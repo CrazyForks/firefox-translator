@@ -1,111 +1,77 @@
 package dev.davidv.translator.assistantOverlay
 
-import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
-import android.graphics.Paint
-import android.graphics.SweepGradient
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.View
-import android.view.animation.LinearInterpolator
+import android.widget.FrameLayout
 
 class BorderWaveView private constructor(
   context: Context,
   private val borderColor: Int,
-  private val strokeWidthPx: Float,
-) : View(context) {
+  private val gradientWidthPx: Int,
+) : FrameLayout(context) {
   companion object {
     private const val COLOR = "#E08050"
-    private const val STROKE_DP = 3
-    private const val DURATION_MS = 3000L
+    private const val GRADIENT_DP = 6
 
     fun create(context: Context): BorderWaveView {
       val density = context.resources.displayMetrics.density
-      return BorderWaveView(context, Color.parseColor(COLOR), (STROKE_DP * density))
+      return BorderWaveView(context, Color.parseColor(COLOR), (GRADIENT_DP * density).toInt().coerceAtLeast(1))
     }
   }
 
-  private var animator: ValueAnimator? = null
+  private val topEdge = View(context)
+  private val rightEdge = View(context)
+  private val bottomEdge = View(context)
+  private val leftEdge = View(context)
 
-  fun startAnimation() {
-    animator?.cancel()
-    visibility = VISIBLE
-    animator =
-      ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = DURATION_MS
-        repeatCount = ValueAnimator.INFINITE
-        interpolator = LinearInterpolator()
-        addUpdateListener { phase = it.animatedValue as Float }
-        start()
-      }
-  }
+  init {
+    setWillNotDraw(true)
+    clipChildren = false
+    clipToPadding = false
 
-  fun stopAnimation() {
-    animator?.cancel()
-    animator = null
+    addView(
+      topEdge,
+      LayoutParams(LayoutParams.MATCH_PARENT, gradientWidthPx, Gravity.TOP),
+    )
+    addView(
+      rightEdge,
+      LayoutParams(gradientWidthPx, LayoutParams.MATCH_PARENT, Gravity.END),
+    )
+    addView(
+      bottomEdge,
+      LayoutParams(LayoutParams.MATCH_PARENT, gradientWidthPx, Gravity.BOTTOM),
+    )
+    addView(
+      leftEdge,
+      LayoutParams(gradientWidthPx, LayoutParams.MATCH_PARENT, Gravity.START),
+    )
+
+    topEdge.background = edgeDrawable(GradientDrawable.Orientation.TOP_BOTTOM)
+    rightEdge.background = edgeDrawable(GradientDrawable.Orientation.RIGHT_LEFT)
+    bottomEdge.background = edgeDrawable(GradientDrawable.Orientation.BOTTOM_TOP)
+    leftEdge.background = edgeDrawable(GradientDrawable.Orientation.LEFT_RIGHT)
+
     visibility = GONE
   }
 
-  private val brightAlpha = 255
-  private val dimAlpha = 20
-
-  private val paint =
-    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      style = Paint.Style.STROKE
-      strokeWidth = strokeWidthPx
-    }
-  private val shaderMatrix = Matrix()
-  private var sweepGradient: SweepGradient? = null
-  private var lastWidth = 0
-  private var lastHeight = 0
-
-  var phase = 0f
-    set(value) {
-      field = value
-      invalidate()
-    }
-
-  override fun onDraw(canvas: Canvas) {
-    val w = width
-    val h = height
-    if (w <= 0 || h <= 0) return
-
-    val cx = w / 2f
-    val cy = h / 2f
-
-    if (sweepGradient == null || w != lastWidth || h != lastHeight) {
-      sweepGradient =
-        SweepGradient(
-          cx,
-          cy,
-          intArrayOf(
-            withAlpha(brightAlpha),
-            withAlpha(dimAlpha),
-            withAlpha(dimAlpha),
-            withAlpha(brightAlpha),
-          ),
-          floatArrayOf(0f, 0.25f, 0.75f, 1f),
-        )
-      lastWidth = w
-      lastHeight = h
-    }
-
-    shaderMatrix.setRotate(phase * 360f, cx, cy)
-    sweepGradient!!.setLocalMatrix(shaderMatrix)
-    paint.shader = sweepGradient
-
-    val half = strokeWidthPx / 2f
-    canvas.drawRoundRect(
-      half,
-      half,
-      w - half,
-      h - half,
-      strokeWidthPx * 2,
-      strokeWidthPx * 2,
-      paint,
-    )
+  fun startAnimation() {
+    visibility = VISIBLE
   }
+
+  fun stopAnimation() {
+    visibility = GONE
+  }
+
+  private fun edgeDrawable(orientation: GradientDrawable.Orientation): GradientDrawable =
+    GradientDrawable(
+      orientation,
+      intArrayOf(withAlpha(255), withAlpha(0)),
+    ).apply {
+      shape = GradientDrawable.RECTANGLE
+    }
 
   private fun withAlpha(alpha: Int): Int = (borderColor and 0x00FFFFFF) or (alpha shl 24)
 }
