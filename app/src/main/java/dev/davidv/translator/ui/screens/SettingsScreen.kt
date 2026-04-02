@@ -18,6 +18,7 @@
 package dev.davidv.translator.ui.screens
 
 import android.app.role.RoleManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -336,27 +337,13 @@ fun SettingsScreen(
 
             TextButton(
               onClick = {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                  val roleManager = context.getSystemService(RoleManager::class.java)
-                  val canRequestRole =
-                    roleManager != null &&
-                      roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) &&
-                      !roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT)
-                  if (canRequestRole) {
-                    assistantRoleLauncher.launch(
-                      roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT),
-                    )
-                  } else {
-                    context.startActivity(
-                      Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                  }
-                } else {
-                  context.startActivity(
-                    Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
-                      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                if (shouldLaunchAssistantRoleRequest(context)) {
+                  val roleManager = context.getSystemService(RoleManager::class.java) ?: return@TextButton
+                  assistantRoleLauncher.launch(
+                    roleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT),
                   )
+                } else {
+                  openAssistantSettings(context)
                 }
               },
             ) {
@@ -805,6 +792,35 @@ private fun isAssistantRoleHeld(context: android.content.Context): Boolean {
   if (!roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) return false
   return roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT)
 }
+
+private fun shouldLaunchAssistantRoleRequest(context: Context): Boolean {
+  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+  if (getConfiguredAssistant(context).isNullOrBlank()) return false
+  val roleManager = context.getSystemService(RoleManager::class.java) ?: return false
+  return roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT) &&
+    !roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT)
+}
+
+private fun getConfiguredAssistant(context: Context): String? =
+  Settings.Secure.getString(context.contentResolver, ASSISTANT_SETTING)
+    ?.takeIf { it.isNotBlank() }
+
+private fun openAssistantSettings(context: Context) {
+  val settingsIntents =
+    listOf(
+      Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),
+      Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+      Intent(Settings.ACTION_SETTINGS),
+    )
+
+  settingsIntents.firstOrNull { intent ->
+    intent.resolveActivity(context.packageManager) != null
+  }?.let { intent ->
+    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+  }
+}
+
+private const val ASSISTANT_SETTING = "assistant"
 
 @Preview(showBackground = true)
 @Composable
