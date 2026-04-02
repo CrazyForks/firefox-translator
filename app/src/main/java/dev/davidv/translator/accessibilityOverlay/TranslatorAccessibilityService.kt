@@ -12,6 +12,8 @@ import android.util.Log
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import dev.davidv.bergamot.TokenAlignment
+import dev.davidv.translator.BatchAlignedTranslationResult
 import dev.davidv.translator.BatchTextTranslator
 import dev.davidv.translator.FilePathManager
 import dev.davidv.translator.ImageProcessor
@@ -20,25 +22,20 @@ import dev.davidv.translator.LanguageDetector
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.OCRService
-import dev.davidv.translator.OverlayColors
 import dev.davidv.translator.OverlayTextTranslationHelper
-import dev.davidv.translator.OverlayTextTranslationResult
 import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.TranslatedStyledBlock
 import dev.davidv.translator.TranslationCoordinator
-import dev.davidv.translator.TranslationResult
+import dev.davidv.translator.TranslationSegment
 import dev.davidv.translator.TranslationService
+import dev.davidv.translator.clusterFragmentsIntoBlocks
+import dev.davidv.translator.mapStylesToSegmentedTranslation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-private data class VisibleTextNode(
-  val text: String,
-  val bounds: Rect,
-  val colors: OverlayColors?,
-)
 
 class TranslatorAccessibilityService : AccessibilityService() {
   private val tag = "TranslatorA11y"
@@ -193,54 +190,16 @@ class TranslatorAccessibilityService : AccessibilityService() {
       return
     }
 
-    val nodes = input.collectVisibleTextBlocks(root).map { it.text to it.bounds }
-    if (nodes.isEmpty()) {
+    val fragments = input.collectVisibleStyledFragments(root)
+    if (fragments.isEmpty()) {
       ui.showOverlayMessage("No visible text found")
       return
     }
 
-    withOptionalScreenshotColors(nodes.map { it.second }) { nodeColors ->
-      translateVisibleNodes(nodes, nodeColors)
-    }
-  }
+    val blocks = clusterFragmentsIntoBlocks(fragments)
+    if (blocks.isEmpty()) return
 
-  private fun translateVisibleNodes(
-    nodes: List<Pair<String, Rect>>,
-    colors: List<OverlayColors>?,
-  ) {
-    ui.removeTranslationOverlays()
-    ui.showCenteredLoading()
-
-    serviceScope.launch {
-      val visibleNodes =
-        nodes.mapIndexed { index, (text, bounds) ->
-          VisibleTextNode(text, bounds, colors?.getOrNull(index))
-        }
-      val nodesByText = linkedMapOf<String, MutableList<VisibleTextNode>>()
-      for (node in visibleNodes) {
-        nodesByText.getOrPut(node.text) { mutableListOf() }.add(node)
-      }
-
-      val result =
-        overlayTextTranslationHelper.translateTexts(
-          inputs = nodesByText.keys.toList(),
-          forcedSourceLanguage = forcedSourceLanguage,
-          forcedTargetLanguage = forcedTargetLanguage,
-        )
-
-      when (result) {
-        is OverlayTextTranslationResult.Message -> showOverlayTranslationMessage(result.value)
-        is OverlayTextTranslationResult.Success -> {
-          ui.removeTranslationOverlays()
-          for ((text, groupedNodes) in nodesByText) {
-            val translatedText = result.results[text] ?: continue
-            for (node in groupedNodes) {
-              ui.showTranslationOverlay(translatedText, node.bounds, node.colors)
-            }
-          }
-        }
-      }
-    }
+    withOptionalScreenshot { screenshot -> translateAndShowBlocks(blocks, screenshot) }
   }
 
   fun handleRegionCapture(region: Rect) {
@@ -332,32 +291,47 @@ class TranslatorAccessibilityService : AccessibilityService() {
       return
     }
 
-    val textBlock = input.extractTextBlockAtPoint(root, x, y)
-    if (textBlock == null) {
+    val fragments = input.extractStyledFragmentsAtPoint(root, x, y)
+    Log.d(tag, "extractStyledFragmentsAtPoint($x, $y) returned ${fragments.size} fragments")
+    for ((idx, f) in fragments.withIndex()) {
+      Log.d(
+        tag,
+        "  Fragment[$idx] text='${f.text.take(50)}' bounds=[${f.bounds.left},${f.bounds.top},${f.bounds.right},${f.bounds.bottom}]",
+      )
+    }
+    if (fragments.isEmpty()) {
       Log.d(tag, "No text block at ($x, $y)")
       ui.showOverlayMessage("No element found at position")
       return
     }
 
-    val text = textBlock.text
-    val bounds = textBlock.bounds
-    Log.d(tag, "Found text: '$text' at $bounds")
+    val blocks = clusterFragmentsIntoBlocks(fragments)
+    Log.d(tag, "Clustered into ${blocks.size} blocks")
+    for ((idx, b) in blocks.withIndex()) {
+      Log.d(tag, "  Block[$idx] ${b.bounds.width()}x${b.bounds.height()} text='${b.text.take(60)}'")
+    }
+    if (blocks.isEmpty()) return
 
-    withOptionalScreenshotColor(bounds) { colors -> translateAndShow(text, bounds, colors) }
+    val unionBounds = Rect(blocks.first().bounds.left, blocks.first().bounds.top, blocks.first().bounds.right, blocks.first().bounds.bottom)
+    for (block in blocks.drop(1)) {
+      unionBounds.union(block.bounds.left, block.bounds.top, block.bounds.right, block.bounds.bottom)
+    }
+
+    withOptionalScreenshot { screenshot -> translateAndShowBlocks(blocks, screenshot) }
   }
 
-  private fun translateAndShow(
-    text: String,
-    bounds: Rect,
-    colors: OverlayColors?,
+  private fun translateAndShowBlocks(
+    blocks: List<dev.davidv.translator.TranslatableBlock>,
+    screenshot: Bitmap?,
   ) {
     ui.removeTranslationOverlays()
-    ui.showLoadingOverlay(bounds, colors)
+    ui.showCenteredLoading()
 
     serviceScope.launch {
       val targetLanguage = overlayTextTranslationHelper.awaitTargetLanguage(forcedTargetLanguage)
+      val combinedText = blocks.joinToString(" ") { it.text }
       val availableLanguages = overlayTextTranslationHelper.awaitAvailableLanguages(isSource = false)
-      val from = forcedSourceLanguage ?: translationCoordinator.detectLanguageRobust(text, null, availableLanguages)
+      val from = forcedSourceLanguage ?: translationCoordinator.detectLanguageRobust(combinedText, null, availableLanguages)
       if (from == null) {
         showOverlayTranslationMessage("Could not detect language — set source language manually")
         return@launch
@@ -368,12 +342,43 @@ class TranslatorAccessibilityService : AccessibilityService() {
         return@launch
       }
 
-      when (val result = translationCoordinator.translateText(from, targetLanguage, text)) {
-        is TranslationResult.Success -> {
-          ui.removeTranslationOverlays()
-          ui.showTranslationOverlay(result.result.translated, bounds, colors)
+      val allSegmentTexts = mutableListOf<String>()
+
+      data class SegmentRef(val blockIdx: Int, val segment: TranslationSegment)
+      val segmentRefs = mutableListOf<SegmentRef>()
+      for ((blockIdx, block) in blocks.withIndex()) {
+        for (segment in block.segments) {
+          allSegmentTexts.add(block.text.substring(segment.start, segment.end))
+          segmentRefs.add(SegmentRef(blockIdx, segment))
         }
-        is TranslationResult.Error -> {
+      }
+
+      when (val result = translationCoordinator.translateTextsWithAlignment(from, targetLanguage, allSegmentTexts.toTypedArray())) {
+        is BatchAlignedTranslationResult.Success -> {
+          val translatedBlocks =
+            blocks.mapIndexed { blockIdx, sourceBlock ->
+              val blockSegmentResults =
+                result.results
+                  .zip(segmentRefs)
+                  .filter { it.second.blockIdx == blockIdx }
+
+              val translatedText = StringBuilder()
+              val segmentAlignments = mutableListOf<Pair<TranslationSegment, Array<TokenAlignment>>>()
+              val translatedSegments = mutableListOf<Pair<TranslationSegment, String>>()
+
+              for ((translation, ref) in blockSegmentResults) {
+                translatedSegments.add(ref.segment to translation.target)
+                segmentAlignments.add(ref.segment to translation.alignments)
+                translatedText.append(translation.target)
+              }
+
+              val styleSpans = mapStylesToSegmentedTranslation(sourceBlock, segmentAlignments, translatedSegments)
+              TranslatedStyledBlock(translatedText.toString(), sourceBlock.bounds, styleSpans)
+            }
+          ui.removeTranslationOverlays()
+          ui.showStyledTranslationOverlays(translatedBlocks, screenshot)
+        }
+        is BatchAlignedTranslationResult.Error -> {
           Log.e(tag, "Translation error: ${result.message}")
           ui.removeTranslationOverlays()
         }
@@ -381,19 +386,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     }
   }
 
-  private fun withOptionalScreenshotColor(
-    bounds: Rect,
-    onResult: (OverlayColors?) -> Unit,
-  ) {
-    withOptionalScreenshotColors(listOf(bounds)) { colors ->
-      onResult(colors?.firstOrNull())
-    }
-  }
-
-  private fun withOptionalScreenshotColors(
-    boundsList: List<Rect>,
-    onResult: (List<OverlayColors>?) -> Unit,
-  ) {
+  private fun withOptionalScreenshot(onResult: (Bitmap?) -> Unit) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
       onResult(null)
       return
@@ -410,15 +403,9 @@ class TranslatorAccessibilityService : AccessibilityService() {
             onResult(null)
             return
           }
-
           val swBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
           hwBitmap.recycle()
-          val colors =
-            boundsList.map { bounds ->
-              input.sampleColorsFromScreenshot(swBitmap, bounds)
-            }
-          swBitmap.recycle()
-          onResult(colors)
+          onResult(swBitmap)
         }
 
         override fun onFailure(errorCode: Int) {

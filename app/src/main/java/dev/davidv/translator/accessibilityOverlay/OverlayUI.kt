@@ -10,6 +10,13 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.text.Spannable
+import android.text.SpannableStringBuilder
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.StrikethroughSpan
+import android.text.style.StyleSpan
+import android.text.style.UnderlineSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -24,6 +31,7 @@ import dev.davidv.translator.MainActivity
 import dev.davidv.translator.OverlayColors
 import dev.davidv.translator.R
 import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.TranslatedStyledBlock
 import dev.davidv.translator.assistantOverlay.BorderWaveView
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
@@ -357,6 +365,110 @@ class OverlayUI(
       fullBitmap.recycle()
     }
     showBitmapOverlay(croppedBitmap, visibleBounds)
+  }
+
+  fun showStyledTranslationOverlays(
+    blocks: List<TranslatedStyledBlock>,
+    screenshot: Bitmap?,
+  ) {
+    val screenWidth = service.resources.displayMetrics.widthPixels
+    val screenHeight = service.resources.displayMetrics.heightPixels
+    val bgMode = settingsManager.settings.value.backgroundMode
+
+    for (block in blocks) {
+      if (block.text.isBlank()) continue
+      val bounds = block.bounds
+      val overlayWidth = maxOf(bounds.width(), dpToPx(48))
+      val targetHeight = maxOf(bounds.height(), dpToPx(32))
+
+      val sampledColors =
+        screenshot?.let {
+          val translatorRect =
+            dev.davidv.translator.Rect(bounds.left, bounds.top, bounds.right, bounds.bottom)
+          dev.davidv.translator.getOverlayColors(it, translatorRect, bgMode)
+        }
+      val bgColor = sampledColors?.background ?: Color.parseColor("#F0FFFFFF")
+      val defaultFg = sampledColors?.foreground ?: Color.BLACK
+
+      val ssb = SpannableStringBuilder(block.text)
+      ssb.setSpan(ForegroundColorSpan(defaultFg), 0, ssb.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+      for (span in block.styleSpans) {
+        val start = span.start.coerceIn(0, ssb.length)
+        val end = span.end.coerceIn(start, ssb.length)
+        if (start == end) continue
+        val style = span.style ?: continue
+
+        val fg = style.textColor
+        if (fg != null && Color.alpha(fg) > 0) {
+          ssb.setSpan(ForegroundColorSpan(fg), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        if (style.hasRealBackground()) {
+          ssb.setSpan(BackgroundColorSpan(style.bgColor!!), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        if (style.bold) {
+          ssb.setSpan(StyleSpan(Typeface.BOLD), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        if (style.italic) {
+          ssb.setSpan(StyleSpan(Typeface.ITALIC), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        if (style.underline) {
+          ssb.setSpan(UnderlineSpan(), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        if (style.strikethrough) {
+          ssb.setSpan(StrikethroughSpan(), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+      }
+
+      val overlayFrame =
+        FrameLayout(service).apply {
+          background =
+            GradientDrawable().apply {
+              shape = GradientDrawable.RECTANGLE
+              cornerRadius = dpToPx(8).toFloat()
+              setColor(bgColor)
+            }
+          setOnClickListener { removeTranslationOverlays() }
+        }
+
+      val textView =
+        TextView(service).apply {
+          text = ssb
+          setPadding(0, 0, 0, 0)
+          gravity = Gravity.START or Gravity.CENTER_VERTICAL
+          maxLines = Int.MAX_VALUE
+          setAutoSizeTextTypeUniformWithConfiguration(8, 48, 1, TypedValue.COMPLEX_UNIT_SP)
+        }
+
+      overlayFrame.addView(
+        textView,
+        FrameLayout.LayoutParams(
+          FrameLayout.LayoutParams.MATCH_PARENT,
+          FrameLayout.LayoutParams.MATCH_PARENT,
+        ),
+      )
+
+      val visibleLeft = bounds.left.coerceIn(0, screenWidth - 1)
+      val visibleTop = bounds.top.coerceIn(0, screenHeight - 1)
+      val visibleWidth = minOf(overlayWidth, screenWidth - visibleLeft)
+      val visibleHeight = minOf(targetHeight, screenHeight - visibleTop)
+      if (visibleWidth <= 0 || visibleHeight <= 0) continue
+
+      val params =
+        WindowManager.LayoutParams(
+          visibleWidth,
+          visibleHeight,
+          WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+          PixelFormat.TRANSLUCENT,
+        )
+      params.gravity = Gravity.TOP or Gravity.START
+      params.x = visibleLeft
+      params.y = visibleTop
+
+      windowManager.addView(overlayFrame, params)
+      translationOverlays.add(overlayFrame)
+    }
   }
 
   private fun renderTextOverlayBitmap(

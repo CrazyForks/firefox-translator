@@ -12,6 +12,7 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
 import dev.davidv.translator.OverlayColors
 import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.StyledFragment
 import dev.davidv.translator.getOverlayColors
 import dev.davidv.translator.Rect as TranslatorRect
 
@@ -195,13 +196,18 @@ class OverlayInput(
     if (root == null) return null
     val bounds = Rect()
     root.getBoundsInScreen(bounds)
-    if (!bounds.contains(x, y)) return null
-    for (i in root.childCount - 1 downTo 0) {
-      val child = root.getChild(i) ?: continue
-      val found = findDeepestNodeAtPoint(child, x, y)
-      if (found != null) return found
+    val containsPoint = bounds.contains(x, y)
+
+    val shouldTryChildren = containsPoint || (bounds.height() <= 0 || bounds.bottom < bounds.top)
+
+    if (shouldTryChildren) {
+      for (i in root.childCount - 1 downTo 0) {
+        val child = root.getChild(i) ?: continue
+        val found = findDeepestNodeAtPoint(child, x, y)
+        if (found != null) return found
+      }
     }
-    return root
+    return if (containsPoint) root else null
   }
 
   fun extractTextBlockAtPoint(
@@ -262,37 +268,141 @@ class OverlayInput(
     return buildTextBlock(bestFragments)
   }
 
-  fun collectVisibleTextBlocks(root: AccessibilityNodeInfo): List<TapTextBlock> {
-    val fragments = collectTextFragments(root, skipButtons = true)
-    if (fragments.isEmpty()) return emptyList()
+  fun extractStyledFragmentsAtPoint(
+    root: AccessibilityNodeInfo?,
+    x: Int,
+    y: Int,
+  ): List<StyledFragment> {
+    val node = findDeepestNodeAtPoint(root, x, y) ?: return emptyList()
+    val screenHeight = service.resources.displayMetrics.heightPixels
+    val screenWidth = service.resources.displayMetrics.widthPixels
+    val screenArea = screenWidth.toLong() * screenHeight.toLong()
 
-    val blocks = mutableListOf<TapTextBlock>()
-    var currentFragments = mutableListOf<TextFragment>()
-    var currentBounds: Rect? = null
+    val nodeBounds = Rect()
+    node.getBoundsInScreen(nodeBounds)
+    android.util.Log.d(
+      "A11yTap",
+      "Deepest node: class=${node.className} text='${node.text?.take(
+        30,
+      )}' bounds=${nodeBounds.toShortString()} children=${node.childCount}",
+    )
 
-    for (fragment in fragments) {
-      val groupBounds = currentBounds
-      if (groupBounds == null) {
-        currentFragments.add(fragment)
-        currentBounds = Rect(fragment.bounds)
+    var webView: AccessibilityNodeInfo? = node
+    while (webView != null && webView.className?.toString() != "android.webkit.WebView") {
+      webView = webView.parent
+    }
+    if (webView != null) {
+      android.util.Log.d("A11yTap", "=== WebView tree dump ===")
+      dumpA11yTree(webView, 0)
+      android.util.Log.d("A11yTap", "=== End dump ===")
+    }
+
+    var bestFragments = emptyList<TextFragment>()
+    var current: AccessibilityNodeInfo? = node
+    while (current != null) {
+      val fragments = collectTextFragments(current)
+      val bounds = Rect()
+      current.getBoundsInScreen(bounds)
+      val area = bounds.width().toLong() * bounds.height().toLong()
+      android.util.Log.d(
+        "A11yTap",
+        "Walk: class=${current.className} fragments=${fragments.size} bounds=${bounds.toShortString()} area=$area",
+      )
+
+      if (fragments.isEmpty()) {
+        current = current.parent
         continue
       }
 
-      if (hasVerticalOverlap(groupBounds, fragment.bounds)) {
-        currentFragments.add(fragment)
-        groupBounds.union(fragment.bounds)
-      } else {
-        buildTextBlock(currentFragments)?.let { blocks.add(it) }
-        currentFragments = mutableListOf(fragment)
-        currentBounds = Rect(fragment.bounds)
+      if (area > screenArea / 2) {
+        android.util.Log.d("A11yTap", "Large node with ${fragments.size} fragments, trying children")
+        var childFragments = fragments
+        if (childFragments.isEmpty()) {
+          for (i in 0 until current.childCount) {
+            val child = current.getChild(i) ?: continue
+            childFragments = collectTextFragments(child)
+            if (childFragments.isNotEmpty()) break
+          }
+        }
+        if (childFragments.isNotEmpty()) {
+          val tapMarginLocal = ui.dpToPx(16)
+          val nearFragments =
+            childFragments.filter { fragment ->
+              val expanded = Rect(fragment.bounds)
+              expanded.inset(-tapMarginLocal, -tapMarginLocal)
+              expanded.contains(x, y)
+            }
+          android.util.Log.d("A11yTap", "Found ${childFragments.size} total, ${nearFragments.size} near tap")
+          if (nearFragments.isNotEmpty()) {
+            val anchor = nearFragments.first()
+            bestFragments =
+              childFragments.filter { fragment ->
+                val hMargin = ui.dpToPx(4)
+                fragment.bounds.right > anchor.bounds.left - hMargin &&
+                  fragment.bounds.left < anchor.bounds.right + hMargin
+              }
+            android.util.Log.d("A11yTap", "Filtered to ${bestFragments.size} aligned fragments")
+          }
+        }
+        break
       }
+
+      bestFragments = fragments
+
+      if (fragments.size > 1) {
+        android.util.Log.d("A11yTap", "Stopping: found ${fragments.size} fragments")
+        break
+      }
+
+      current = current.parent
     }
 
-    if (currentFragments.isNotEmpty()) {
-      buildTextBlock(currentFragments)?.let { blocks.add(it) }
+    android.util.Log.d("A11yTap", "bestFragments=${bestFragments.size}")
+    if (bestFragments.isEmpty()) return emptyList()
+
+    val tapMargin = ui.dpToPx(8)
+    val tapNearFragment =
+      bestFragments.any { fragment ->
+        val expanded = Rect(fragment.bounds)
+        expanded.inset(-tapMargin, -tapMargin)
+        expanded.contains(x, y)
+      }
+    android.util.Log.d("A11yTap", "tapNearFragment=$tapNearFragment tapPoint=($x,$y)")
+    if (!tapNearFragment) {
+      val fallbackNode = findNodeAtPoint(root, x, y)
+      if (fallbackNode != null) {
+        val fallbackText = fallbackNode.text?.toString()?.trim()
+        if (!fallbackText.isNullOrEmpty()) {
+          val fb = Rect()
+          fallbackNode.getBoundsInScreen(fb)
+          android.util.Log.d("A11yTap", "Fallback to single node: '${fallbackText.take(40)}' bounds=${fb.toShortString()}")
+          return listOf(
+            StyledFragment(
+              fallbackText,
+              TranslatorRect(fb.left, fb.top, fb.right, fb.bottom),
+            ),
+          )
+        }
+      }
+      return emptyList()
     }
 
-    return blocks
+    return bestFragments.map { fragment ->
+      StyledFragment(
+        fragment.text,
+        TranslatorRect(fragment.bounds.left, fragment.bounds.top, fragment.bounds.right, fragment.bounds.bottom),
+      )
+    }
+  }
+
+  fun collectVisibleStyledFragments(root: AccessibilityNodeInfo): List<StyledFragment> {
+    val fragments = collectTextFragments(root, skipButtons = true)
+    return fragments.map { fragment ->
+      StyledFragment(
+        fragment.text,
+        TranslatorRect(fragment.bounds.left, fragment.bounds.top, fragment.bounds.right, fragment.bounds.bottom),
+      )
+    }
   }
 
   fun sampleColorsFromScreenshot(
@@ -346,7 +456,11 @@ class OverlayInput(
     skipButtons: Boolean,
     results: MutableList<TextFragment>,
   ): Boolean {
-    if (!node.isVisibleToUser) return false
+    if (!node.isVisibleToUser) {
+      val bounds = Rect()
+      node.getBoundsInScreen(bounds)
+      if (bounds.height() > 0) return false
+    }
     val cls = node.className?.toString()
     if (cls == "android.widget.Image") return false
     if (skipButtons && cls in skipClasses) return false
@@ -522,6 +636,22 @@ class OverlayInput(
     first: Rect,
     second: Rect,
   ): Boolean = minOf(first.bottom, second.bottom) - maxOf(first.top, second.top) >= -ui.dpToPx(4)
+
+  private fun dumpA11yTree(
+    node: AccessibilityNodeInfo,
+    depth: Int,
+  ) {
+    val indent = "  ".repeat(depth)
+    val bounds = Rect()
+    node.getBoundsInScreen(bounds)
+    val text = node.text?.toString()?.take(40) ?: ""
+    val vis = if (node.isVisibleToUser) "V" else "H"
+    android.util.Log.d("A11yTap", "$indent${node.className} text='$text' bounds=${bounds.toShortString()} $vis children=${node.childCount}")
+    for (i in 0 until node.childCount) {
+      val child = node.getChild(i) ?: continue
+      dumpA11yTree(child, depth + 1)
+    }
+  }
 
   private class SelectionRectView(
     context: android.content.Context,
