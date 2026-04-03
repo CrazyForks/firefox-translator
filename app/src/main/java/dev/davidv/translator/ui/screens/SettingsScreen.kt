@@ -312,7 +312,9 @@ fun SettingsScreen(
           )
 
           Text(
-            text = "Translate text directly on top of other apps.",
+            text =
+              "Translate text directly on top of other apps.\n" +
+                "Tech preview, expect bugs.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -329,7 +331,9 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurface,
               )
               Text(
-                text = "Requires assistant gesture. Higher quality.",
+                text =
+                  "Requires assistant gesture.\n" +
+                    "Higher quality.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -363,7 +367,9 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurface,
               )
               Text(
-                text = "Quality depends on target app.",
+                text =
+                  "Requires accessibility permissions\n" +
+                    "Quality depends on target app.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -802,7 +808,8 @@ private fun shouldLaunchAssistantRoleRequest(context: Context): Boolean {
 }
 
 private fun getConfiguredAssistant(context: Context): String? =
-  Settings.Secure.getString(context.contentResolver, ASSISTANT_SETTING)
+  Settings.Secure
+    .getString(context.contentResolver, ASSISTANT_SETTING)
     ?.takeIf { it.isNotBlank() }
 
 private fun openAssistantSettings(context: Context) {
@@ -813,11 +820,12 @@ private fun openAssistantSettings(context: Context) {
       Intent(Settings.ACTION_SETTINGS),
     )
 
-  settingsIntents.firstOrNull { intent ->
-    intent.resolveActivity(context.packageManager) != null
-  }?.let { intent ->
-    context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-  }
+  settingsIntents
+    .firstOrNull { intent ->
+      intent.resolveActivity(context.packageManager) != null
+    }?.let { intent ->
+      context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 }
 
 private const val ASSISTANT_SETTING = "assistant"
