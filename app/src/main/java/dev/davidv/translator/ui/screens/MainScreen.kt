@@ -395,18 +395,16 @@ fun MainScreen(
     )
   }
 
-  // Dictionary bottom sheet
-  if (dictionaryWord != null) {
+  if (dictionaryWord != null && dictionaryLookupLanguage != null) {
     DictionaryBottomSheet(
       dictionaryWord = dictionaryWord,
       dictionaryStack = dictionaryStack,
-      // DictionaryLookupLanguage should always be set if dictionaryWord if set
-      dictionaryLookupLanguage = dictionaryLookupLanguage ?: Language.ENGLISH,
+      dictionaryLookupLanguage = dictionaryLookupLanguage,
       onDismiss = {
         onMessage(TranslatorMessage.ClearDictionaryStack)
       },
       onDictionaryLookup = { word ->
-        onMessage(TranslatorMessage.DictionaryLookup(word, dictionaryLookupLanguage ?: Language.ENGLISH))
+        onMessage(TranslatorMessage.DictionaryLookup(word, dictionaryLookupLanguage))
       },
       onBackPressed = {
         onMessage(TranslatorMessage.PopDictionary)
@@ -497,6 +495,22 @@ fun WideDialogTheme(content: @Composable () -> Unit) {
   }
 }
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Preview(
   showBackground = true,
   uiMode = Configuration.UI_MODE_NIGHT_YES,
@@ -508,9 +522,9 @@ fun PopupMode() {
       onSettings = { },
       input = "Example input",
       output = TranslatedText("Example output", null),
-      from = Language.AZERBAIJANI,
-      to = Language.SPANISH,
-      detectedLanguage = Language.FRENCH,
+      from = previewLanguage("az", "Azerbaijani"),
+      to = previewLanguage("es", "Spanish"),
+      detectedLanguage = previewLanguage("fr", "French"),
       displayImage = null,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
@@ -518,11 +532,11 @@ fun PopupMode() {
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
         ),
-      languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+      languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
       downloadStates = emptyMap(),
       settings = AppSettings(),
       dictionaryWord = null,
@@ -544,9 +558,9 @@ fun MainScreenPreview() {
       onSettings = { },
       input = "Example input",
       output = TranslatedText("Example output", null),
-      from = Language.ENGLISH,
-      to = Language.SPANISH,
-      detectedLanguage = Language.FRENCH,
+      from = previewLanguage("en", "English"),
+      to = previewLanguage("es", "Spanish"),
+      detectedLanguage = previewLanguage("fr", "French"),
       displayImage = null,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
@@ -554,11 +568,11 @@ fun MainScreenPreview() {
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
         ),
-      languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+      languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
       downloadStates = emptyMap(),
       settings = AppSettings(),
       dictionaryWord = null,
@@ -584,8 +598,8 @@ fun PreviewTranslitText() {
           "Tokyo",
           null,
         ),
-      from = Language.JAPANESE,
-      to = Language.ENGLISH,
+      from = previewLanguage("ja", "Japanese"),
+      to = previewLanguage("en", "English"),
       detectedLanguage = null,
       displayImage = null,
       isTranslating = MutableStateFlow(false).asStateFlow(),
@@ -594,13 +608,13 @@ fun PreviewTranslitText() {
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
         ),
       downloadStates = emptyMap(),
       settings = AppSettings(showTransliterationOnInput = true),
-      languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+      languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
       dictionaryWord = null,
       dictionaryStack = emptyList(),
       dictionaryLookupLanguage = null,
@@ -625,8 +639,8 @@ fun PreviewVeryLongText() {
           vlong,
           null,
         ),
-      from = Language.ENGLISH,
-      to = Language.ENGLISH,
+      from = previewLanguage("en", "English"),
+      to = previewLanguage("en", "English"),
       detectedLanguage = null,
       displayImage = null,
       isTranslating = MutableStateFlow(false).asStateFlow(),
@@ -635,13 +649,13 @@ fun PreviewVeryLongText() {
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
         ),
       downloadStates = emptyMap(),
       settings = AppSettings(showTransliterationOnInput = true),
-      languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+      languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
       dictionaryWord = null,
       dictionaryStack = emptyList(),
       dictionaryLookupLanguage = null,
@@ -670,8 +684,8 @@ fun PreviewVeryLongTextImage() {
           vlong,
           null,
         ),
-      from = Language.ENGLISH,
-      to = Language.ENGLISH,
+      from = previewLanguage("en", "English"),
+      to = previewLanguage("en", "English"),
       detectedLanguage = null,
       displayImage = bitmap,
       isTranslating = MutableStateFlow(false).asStateFlow(),
@@ -680,13 +694,13 @@ fun PreviewVeryLongTextImage() {
       onMessage = {},
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
         ),
       downloadStates = emptyMap(),
       settings = AppSettings(),
-      languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+      languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
       dictionaryWord = null,
       dictionaryStack = emptyList(),
       dictionaryLookupLanguage = null,

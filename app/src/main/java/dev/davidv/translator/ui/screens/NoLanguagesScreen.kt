@@ -48,7 +48,6 @@ import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.R
-import dev.davidv.translator.downloadableLanguages
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -109,10 +108,11 @@ fun NoLanguagesScreen(
       )
 
       val downloadStates by downloadService.downloadStates.collectAsState()
+      val langIndex by languageStateManager.languageIndex.collectAsState()
       val availLangs = state.availableLanguageMap.filterValues { it.translatorFiles }.keys
-      val installedLanguages = availLangs.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
+      val installedLanguages = availLangs.filter { !it.isEnglish }.sortedBy { it.displayName }
       val availableLanguages =
-        downloadableLanguages
+        (langIndex?.downloadable ?: emptyList())
           .filter { lang -> !availLangs.contains(lang) }
           .sortedBy { it.displayName }
 
@@ -143,13 +143,14 @@ fun NoLanguagesScreenPreview() {
   val fp = FilePathManager(context, appSettingsFlow)
   val mockDownloadEvents = MutableSharedFlow<DownloadEvent>()
   val downloadService = DownloadService()
+  val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow<List<Language>>(emptyList())
   TranslatorTheme {
     NoLanguagesScreen(
       onDone = {},
       onSettings = {},
       downloadService = downloadService,
       languageStateManager = LanguageStateManager(scope, fp, mockDownloadEvents),
-      languageMetadataManager = LanguageMetadataManager(context),
+      languageMetadataManager = LanguageMetadataManager(context, languagesFlow),
     )
   }
 }

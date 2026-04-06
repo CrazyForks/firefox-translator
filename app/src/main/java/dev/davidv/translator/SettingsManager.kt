@@ -28,7 +28,6 @@ class SettingsManager(
 ) {
   private val prefs: SharedPreferences = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
 
-  // Track which settings have been explicitly modified - initialize first
   private val modifiedSettings = mutableSetOf<String>()
 
   private val _settings = MutableStateFlow(loadSettings())
@@ -44,37 +43,18 @@ class SettingsManager(
   }
 
   private fun loadSettings(): AppSettings {
-    val defaults = AppSettings() // Get current defaults
+    val defaults = AppSettings()
 
-    // Build set of modified settings from SharedPreferences
     modifiedSettings.clear()
     prefs.all.keys.forEach { key ->
       modifiedSettings.add(key)
     }
 
-    val defaultTargetLanguageCode = prefs.getString("default_target_language", null)
-    val defaultTargetLanguage =
-      if (defaultTargetLanguageCode != null) {
-        Language.entries.find { it.code == defaultTargetLanguageCode } ?: defaults.defaultTargetLanguage
-      } else {
-        defaults.defaultTargetLanguage
-      }
-
+    val defaultTargetLanguageCode = prefs.getString("default_target_language", null) ?: defaults.defaultTargetLanguageCode
     val defaultSourceLanguageCode = prefs.getString("default_source_language", null)
-    val defaultSourceLanguage =
-      if (defaultSourceLanguageCode != null) {
-        Language.entries.find { it.code == defaultSourceLanguageCode }
-      } else {
-        defaults.defaultSourceLanguage
-      }
 
-    val translationModelsBaseUrl =
-      prefs.getString("translation_models_base_url_v3", null)
-        ?: defaults.translationModelsBaseUrl
-
-    val tesseractModelsBaseUrl =
-      prefs.getString("tesseract_models_base_url", null)
-        ?: defaults.tesseractModelsBaseUrl
+    val translationModelsBaseUrl = prefs.getString("translation_models_base_url_v3", null)
+    val tesseractModelsBaseUrl = prefs.getString("tesseract_models_base_url", null)
 
     val dictionaryBaseUrl =
       prefs.getString("dictionary_base_url", null)
@@ -109,8 +89,8 @@ class SettingsManager(
       )
 
     return AppSettings(
-      defaultTargetLanguage = defaultTargetLanguage,
-      defaultSourceLanguage = defaultSourceLanguage,
+      defaultTargetLanguageCode = defaultTargetLanguageCode,
+      defaultSourceLanguageCode = defaultSourceLanguageCode,
       translationModelsBaseUrl = translationModelsBaseUrl,
       tesseractModelsBaseUrl = tesseractModelsBaseUrl,
       dictionaryBaseUrl = dictionaryBaseUrl,
@@ -133,25 +113,32 @@ class SettingsManager(
     val currentSettings = _settings.value
 
     prefs.edit().apply {
-      // Only save settings that have changed from their current value
-      if (newSettings.defaultTargetLanguage != currentSettings.defaultTargetLanguage) {
-        putString("default_target_language", newSettings.defaultTargetLanguage.code)
+      if (newSettings.defaultTargetLanguageCode != currentSettings.defaultTargetLanguageCode) {
+        putString("default_target_language", newSettings.defaultTargetLanguageCode)
         modifiedSettings.add("default_target_language")
       }
-      if (newSettings.defaultSourceLanguage != currentSettings.defaultSourceLanguage) {
-        if (newSettings.defaultSourceLanguage != null) {
-          putString("default_source_language", newSettings.defaultSourceLanguage.code)
+      if (newSettings.defaultSourceLanguageCode != currentSettings.defaultSourceLanguageCode) {
+        if (newSettings.defaultSourceLanguageCode != null) {
+          putString("default_source_language", newSettings.defaultSourceLanguageCode)
         } else {
           remove("default_source_language")
         }
         modifiedSettings.add("default_source_language")
       }
       if (newSettings.translationModelsBaseUrl != currentSettings.translationModelsBaseUrl) {
-        putString("translation_models_base_url_v3", newSettings.translationModelsBaseUrl)
+        if (newSettings.translationModelsBaseUrl != null) {
+          putString("translation_models_base_url_v3", newSettings.translationModelsBaseUrl)
+        } else {
+          remove("translation_models_base_url_v3")
+        }
         modifiedSettings.add("translation_models_base_url_v3")
       }
       if (newSettings.tesseractModelsBaseUrl != currentSettings.tesseractModelsBaseUrl) {
-        putString("tesseract_models_base_url", newSettings.tesseractModelsBaseUrl)
+        if (newSettings.tesseractModelsBaseUrl != null) {
+          putString("tesseract_models_base_url", newSettings.tesseractModelsBaseUrl)
+        } else {
+          remove("tesseract_models_base_url")
+        }
         modifiedSettings.add("tesseract_models_base_url")
       }
       if (newSettings.dictionaryBaseUrl != currentSettings.dictionaryBaseUrl) {

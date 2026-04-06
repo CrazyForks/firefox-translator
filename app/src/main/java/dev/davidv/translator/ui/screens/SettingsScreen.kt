@@ -59,11 +59,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.AppSettings
 import dev.davidv.translator.BackgroundMode
 import dev.davidv.translator.Language
+import dev.davidv.translator.LanguageIndex
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.PermissionHelper
 import dev.davidv.translator.R
@@ -126,6 +128,7 @@ fun SettingsScreen(
   settings: AppSettings,
   languageMetadataManager: dev.davidv.translator.LanguageMetadataManager,
   availableLanguages: List<Language>,
+  languageIndex: LanguageIndex?,
   onSettingsChange: (AppSettings) -> Unit,
   onManageLanguages: () -> Unit,
 ) {
@@ -234,21 +237,21 @@ fun SettingsScreen(
 
           LanguageDropdown(
             label = "Default 'from' language",
-            selectedLanguage = settings.defaultSourceLanguage,
+            selectedLanguage = settings.defaultSourceLanguageCode?.let { languageIndex?.languageByCode(it) },
             availableLanguages = availableLanguages,
-            fallbackLanguage = availableLanguages.firstOrNull { it != settings.defaultTargetLanguage },
+            fallbackLanguage = availableLanguages.firstOrNull { it.code != settings.defaultTargetLanguageCode },
             onLanguageSelected = { language ->
-              onSettingsChange(settings.copy(defaultSourceLanguage = language))
+              onSettingsChange(settings.copy(defaultSourceLanguageCode = language.code))
             },
           )
 
           LanguageDropdown(
             label = "Default 'to' language",
-            selectedLanguage = settings.defaultTargetLanguage,
+            selectedLanguage = languageIndex?.languageByCode(settings.defaultTargetLanguageCode),
             availableLanguages = availableLanguages,
             fallbackLanguage = null,
             onLanguageSelected = { language ->
-              onSettingsChange(settings.copy(defaultTargetLanguage = language))
+              onSettingsChange(settings.copy(defaultTargetLanguageCode = language.code))
             },
           )
 
@@ -530,15 +533,15 @@ fun SettingsScreen(
             )
 
             OutlinedTextField(
-              value = settings.translationModelsBaseUrl,
+              value = settings.translationModelsBaseUrl ?: "",
               onValueChange = {
-                onSettingsChange(settings.copy(translationModelsBaseUrl = it))
+                onSettingsChange(settings.copy(translationModelsBaseUrl = it.ifBlank { null }))
               },
+              placeholder = { Text(languageIndex?.translationModelsBaseUrl ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
               modifier = Modifier.fillMaxWidth(),
               singleLine = true,
             )
 
-            // Tesseract Models Base URL
             Text(
               text = "Base URL for Tesseract Models",
               style = MaterialTheme.typography.bodyMedium,
@@ -546,10 +549,11 @@ fun SettingsScreen(
             )
 
             OutlinedTextField(
-              value = settings.tesseractModelsBaseUrl,
+              value = settings.tesseractModelsBaseUrl ?: "",
               onValueChange = {
-                onSettingsChange(settings.copy(tesseractModelsBaseUrl = it))
+                onSettingsChange(settings.copy(tesseractModelsBaseUrl = it.ifBlank { null }))
               },
+              placeholder = { Text(languageIndex?.tesseractModelsBaseUrl ?: "", maxLines = 1, overflow = TextOverflow.Ellipsis) },
               modifier = Modifier.fillMaxWidth(),
               singleLine = true,
             )
@@ -830,15 +834,38 @@ private fun openAssistantSettings(context: Context) {
 
 private const val ASSISTANT_SETTING = "assistant"
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
   val context = LocalContext.current
+  val previewLangs =
+    listOf(
+      previewLanguage("en", "English"),
+      previewLanguage("es", "Spanish"),
+      previewLanguage("fr", "French"),
+    )
   TranslatorTheme {
     SettingsScreen(
       settings = AppSettings(),
-      languageMetadataManager = LanguageMetadataManager(context),
-      availableLanguages = Language.entries,
+      languageMetadataManager = LanguageMetadataManager(context, kotlinx.coroutines.flow.MutableStateFlow(emptyList())),
+      availableLanguages = previewLangs,
+      languageIndex = null,
       onSettingsChange = {},
       onManageLanguages = {},
     )
@@ -852,11 +879,18 @@ fun SettingsScreenPreview() {
 @Composable
 fun SettingsScreenDarkPreview() {
   val context = LocalContext.current
+  val previewLangs =
+    listOf(
+      previewLanguage("en", "English"),
+      previewLanguage("es", "Spanish"),
+      previewLanguage("fr", "French"),
+    )
   TranslatorTheme {
     SettingsScreen(
       settings = AppSettings(fontFactor = 3.0f),
-      languageMetadataManager = LanguageMetadataManager(context),
-      availableLanguages = Language.entries,
+      languageMetadataManager = LanguageMetadataManager(context, kotlinx.coroutines.flow.MutableStateFlow(emptyList())),
+      availableLanguages = previewLangs,
+      languageIndex = null,
       onSettingsChange = {},
       onManageLanguages = {},
     )

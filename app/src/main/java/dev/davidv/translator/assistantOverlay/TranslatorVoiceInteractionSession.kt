@@ -276,7 +276,7 @@ class TranslatorVoiceInteractionSession(
     val assistScreenshotEnabled = isAssistScreenshotEnabled()
     Log.d(
       tag,
-      "Showing assistant session flags=$showFlags assistStructureEnabled=$assistStructureEnabled assistScreenshotEnabled=$assistScreenshotEnabled forcedSource=${forcedSourceLanguage?.code} forcedTarget=${forcedTargetLanguage?.code} defaultSource=${settingsManager.settings.value.defaultSourceLanguage?.code} defaultTarget=${settingsManager.settings.value.defaultTargetLanguage.code}",
+      "Showing assistant session flags=$showFlags assistStructureEnabled=$assistStructureEnabled assistScreenshotEnabled=$assistScreenshotEnabled forcedSource=${forcedSourceLanguage?.code} forcedTarget=${forcedTargetLanguage?.code} defaultSource=${settingsManager.settings.value.defaultSourceLanguageCode} defaultTarget=${settingsManager.settings.value.defaultTargetLanguageCode}",
     )
     if (!assistStructureEnabled && !assistScreenshotEnabled) {
       Log.w(tag, "AssistStructure and screenshot capture are both disabled in system settings")
@@ -287,7 +287,10 @@ class TranslatorVoiceInteractionSession(
     }
 
     if (!assistStructureEnabled) {
-      val sourceLanguage = forcedSourceLanguage ?: settingsManager.settings.value.defaultSourceLanguage
+      val sourceLanguage =
+        forcedSourceLanguage ?: settingsManager.settings.value.defaultSourceLanguageCode?.let {
+          langStateManager.languageByCode(it)
+        }
       if (!assistScreenshotEnabled || sourceLanguage == null) {
         Log.w(
           tag,
@@ -568,7 +571,7 @@ class TranslatorVoiceInteractionSession(
     setOcrButtonVisible(false)
     val sourceLanguage =
       forcedSourceLanguage
-        ?: settingsManager.settings.value.defaultSourceLanguage
+        ?: settingsManager.settings.value.defaultSourceLanguageCode?.let { langStateManager.languageByCode(it) }
     if (sourceLanguage == null) {
       processing = false
       showLoading(false)
@@ -576,7 +579,7 @@ class TranslatorVoiceInteractionSession(
       return
     }
 
-    val targetLanguage = forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
+    val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
     val maxImageSize = settingsManager.settings.value.maxImageSize
     val cropped = cropSystemBars(screenshot)
     val copy = cropped.copy(Bitmap.Config.ARGB_8888, false)
@@ -761,12 +764,15 @@ class TranslatorVoiceInteractionSession(
     bitmap: Bitmap,
     region: Rect,
   ) {
-    val sourceLanguage = forcedSourceLanguage ?: settingsManager.settings.value.defaultSourceLanguage
+    val sourceLanguage =
+      forcedSourceLanguage ?: settingsManager.settings.value.defaultSourceLanguageCode?.let {
+        langStateManager.languageByCode(it)
+      }
     if (sourceLanguage == null) {
       showStatus("Set source language first for OCR")
       return
     }
-    val targetLanguage = forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
+    val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
 
     overlayContainer.removeAllViews()
     processing = true
@@ -926,7 +932,7 @@ class TranslatorVoiceInteractionSession(
         dpToPx = ::dpToPx,
         forcedSourceLanguage = forcedSourceLanguage,
         forcedTargetLanguage = forcedTargetLanguage,
-        defaultTargetLanguage = settingsManager.settings.value.defaultTargetLanguage,
+        defaultTargetLanguage = langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: langStateManager.languageByCode("en")!!,
         onClose = { hide() },
         onSourceClick = { showLanguagePicker(true) },
         onSwap = { swapLanguages() },
@@ -980,7 +986,7 @@ class TranslatorVoiceInteractionSession(
 
   private fun swapLanguages() {
     val oldSource = forcedSourceLanguage
-    val oldTarget = forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
+    val oldTarget = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
     forcedSourceLanguage = oldTarget
     forcedTargetLanguage = oldSource
     updateToolbarLabels()
@@ -1006,8 +1012,8 @@ class TranslatorVoiceInteractionSession(
 
   private fun updateToolbarLabels() {
     sourceLabelView?.text = forcedSourceLanguage?.shortDisplayName ?: "Auto"
-    val currentTarget = forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
-    targetLabelView?.text = currentTarget.shortDisplayName
+    val currentTarget = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
+    targetLabelView?.text = currentTarget?.shortDisplayName ?: "?"
   }
 
   private fun showLanguagePicker(isSource: Boolean) {

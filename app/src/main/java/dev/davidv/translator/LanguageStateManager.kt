@@ -48,8 +48,8 @@ fun canSwapLanguages(
   from: Language,
   to: Language,
 ): Boolean {
-  val toCanBeSource = to == Language.ENGLISH || toEnglishFiles.containsKey(to)
-  val fromCanBeTarget = from == Language.ENGLISH || fromEnglishFiles.containsKey(from)
+  val toCanBeSource = to.isEnglish || to.toEnglish != null
+  val fromCanBeTarget = from.isEnglish || from.fromEnglish != null
   return toCanBeSource && fromCanBeTarget
 }
 
@@ -58,8 +58,8 @@ fun canSwapLanguages(
   to: Language,
   availableLanguages: Map<Language, LangAvailability>,
 ): Boolean {
-  val toCanBeSource = to == Language.ENGLISH || availableLanguages[to]?.hasToEnglish == true
-  val fromCanBeTarget = from == Language.ENGLISH || availableLanguages[from]?.hasFromEnglish == true
+  val toCanBeSource = to.isEnglish || availableLanguages[to]?.hasToEnglish == true
+  val fromCanBeTarget = from.isEnglish || availableLanguages[from]?.hasFromEnglish == true
   return toCanBeSource && fromCanBeTarget
 }
 
@@ -71,7 +71,34 @@ fun isDictionaryAvailable(
 fun isDictionaryAvailable(
   dictFiles: Set<String>,
   language: Language,
-): Boolean = "${language.dictionaryCode()}.dict" in dictFiles
+): Boolean = "${language.dictionaryCode}.dict" in dictFiles
+
+fun missingFilesFrom(
+  dataFiles: Set<String>,
+  lang: Language,
+): Pair<Long, List<ModelFile>> {
+  val files = lang.fromEnglish?.allFiles() ?: return Pair(0L, emptyList())
+  val missing = files.filter { it.name !in dataFiles }
+  return Pair(missing.sumOf { it.sizeBytes }, missing)
+}
+
+fun missingFilesTo(
+  dataFiles: Set<String>,
+  lang: Language,
+): Pair<Long, List<ModelFile>> {
+  val files = lang.toEnglish?.allFiles() ?: return Pair(0L, emptyList())
+  val missing = files.filter { it.name !in dataFiles }
+  return Pair(missing.sumOf { it.sizeBytes }, missing)
+}
+
+fun missingFiles(
+  dataFiles: Set<String>,
+  lang: Language,
+): Pair<Long, List<ModelFile>> {
+  val (toSize, toFiles) = missingFilesTo(dataFiles, lang)
+  val (fromSize, fromFiles) = missingFilesFrom(dataFiles, lang)
+  return Pair(toSize + fromSize, toFiles + fromFiles)
+}
 
 class LanguageStateManager(
   private val scope: CoroutineScope,
@@ -81,24 +108,43 @@ class LanguageStateManager(
   private val _languageState = MutableStateFlow(LanguageAvailabilityState())
   val languageState: StateFlow<LanguageAvailabilityState> = _languageState.asStateFlow()
 
+  private val _languageIndex = MutableStateFlow<LanguageIndex?>(null)
+  val languageIndex: StateFlow<LanguageIndex?> = _languageIndex.asStateFlow()
+
   private val _dictionaryIndex = MutableStateFlow<DictionaryIndex?>(null)
   val dictionaryIndex: StateFlow<DictionaryIndex?> = _dictionaryIndex.asStateFlow()
 
   private val _dictionaryIndexVersion = MutableStateFlow(0)
   val dictionaryIndexVersion: StateFlow<Int> = _dictionaryIndexVersion.asStateFlow()
 
+  private val _languageIndexVersion = MutableStateFlow(0)
+  val languageIndexVersion: StateFlow<Int> = _languageIndexVersion.asStateFlow()
+
   private val _fileEvents = MutableSharedFlow<FileEvent>()
   val fileEvents: SharedFlow<FileEvent> = _fileEvents.asSharedFlow()
 
   private var downloadEventsJob: kotlinx.coroutines.Job? = null
 
+  fun languageByCode(code: String): Language? = _languageIndex.value?.languageByCode(code)
+
   init {
     if (downloadEvents != null) {
       connectToDownloadEvents(downloadEvents)
     }
-    refreshLanguageAvailability()
+    loadLanguageIndex()
     loadDictionaryIndex()
     loadMucabFile()
+  }
+
+  private fun loadLanguageIndex() {
+    scope.launch {
+      withContext(Dispatchers.IO) {
+        val index = filePathManager.loadLanguageIndex()
+        _languageIndex.value = index
+        Log.i("LanguageStateManager", "Language index loaded from file: ${index != null}")
+      }
+      refreshLanguageAvailability()
+    }
   }
 
   fun connectToDownloadEvents(downloadEvents: SharedFlow<DownloadEvent>) {
@@ -109,7 +155,7 @@ class LanguageStateManager(
           when (event) {
             is DownloadEvent.NewTranslationAvailable -> {
               addTranslationLanguage(event.language)
-              if (event.language == Language.JAPANESE) {
+              if (event.language.extraFiles.contains("mucab.bin")) {
                 loadMucabFile()
               }
             }
@@ -125,6 +171,12 @@ class LanguageStateManager(
               Log.i("LanguageStateManager", "Dictionary index downloaded: ${event.index}")
             }
 
+            is DownloadEvent.LanguageIndexDownloaded -> {
+              _languageIndex.value = event.index
+              _languageIndexVersion.value++
+              refreshLanguageAvailability()
+            }
+
             is DownloadEvent.DownloadError -> {
               Log.w("LanguageStateManager", "Download error: ${event.message}")
               _fileEvents.emit(FileEvent.Error(event.message))
@@ -137,6 +189,8 @@ class LanguageStateManager(
   fun refreshLanguageAvailability() {
     scope.launch {
       _languageState.value = _languageState.value.copy(isChecking = true)
+
+      val languages = _languageIndex.value?.languages ?: return@launch
 
       Log.i("LanguageStateManager", "Refreshing language availability")
       val availabilityMap =
@@ -163,20 +217,20 @@ class LanguageStateManager(
           Log.d("LanguageStateManager", "listed")
 
           buildMap {
-            put(
-              Language.ENGLISH,
-              LangAvailability(
-                hasFromEnglish = true,
-                hasToEnglish = true,
-                ocrFiles = true,
-                dictionaryFiles = isDictionaryAvailable(dictFiles, Language.ENGLISH),
-              ),
-            )
-
-            Language.entries.forEach { lang ->
-              if (lang != Language.ENGLISH) {
-                val fromAvailable = missingFilesFrom(dataFiles, lang).second.isEmpty() && fromEnglishFiles.containsKey(lang)
-                val toAvailable = missingFilesTo(dataFiles, lang).second.isEmpty() && toEnglishFiles.containsKey(lang)
+            languages.forEach { lang ->
+              if (lang.isEnglish) {
+                put(
+                  lang,
+                  LangAvailability(
+                    hasFromEnglish = true,
+                    hasToEnglish = true,
+                    ocrFiles = true,
+                    dictionaryFiles = isDictionaryAvailable(dictFiles, lang),
+                  ),
+                )
+              } else {
+                val fromAvailable = lang.fromEnglish != null && missingFilesFrom(dataFiles, lang).second.isEmpty()
+                val toAvailable = lang.toEnglish != null && missingFilesTo(dataFiles, lang).second.isEmpty()
                 val isOcrAvailable = "${lang.tessName}.traineddata" in tessFiles
                 put(
                   lang,
@@ -193,7 +247,7 @@ class LanguageStateManager(
           }
         }
 
-      val hasLanguages = availabilityMap.any { it.key != Language.ENGLISH && it.value.translatorFiles }
+      val hasLanguages = availabilityMap.any { !it.key.isEnglish && it.value.translatorFiles }
       Log.i("LanguageStateManager", "hasLanguages = $hasLanguages")
       _languageState.value =
         LanguageAvailabilityState(
@@ -210,15 +264,13 @@ class LanguageStateManager(
     val isDictAvail = isDictionaryAvailable(filePathManager, language)
     updatedLanguageMap[language] =
       LangAvailability(
-        hasFromEnglish = fromEnglishFiles.containsKey(language),
-        hasToEnglish = toEnglishFiles.containsKey(language),
+        hasFromEnglish = language.fromEnglish != null,
+        hasToEnglish = language.toEnglish != null,
         ocrFiles = true,
         dictionaryFiles = isDictAvail,
       )
 
-    // Only english doesn't count, so if it's non-english
-    // or we already had languages, then we still have them
-    val hasLanguages = _languageState.value.hasLanguages || language != Language.ENGLISH
+    val hasLanguages = _languageState.value.hasLanguages || !language.isEnglish
 
     _languageState.value =
       currentState.copy(
@@ -269,7 +321,7 @@ class LanguageStateManager(
     val updatedLanguageMap = currentState.availableLanguageMap.toMutableMap()
     updatedLanguageMap[language] = LangAvailability(hasFromEnglish = false, hasToEnglish = false, ocrFiles = false, dictionaryFiles = false)
 
-    val hasLanguages = updatedLanguageMap.any { it.key != Language.ENGLISH && it.value.translatorFiles }
+    val hasLanguages = updatedLanguageMap.any { !it.key.isEnglish && it.value.translatorFiles }
 
     _languageState.value =
       currentState.copy(
@@ -280,7 +332,7 @@ class LanguageStateManager(
     val hasSharedDictionaryLanguage =
       updatedLanguageMap.any {
         it.key != language &&
-          it.key.dictionaryCode() == language.dictionaryCode() &&
+          it.key.dictionaryCode == language.dictionaryCode &&
           it.value.translatorFiles
       }
     filePathManager.deleteLanguageFiles(language, deleteDictionary = !hasSharedDictionaryLanguage)
@@ -303,7 +355,7 @@ class LanguageStateManager(
     scope.launch {
       val index =
         withContext(Dispatchers.IO) {
-          filePathManager.loadDictionaryIndexFromFile()
+          filePathManager.loadDictionaryIndex()
         }
       _dictionaryIndex.value = index
       if (index != null) {
@@ -338,8 +390,8 @@ class LanguageStateManager(
     language: Language,
     available: Boolean,
   ) {
-    Language.entries
-      .filter { it.dictionaryCode() == language.dictionaryCode() }
+    (_languageIndex.value?.languages ?: return)
+      .filter { it.dictionaryCode == language.dictionaryCode }
       .forEach { sharedLanguage ->
         val existingAvailability = languageMap[sharedLanguage]
         languageMap[sharedLanguage] =

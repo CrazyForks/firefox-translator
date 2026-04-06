@@ -39,7 +39,7 @@ object TransliterationService {
     }
 
     return try {
-      if (language == Language.JAPANESE) {
+      if (language.code == "ja") {
         transliterateJapanese(text, mucabBinding, japaneseSpaced)
       } else {
         binding.transliterate(text, language.script)

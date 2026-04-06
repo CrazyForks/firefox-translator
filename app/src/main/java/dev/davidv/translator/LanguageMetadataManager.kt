@@ -28,7 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
@@ -38,24 +38,24 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 class LanguageMetadataManager(
   private val context: Context,
+  private val languagesFlow: StateFlow<List<Language>>,
 ) {
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
   val metadata: StateFlow<Map<Language, LanguageMetadata>> =
-    context.dataStore.data
-      .map { prefs ->
-        Language.entries.associateWith { lang ->
-          (
-            prefs[stringPreferencesKey("lang_${lang.code}")]?.let {
-              Json.decodeFromString<LanguageMetadata>(it)
-            } ?: LanguageMetadata()
-          )
-        }
-      }.stateIn(
-        scope = scope,
-        started = SharingStarted.Eagerly,
-        initialValue = emptyMap(),
-      )
+    combine(context.dataStore.data, languagesFlow) { prefs, languages ->
+      languages.associateWith { lang ->
+        (
+          prefs[stringPreferencesKey("lang_${lang.code}")]?.let {
+            Json.decodeFromString<LanguageMetadata>(it)
+          } ?: LanguageMetadata()
+        )
+      }
+    }.stateIn(
+      scope = scope,
+      started = SharingStarted.Eagerly,
+      initialValue = emptyMap(),
+    )
 
   fun updateLanguage(
     language: Language,

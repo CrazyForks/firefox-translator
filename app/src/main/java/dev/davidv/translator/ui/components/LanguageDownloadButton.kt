@@ -145,9 +145,26 @@ sealed class LanguageEvent {
   object FetchDictionaryIndex : LanguageEvent()
 }
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Preview(showBackground = true)
 @Composable
 fun LanguageDownloadButtonPreview() {
+  val french = previewLanguage("fr", "French")
   TranslatorTheme {
     Surface(
       modifier = Modifier.padding(16.dp),
@@ -158,43 +175,40 @@ fun LanguageDownloadButtonPreview() {
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
       ) {
-        // DL
         LanguageDownloadButton(
-          language = Language.FRENCH,
+          language = french,
           downloadState = null,
           isLanguageAvailable = false,
           onEvent = {},
           enabled = true,
         )
 
-        // Prog
         LanguageDownloadButton(
-          language = Language.FRENCH,
+          language = french,
           downloadState = DownloadState(isDownloading = true, totalSize = 100, downloaded = 50),
           isLanguageAvailable = false,
           onEvent = {},
           enabled = true,
         )
 
-        // Complete
         LanguageDownloadButton(
-          language = Language.FRENCH,
+          language = french,
           downloadState = null,
           isLanguageAvailable = true,
           onEvent = {},
           enabled = false,
         )
-        // Failed
+
         LanguageDownloadButton(
-          language = Language.FRENCH,
+          language = french,
           downloadState = DownloadState(error = "Failed"),
           isLanguageAvailable = false,
           onEvent = {},
           enabled = true,
         )
-        // Missing partial
+
         LanguageDownloadButton(
-          language = Language.FRENCH,
+          language = french,
           downloadState = null,
           isLanguageAvailable = true,
           onEvent = {},

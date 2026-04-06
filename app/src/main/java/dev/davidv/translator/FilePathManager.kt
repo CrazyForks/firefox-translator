@@ -37,9 +37,11 @@ class FilePathManager(
 
   fun getDictionariesDir(): File = File(baseDir, "dictionaries")
 
-  fun getDictionaryFile(language: Language): File = File(getDictionariesDir(), "${language.dictionaryCode()}.dict")
+  fun getDictionaryFile(language: Language): File = File(getDictionariesDir(), "${language.dictionaryCode}.dict")
 
   fun getDictionaryIndexFile(): File = File(baseDir, "dictionaries/index.json")
+
+  fun getLanguageIndexFile(): File = File(baseDir, "language_index.json")
 
   fun getMucabFile(): File = File(getDataDir(), "mucab.bin")
 
@@ -49,26 +51,21 @@ class FilePathManager(
   ) {
     val dataPath = getDataDir()
 
-    // Delete to English files
-    val toEnglishFiles = toEnglishFiles[language]
-    toEnglishFiles?.allFiles()?.forEach { modelFile ->
+    language.toEnglish?.allFiles()?.forEach { modelFile ->
       val file = File(dataPath, modelFile.name)
       if (file.exists() && file.delete()) {
         Log.i("FilePathManager", "Deleted: ${modelFile.name}")
       }
     }
 
-    // Delete from English files
-    val fromEnglishFiles = fromEnglishFiles[language]
-    fromEnglishFiles?.allFiles()?.forEach { modelFile ->
+    language.fromEnglish?.allFiles()?.forEach { modelFile ->
       val file = File(dataPath, modelFile.name)
       if (file.exists() && file.delete()) {
         Log.i("FilePathManager", "Deleted: ${modelFile.name}")
       }
     }
 
-    // Delete extra files
-    extraFiles[language]?.forEach { fileName ->
+    language.extraFiles.forEach { fileName ->
       val file = File(dataPath, fileName)
       if (file.exists() && file.delete()) {
         Log.i("FilePathManager", "Deleted extra file: $fileName")
@@ -91,12 +88,9 @@ class FilePathManager(
     }
   }
 
-  fun loadDictionaryIndexFromFile(): DictionaryIndex? {
+  fun loadDictionaryIndex(): DictionaryIndex? {
     return try {
-      val indexFile = getDictionaryIndexFile()
-      if (!indexFile.exists()) return null
-
-      val jsonString = indexFile.readText()
+      val jsonString = loadWithAssetFallback(getDictionaryIndexFile(), "dictionary_index.json") ?: return null
       val jsonObject = org.json.JSONObject(jsonString)
 
       val dictionariesJson = jsonObject.getJSONObject("dictionaries")
@@ -120,7 +114,29 @@ class FilePathManager(
         version = jsonObject.getInt("version"),
       )
     } catch (e: Exception) {
-      Log.e("FilePathManager", "Error parsing dictionary index file", e)
+      Log.e("FilePathManager", "Error parsing dictionary index", e)
+      null
+    }
+  }
+
+  fun loadLanguageIndex(): LanguageIndex? {
+    return try {
+      val jsonString = loadWithAssetFallback(getLanguageIndexFile(), "language_index.json") ?: return null
+      parseLanguageIndex(jsonString)
+    } catch (e: Exception) {
+      Log.e("FilePathManager", "Error parsing language index", e)
+      null
+    }
+  }
+
+  private fun loadWithAssetFallback(
+    diskFile: File,
+    assetName: String,
+  ): String? {
+    if (diskFile.exists()) return diskFile.readText()
+    return try {
+      context.assets.open(assetName).bufferedReader().readText()
+    } catch (_: Exception) {
       null
     }
   }

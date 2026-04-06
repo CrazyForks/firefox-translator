@@ -122,27 +122,30 @@ class TranslatorViewModel(
         langState.isChecking -> NavigationState.LOADING
         !langState.hasLanguages -> NavigationState.NO_LANGUAGES
         fromLang != null && toLang != null -> NavigationState.READY
-        else -> NavigationState.LOADING // Still initializing from/to
+        else -> NavigationState.LOADING
       }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, NavigationState.LOADING)
 
   init {
-    val settings = settingsManager.settings.value
-    _to.value = settings.defaultTargetLanguage
-
-    // Animate in modal on launch
     if (initialLaunchMode != LaunchMode.Normal) {
       _modalVisible.value = true
     }
 
-    // Collect file events from LanguageStateManager
     viewModelScope.launch {
       languageStateManager.fileEvents.collect { event ->
         handleFileEvent(event)
       }
     }
 
-    // Load dictionary bindings when languages become available
+    viewModelScope.launch {
+      languageStateManager.languageIndex.collect { index ->
+        if (index == null) return@collect
+        if (_to.value != null) return@collect
+        val settings = settingsManager.settings.value
+        _to.value = index.languageByCode(settings.defaultTargetLanguageCode) ?: index.english
+      }
+    }
+
     viewModelScope.launch {
       languageStateManager.languageState.collect { languageState ->
         languageState.availableLanguageMap.forEach { (language, availability) ->
@@ -163,29 +166,31 @@ class TranslatorViewModel(
       }
     }
 
-    // Update prefs when languages are deleted
     viewModelScope.launch {
       languageStateManager.languageState.collect { languageState ->
         if (!languageState.hasLanguages) return@collect
+        val index = languageStateManager.languageIndex.value ?: return@collect
         val curSettings = settingsManager.settings.value
-        if (languageState.availableLanguageMap[curSettings.defaultTargetLanguage]?.translatorFiles == false) {
-          _to.value = Language.ENGLISH
-          settingsManager.updateSettings(curSettings.copy(defaultTargetLanguage = Language.ENGLISH))
+        val targetLang = index.languageByCode(curSettings.defaultTargetLanguageCode)
+        if (targetLang != null && languageState.availableLanguageMap[targetLang]?.translatorFiles == false) {
+          _to.value = index.english
+          settingsManager.updateSettings(curSettings.copy(defaultTargetLanguageCode = "en"))
         }
-        if (languageState.availableLanguageMap[curSettings.defaultSourceLanguage]?.translatorFiles == false) {
-          _from.value = Language.ENGLISH
-          settingsManager.updateSettings(curSettings.copy(defaultSourceLanguage = Language.ENGLISH))
+        val sourceLang = curSettings.defaultSourceLanguageCode?.let { index.languageByCode(it) }
+        if (sourceLang != null && languageState.availableLanguageMap[sourceLang]?.translatorFiles == false) {
+          _from.value = index.english
+          settingsManager.updateSettings(curSettings.copy(defaultSourceLanguageCode = "en"))
         }
       }
     }
 
-    // Initialize from language when languages become available
     viewModelScope.launch {
       languageStateManager.languageState.collect { languageState ->
         if (!languageState.hasLanguages) return@collect
+        val index = languageStateManager.languageIndex.value ?: return@collect
         val curSettings = settingsManager.settings.value
-        val preferredSource = curSettings.defaultSourceLanguage
-        val preferredAvail = languageState.availableLanguageMap[preferredSource]?.translatorFiles == true
+        val preferredSource = curSettings.defaultSourceLanguageCode?.let { index.languageByCode(it) }
+        val preferredAvail = preferredSource != null && languageState.availableLanguageMap[preferredSource]?.translatorFiles == true
 
         if (_from.value == null) {
           val currentTo = _to.value
@@ -528,6 +533,7 @@ class TranslatorViewModel(
   private fun handleFileEvent(event: FileEvent) {
     when (event) {
       is FileEvent.LanguageDeleted -> {
+        val index = languageStateManager.languageIndex.value
         val langs = languageStateManager.languageState.value.availableLanguageMap
         val validLangs = langs.filter { it.key != event.language }.filter { it.value.translatorFiles }
         val currentFrom = _from.value
@@ -536,9 +542,10 @@ class TranslatorViewModel(
           _from.value = validLangs.filterNot { it.key == currentTo }.keys.firstOrNull()
         }
         if (currentTo == event.language) {
-          _to.value = validLangs.filterNot { it.key == currentFrom }.keys.firstOrNull() ?: Language.ENGLISH
+          _to.value = validLangs.filterNot { it.key == currentFrom }.keys.firstOrNull()
+            ?: index?.english
         }
-        if (event.language == Language.JAPANESE) {
+        if (event.language.code == "ja") {
           translationCoordinator.setMucabBinding(null)
         }
         Log.d("TranslatorViewModel", "Language deleted: ${event.language}")

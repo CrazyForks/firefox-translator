@@ -52,7 +52,8 @@ class TranslatorAccessibilityService : AccessibilityService() {
   private var lastOcrBitmap: Bitmap? = null
   private var lastOcrRegion: Rect? = null
   private lateinit var overlayTextTranslationHelper: OverlayTextTranslationHelper
-  private lateinit var langStateManager: LanguageStateManager
+  lateinit var langStateManager: LanguageStateManager
+    private set
 
   lateinit var ui: OverlayUI
     private set
@@ -81,18 +82,25 @@ class TranslatorAccessibilityService : AccessibilityService() {
 
     settingsManager = SettingsManager(this)
     val filePathManager = FilePathManager(this, settingsManager.settings)
-    val translationService = TranslationService(settingsManager, filePathManager)
-    val languageDetector = LanguageDetector()
-    imageProcessor = ImageProcessor(this, OCRService(filePathManager))
-    translationCoordinator = TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)
     langStateManager = LanguageStateManager(serviceScope, filePathManager, null)
-    overlayTextTranslationHelper =
-      OverlayTextTranslationHelper(
-        settingsManager = settingsManager,
-        batchTextTranslator = BatchTextTranslator(translationCoordinator),
-        langStateManager = langStateManager,
-        languageMetadataManager = LanguageMetadataManager(this),
-      )
+    val languageDetector = LanguageDetector(langStateManager::languageByCode)
+    imageProcessor = ImageProcessor(this, OCRService(filePathManager))
+
+    serviceScope.launch {
+      langStateManager.languageIndex.collect { index ->
+        if (index == null) return@collect
+        val translationService = TranslationService(settingsManager, filePathManager, index.english)
+        translationCoordinator = TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)
+        val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow(index.languages)
+        overlayTextTranslationHelper =
+          OverlayTextTranslationHelper(
+            settingsManager = settingsManager,
+            batchTextTranslator = BatchTextTranslator(translationCoordinator),
+            langStateManager = langStateManager,
+            languageMetadataManager = LanguageMetadataManager(this@TranslatorAccessibilityService, languagesFlow),
+          )
+      }
+    }
 
     ui = OverlayUI(this, windowManager, settingsManager)
     input = OverlayInput(this, windowManager, ui, settingsManager)
@@ -169,7 +177,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
 
   fun swapLanguages() {
     val oldSource = forcedSourceLanguage ?: return
-    val oldTarget = forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
+    val oldTarget = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
     if (!canSwapLanguages(oldSource, oldTarget)) return
     forcedSourceLanguage = oldTarget
     forcedTargetLanguage = oldSource
@@ -310,7 +318,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     region: Rect,
   ) {
     val sourceLang = forcedSourceLanguage ?: return
-    val targetLang = forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
+    val targetLang = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
 
     val result =
       withContext(Dispatchers.IO) {

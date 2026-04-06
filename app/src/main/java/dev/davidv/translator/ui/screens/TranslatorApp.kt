@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,7 +63,6 @@ import dev.davidv.translator.Language
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.TarkkaBinding
 import dev.davidv.translator.TranslatorMessage
-import dev.davidv.translator.downloadableLanguages
 import dev.davidv.translator.ui.TranslatorViewModel
 import dev.davidv.translator.ui.UiEvent
 import kotlinx.coroutines.Dispatchers
@@ -211,7 +211,6 @@ fun TranslatorApp(
       }
     }
 
-  // Navigate when state changes from loading
   LaunchedEffect(navigationState) {
     val currentRoute = navController.currentDestination?.route
     val targetRoute =
@@ -357,12 +356,13 @@ fun TranslatorApp(
             }
           }
           composable("language_manager") {
-            if (downloadService != null) {
-              val curDownloadService = downloadService!!
+            val curDownloadService = downloadService
+            val langIndex = viewModel.languageStateManager.languageIndex.collectAsState().value
+            if (curDownloadService != null && langIndex != null) {
               val availLangs = languageState.availableLanguageMap.filterValues { it.translatorFiles }.keys
-              val installedLanguages = availLangs.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
+              val installedLanguages = availLangs.filter { !it.isEnglish }.sortedBy { it.displayName }
               val availableLanguages =
-                downloadableLanguages
+                langIndex.downloadable
                   .filter { lang -> !availLangs.contains(lang) }
                   .sortedBy { it.displayName }
               val dictionaryDownloadStates by curDownloadService.dictionaryDownloadStates.collectAsState()
@@ -391,14 +391,26 @@ fun TranslatorApp(
             }
           }
           composable("settings") {
+            val langIndex = viewModel.languageStateManager.languageIndex.collectAsState().value
+            val englishLang = langIndex?.english
+            val availableWithEnglish =
+              if (englishLang != null) {
+                (languageState.availableLanguageMap.filterValues { it.translatorFiles }.keys + englishLang).toList()
+              } else {
+                languageState.availableLanguageMap.filterValues { it.translatorFiles }.keys.toList()
+              }
             SettingsScreen(
               settings = settings,
               languageMetadataManager = viewModel.languageMetadataManager,
-              availableLanguages = (languageState.availableLanguageMap.filterValues { it.translatorFiles }.keys + Language.ENGLISH).toList(),
+              availableLanguages = availableWithEnglish,
+              languageIndex = langIndex,
               onSettingsChange = { newSettings ->
                 viewModel.settingsManager.updateSettings(newSettings)
-                if (newSettings.defaultTargetLanguage != settings.defaultTargetLanguage) {
-                  viewModel.handleMessage(dev.davidv.translator.TranslatorMessage.ToLang(newSettings.defaultTargetLanguage))
+                if (newSettings.defaultTargetLanguageCode != settings.defaultTargetLanguageCode) {
+                  val targetLang = langIndex?.languageByCode(newSettings.defaultTargetLanguageCode)
+                  if (targetLang != null) {
+                    viewModel.handleMessage(dev.davidv.translator.TranslatorMessage.ToLang(targetLang))
+                  }
                 }
                 if (newSettings.useExternalStorage != settings.useExternalStorage) {
                   viewModel.languageStateManager.refreshLanguageAvailability()

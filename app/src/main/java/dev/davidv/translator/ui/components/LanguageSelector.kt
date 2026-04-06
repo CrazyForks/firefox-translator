@@ -124,6 +124,22 @@ fun LanguageSelector(
   }
 }
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Preview(showBackground = true)
 @Composable
 fun LanguageSelectorAzerbaijaniPreview() {
@@ -132,16 +148,16 @@ fun LanguageSelectorAzerbaijaniPreview() {
       color = MaterialTheme.colorScheme.surface,
     ) {
       LanguageSelector(
-        selectedLanguage = Language.AZERBAIJANI,
+        selectedLanguage = previewLanguage("az", "Azerbaijani"),
         availableLanguages =
           listOf(
-            Language.ENGLISH,
-            Language.SPANISH,
-            Language.FRENCH,
-            Language.AZERBAIJANI,
-            Language.GERMAN,
+            previewLanguage("en", "English"),
+            previewLanguage("es", "Spanish"),
+            previewLanguage("fr", "French"),
+            previewLanguage("az", "Azerbaijani"),
+            previewLanguage("de", "German"),
           ),
-        languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+        languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
         onLanguageSelected = { },
       )
     }
@@ -156,16 +172,16 @@ fun LanguageSelectorSpanishPreview() {
       color = MaterialTheme.colorScheme.surface,
     ) {
       LanguageSelector(
-        selectedLanguage = Language.SPANISH,
+        selectedLanguage = previewLanguage("es", "Spanish"),
         availableLanguages =
           listOf(
-            Language.ENGLISH,
-            Language.SPANISH,
-            Language.FRENCH,
-            Language.AZERBAIJANI,
-            Language.GERMAN,
+            previewLanguage("en", "English"),
+            previewLanguage("es", "Spanish"),
+            previewLanguage("fr", "French"),
+            previewLanguage("az", "Azerbaijani"),
+            previewLanguage("de", "German"),
           ),
-        languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+        languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
         onLanguageSelected = { },
       )
     }

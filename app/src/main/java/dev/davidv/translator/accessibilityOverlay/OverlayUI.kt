@@ -204,7 +204,7 @@ class OverlayUI(
         dpToPx = ::dpToPx,
         forcedSourceLanguage = forcedSourceLanguage,
         forcedTargetLanguage = forcedTargetLanguage,
-        defaultTargetLanguage = settingsManager.settings.value.defaultTargetLanguage,
+        defaultTargetLanguage = service.langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return,
         onClose = { service.deactivate() },
         onSourceClick = { service.showLanguagePicker(true) },
         onSwap = { service.swapLanguages() },
@@ -251,8 +251,8 @@ class OverlayUI(
     forcedTargetLanguage: Language?,
   ) {
     sourceLabelView?.text = forcedSourceLanguage?.shortDisplayName ?: "Auto"
-    val currentTarget = forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
-    targetLabelView?.text = currentTarget.shortDisplayName
+    val currentTarget = forcedTargetLanguage ?: service.langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
+    targetLabelView?.text = currentTarget?.shortDisplayName ?: "?"
   }
 
   fun setOcrButtonVisible(visible: Boolean) {

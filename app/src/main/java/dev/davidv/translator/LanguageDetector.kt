@@ -22,7 +22,9 @@ import dev.davidv.bergamot.LangDetect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class LanguageDetector {
+class LanguageDetector(
+  private val languageByCode: (String) -> Language?,
+) {
   private val tag = this.javaClass.name.substringAfterLast('.')
 
   private val langDetect = LangDetect()
@@ -38,7 +40,7 @@ class LanguageDetector {
 
       val detected = langDetect.detectLanguage(text, fromLang?.code)
       if (detected.isReliable) {
-        Language.entries.firstOrNull { it.code == detected.language }
+        languageByCode(detected.language)
       } else {
         null
       }
@@ -57,11 +59,11 @@ class LanguageDetector {
       }
 
       for (lang in availableLanguages) {
-        if (lang == hint) continue // Already tried
+        if (lang == hint) continue
         Log.d(tag, "trying ${lang.code}")
         val detected = langDetect.detectLanguage(text, lang.code)
         if (detected.isReliable) {
-          val detectedLang = Language.entries.firstOrNull { it.code == detected.language }
+          val detectedLang = languageByCode(detected.language)
           if (detectedLang == lang) {
             return@withContext lang
           }

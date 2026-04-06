@@ -54,19 +54,35 @@ fun DetectedLanguageSection(
   }
 }
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Preview(showBackground = true)
 @Composable
 fun DetectedLanguageSectionPreview() {
   TranslatorTheme {
     DetectedLanguageSection(
-      detectedLanguage = Language.FRENCH,
-      from = Language.ENGLISH,
+      detectedLanguage = previewLanguage("fr", "French"),
+      from = previewLanguage("en", "English"),
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
-          Language.GERMAN to LangAvailability(false, false, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
+          previewLanguage("de", "German") to LangAvailability(false, false, true, true),
         ),
       onMessage = {},
       downloadStates = emptyMap(),
@@ -81,12 +97,12 @@ fun DetectedLanguageSectionNoDetectionPreview() {
   TranslatorTheme {
     DetectedLanguageSection(
       detectedLanguage = null,
-      from = Language.ENGLISH,
+      from = previewLanguage("en", "English"),
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
         ),
       onMessage = {},
       downloadStates = emptyMap(),
@@ -103,13 +119,13 @@ fun DetectedLanguageSectionNoDetectionPreview() {
 fun DetectedLanguageSectionDarkPreview() {
   TranslatorTheme {
     DetectedLanguageSection(
-      detectedLanguage = Language.GERMAN,
-      from = Language.SPANISH,
+      detectedLanguage = previewLanguage("de", "German"),
+      from = previewLanguage("es", "Spanish"),
       availableLanguages =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, true),
-          Language.GERMAN to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true),
+          previewLanguage("de", "German") to LangAvailability(true, true, true, true),
         ),
       onMessage = {},
       downloadStates = emptyMap(),

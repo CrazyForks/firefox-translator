@@ -54,7 +54,11 @@ class OverlayTextTranslationHelper(
 
   suspend fun awaitTargetLanguage(forcedTargetLanguage: Language?): Language {
     awaitTranslatorLanguages()
-    return forcedTargetLanguage ?: settingsManager.settings.value.defaultTargetLanguage
+    if (forcedTargetLanguage != null) return forcedTargetLanguage
+    val code = settingsManager.settings.value.defaultTargetLanguageCode
+    return langStateManager.languageByCode(code)
+      ?: langStateManager.languageState.value.availableLanguageMap.keys.firstOrNull { it.isEnglish }
+      ?: langStateManager.languageState.value.availableLanguageMap.keys.first()
   }
 
   fun availableLanguages(isSource: Boolean): List<Language> {

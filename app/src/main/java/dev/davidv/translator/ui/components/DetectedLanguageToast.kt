@@ -108,13 +108,29 @@ fun DetectedLanguageToast(
   }
 }
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Preview(showBackground = true)
 @Composable
 fun DetectedLanguageToastPreview() {
   TranslatorTheme {
     DetectedLanguageToast(
-      detectedLanguage = Language.SPANISH,
-      availableLanguages = mapOf(Language.SPANISH to LangAvailability(true, true, true, true)),
+      detectedLanguage = previewLanguage("es", "Spanish"),
+      availableLanguages = mapOf(previewLanguage("es", "Spanish") to LangAvailability(true, true, true, true)),
       onSwitchClick = {},
       onEvent = {},
       downloadStates = emptyMap(),
@@ -130,8 +146,8 @@ fun DetectedLanguageToastPreview() {
 fun DetectedLanguageToastDarkPreview() {
   TranslatorTheme {
     DetectedLanguageToast(
-      detectedLanguage = Language.FRENCH,
-      availableLanguages = mapOf(Language.FRENCH to LangAvailability(true, true, true, true)),
+      detectedLanguage = previewLanguage("fr", "French"),
+      availableLanguages = mapOf(previewLanguage("fr", "French") to LangAvailability(true, true, true, true)),
       onSwitchClick = {},
       onEvent = {},
       downloadStates = emptyMap(),
@@ -147,8 +163,8 @@ fun DetectedLanguageToastDarkPreview() {
 fun MissingLanguage() {
   TranslatorTheme {
     DetectedLanguageToast(
-      detectedLanguage = Language.SPANISH,
-      availableLanguages = mapOf(Language.FRENCH to LangAvailability(false, false, true, true)),
+      detectedLanguage = previewLanguage("es", "Spanish"),
+      availableLanguages = mapOf(previewLanguage("fr", "French") to LangAvailability(false, false, true, true)),
       onSwitchClick = {},
       onEvent = {},
       downloadStates = emptyMap(),

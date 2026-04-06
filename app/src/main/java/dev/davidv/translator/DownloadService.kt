@@ -97,20 +97,24 @@ class DownloadService : Service() {
   private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
   private val settingsManager by lazy { SettingsManager(this) }
   private val filePathManager by lazy { FilePathManager(this, settingsManager.settings) }
+  private var cachedLanguageIndex: LanguageIndex? = null
 
-  // Track download status for each language
+  private fun getLanguageIndex(): LanguageIndex? {
+    cachedLanguageIndex?.let { return it }
+    val index = filePathManager.loadLanguageIndex()
+    cachedLanguageIndex = index
+    return index
+  }
+
   private val _downloadStates = MutableStateFlow<Map<Language, DownloadState>>(emptyMap())
   val downloadStates: StateFlow<Map<Language, DownloadState>> = _downloadStates
 
-  // Track dictionary download status for each language
   private val _dictionaryDownloadStates = MutableStateFlow<Map<Language, DownloadState>>(emptyMap())
   val dictionaryDownloadStates: StateFlow<Map<Language, DownloadState>> = _dictionaryDownloadStates
 
-  // Event emission for download lifecycle changes
   private val _downloadEvents = MutableSharedFlow<DownloadEvent>()
   val downloadEvents: SharedFlow<DownloadEvent> = _downloadEvents.asSharedFlow()
 
-  // Track download jobs for cancellation
   private val downloadJobs = mutableMapOf<Language, Job>()
   private val dictionaryDownloadJobs = mutableMapOf<Language, Job>()
 
@@ -173,6 +177,14 @@ class DownloadService : Service() {
         }
       context.startService(intent)
     }
+
+    fun fetchLanguageIndex(context: Context) {
+      val intent =
+        Intent(context, DownloadService::class.java).apply {
+          action = "FETCH_LANGUAGE_INDEX"
+        }
+      context.startService(intent)
+    }
   }
 
   override fun onStartCommand(
@@ -182,41 +194,41 @@ class DownloadService : Service() {
   ): Int {
     when (intent?.action) {
       "START_DOWNLOAD" -> {
-        val languageCode = intent.getStringExtra("language_code")
-        val language = Language.entries.find { it.code == languageCode }
-        if (language != null) {
-          startLanguageDownload(language)
-        }
+        val languageCode = intent.getStringExtra("language_code") ?: return START_NOT_STICKY
+        val index = getLanguageIndex() ?: return START_NOT_STICKY
+        val language = index.languageByCode(languageCode) ?: return START_NOT_STICKY
+        startLanguageDownload(language, index)
       }
 
       "CANCEL_DOWNLOAD" -> {
-        val languageCode = intent.getStringExtra("language_code")
-        val language = Language.entries.find { it.code == languageCode }
-        if (language != null) {
-          cancelLanguageDownload(language)
-        }
+        val languageCode = intent.getStringExtra("language_code") ?: return START_NOT_STICKY
+        val index = getLanguageIndex() ?: return START_NOT_STICKY
+        val language = index.languageByCode(languageCode) ?: return START_NOT_STICKY
+        cancelLanguageDownload(language)
       }
 
       "START_DICT_DOWNLOAD" -> {
-        val languageCode = intent.getStringExtra("language_code")
+        val languageCode = intent.getStringExtra("language_code") ?: return START_NOT_STICKY
         val dictionarySize = intent.getLongExtra("dictionary_size", 1000000L)
         Log.d("onStartCommand", "Dict download for $languageCode")
-        val language = Language.entries.find { it.code == languageCode }
-        if (language != null) {
-          startDictionaryDownload(language, dictionarySize)
-        }
+        val index = getLanguageIndex() ?: return START_NOT_STICKY
+        val language = index.languageByCode(languageCode) ?: return START_NOT_STICKY
+        startDictionaryDownload(language, index, dictionarySize)
       }
 
       "CANCEL_DICT_DOWNLOAD" -> {
-        val languageCode = intent.getStringExtra("language_code")
-        val language = Language.entries.find { it.code == languageCode }
-        if (language != null) {
-          cancelDictionaryDownload(language)
-        }
+        val languageCode = intent.getStringExtra("language_code") ?: return START_NOT_STICKY
+        val index = getLanguageIndex() ?: return START_NOT_STICKY
+        val language = index.languageByCode(languageCode) ?: return START_NOT_STICKY
+        cancelDictionaryDownload(language)
       }
 
       "FETCH_DICTIONARY_INDEX" -> {
         fetchDictionaryIndex()
+      }
+
+      "FETCH_LANGUAGE_INDEX" -> {
+        fetchLanguageIndex()
       }
     }
     return START_STICKY
@@ -224,8 +236,10 @@ class DownloadService : Service() {
 
   override fun onBind(intent: Intent): IBinder = binder
 
-  private fun startLanguageDownload(language: Language) {
-    // Don't start if already downloading
+  private fun startLanguageDownload(
+    language: Language,
+    index: LanguageIndex,
+  ) {
     if (_downloadStates.value[language]?.isDownloading == true) return
     updateDownloadState(language) {
       DownloadState(
@@ -251,41 +265,40 @@ class DownloadService : Service() {
           val (fromSize, missingFrom) = missingFilesFrom(dataFiles, language)
           val (toSize, missingTo) = missingFilesTo(dataFiles, language)
           val tessFile = File(tessDir, language.tessFilename)
-          val engTessFile = File(tessDir, Language.ENGLISH.tessFilename)
-          var toDownload = (fromSize + toSize).toLong()
+          val english = index.english
+          val engTessFile = File(tessDir, english.tessFilename)
+          var toDownload = fromSize + toSize
           if (missingTo.isNotEmpty()) {
-            val tasks = downloadLanguageFiles(dataDir, missingTo, language)
+            val tasks = downloadLanguageFiles(index, dataDir, missingTo, language)
             downloadTasks.addAll(tasks)
           }
 
           if (missingFrom.isNotEmpty()) {
-            val tasks = downloadLanguageFiles(dataDir, missingFrom, language)
+            val tasks = downloadLanguageFiles(index, dataDir, missingFrom, language)
             downloadTasks.addAll(tasks)
           }
 
           if (!tessFile.exists()) {
-            val task = downloadTessData(language)
+            val task = downloadTessData(index, language)
             toDownload += language.tessdataSizeBytes
             downloadTasks.add(task)
           }
 
-          // Always ensure English OCR is available
           if (!engTessFile.exists()) {
-            val task = downloadTessData(Language.ENGLISH)
-            toDownload += Language.ENGLISH.tessdataSizeBytes
+            val task = downloadTessData(index, english)
+            toDownload += english.tessdataSizeBytes
             downloadTasks.add(task)
           }
 
-          extraFiles[language]?.forEach { extraFileName ->
+          language.extraFiles.forEach { extraFileName ->
             val extraFile = File(dataDir, extraFileName)
             if (!extraFile.exists()) {
               downloadTasks.add {
-                downloadExtraFile(language, extraFileName, extraFile)
+                downloadExtraFile(index, language, extraFileName, extraFile)
               }
             }
           }
 
-          // Execute all downloads in parallel
           var success = true
           if (downloadTasks.isNotEmpty()) {
             updateDownloadState(language) {
@@ -327,6 +340,7 @@ class DownloadService : Service() {
 
   private fun startDictionaryDownload(
     language: Language,
+    index: LanguageIndex,
     dictionarySize: Long,
   ) {
     if (_dictionaryDownloadStates.value[language]?.isDownloading == true) return
@@ -347,7 +361,7 @@ class DownloadService : Service() {
         if (!dictionaryFile.exists()) {
           toDownload += dictionarySize
           downloadTasks.add {
-            downloadDictionaryFile(language, dictionaryFile)
+            downloadDictionaryFile(index, language, dictionaryFile)
           }
         }
 
@@ -477,11 +491,12 @@ class DownloadService : Service() {
   }
 
   private fun downloadLanguageFiles(
+    index: LanguageIndex,
     dataPath: File,
     files: List<ModelFile>,
     targetLanguage: Language,
   ): List<suspend () -> Boolean> {
-    val base = settingsManager.settings.value.translationModelsBaseUrl
+    val base = settingsManager.settings.value.translationModelsBaseUrl ?: index.translationModelsBaseUrl
     val downloadJobs =
       files.mapNotNull { modelFile ->
         val file = File(dataPath, modelFile.name)
@@ -507,13 +522,17 @@ class DownloadService : Service() {
     return downloadJobs
   }
 
-  private fun downloadTessData(language: Language): suspend () -> Boolean {
+  private fun downloadTessData(
+    index: LanguageIndex,
+    language: Language,
+  ): suspend () -> Boolean {
     val tessDataPath = filePathManager.getTesseractDataDir()
     if (!tessDataPath.isDirectory) {
       tessDataPath.mkdirs()
     }
     val tessFile = File(tessDataPath, "${language.tessName}.traineddata")
-    val url = "${settingsManager.settings.value.tesseractModelsBaseUrl}/${language.tessName}.traineddata"
+    val tessBase = settingsManager.settings.value.tesseractModelsBaseUrl ?: index.tesseractModelsBaseUrl
+    val url = "$tessBase/${language.tessName}.traineddata"
 
     if (tessFile.exists()) {
       return suspend { true }
@@ -538,11 +557,12 @@ class DownloadService : Service() {
   }
 
   private suspend fun downloadExtraFile(
+    index: LanguageIndex,
     language: Language,
     fileName: String,
     outputFile: File,
   ): Boolean {
-    val url = "${settingsManager.settings.value.dictionaryBaseUrl}/extra/$fileName"
+    val url = "${index.dictionaryBaseUrl}/extra/$fileName"
     return try {
       val success =
         download(url, outputFile) { incrementalProgress ->
@@ -615,10 +635,11 @@ class DownloadService : Service() {
   }
 
   private suspend fun downloadDictionaryFile(
+    index: LanguageIndex,
     language: Language,
     outputFile: File,
   ): Boolean {
-    val url = "${settingsManager.settings.value.dictionaryBaseUrl}/${Constants.DICT_VERSION}/${language.dictionaryCode()}.dict"
+    val url = "${index.dictionaryBaseUrl}/${Constants.DICT_VERSION}/${language.dictionaryCode}.dict"
 
     return try {
       download(url, outputFile) { incrementalProgress ->
@@ -637,7 +658,7 @@ class DownloadService : Service() {
     serviceScope.launch {
       try {
         val indexFile = filePathManager.getDictionaryIndexFile()
-        val url = "${settingsManager.settings.value.dictionaryBaseUrl}/${Constants.DICT_VERSION}/index.json"
+        val url = "${Constants.DEFAULT_DICTIONARY_BASE_URL}/${Constants.DICT_VERSION}/index.json"
 
         indexFile.parentFile?.mkdirs()
         val tempFile = File(indexFile.parentFile, "${indexFile.name}.tmp")
@@ -655,7 +676,7 @@ class DownloadService : Service() {
 
         if (tempFile.renameTo(indexFile)) {
           Log.i("DownloadService", "Downloaded dictionary index from $url to $indexFile")
-          val index = filePathManager.loadDictionaryIndexFromFile()
+          val index = filePathManager.loadDictionaryIndex()
           if (index != null) {
             _downloadEvents.emit(DownloadEvent.DictionaryIndexDownloaded(index))
           }
@@ -667,6 +688,46 @@ class DownloadService : Service() {
       } catch (e: Exception) {
         Log.e("DownloadService", "Error downloading dictionary index", e)
         val errorMessage = "Failed to download dictionary index: ${e.message ?: "Unknown error"}"
+        _downloadEvents.emit(DownloadEvent.DownloadError(errorMessage))
+      }
+    }
+  }
+
+  private fun fetchLanguageIndex() {
+    serviceScope.launch {
+      try {
+        val indexFile = filePathManager.getLanguageIndexFile()
+        val url = "${Constants.DEFAULT_LANGUAGE_INDEX_BASE_URL}/${Constants.LANGUAGE_INDEX_VERSION}/index.json"
+
+        indexFile.parentFile?.mkdirs()
+        val tempFile = File(indexFile.parentFile, "${indexFile.name}.tmp")
+
+        val conn = URL(url).openConnection()
+        conn.getInputStream().use { inputStream ->
+          tempFile.outputStream().use { output ->
+            val buffer = ByteArray(16384)
+            var bytesRead: Int
+            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+              output.write(buffer, 0, bytesRead)
+            }
+          }
+        }
+
+        if (tempFile.renameTo(indexFile)) {
+          Log.i("DownloadService", "Downloaded language index from $url to $indexFile")
+          val index = filePathManager.loadLanguageIndex()
+          if (index != null) {
+            cachedLanguageIndex = index
+            _downloadEvents.emit(DownloadEvent.LanguageIndexDownloaded(index))
+          }
+        } else {
+          Log.e("DownloadService", "Failed to move temp index file $tempFile to final location $indexFile")
+          tempFile.delete()
+          _downloadEvents.emit(DownloadEvent.DownloadError("Failed to save language index"))
+        }
+      } catch (e: Exception) {
+        Log.e("DownloadService", "Error downloading language index", e)
+        val errorMessage = "Failed to download language index: ${e.message ?: "Unknown error"}"
         _downloadEvents.emit(DownloadEvent.DownloadError(errorMessage))
       }
     }

@@ -2,9 +2,7 @@
 import asyncio
 import json
 import os
-import re
-import unicodedata
-from typing import Dict
+import time
 
 import aiohttp
 
@@ -205,16 +203,6 @@ MANIFEST_FILE_TYPES = {
 }
 
 
-def sanitize_enum_name(name: str) -> str:
-    normalized_name = (
-        name.replace("简体", "sim")
-        .replace("繁體", "tra")
-        .replace("繁体", "tra")
-    )
-    ascii_name = unicodedata.normalize("NFKD", normalized_name).encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"[^A-Z0-9]+", "_", ascii_name.upper()).strip("_")
-
-
 def get_best_model_type(model_types: set[str]) -> str:
     if 'base-memory' in model_types:
         return 'base-memory'
@@ -392,139 +380,62 @@ async def get_tessdata_sizes(languages: set[str]) -> dict[str, int]:
     return sizes
 
 
-def compute_language_size(lang_code: str, from_english: dict, to_english: dict, tessdata_sizes: dict[str, int]) -> int:
-    total = 0
-    seen = set()
 
-    for mapping in (from_english.get(lang_code), to_english.get(lang_code)):
-        if mapping is None:
-            continue
-        for file_entry in mapping.values():
-            if file_entry["name"] in seen:
-                continue
-            total += file_entry["size"]
-            seen.add(file_entry["name"])
+DICTIONARY_CODE_OVERRIDES = {
+    'zh_hant': 'zh',
+    'bs': 'hr',
+    'sr': 'hr',
+}
 
-    total += tessdata_sizes.get(lang_code, 0)
-    return total
+EXTRA_FILES = {
+    'ja': ['mucab.bin'],
+}
 
 
-def format_model_file(entry: dict) -> str:
-    return f'ModelFile("{entry["name"]}", {entry["size"]}, "{entry["path"]}")'
+def format_direction(entry: dict) -> dict:
+    return {
+        "model": {"name": entry["model"]["name"], "sizeBytes": entry["model"]["size"], "path": entry["model"]["path"]},
+        "srcVocab": {"name": entry["srcVocab"]["name"], "sizeBytes": entry["srcVocab"]["size"], "path": entry["srcVocab"]["path"]},
+        "tgtVocab": {"name": entry["tgtVocab"]["name"], "sizeBytes": entry["tgtVocab"]["size"], "path": entry["tgtVocab"]["path"]},
+        "lex": {"name": entry["lex"]["name"], "sizeBytes": entry["lex"]["size"], "path": entry["lex"]["path"]},
+    }
 
 
-def generate_kotlin(
+def generate_index_json(
     from_english: dict,
     to_english: dict,
     all_languages: set[str],
     tessdata_sizes: dict[str, int],
     translation_models_base_url: str,
-) -> str:
-    language_entries = []
+) -> dict:
+    languages = []
     for lang_code in sorted(all_languages):
         if lang_code not in LANGUAGE_NAMES:
             continue
 
-        lang_name = LANGUAGE_NAMES[lang_code]
-        tess_name = TESSERACT_LANGUAGE_MAPPINGS[lang_code]
-        script = LANGUAGE_SCRIPTS[lang_code]
-        enum_name = sanitize_enum_name(lang_name)
-        tess_size = tessdata_sizes.get(lang_code, 0)
-        total_size = compute_language_size(lang_code, from_english, to_english, tessdata_sizes)
-        short_name = SHORT_DISPLAY_NAMES.get(lang_code, lang_name)
-        language_entries.append(
-            f'  {enum_name}("{lang_code}", "{tess_name}", "{lang_name}", "{short_name}", "{script}", {total_size}, {tess_size})'
-        )
+        lang = {
+            "code": lang_code,
+            "name": LANGUAGE_NAMES[lang_code],
+            "shortName": SHORT_DISPLAY_NAMES.get(lang_code, LANGUAGE_NAMES[lang_code]),
+            "tessName": TESSERACT_LANGUAGE_MAPPINGS[lang_code],
+            "script": LANGUAGE_SCRIPTS[lang_code],
+            "dictionaryCode": DICTIONARY_CODE_OVERRIDES.get(lang_code, lang_code),
+            "tessdataSizeBytes": tessdata_sizes.get(lang_code, 0),
+            "toEnglish": format_direction(to_english[lang_code]) if lang_code in to_english else None,
+            "fromEnglish": format_direction(from_english[lang_code]) if lang_code in from_english else None,
+            "extraFiles": EXTRA_FILES.get(lang_code, []),
+        }
+        languages.append(lang)
 
-    from_entries = []
-    for lang_code in sorted(from_english.keys()):
-        lang_enum = f'Language.{sanitize_enum_name(LANGUAGE_NAMES[lang_code])}'
-        entry = from_english[lang_code]
-        from_entries.append(
-            f'  {lang_enum} to LanguageFiles({format_model_file(entry["model"])}, '
-            f'{format_model_file(entry["srcVocab"])}, {format_model_file(entry["tgtVocab"])}, '
-            f'{format_model_file(entry["lex"])})'
-        )
-
-    to_entries = []
-    for lang_code in sorted(to_english.keys()):
-        lang_enum = f'Language.{sanitize_enum_name(LANGUAGE_NAMES[lang_code])}'
-        entry = to_english[lang_code]
-        to_entries.append(
-            f'  {lang_enum} to LanguageFiles({format_model_file(entry["model"])}, '
-            f'{format_model_file(entry["srcVocab"])}, {format_model_file(entry["tgtVocab"])}, '
-            f'{format_model_file(entry["lex"])})'
-        )
-
-    language_lines = ",\n".join(sorted(language_entries))
-    from_lines = ",\n".join(from_entries)
-    to_lines = ",\n".join(to_entries)
-    extra_files_lines = '  Language.JAPANESE to listOf("mucab.bin")'
-
-    return f"""/*
- * Copyright (C) 2024 David V
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
- */
-
-// This file was generated by `generate.py`. Do not edit.
-
-package dev.davidv.translator
-
-object Constants {{
-  const val DICT_VERSION = {DICT_VERSION}
-  const val DEFAULT_TRANSLATION_MODELS_BASE_URL =
-    "{translation_models_base_url}"
-  const val DEFAULT_TESSERACT_MODELS_BASE_URL = "{TESSERACT_BASE_URL}"
-  const val DEFAULT_DICTIONARY_BASE_URL = "{DICTIONARY_BASE_URL}"
-}}
-
-data class ModelFile(
-  val name: String,
-  val size: Int,
-  val path: String,
-)
-
-enum class Language(val code: String, val tessName: String, val displayName: String, val shortDisplayName: String, val script: String, val sizeBytes: Int, val tessdataSizeBytes: Int) {{
-{language_lines};
-
-  val tessFilename: String
-    get() = "$tessName.traineddata"
-}}
-
-data class LanguageFiles(
-  val model: ModelFile,
-  val srcVocab: ModelFile,
-  val tgtVocab: ModelFile,
-  val lex: ModelFile,
-) {{
-  fun allFiles(): List<ModelFile> = listOf(model, srcVocab, tgtVocab, lex).distinctBy {{ it.name }}
-}}
-
-val fromEnglishFiles = mapOf(
-{from_lines}
-)
-
-val toEnglishFiles = mapOf(
-{to_lines}
-)
-
-val extraFiles = mapOf(
-{extra_files_lines}
-)
-
-val downloadableLanguages: List<Language> = Language.entries.filter {{ it != Language.ENGLISH && (fromEnglishFiles.containsKey(it) || toEnglishFiles.containsKey(it)) }}"""
+    return {
+        "version": 1,
+        "updatedAt": int(time.time()),
+        "translationModelsBaseUrl": translation_models_base_url,
+        "tesseractModelsBaseUrl": TESSERACT_BASE_URL,
+        "dictionaryBaseUrl": DICTIONARY_BASE_URL,
+        "dictionaryVersion": DICT_VERSION,
+        "languages": languages,
+    }
 
 
 async def main():
@@ -546,13 +457,13 @@ async def main():
     print("Fetching tessdata sizes...")
     tessdata_sizes = await get_tessdata_sizes(all_languages)
 
-    kotlin_code = generate_kotlin(from_english, to_english, all_languages, tessdata_sizes, base_url)
+    index = generate_index_json(from_english, to_english, all_languages, tessdata_sizes, base_url)
 
-    output_file = "app/src/main/java/dev/davidv/translator/Language.kt"
+    output_file = "index.json"
     with open(output_file, "w") as f:
-        f.write(kotlin_code)
+        json.dump(index, f, indent=2, sort_keys=False)
 
-    print(f"Generated {output_file}")
+    print(f"Generated {output_file} with {len(index['languages'])} languages")
 
 
 if __name__ == "__main__":

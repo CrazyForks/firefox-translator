@@ -441,7 +441,19 @@ fun DictionaryBottomSheetPreview() {
     Surface {
       DictionaryEntry(
         dictionaryWord = sampleWord,
-        dictionaryLookupLanguage = Language.SPANISH,
+        dictionaryLookupLanguage =
+          Language(
+            code = "es",
+            displayName = "Spanish",
+            shortDisplayName = "Spanish",
+            tessName = "es",
+            script = "Latn",
+            dictionaryCode = "es",
+            tessdataSizeBytes = 0,
+            toEnglish = null,
+            fromEnglish = null,
+            extraFiles = emptyList(),
+          ),
         selectedEntryIndex = 0,
         onEntryIndexChanged = {},
         showBackButton = true,

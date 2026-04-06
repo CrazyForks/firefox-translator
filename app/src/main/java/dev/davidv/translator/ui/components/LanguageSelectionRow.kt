@@ -53,12 +53,12 @@ fun LanguageSelectionRow(
     verticalAlignment = Alignment.CenterVertically,
   ) {
     val fromLanguages =
-      Language.entries.filter { x ->
-        x != to && x != from && (availableLanguages[x]?.hasToEnglish == true || x == Language.ENGLISH)
+      availableLanguages.keys.filter { x ->
+        x != to && x != from && (availableLanguages[x]?.hasToEnglish == true || x.isEnglish)
       }
     val toLanguages =
-      Language.entries.filter { x ->
-        x != from && x != to && (availableLanguages[x]?.hasFromEnglish == true || x == Language.ENGLISH)
+      availableLanguages.keys.filter { x ->
+        x != from && x != to && (availableLanguages[x]?.hasFromEnglish == true || x.isEnglish)
       }
 
     LanguageSelector(
@@ -103,15 +103,31 @@ fun LanguageSelectionRow(
   }
 }
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Preview(showBackground = true)
 @Composable
 fun LanguageSelectionRowPreview() {
   TranslatorTheme {
     LanguageSelectionRow(
-      from = Language.ENGLISH,
-      to = Language.SPANISH,
+      from = previewLanguage("en", "English"),
+      to = previewLanguage("es", "Spanish"),
       availableLanguages = previewAvailability(),
-      languageMetadata = mapOf(Language.SPANISH to LanguageMetadata(favorite = true)),
+      languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
       onMessage = {},
       onSettings = {},
       drawable = Pair("Settings", R.drawable.settings),
@@ -121,10 +137,10 @@ fun LanguageSelectionRowPreview() {
 
 private fun previewAvailability() =
   mapOf(
-    Language.ENGLISH to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
-    Language.SPANISH to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
-    Language.FRENCH to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
-    Language.GERMAN to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
+    previewLanguage("en", "English") to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
+    previewLanguage("es", "Spanish") to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
+    previewLanguage("fr", "French") to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
+    previewLanguage("de", "German") to LangAvailability(hasFromEnglish = true, hasToEnglish = true, ocrFiles = true, dictionaryFiles = false),
   )
 
 @Preview(
@@ -135,10 +151,10 @@ private fun previewAvailability() =
 fun LanguageSelectionRowDarkPreview() {
   TranslatorTheme {
     LanguageSelectionRow(
-      from = Language.FRENCH,
-      to = Language.GERMAN,
+      from = previewLanguage("fr", "French"),
+      to = previewLanguage("de", "German"),
       availableLanguages = previewAvailability(),
-      languageMetadata = mapOf(Language.FRENCH to LanguageMetadata(favorite = true)),
+      languageMetadata = mapOf(previewLanguage("fr", "French") to LanguageMetadata(favorite = true)),
       onMessage = {},
       onSettings = {},
       drawable = Pair("Settings", R.drawable.settings),

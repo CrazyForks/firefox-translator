@@ -27,6 +27,7 @@ import kotlin.system.measureTimeMillis
 class TranslationService(
   private val settingsManager: SettingsManager,
   private val filePathManager: FilePathManager,
+  private val english: Language,
 ) {
   companion object {
     @Volatile
@@ -85,7 +86,7 @@ class TranslationService(
       // TODO: do once
       for (pair in translationPairs) {
         val lang =
-          if (pair.first == Language.ENGLISH) {
+          if (pair.first.isEnglish) {
             pair.second
           } else {
             pair.first
@@ -145,7 +146,7 @@ class TranslationService(
       // Validate all required language pairs are available
       for (pair in translationPairs) {
         val lang =
-          if (pair.first == Language.ENGLISH) {
+          if (pair.first.isEnglish) {
             pair.second
           } else {
             pair.first
@@ -197,7 +198,7 @@ class TranslationService(
 
       for (pair in translationPairs) {
         val lang =
-          if (pair.first == Language.ENGLISH) {
+          if (pair.first.isEnglish) {
             pair.second
           } else {
             pair.first
@@ -235,10 +236,10 @@ class TranslationService(
     to: Language,
   ): List<Pair<Language, Language>> =
     when {
-      from == Language.ENGLISH && to == Language.ENGLISH -> emptyList()
-      from == Language.ENGLISH -> listOf(from to to)
-      to == Language.ENGLISH -> listOf(from to to)
-      else -> listOf(from to Language.ENGLISH, Language.ENGLISH to to) // Pivot through English
+      from.isEnglish && to.isEnglish -> emptyList()
+      from.isEnglish -> listOf(from to to)
+      to.isEnglish -> listOf(from to to)
+      else -> listOf(from to english, english to to)
     }
 
   // pairs can be len 1 or len 2 only
@@ -290,10 +291,10 @@ class TranslationService(
   ): String {
     val dataPath = filePathManager.getDataDir()
     val languageFiles =
-      if (fromLang == Language.ENGLISH) {
-        fromEnglishFiles[toLang]
+      if (fromLang.isEnglish) {
+        toLang.fromEnglish
       } else {
-        toEnglishFiles[fromLang]
+        fromLang.toEnglish
       } ?: throw IllegalArgumentException("No language files found for $fromLang -> $toLang")
 
     return """

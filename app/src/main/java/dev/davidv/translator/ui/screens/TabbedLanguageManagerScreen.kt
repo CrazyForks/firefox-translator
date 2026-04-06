@@ -63,9 +63,6 @@ import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.createPreviewStates
-import dev.davidv.translator.dictionaryCode
-import dev.davidv.translator.downloadableLanguages
-import dev.davidv.translator.infoFor
 import dev.davidv.translator.ui.components.LanguageEvent
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.CoroutineScope
@@ -89,14 +86,18 @@ fun TabbedLanguageManagerScreen(
   var selectedTabIndex by remember { mutableIntStateOf(defaultTabIndex) }
   val languageMetadata by languageMetadataManager.metadata.collectAsState()
 
+  val allKnownLanguages = languageAvailabilityState.availableLanguageMap.keys
   val installedDictionaries =
-    (installedLanguages + Language.ENGLISH)
+    allKnownLanguages
       .filter { lang -> languageAvailabilityState.availableLanguageMap[lang]?.dictionaryFiles == true }
-      .distinctBy { it.dictionaryCode() }
+      .distinctBy { it.dictionaryCode }
   val availableDictionaries =
-    (installedLanguages + Language.ENGLISH)
-      .filter { lang -> languageAvailabilityState.availableLanguageMap[lang]?.dictionaryFiles == false }
-      .distinctBy { it.dictionaryCode() }
+    allKnownLanguages
+      .filter { lang ->
+        languageAvailabilityState.availableLanguageMap[lang]?.translatorFiles == true &&
+          languageAvailabilityState.availableLanguageMap[lang]?.dictionaryFiles == false
+      }
+      .distinctBy { it.dictionaryCode }
 
   Scaffold(
     modifier =
@@ -130,51 +131,68 @@ fun TabbedLanguageManagerScreen(
     ) {
       when (selectedTabIndex) {
         0 -> {
-          LanguageManagerScreen(
-            embedded = true,
-            title = "Language Packs",
-            installedLanguages = (installedLanguages + Language.ENGLISH).sortedBy { l -> l.displayName },
-            availableLanguages = availableLanguages,
-            languageAvailabilityState = languageAvailabilityState,
-            downloadStates = downloadStates,
-            languageMetadata = languageMetadata,
-            availabilityCheck = { it.translatorFiles },
-            label = { it.displayName },
-            onEvent = { event ->
-              when (event) {
-                is LanguageEvent.Download -> DownloadService.startDownload(context, event.language)
-                is LanguageEvent.Delete -> languageStateManager.deleteLanguage(event.language)
-                is LanguageEvent.Cancel -> DownloadService.cancelDownload(context, event.language)
-                is LanguageEvent.DeleteDictionary -> languageStateManager.deleteDict(event.language)
-                is LanguageEvent.FetchDictionaryIndex -> {}
-              }
+          var isRefreshingLanguages by remember { mutableStateOf(false) }
+          val langIndexVersion by languageStateManager.languageIndexVersion.collectAsState()
+          LaunchedEffect(langIndexVersion) {
+            isRefreshingLanguages = false
+          }
+          PullToRefreshBox(
+            isRefreshing = isRefreshingLanguages,
+            onRefresh = {
+              isRefreshingLanguages = true
+              DownloadService.fetchLanguageIndex(context)
             },
-            onFavorite = { event ->
-              when (event) {
-                is FavoriteEvent.Star -> {
-                  val current = languageMetadata[event.language] ?: LanguageMetadata()
-                  languageMetadataManager.updateLanguage(event.language, current.copy(favorite = true))
+          ) {
+            LanguageManagerScreen(
+              embedded = true,
+              title = "Language Packs",
+              installedLanguages =
+                allKnownLanguages.filter { languageAvailabilityState.availableLanguageMap[it]?.translatorFiles == true }.sortedBy {
+                    l ->
+                  l.displayName
+                },
+              availableLanguages = availableLanguages,
+              languageAvailabilityState = languageAvailabilityState,
+              downloadStates = downloadStates,
+              languageMetadata = languageMetadata,
+              availabilityCheck = { it.translatorFiles },
+              label = { it.displayName },
+              onEvent = { event ->
+                when (event) {
+                  is LanguageEvent.Download -> DownloadService.startDownload(context, event.language)
+                  is LanguageEvent.Delete -> languageStateManager.deleteLanguage(event.language)
+                  is LanguageEvent.Cancel -> DownloadService.cancelDownload(context, event.language)
+                  is LanguageEvent.DeleteDictionary -> languageStateManager.deleteDict(event.language)
+                  is LanguageEvent.FetchDictionaryIndex -> {}
                 }
-                is FavoriteEvent.Unstar -> {
-                  val current = languageMetadata[event.language] ?: LanguageMetadata()
-                  languageMetadataManager.updateLanguage(event.language, current.copy(favorite = false))
+              },
+              onFavorite = { event ->
+                when (event) {
+                  is FavoriteEvent.Star -> {
+                    val current = languageMetadata[event.language] ?: LanguageMetadata()
+                    languageMetadataManager.updateLanguage(event.language, current.copy(favorite = true))
+                  }
+                  is FavoriteEvent.Unstar -> {
+                    val current = languageMetadata[event.language] ?: LanguageMetadata()
+                    languageMetadataManager.updateLanguage(event.language, current.copy(favorite = false))
+                  }
                 }
-              }
-            },
-            description = { lang ->
-              if (lang == Language.ENGLISH) {
-                return@LanguageManagerScreen "Built in"
-              }
-              val size = lang.sizeBytes / (1024f * 1024f)
-              if (size > 10f) {
-                "${size.roundToInt()} MB"
-              } else {
-                String.format("%.2f MB", size)
-              }
-            },
-            sizeBytes = { it.sizeBytes.toLong() },
-            enabled = { it != Language.ENGLISH },
-          )
+              },
+              description = { lang ->
+                if (lang.isEnglish) {
+                  return@LanguageManagerScreen "Built in"
+                }
+                val size = lang.sizeBytes / (1024f * 1024f)
+                if (size > 10f) {
+                  "${size.roundToInt()} MB"
+                } else {
+                  String.format("%.2f MB", size)
+                }
+              },
+              sizeBytes = { it.sizeBytes.toLong() },
+              enabled = { !it.isEnglish },
+            )
+          }
         }
 
         1 -> {
@@ -222,7 +240,7 @@ fun TabbedLanguageManagerScreen(
                 languageMetadata = emptyMap(),
                 availabilityCheck = { it.dictionaryFiles },
                 label = { language ->
-                  if (language.dictionaryCode() == Language.CHINESE_SIM.code) {
+                  if (language.dictionaryCode == "zh") {
                     "Chinese (Both)"
                   } else {
                     language.displayName
@@ -289,30 +307,41 @@ fun humanCount(v: Long): String =
     }
   }
 
+private fun previewLanguage(
+  code: String,
+  name: String,
+) = Language(
+  code = code,
+  displayName = name,
+  shortDisplayName = name,
+  tessName = code,
+  script = "Latn",
+  dictionaryCode = code,
+  tessdataSizeBytes = 0,
+  toEnglish = null,
+  fromEnglish = null,
+  extraFiles = emptyList(),
+)
+
 @Composable
 @Preview
 fun TabbedLanguageManagerPreview() {
   val states = createPreviewStates()
   val downloadStates by states.downloadStates.collectAsState()
 
-  // Create mock data with some installed languages and dictionaries
   val mockLanguageState =
     LanguageAvailabilityState(
       availableLanguageMap =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
-          Language.FRENCH to LangAvailability(true, true, true, true),
-          Language.SPANISH to LangAvailability(true, true, true, false),
-          Language.GERMAN to LangAvailability(true, true, true, false),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
+          previewLanguage("fr", "French") to LangAvailability(true, true, true, true),
+          previewLanguage("es", "Spanish") to LangAvailability(true, true, true, false),
+          previewLanguage("de", "German") to LangAvailability(true, true, true, false),
         ),
     )
 
   val availLangs = mockLanguageState.availableLanguageMap.filterValues { it.translatorFiles }.keys
-  val installedLanguages = availLangs.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
-  val availableLanguages =
-    downloadableLanguages
-      .filter { lang -> !availLangs.contains(lang) }
-      .sortedBy { it.displayName }
+  val installedLanguages = availLangs.filter { !it.isEnglish }.sortedBy { it.displayName }
 
   val context = LocalContext.current
   TranslatorTheme {
@@ -323,14 +352,14 @@ fun TabbedLanguageManagerPreview() {
           CoroutineScope(Dispatchers.Main),
           FilePathManager(context, kotlinx.coroutines.flow.MutableStateFlow(AppSettings())),
         ),
-      languageMetadataManager = LanguageMetadataManager(context),
+      languageMetadataManager = LanguageMetadataManager(context, kotlinx.coroutines.flow.MutableStateFlow(emptyList())),
       installedLanguages = installedLanguages,
-      availableLanguages = availableLanguages,
+      availableLanguages = emptyList(),
       languageAvailabilityState = mockLanguageState,
       downloadStates = downloadStates,
       dictionaryDownloadStates =
         mapOf(
-          Language.SPANISH to DownloadState(isDownloading = true, totalSize = 1000000, downloaded = 500000),
+          previewLanguage("es", "Spanish") to DownloadState(isDownloading = true, totalSize = 1000000, downloaded = 500000),
         ),
       dictionaryIndex =
         DictionaryIndex(
@@ -356,16 +385,12 @@ fun TabbedLanguageManagerDictionaryTabPreview() {
     LanguageAvailabilityState(
       availableLanguageMap =
         mapOf(
-          Language.ENGLISH to LangAvailability(true, true, true, true),
+          previewLanguage("en", "English") to LangAvailability(true, true, true, true),
         ),
     )
 
   val availLangs = mockLanguageState.availableLanguageMap.filterValues { it.translatorFiles }.keys
-  val installedLanguages = availLangs.filter { it != Language.ENGLISH }.sortedBy { it.displayName }
-  val availableLanguages =
-    downloadableLanguages
-      .filter { lang -> !availLangs.contains(lang) }
-      .sortedBy { it.displayName }
+  val installedLanguages = availLangs.filter { !it.isEnglish }.sortedBy { it.displayName }
 
   val context = LocalContext.current
   TranslatorTheme {
@@ -376,9 +401,9 @@ fun TabbedLanguageManagerDictionaryTabPreview() {
           CoroutineScope(Dispatchers.Main),
           FilePathManager(context, kotlinx.coroutines.flow.MutableStateFlow(AppSettings())),
         ),
-      languageMetadataManager = LanguageMetadataManager(context),
+      languageMetadataManager = LanguageMetadataManager(context, kotlinx.coroutines.flow.MutableStateFlow(emptyList())),
       installedLanguages = installedLanguages,
-      availableLanguages = availableLanguages,
+      availableLanguages = emptyList(),
       languageAvailabilityState = mockLanguageState,
       downloadStates = downloadStates,
       dictionaryDownloadStates = emptyMap(),

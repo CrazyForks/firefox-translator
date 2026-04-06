@@ -29,18 +29,24 @@ class TranslatorApplication : Application() {
   lateinit var translationService: TranslationService
   lateinit var languageDetector: LanguageDetector
   lateinit var translationCoordinator: TranslationCoordinator
+  val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow<List<Language>>(emptyList())
+  var languageIndex: LanguageIndex? = null
+    private set
 
   override fun onCreate() {
     super.onCreate()
     Log.d("TranslatorApplication", "Initializing application services")
 
     settingsManager = SettingsManager(this)
-    languageMetadataManager = LanguageMetadataManager(this)
     filePathManager = FilePathManager(this, settingsManager.settings)
+    languageIndex = filePathManager.loadLanguageIndex()
+    languagesFlow.value = languageIndex?.languages ?: emptyList()
+    languageMetadataManager = LanguageMetadataManager(this, languagesFlow)
     ocrService = OCRService(filePathManager)
     imageProcessor = ImageProcessor(this, ocrService)
-    translationService = TranslationService(settingsManager, filePathManager)
-    languageDetector = LanguageDetector()
+    val english = languageIndex?.english ?: Language(code = "en", displayName = "English", shortDisplayName = "EN", tessName = "eng", script = "Latn", dictionaryCode = "en", tessdataSizeBytes = 0, toEnglish = null, fromEnglish = null, extraFiles = emptyList())
+    translationService = TranslationService(settingsManager, filePathManager, english)
+    languageDetector = LanguageDetector { code -> languageIndex?.languageByCode(code) }
     translationCoordinator =
       TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)
   }
