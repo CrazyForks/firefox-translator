@@ -103,6 +103,30 @@ val androidSdkRoot =
 val ndk = "$androidSdkRoot/ndk/28.0.12674087"
 val bindingsAndroidApi = 28
 val onnxRuntimeRootDir = file("../third_party/onnxruntime")
+val onnxRuntimeSourceFingerprint =
+  providers.exec {
+    workingDir = onnxRuntimeRootDir
+    commandLine(
+      "bash",
+      "-lc",
+      """
+        set -euo pipefail
+        if [ ! -e .git ]; then
+          echo missing
+          exit 0
+        fi
+        git rev-parse HEAD
+        git stash create || true
+        git status --short --untracked-files=normal
+        git submodule status --recursive
+        git submodule foreach --quiet --recursive 'printf "%s\n" "${'$'}displaypath"; git rev-parse HEAD; git stash create || true; git status --short --untracked-files=normal'
+      """
+        .trimIndent(),
+    )
+  }
+    .standardOutput
+    .asText
+    .map(String::trim)
 
 fun onnxRuntimeBuildDir(abi: String) = file("${layout.buildDirectory.asFile.get()}/onnxruntime/$abi")
 
@@ -152,11 +176,14 @@ val abiToOnnxRuntimeTask =
         description = "Build ONNX Runtime for $abi"
         dependsOn(verifyOnnxRuntimeSources)
         workingDir = onnxRuntimeRootDir
-        // The ONNX Runtime checkout includes test fixtures with non-portable Unicode paths.
-        // Gradle 8.9 fingerprints Exec task inputs eagerly and fails on CI before the build
-        // starts if any input path is unreadable, so let the external build system manage
-        // incrementality for this source tree instead.
-        doNotTrackState("ONNX Runtime source tree contains CI-unfriendly paths")
+        // The ONNX Runtime checkout includes paths that Gradle cannot fingerprint reliably on CI.
+        // Fingerprint the git state instead so local edits still invalidate the native build.
+        inputs.property("onnxRuntimeSourceFingerprint", onnxRuntimeSourceFingerprint)
+        inputs.property("abi", abi)
+        inputs.property("androidApi", bindingsAndroidApi)
+        inputs.property("androidSdkRoot", androidSdkRoot)
+        inputs.property("androidNdkRoot", ndk)
+        inputs.property("cmakeCppStandard", "20")
         outputs.file(onnxRuntimeSharedLibrary(abi))
         commandLine(
           "python3",
@@ -204,6 +231,16 @@ val abiToBindingsTask =
       group = "build"
       description = "Build Rust bindings library for $abi"
       dependsOn(abiToOnnxRuntimeTask.getValue(abi))
+      inputs.file(bindingsRootDir.resolve("Cargo.toml"))
+      inputs.file(bindingsRootDir.resolve("Cargo.lock"))
+      inputs.file(bindingsRootDir.resolve(".cargo/config.toml"))
+      inputs.dir(bindingsRootDir.resolve("src"))
+      inputs.file(onnxRuntimeSharedLibrary(abi))
+      inputs.property("cargoTarget", cargoTarget)
+      inputs.property("androidApi", bindingsAndroidApi)
+      inputs.property("androidNdkRoot", ndk)
+      outputs.file(File(jniLibAbiDir(abi), "libbindings.so"))
+      outputs.file(File(jniLibAbiDir(abi), "libc++_shared.so"))
 
       doLast {
         exec {
