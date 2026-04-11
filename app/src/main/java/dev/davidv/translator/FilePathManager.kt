@@ -109,6 +109,18 @@ class FilePathManager(
           speakerId = voicePack.defaultSpeakerId,
         )
       }
+      "mms" -> {
+        val tokensAsset = packFiles.firstOrNull { it.name.endsWith("tokens.txt") } ?: return null
+        val auxFile = resolveInstallPath(tokensAsset.installPath)
+        if (!auxFile.exists()) return null
+        TtsVoiceFiles(
+          engine = engine,
+          model = modelFile,
+          aux = auxFile,
+          languageCode = language.code,
+          speakerId = voicePack.defaultSpeakerId,
+        )
+      }
       else -> {
         val configAsset = packFiles.firstOrNull { it.name.endsWith(".onnx.json") } ?: return null
         val auxFile = resolveInstallPath(configAsset.installPath)

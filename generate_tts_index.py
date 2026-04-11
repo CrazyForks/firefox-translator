@@ -11,6 +11,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 PIPER_BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 KOKORO_BASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+MMS_BASE_URL = "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main"
 TTS_BASE_URL = "https://translator.davidv.dev/tts"
 TTS_VERSION = 1
 KOKORO_SHARED_PACK_ID = "tts-kokoro-v1.0-core"
@@ -20,6 +21,11 @@ QUALITY_PRIORITY = {
     "low": 1,
     "x_low": 2,
     "high": 3,
+}
+ENGINE_PRIORITY = {
+    "piper": 0,
+    "mms": 1,
+    "kokoro": 2,
 }
 DEFAULT_REGION_OVERRIDES = {
     "en": "US",
@@ -124,6 +130,35 @@ EXTRA_TTS_VOICES = {
         },
         "aliases": [],
     },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/heb
+    "he_IL-standard-mms": {
+        "engine": "mms",
+        "key": "he_IL-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "he_IL",
+            "family": "he",
+            "region": "IL",
+            "name_native": "עברית",
+            "name_english": "Hebrew",
+            "country_english": "Israel",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "heb/model.onnx": {
+                "size_bytes": 114012344,
+                "url": f"{MMS_BASE_URL}/heb/model.onnx",
+            },
+            "heb/tokens.txt": {
+                "size_bytes": 179,
+                "url": f"{MMS_BASE_URL}/heb/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
     # External Kokoro model metadata source:
     # https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0
     "ja_JP-jf_alpha-kokoro-v1.0": {
@@ -165,6 +200,209 @@ EXTRA_TTS_VOICES = {
         "num_speakers": 1,
         "speaker_id_map": {},
         "files": {},
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/azj-script_latin
+    "az_AZ-north_latin-mms": {
+        "engine": "mms",
+        "key": "az_AZ-north_latin-mms",
+        "name": "north_latin",
+        "language": {
+            "code": "az_AZ",
+            "family": "az",
+            "region": "AZ",
+            "name_native": "Azərbaycan dili",
+            "name_english": "Azerbaijani",
+            "country_english": "Azerbaijan",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "azj-script_latin/model.onnx": {
+                "size_bytes": 114020024,
+                "url": f"{MMS_BASE_URL}/azj-script_latin/model.onnx",
+            },
+            "azj-script_latin/tokens.txt": {
+                "size_bytes": 361,
+                "url": f"{MMS_BASE_URL}/azj-script_latin/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/ben
+    "bn_IN-standard-mms": {
+        "engine": "mms",
+        "key": "bn_IN-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "bn_IN",
+            "family": "bn",
+            "region": "IN",
+            "name_native": "বাংলা",
+            "name_english": "Bengali",
+            "country_english": "India",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "ben/model.onnx": {
+                "size_bytes": 114044600,
+                "url": f"{MMS_BASE_URL}/ben/model.onnx",
+            },
+            "ben/tokens.txt": {
+                "size_bytes": 480,
+                "url": f"{MMS_BASE_URL}/ben/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/guj
+    "gu_IN-standard-mms": {
+        "engine": "mms",
+        "key": "gu_IN-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "gu_IN",
+            "family": "gu",
+            "region": "IN",
+            "name_native": "ગુજરાતી",
+            "name_english": "Gujarati",
+            "country_english": "India",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "guj/model.onnx": {
+                "size_bytes": 114033848,
+                "url": f"{MMS_BASE_URL}/guj/model.onnx",
+            },
+            "guj/tokens.txt": {
+                "size_bytes": 402,
+                "url": f"{MMS_BASE_URL}/guj/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/kan
+    "kn_IN-standard-mms": {
+        "engine": "mms",
+        "key": "kn_IN-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "kn_IN",
+            "family": "kn",
+            "region": "IN",
+            "name_native": "ಕನ್ನಡ",
+            "name_english": "Kannada",
+            "country_english": "India",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "kan/model.onnx": {
+                "size_bytes": 114045368,
+                "url": f"{MMS_BASE_URL}/kan/model.onnx",
+            },
+            "kan/tokens.txt": {
+                "size_bytes": 487,
+                "url": f"{MMS_BASE_URL}/kan/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/zlm
+    "ms_MY-standard-mms": {
+        "engine": "mms",
+        "key": "ms_MY-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "ms_MY",
+            "family": "ms",
+            "region": "MY",
+            "name_native": "Bahasa Melayu",
+            "name_english": "Malay",
+            "country_english": "Malaysia",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "zlm/model.onnx": {
+                "size_bytes": 114013880,
+                "url": f"{MMS_BASE_URL}/zlm/model.onnx",
+            },
+            "zlm/tokens.txt": {
+                "size_bytes": 275,
+                "url": f"{MMS_BASE_URL}/zlm/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/tam
+    "ta_IN-standard-mms": {
+        "engine": "mms",
+        "key": "ta_IN-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "ta_IN",
+            "family": "ta",
+            "region": "IN",
+            "name_native": "தமிழ்",
+            "name_english": "Tamil",
+            "country_english": "India",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "tam/model.onnx": {
+                "size_bytes": 114032312,
+                "url": f"{MMS_BASE_URL}/tam/model.onnx",
+            },
+            "tam/tokens.txt": {
+                "size_bytes": 375,
+                "url": f"{MMS_BASE_URL}/tam/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/tha
+    "th_TH-standard-mms": {
+        "engine": "mms",
+        "key": "th_TH-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "th_TH",
+            "family": "th",
+            "region": "TH",
+            "name_native": "ไทย",
+            "name_english": "Thai",
+            "country_english": "Thailand",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "tha/model.onnx": {
+                "size_bytes": 114042296,
+                "url": f"{MMS_BASE_URL}/tha/model.onnx",
+            },
+            "tha/tokens.txt": {
+                "size_bytes": 473,
+                "url": f"{MMS_BASE_URL}/tha/tokens.txt",
+            },
+        },
         "aliases": [],
     },
 }
@@ -254,9 +492,10 @@ def espeak_dict_code(app_language: str, locale_code: str) -> str:
     return ESPEAK_DICT_OVERRIDES.get(app_language, app_language)
 
 
-def voice_sort_key(item: tuple[str, dict]) -> tuple[int, int, int, str]:
+def voice_sort_key(item: tuple[str, dict]) -> tuple[int, int, int, int, str]:
     key, voice = item
     quality_rank = QUALITY_PRIORITY.get(voice.get("quality"), 99)
+    engine_rank = ENGINE_PRIORITY.get(voice.get("engine", "piper"), 99)
     speaker_rank = 0 if voice.get("num_speakers", 1) == 1 else 1
     model_size = min(
         (
@@ -266,7 +505,7 @@ def voice_sort_key(item: tuple[str, dict]) -> tuple[int, int, int, str]:
         ),
         default=0,
     )
-    return quality_rank, speaker_rank, model_size, key
+    return quality_rank, engine_rank, speaker_rank, model_size, key
 
 
 def region_display_name(voice: dict) -> str:
@@ -372,6 +611,10 @@ def build_shared_tts_support_packs(catalog: dict, voices: dict) -> None:
     }
 
 
+def engine_supports_espeak(engine: str) -> bool:
+    return engine in {"piper", "kokoro"}
+
+
 def merge_tts(
     base_catalog: dict,
     voices: dict,
@@ -402,9 +645,11 @@ def merge_tts(
         if not region:
             continue
         grouped[(app_language, region)].append((key, voice))
-        required_dict_codes.add(espeak_dict_code(app_language, voice["language"]["code"]))
+        if engine_supports_espeak(voice.get("engine", "piper")):
+            required_dict_codes.add(espeak_dict_code(app_language, voice["language"]["code"]))
 
-    build_espeak_support_packs(catalog, required_dict_codes, tts_base_url, tts_version, espeak_core_zip_size)
+    if required_dict_codes:
+        build_espeak_support_packs(catalog, required_dict_codes, tts_base_url, tts_version, espeak_core_zip_size)
     build_shared_tts_support_packs(catalog, voices)
 
     regions_by_language: dict[str, dict[str, dict]] = defaultdict(dict)
@@ -437,7 +682,9 @@ def merge_tts(
             if speaker_id_map:
                 default_speaker_id = sorted(speaker_id_map.values())[0]
 
-            depends_on = [f"tts-espeak-dict-{dict_code}"]
+            depends_on = []
+            if engine_supports_espeak(engine):
+                depends_on.append(f"tts-espeak-dict-{dict_code}")
             shared_pack = voice.get("shared_pack")
             if shared_pack:
                 depends_on.append(shared_pack)

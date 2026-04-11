@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::time::Instant;
 
-use piper_rs::{Backend, BoundaryAfter, KokoroModel, PhonemeChunk, PiperModel};
+use piper_rs::{Backend, BoundaryAfter, KokoroModel, MmsModel, PhonemeChunk, PiperModel};
 
 use crate::logging::{ANDROID_LOG_DEBUG, ANDROID_LOG_ERROR, android_log_with_level};
 
@@ -43,6 +43,7 @@ fn audio_duration_ms(sample_count: usize, sample_rate: u32) -> u64 {
 enum SpeechModel {
     Piper(PiperModel),
     Kokoro(KokoroModel),
+    Mms(MmsModel),
 }
 
 struct CachedSpeechModel {
@@ -122,6 +123,15 @@ fn available_voices(model: &SpeechModel) -> Vec<(String, i64)> {
             })
             .unwrap_or_default(),
         SpeechModel::Kokoro(model) => model
+            .voices()
+            .map(|voices| {
+                voices
+                    .iter()
+                    .map(|(name, id)| (name.clone(), *id))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+        SpeechModel::Mms(model) => model
             .voices()
             .map(|voices| {
                 voices
@@ -301,6 +311,9 @@ fn load_speech_model(
             }
             Ok(SpeechModel::Kokoro(model))
         }
+        "mms" => MmsModel::new(Path::new(model_path), Path::new(aux_path), &Backend::Cpu)
+            .map(SpeechModel::Mms)
+            .map_err(|err| format!("Failed to load MMS voice: {err}")),
         "piper" => PiperModel::new(Path::new(model_path), Path::new(aux_path), &Backend::Cpu)
             .map(SpeechModel::Piper)
             .map_err(|err| format!("Failed to load Piper voice: {err}")),
@@ -421,6 +434,9 @@ fn phonemize(model: &mut SpeechModel, text: &str) -> Result<String, String> {
         SpeechModel::Kokoro(model) => model
             .phonemize(text)
             .map_err(|err| format!("Speech synthesis failed: {err}")),
+        SpeechModel::Mms(model) => model
+            .phonemize(text)
+            .map_err(|err| format!("Speech synthesis failed: {err}")),
     }
 }
 
@@ -474,6 +490,17 @@ fn synthesize(
                     cached_model.voices.len()
                 ));
             }
+            if is_phonemes {
+                model
+                    .synthesize_phonemes(text, effective_speaker_id, Some(clamped_speech_speed))
+                    .map_err(|err| format!("Speech synthesis failed: {err}"))
+            } else {
+                model
+                    .synthesize(text, effective_speaker_id, Some(clamped_speech_speed))
+                    .map_err(|err| format!("Speech synthesis failed: {err}"))
+            }
+        }
+        SpeechModel::Mms(model) => {
             if is_phonemes {
                 model
                     .synthesize_phonemes(text, effective_speaker_id, Some(clamped_speech_speed))

@@ -1,6 +1,6 @@
 {
   "formatVersion": 2,
-  "generatedAt": 1775921546,
+  "generatedAt": 1775947076,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "tesseractModelsBaseUrl": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main",
   "dictionaryBaseUrl": "https://translator.davidv.dev/dictionaries",
@@ -58,6 +58,17 @@
           "tesseract": "ocr-tesseract-az"
         },
         "dictionary": "dict-az"
+      },
+      "tts": {
+        "defaultRegion": "AZ",
+        "regions": {
+          "AZ": {
+            "displayName": "Azerbaijan",
+            "voices": [
+              "tts-mms-az-az-north-latin-mms"
+            ]
+          }
+        }
       }
     },
     "be": {
@@ -122,6 +133,17 @@
           "tesseract": "ocr-tesseract-bn"
         },
         "dictionary": "dict-bn"
+      },
+      "tts": {
+        "defaultRegion": "IN",
+        "regions": {
+          "IN": {
+            "displayName": "India",
+            "voices": [
+              "tts-mms-bn-in-standard-mms"
+            ]
+          }
+        }
       }
     },
     "bs": {
@@ -608,6 +630,17 @@
           "tesseract": "ocr-tesseract-gu"
         },
         "dictionary": "dict-gu"
+      },
+      "tts": {
+        "defaultRegion": "IN",
+        "regions": {
+          "IN": {
+            "displayName": "India",
+            "voices": [
+              "tts-mms-gu-in-standard-mms"
+            ]
+          }
+        }
       }
     },
     "he": {
@@ -634,7 +667,8 @@
             "displayName": "Israel",
             "voices": [
               "tts-piper-he-il-community-female-medium",
-              "tts-piper-he-il-community-male-medium"
+              "tts-piper-he-il-community-male-medium",
+              "tts-mms-he-il-standard-mms"
             ]
           }
         }
@@ -856,6 +890,17 @@
           "tesseract": "ocr-tesseract-kn"
         },
         "dictionary": "dict-kn"
+      },
+      "tts": {
+        "defaultRegion": "IN",
+        "regions": {
+          "IN": {
+            "displayName": "India",
+            "voices": [
+              "tts-mms-kn-in-standard-mms"
+            ]
+          }
+        }
       }
     },
     "ko": {
@@ -980,6 +1025,17 @@
           "tesseract": "ocr-tesseract-ms"
         },
         "dictionary": "dict-ms"
+      },
+      "tts": {
+        "defaultRegion": "MY",
+        "regions": {
+          "MY": {
+            "displayName": "Malaysia",
+            "voices": [
+              "tts-mms-ms-my-standard-mms"
+            ]
+          }
+        }
       }
     },
     "nb": {
@@ -1382,6 +1438,17 @@
           "tesseract": "ocr-tesseract-ta"
         },
         "dictionary": "dict-ta"
+      },
+      "tts": {
+        "defaultRegion": "IN",
+        "regions": {
+          "IN": {
+            "displayName": "India",
+            "voices": [
+              "tts-mms-ta-in-standard-mms"
+            ]
+          }
+        }
       }
     },
     "te": {
@@ -1431,6 +1498,17 @@
           "tesseract": "ocr-tesseract-th"
         },
         "dictionary": "dict-th"
+      },
+      "tts": {
+        "defaultRegion": "TH",
+        "regions": {
+          "TH": {
+            "displayName": "Thailand",
+            "voices": [
+              "tts-mms-th-th-standard-mms"
+            ]
+          }
+        }
       }
     },
     "tr": {
@@ -6592,6 +6670,25 @@
       ],
       "dependsOn": []
     },
+    "tts-kokoro-v1.0-core": {
+      "feature": "support",
+      "kind": "tts-kokoro-core",
+      "files": [
+        {
+          "name": "kokoro-v1.0.int8.onnx",
+          "sizeBytes": 92361271,
+          "installPath": "bin/kokoro/kokoro-v1.0.int8.onnx",
+          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
+        },
+        {
+          "name": "voices-v1.0.bin",
+          "sizeBytes": 28214398,
+          "installPath": "bin/kokoro/voices-v1.0.bin",
+          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+        }
+      ],
+      "dependsOn": []
+    },
     "tts-espeak-core-v1": {
       "feature": "support",
       "kind": "tts-espeak-core",
@@ -7180,25 +7277,6 @@
         "tts-espeak-core-v1"
       ]
     },
-    "tts-kokoro-v1.0-core": {
-      "feature": "support",
-      "kind": "tts-kokoro-core",
-      "files": [
-        {
-          "name": "kokoro-v1.0.int8.onnx",
-          "sizeBytes": 92361271,
-          "installPath": "bin/kokoro/kokoro-v1.0.int8.onnx",
-          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
-        },
-        {
-          "name": "voices-v1.0.bin",
-          "sizeBytes": 28214398,
-          "installPath": "bin/kokoro/voices-v1.0.bin",
-          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
-        }
-      ],
-      "dependsOn": []
-    },
     "tts-piper-ar-jo-kareem-medium": {
       "feature": "tts",
       "engine": "piper",
@@ -7255,6 +7333,32 @@
         "tts-espeak-dict-ar"
       ]
     },
+    "tts-mms-az-az-north-latin-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "az",
+      "locale": "az_AZ",
+      "region": "AZ",
+      "voice": "north_latin",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114020024,
+          "installPath": "bin/mms/azj-script_latin/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/azj-script_latin/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 361,
+          "installPath": "bin/mms/azj-script_latin/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/azj-script_latin/tokens.txt"
+        }
+      ],
+      "dependsOn": []
+    },
     "tts-piper-bg-bg-dimitar-medium": {
       "feature": "tts",
       "engine": "piper",
@@ -7282,6 +7386,32 @@
       "dependsOn": [
         "tts-espeak-dict-bg"
       ]
+    },
+    "tts-mms-bn-in-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "bn",
+      "locale": "bn_IN",
+      "region": "IN",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114044600,
+          "installPath": "bin/mms/ben/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/ben/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 480,
+          "installPath": "bin/mms/ben/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/ben/tokens.txt"
+        }
+      ],
+      "dependsOn": []
     },
     "tts-piper-ca-es-upc-ona-medium": {
       "feature": "tts",
@@ -8340,6 +8470,32 @@
         "tts-espeak-dict-fr"
       ]
     },
+    "tts-mms-gu-in-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "gu",
+      "locale": "gu_IN",
+      "region": "IN",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114033848,
+          "installPath": "bin/mms/guj/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/guj/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 402,
+          "installPath": "bin/mms/guj/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/guj/tokens.txt"
+        }
+      ],
+      "dependsOn": []
+    },
     "tts-piper-he-il-community-female-medium": {
       "feature": "tts",
       "engine": "piper",
@@ -8395,6 +8551,32 @@
       "dependsOn": [
         "tts-espeak-dict-he"
       ]
+    },
+    "tts-mms-he-il-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "he",
+      "locale": "he_IL",
+      "region": "IL",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114012344,
+          "installPath": "bin/mms/heb/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/heb/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 179,
+          "installPath": "bin/mms/heb/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/heb/tokens.txt"
+        }
+      ],
+      "dependsOn": []
     },
     "tts-piper-hi-in-rohan-medium": {
       "feature": "tts",
@@ -8787,6 +8969,32 @@
         "support-ja-mucab"
       ]
     },
+    "tts-mms-kn-in-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "kn",
+      "locale": "kn_IN",
+      "region": "IN",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114045368,
+          "installPath": "bin/mms/kan/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/kan/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 487,
+          "installPath": "bin/mms/kan/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/kan/tokens.txt"
+        }
+      ],
+      "dependsOn": []
+    },
     "tts-kokoro-ko-kr-jf-alpha-kokoro-v1.0": {
       "feature": "tts",
       "engine": "kokoro",
@@ -8886,6 +9094,32 @@
       "dependsOn": [
         "tts-espeak-dict-ml"
       ]
+    },
+    "tts-mms-ms-my-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "ms",
+      "locale": "ms_MY",
+      "region": "MY",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114013880,
+          "installPath": "bin/mms/zlm/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/zlm/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 275,
+          "installPath": "bin/mms/zlm/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/zlm/tokens.txt"
+        }
+      ],
+      "dependsOn": []
     },
     "tts-piper-nl-be-rdh-medium": {
       "feature": "tts",
@@ -9770,6 +10004,32 @@
         "tts-espeak-dict-sv"
       ]
     },
+    "tts-mms-ta-in-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "ta",
+      "locale": "ta_IN",
+      "region": "IN",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114032312,
+          "installPath": "bin/mms/tam/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tam/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 375,
+          "installPath": "bin/mms/tam/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tam/tokens.txt"
+        }
+      ],
+      "dependsOn": []
+    },
     "tts-piper-te-in-maya-medium": {
       "feature": "tts",
       "engine": "piper",
@@ -9853,6 +10113,32 @@
       "dependsOn": [
         "tts-espeak-dict-te"
       ]
+    },
+    "tts-mms-th-th-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "th",
+      "locale": "th_TH",
+      "region": "TH",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114042296,
+          "installPath": "bin/mms/tha/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tha/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 473,
+          "installPath": "bin/mms/tha/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tha/tokens.txt"
+        }
+      ],
+      "dependsOn": []
     },
     "tts-piper-tr-tr-dfki-medium": {
       "feature": "tts",
