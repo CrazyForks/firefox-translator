@@ -299,7 +299,7 @@ class TranslatorViewModel(
       }
 
       is TranslatorMessage.SetImageUri -> {
-        val bm = translationCoordinator.correctBitmap(message.uri)
+        val bm = translationCoordinator.correctBitmap(message.uri, message.deleteAfterLoad)
         originalImage.value = bm
         _displayImage.value = bm
         _inputType.value = InputType.IMAGE

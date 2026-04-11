@@ -34,6 +34,7 @@ sealed class TranslatorMessage {
 
   data class SetImageUri(
     val uri: Uri,
+    val deleteAfterLoad: Boolean = false,
   ) : TranslatorMessage()
 
   data object ShareTranslatedImage : TranslatorMessage()

@@ -130,22 +130,31 @@ class TranslationCoordinator(
     availableLanguages: List<Language>,
   ): Language? = languageDetector.detectLanguageRobust(text, hint, availableLanguages)
 
-  fun correctBitmap(uri: Uri): Bitmap {
-    val originalBitmap = imageProcessor.loadBitmapFromUri(uri)
-    val correctedBitmap = imageProcessor.correctImageOrientation(uri, originalBitmap)
+  fun correctBitmap(
+    uri: Uri,
+    deleteAfterLoad: Boolean = false,
+  ): Bitmap {
+    try {
+      val originalBitmap = imageProcessor.loadBitmapFromUri(uri)
+      val correctedBitmap = imageProcessor.correctImageOrientation(uri, originalBitmap)
 
-    if (correctedBitmap !== originalBitmap && !originalBitmap.isRecycled) {
-      originalBitmap.recycle()
+      if (correctedBitmap !== originalBitmap && !originalBitmap.isRecycled) {
+        originalBitmap.recycle()
+      }
+
+      val maxImageSize = settingsManager.settings.value.maxImageSize
+      val finalBitmap = imageProcessor.downscaleImage(correctedBitmap, maxImageSize)
+
+      if (finalBitmap !== correctedBitmap && !correctedBitmap.isRecycled) {
+        correctedBitmap.recycle()
+      }
+
+      return finalBitmap
+    } finally {
+      if (deleteAfterLoad) {
+        imageProcessor.deleteTemporaryImageUri(uri)
+      }
     }
-
-    val maxImageSize = settingsManager.settings.value.maxImageSize
-    val finalBitmap = imageProcessor.downscaleImage(correctedBitmap, maxImageSize)
-
-    if (finalBitmap !== correctedBitmap && !correctedBitmap.isRecycled) {
-      correctedBitmap.recycle()
-    }
-
-    return finalBitmap
   }
 
   suspend fun translateImageWithOverlay(

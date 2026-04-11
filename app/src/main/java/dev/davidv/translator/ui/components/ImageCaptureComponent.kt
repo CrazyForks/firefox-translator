@@ -18,7 +18,9 @@
 package dev.davidv.translator.ui.components
 
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -42,6 +44,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,9 +59,44 @@ import com.canhub.cropper.CropImageOptions
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+
+private data class PendingImageImport(
+  val sourceUri: Uri?,
+  val cropOutputUri: Uri,
+)
+
+private fun createTemporaryImageUri(
+  context: Context,
+  prefix: String,
+  compressFormat: Bitmap.CompressFormat = Bitmap.CompressFormat.JPEG,
+): Uri {
+  val suffix =
+    when (compressFormat) {
+      Bitmap.CompressFormat.JPEG -> ".jpg"
+      Bitmap.CompressFormat.PNG -> ".png"
+      Bitmap.CompressFormat.WEBP,
+      Bitmap.CompressFormat.WEBP_LOSSY,
+      Bitmap.CompressFormat.WEBP_LOSSLESS,
+      -> ".webp"
+    }
+  val file = java.io.File.createTempFile(prefix, suffix, context.cacheDir)
+  return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
+private fun deleteTemporaryImageUri(
+  context: Context,
+  uri: Uri,
+): Boolean =
+  try {
+    when (uri.scheme) {
+      "content" -> context.contentResolver.delete(uri, null, null) > 0
+      "file" -> uri.path?.let(::File)?.delete() == true
+      else -> false
+    }
+  } catch (e: Exception) {
+    Log.w("ImageCapture", "Failed to delete temporary image URI: $uri", e)
+    false
+  }
 
 @Composable
 fun ImageCaptureHandler(
@@ -68,32 +106,29 @@ fun ImageCaptureHandler(
   showFilePickerInImagePicker: Boolean = true,
 ) {
   val context = LocalContext.current
-
-  // Create temporary file for camera capture
-  val cameraImageUri =
-    remember {
-      val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
-      val imageFile = File(context.cacheDir, "camera_image_$timeStamp.jpg")
-      try {
-        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", imageFile)
-      } catch (e: IllegalArgumentException) {
-        Log.e("ImageCapture", "Failed to create camera image URI")
-        Uri.EMPTY
-      }
-    }
+  val pendingImport = remember { mutableStateOf<PendingImageImport?>(null) }
 
   val cropImage =
     rememberLauncherForActivityResult(CropImageContract()) { result ->
+      val activeImport = pendingImport.value
       if (result.isSuccessful) {
-        val croppedUri = result.uriContent
+        val croppedUri = result.uriContent ?: activeImport?.cropOutputUri
         if (croppedUri != null) {
+          activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+          pendingImport.value = null
           Log.d("ImageCrop", "Image cropped: $croppedUri")
-          onMessage(TranslatorMessage.SetImageUri(croppedUri))
+          onMessage(TranslatorMessage.SetImageUri(croppedUri, deleteAfterLoad = true))
         } else {
+          activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+          activeImport?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
+          pendingImport.value = null
           Log.d("ImageCrop", "Crop successful but no URI returned")
         }
       } else {
         val exception = result.error
+        activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+        activeImport?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
+        pendingImport.value = null
         Log.d("ImageCrop", "Crop cancelled or failed: ${exception?.message}")
       }
     }
@@ -103,14 +138,28 @@ fun ImageCaptureHandler(
       ActivityResultContracts.StartActivityForResult(),
     ) { result ->
       if (result.resultCode == android.app.Activity.RESULT_OK) {
+        val activeImport = pendingImport.value
+        val cameraImageUri = activeImport?.sourceUri
+        if (cameraImageUri == null) {
+          Log.d("Camera", "Photo capture completed without an active import session")
+          return@rememberLauncherForActivityResult
+        }
         Log.d("Camera", "Photo captured: $cameraImageUri")
         cropImage.launch(
           CropImageContractOptions(
             uri = cameraImageUri,
-            cropImageOptions = CropImageOptions(),
+            cropImageOptions =
+              CropImageOptions(
+                customOutputUri = activeImport.cropOutputUri,
+                outputCompressFormat = Bitmap.CompressFormat.JPEG,
+                outputCompressQuality = 95,
+              ),
           ),
         )
       } else {
+        pendingImport.value?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+        pendingImport.value?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
+        pendingImport.value = null
         Log.d("Camera", "Photo capture cancelled or failed")
       }
     }
@@ -118,11 +167,18 @@ fun ImageCaptureHandler(
   val pickMedia =
     rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
       if (uri != null) {
+        val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
+        pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
         Log.d("PhotoPicker", "Selected URI: $uri")
         cropImage.launch(
           CropImageContractOptions(
             uri = uri,
-            cropImageOptions = CropImageOptions(),
+            cropImageOptions =
+              CropImageOptions(
+                customOutputUri = cropOutputUri,
+                outputCompressFormat = Bitmap.CompressFormat.JPEG,
+                outputCompressQuality = 95,
+              ),
           ),
         )
       } else {
@@ -135,11 +191,18 @@ fun ImageCaptureHandler(
       if (result.resultCode == android.app.Activity.RESULT_OK) {
         val imageUri = result.data?.data
         if (imageUri != null) {
+          val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
+          pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
           Log.d("Gallery", "Selected URI: $imageUri")
           cropImage.launch(
             CropImageContractOptions(
               uri = imageUri,
-              cropImageOptions = CropImageOptions(),
+              cropImageOptions =
+                CropImageOptions(
+                  customOutputUri = cropOutputUri,
+                  outputCompressFormat = Bitmap.CompressFormat.JPEG,
+                  outputCompressQuality = 95,
+                ),
             ),
           )
         } else {
@@ -151,11 +214,18 @@ fun ImageCaptureHandler(
   val pickFromFiles =
     rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
       if (uri != null) {
+        val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
+        pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
         Log.d("FilePicker", "Selected URI: $uri")
         cropImage.launch(
           CropImageContractOptions(
             uri = uri,
-            cropImageOptions = CropImageOptions(),
+            cropImageOptions =
+              CropImageOptions(
+                customOutputUri = cropOutputUri,
+                outputCompressFormat = Bitmap.CompressFormat.JPEG,
+                outputCompressQuality = 95,
+              ),
           ),
         )
       } else {
@@ -170,6 +240,9 @@ fun ImageCaptureHandler(
       showFilePickerOption = showFilePickerInImagePicker,
       onCameraClick = {
         onDismissImageSourceSheet()
+        val cameraImageUri = createTemporaryImageUri(context, "camera_image")
+        val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
+        pendingImport.value = PendingImageImport(sourceUri = cameraImageUri, cropOutputUri = cropOutputUri)
         val cameraIntent =
           Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
             putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri)

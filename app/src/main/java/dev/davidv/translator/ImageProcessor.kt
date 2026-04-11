@@ -26,6 +26,7 @@ import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import kotlin.math.max
 
 class ImageProcessor(
@@ -51,6 +52,18 @@ class ImageProcessor(
     context.contentResolver.openInputStream(uri)?.use { inputStream ->
       BitmapFactory.decodeStream(inputStream)
     } ?: throw IllegalArgumentException("Cannot load bitmap from URI: $uri")
+
+  fun deleteTemporaryImageUri(uri: Uri): Boolean =
+    try {
+      when (uri.scheme) {
+        "content" -> context.contentResolver.delete(uri, null, null) > 0
+        "file" -> uri.path?.let(::File)?.delete() == true
+        else -> false
+      }
+    } catch (e: Exception) {
+      Log.w("ImageProcessor", "Failed to delete temporary image URI: $uri", e)
+      false
+    }
 
   fun downscaleImage(
     bitmap: Bitmap,
