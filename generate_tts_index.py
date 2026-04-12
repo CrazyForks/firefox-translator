@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import re
 import time
 from collections import defaultdict
 from copy import deepcopy
@@ -51,6 +52,8 @@ BANNED_TTS_VOICES = {
     # Broken Spanish Piper MLS voices. Keep them out of the generated TTS catalog.
     "es_ES-mls_10246-low",
     "es_ES-mls_9972-low",
+    # Upstream Piper metadata still lists this voice, but the files 404 on Hugging Face.
+    "no_NO-nvcc-medium",
 }
 EXTRA_TTS_VOICES = {
     # External Polish Piper voice metadata source:
@@ -798,6 +801,25 @@ def region_display_name(voice: dict) -> str:
     return voice["language"].get("region", voice["language"]["code"])
 
 
+def slug_path_segment(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-")
+    return slug.lower() or "default"
+
+
+def tts_install_path(
+    *,
+    install_root: str,
+    app_language: str,
+    locale_code: str,
+    voice_name: str,
+    quality: str | None,
+    filename: str,
+) -> str:
+    quality_segment = slug_path_segment(quality or "default")
+    voice_segment = slug_path_segment(voice_name)
+    return f"bin/{install_root}/{app_language}/{locale_code}/{voice_segment}/{quality_segment}/{filename}"
+
+
 def resolve_espeak_data_dir(configured: str | None) -> Path | None:
     if configured:
         path = Path(configured)
@@ -945,6 +967,7 @@ def merge_tts(
             install_root = voice.get("install_root", engine)
             pack_id = f"tts-{engine}-{key.replace('_', '-').lower()}"
             locale_code = voice["language"]["code"]
+            quality = voice.get("quality")
             dict_code = espeak_dict_code(app_language, locale_code)
             files = []
             for source_path, file_info in voice.get("files", {}).items():
@@ -955,7 +978,14 @@ def merge_tts(
                     {
                         "name": filename,
                         "sizeBytes": file_info.get("size_bytes", 0),
-                        "installPath": f"bin/{install_root}/{source_path}",
+                        "installPath": tts_install_path(
+                            install_root=install_root,
+                            app_language=app_language,
+                            locale_code=locale_code,
+                            voice_name=voice["name"],
+                            quality=quality,
+                            filename=filename,
+                        ),
                         "url": file_info.get("url") or f"{piper_base_url.rstrip('/')}/{source_path}",
                     }
                 )
@@ -980,7 +1010,7 @@ def merge_tts(
                 "locale": locale_code,
                 "region": region,
                 "voice": voice["name"],
-                "quality": voice.get("quality"),
+                "quality": quality,
                 "numSpeakers": voice.get("num_speakers", 1),
                 "defaultSpeakerId": default_speaker_id,
                 "aliases": voice.get("aliases", []),

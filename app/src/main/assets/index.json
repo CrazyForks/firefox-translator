@@ -1,6 +1,6 @@
 {
   "formatVersion": 2,
-  "generatedAt": 1776012156,
+  "generatedAt": 1776022307,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "tesseractModelsBaseUrl": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main",
   "dictionaryBaseUrl": "https://translator.davidv.dev/dictionaries",
@@ -1181,8 +1181,7 @@
           "NO": {
             "displayName": "Norway",
             "voices": [
-              "tts-piper-no-no-talesyntese-medium",
-              "tts-piper-no-no-nvcc-medium"
+              "tts-piper-no-no-talesyntese-medium"
             ]
           }
         }
@@ -7408,13 +7407,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114020024,
-          "installPath": "bin/mms/azj-script_latin/model.onnx",
+          "installPath": "bin/mms/az/az_AZ/north_latin/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/azj-script_latin/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 361,
-          "installPath": "bin/mms/azj-script_latin/tokens.txt",
+          "installPath": "bin/mms/az/az_AZ/north_latin/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/azj-script_latin/tokens.txt"
         }
       ],
@@ -7462,13 +7461,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114044600,
-          "installPath": "bin/mms/ben/model.onnx",
+          "installPath": "bin/mms/bn/bn_IN/standard/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/ben/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 480,
-          "installPath": "bin/mms/ben/tokens.txt",
+          "installPath": "bin/mms/bn/bn_IN/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/ben/tokens.txt"
         }
       ],
@@ -7488,31 +7487,31 @@
         {
           "name": "model.onnx",
           "sizeBytes": 71043321,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/model.onnx",
+          "installPath": "bin/coqui_vits/bs/bs_BA/cv/medium/model.onnx",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/model.onnx"
         },
         {
           "name": "config.json",
           "sizeBytes": 8452,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/config.json",
+          "installPath": "bin/coqui_vits/bs/bs_BA/cv/medium/config.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/config.json"
         },
         {
           "name": "language_ids.json",
           "sizeBytes": 15,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/language_ids.json",
+          "installPath": "bin/coqui_vits/bs/bs_BA/cv/medium/language_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/language_ids.json"
         },
         {
           "name": "speaker_ids.json",
           "sizeBytes": 19,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/speaker_ids.json",
+          "installPath": "bin/coqui_vits/bs/bs_BA/cv/medium/speaker_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/speaker_ids.json"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 1760,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/tokens.txt",
+          "installPath": "bin/coqui_vits/bs/bs_BA/cv/medium/tokens.txt",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/tokens.txt"
         }
       ],
@@ -8273,31 +8272,31 @@
         {
           "name": "model.onnx",
           "sizeBytes": 71030265,
-          "installPath": "bin/coqui_vits/vits-coqui-et-cv/model.onnx",
+          "installPath": "bin/coqui_vits/et/et_EE/cv/medium/model.onnx",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-et-cv/model.onnx"
         },
         {
           "name": "config.json",
           "sizeBytes": 8281,
-          "installPath": "bin/coqui_vits/vits-coqui-et-cv/config.json",
+          "installPath": "bin/coqui_vits/et/et_EE/cv/medium/config.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-et-cv/config.json"
         },
         {
           "name": "language_ids.json",
           "sizeBytes": 15,
-          "installPath": "bin/coqui_vits/vits-coqui-et-cv/language_ids.json",
+          "installPath": "bin/coqui_vits/et/et_EE/cv/medium/language_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-et-cv/language_ids.json"
         },
         {
           "name": "speaker_ids.json",
           "sizeBytes": 19,
-          "installPath": "bin/coqui_vits/vits-coqui-et-cv/speaker_ids.json",
+          "installPath": "bin/coqui_vits/et/et_EE/cv/medium/speaker_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-et-cv/speaker_ids.json"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 1522,
-          "installPath": "bin/coqui_vits/vits-coqui-et-cv/tokens.txt",
+          "installPath": "bin/coqui_vits/et/et_EE/cv/medium/tokens.txt",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-et-cv/tokens.txt"
         }
       ],
@@ -8603,13 +8602,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114033848,
-          "installPath": "bin/mms/guj/model.onnx",
+          "installPath": "bin/mms/gu/gu_IN/standard/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/guj/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 402,
-          "installPath": "bin/mms/guj/tokens.txt",
+          "installPath": "bin/mms/gu/gu_IN/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/guj/tokens.txt"
         }
       ],
@@ -8685,13 +8684,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114012344,
-          "installPath": "bin/mms/heb/model.onnx",
+          "installPath": "bin/mms/he/he_IL/standard/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/heb/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 179,
-          "installPath": "bin/mms/heb/tokens.txt",
+          "installPath": "bin/mms/he/he_IL/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/heb/tokens.txt"
         }
       ],
@@ -8795,31 +8794,31 @@
         {
           "name": "model.onnx",
           "sizeBytes": 71043321,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/model.onnx",
+          "installPath": "bin/coqui_vits/hr/hr_HR/cv/medium/model.onnx",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/model.onnx"
         },
         {
           "name": "config.json",
           "sizeBytes": 8452,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/config.json",
+          "installPath": "bin/coqui_vits/hr/hr_HR/cv/medium/config.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/config.json"
         },
         {
           "name": "language_ids.json",
           "sizeBytes": 15,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/language_ids.json",
+          "installPath": "bin/coqui_vits/hr/hr_HR/cv/medium/language_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/language_ids.json"
         },
         {
           "name": "speaker_ids.json",
           "sizeBytes": 19,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/speaker_ids.json",
+          "installPath": "bin/coqui_vits/hr/hr_HR/cv/medium/speaker_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/speaker_ids.json"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 1760,
-          "installPath": "bin/coqui_vits/vits-coqui-hr-cv/tokens.txt",
+          "installPath": "bin/coqui_vits/hr/hr_HR/cv/medium/tokens.txt",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-hr-cv/tokens.txt"
         }
       ],
@@ -9146,13 +9145,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114045368,
-          "installPath": "bin/mms/kan/model.onnx",
+          "installPath": "bin/mms/kn/kn_IN/standard/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/kan/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 487,
-          "installPath": "bin/mms/kan/tokens.txt",
+          "installPath": "bin/mms/kn/kn_IN/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/kan/tokens.txt"
         }
       ],
@@ -9222,31 +9221,31 @@
         {
           "name": "model.onnx",
           "sizeBytes": 71032571,
-          "installPath": "bin/coqui_vits/vits-coqui-lt-cv/model.onnx",
+          "installPath": "bin/coqui_vits/lt/lt_LT/cv/medium/model.onnx",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-lt-cv/model.onnx"
         },
         {
           "name": "config.json",
           "sizeBytes": 8276,
-          "installPath": "bin/coqui_vits/vits-coqui-lt-cv/config.json",
+          "installPath": "bin/coqui_vits/lt/lt_LT/cv/medium/config.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-lt-cv/config.json"
         },
         {
           "name": "language_ids.json",
           "sizeBytes": 15,
-          "installPath": "bin/coqui_vits/vits-coqui-lt-cv/language_ids.json",
+          "installPath": "bin/coqui_vits/lt/lt_LT/cv/medium/language_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-lt-cv/language_ids.json"
         },
         {
           "name": "speaker_ids.json",
           "sizeBytes": 19,
-          "installPath": "bin/coqui_vits/vits-coqui-lt-cv/speaker_ids.json",
+          "installPath": "bin/coqui_vits/lt/lt_LT/cv/medium/speaker_ids.json",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-lt-cv/speaker_ids.json"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 1564,
-          "installPath": "bin/coqui_vits/vits-coqui-lt-cv/tokens.txt",
+          "installPath": "bin/coqui_vits/lt/lt_LT/cv/medium/tokens.txt",
           "url": "https://translator.davidv.dev/tts/1/vits-coqui-lt-cv/tokens.txt"
         }
       ],
@@ -9350,13 +9349,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114013880,
-          "installPath": "bin/mms/zlm/model.onnx",
+          "installPath": "bin/mms/ms/ms_MY/standard/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/zlm/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 275,
-          "installPath": "bin/mms/zlm/tokens.txt",
+          "installPath": "bin/mms/ms/ms_MY/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/zlm/tokens.txt"
         }
       ],
@@ -9623,35 +9622,6 @@
         "tts-espeak-dict-no"
       ]
     },
-    "tts-piper-no-no-nvcc-medium": {
-      "feature": "tts",
-      "engine": "piper",
-      "language": "no",
-      "locale": "no_NO",
-      "region": "NO",
-      "voice": "nvcc",
-      "quality": "medium",
-      "numSpeakers": 10,
-      "defaultSpeakerId": 0,
-      "aliases": [],
-      "files": [
-        {
-          "name": "no_NO-nvcc-medium.onnx",
-          "sizeBytes": 76770227,
-          "installPath": "bin/piper/no/no_NO/nvcc/medium/no_NO-nvcc-medium.onnx",
-          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/no/no_NO/nvcc/medium/no_NO-nvcc-medium.onnx"
-        },
-        {
-          "name": "no_NO-nvcc-medium.onnx.json",
-          "sizeBytes": 5367,
-          "installPath": "bin/piper/no/no_NO/nvcc/medium/no_NO-nvcc-medium.onnx.json",
-          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/no/no_NO/nvcc/medium/no_NO-nvcc-medium.onnx.json"
-        }
-      ],
-      "dependsOn": [
-        "tts-espeak-dict-no"
-      ]
-    },
     "tts-piper-pl-pl-darkman-medium": {
       "feature": "tts",
       "engine": "piper",
@@ -9892,13 +9862,13 @@
         {
           "name": "pt_PT-tugão-medium.onnx",
           "sizeBytes": 63201294,
-          "installPath": "bin/piper/pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx",
+          "installPath": "bin/piper/pt/pt_PT/tug-o/medium/pt_PT-tugão-medium.onnx",
           "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx"
         },
         {
           "name": "pt_PT-tugão-medium.onnx.json",
           "sizeBytes": 5026,
-          "installPath": "bin/piper/pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx.json",
+          "installPath": "bin/piper/pt/pt_PT/tug-o/medium/pt_PT-tugão-medium.onnx.json",
           "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_PT/tugão/medium/pt_PT-tugão-medium.onnx.json"
         }
       ],
@@ -10259,13 +10229,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114032312,
-          "installPath": "bin/mms/tam/model.onnx",
+          "installPath": "bin/mms/ta/ta_IN/standard/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tam/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 375,
-          "installPath": "bin/mms/tam/tokens.txt",
+          "installPath": "bin/mms/ta/ta_IN/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tam/tokens.txt"
         }
       ],
@@ -10369,13 +10339,13 @@
         {
           "name": "model.onnx",
           "sizeBytes": 114042296,
-          "installPath": "bin/mms/tha/model.onnx",
+          "installPath": "bin/mms/th/th_TH/standard/medium/model.onnx",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tha/model.onnx"
         },
         {
           "name": "tokens.txt",
           "sizeBytes": 473,
-          "installPath": "bin/mms/tha/tokens.txt",
+          "installPath": "bin/mms/th/th_TH/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tha/tokens.txt"
         }
       ],
@@ -10729,13 +10699,13 @@
         {
           "name": "yt-chinese_female.onnx",
           "sizeBytes": 63531476,
-          "installPath": "bin/piper/zh_hant/zh_TW/mandarin_traditional/medium/yt-chinese_female.onnx",
+          "installPath": "bin/piper/zh_hant/zh_TW/mandarin-traditional/medium/yt-chinese_female.onnx",
           "url": "https://huggingface.co/colafly/piper_zh_tw/resolve/main/yt-chinese_female.onnx"
         },
         {
           "name": "yt-chinese_female.onnx.json",
           "sizeBytes": 7352,
-          "installPath": "bin/piper/zh_hant/zh_TW/mandarin_traditional/medium/yt-chinese_female.onnx.json",
+          "installPath": "bin/piper/zh_hant/zh_TW/mandarin-traditional/medium/yt-chinese_female.onnx.json",
           "url": "https://huggingface.co/colafly/piper_zh_tw/resolve/main/yt-chinese_female.onnx.json"
         }
       ],
