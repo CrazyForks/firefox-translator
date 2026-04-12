@@ -1,6 +1,6 @@
 {
   "formatVersion": 2,
-  "generatedAt": 1776022307,
+  "generatedAt": 1776027802,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "tesseractModelsBaseUrl": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main",
   "dictionaryBaseUrl": "https://translator.davidv.dev/dictionaries",
@@ -6730,25 +6730,6 @@
       ],
       "dependsOn": []
     },
-    "tts-kokoro-v1.0-core": {
-      "feature": "support",
-      "kind": "tts-kokoro-core",
-      "files": [
-        {
-          "name": "kokoro-v1.0.int8.onnx",
-          "sizeBytes": 92361271,
-          "installPath": "bin/kokoro/kokoro-v1.0.int8.onnx",
-          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
-        },
-        {
-          "name": "voices-v1.0.bin",
-          "sizeBytes": 28214398,
-          "installPath": "bin/kokoro/voices-v1.0.bin",
-          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
-        }
-      ],
-      "dependsOn": []
-    },
     "tts-espeak-core-v1": {
       "feature": "support",
       "kind": "tts-espeak-core",
@@ -7336,6 +7317,25 @@
       "dependsOn": [
         "tts-espeak-core-v1"
       ]
+    },
+    "tts-kokoro-v1.0-core": {
+      "feature": "support",
+      "kind": "tts-kokoro-core",
+      "files": [
+        {
+          "name": "kokoro-v1.0.int8.onnx",
+          "sizeBytes": 92361271,
+          "installPath": "bin/kokoro/kokoro-v1.0.int8.onnx",
+          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
+        },
+        {
+          "name": "voices-v1.0.bin",
+          "sizeBytes": 28214398,
+          "installPath": "bin/kokoro/voices-v1.0.bin",
+          "url": "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+        }
+      ],
+      "dependsOn": []
     },
     "tts-piper-ar-jo-kareem-medium": {
       "feature": "tts",
