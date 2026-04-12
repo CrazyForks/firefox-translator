@@ -135,6 +135,19 @@ fun onnxRuntimeSharedLibrary(abi: String) = File(onnxRuntimeConfigDir(abi), "lib
 
 fun jniLibAbiDir(abi: String) = File(jniLibsRootDir, abi)
 
+fun cmakePathRemapFlags(): String =
+  listOf(
+    "-ffile-prefix-map=${rootProject.projectDir.absolutePath}=.",
+    "-fdebug-prefix-map=${rootProject.projectDir.absolutePath}=.",
+  ).joinToString(" ")
+
+fun cargoEncodedRustflags(): String =
+  listOf(
+    "--remap-path-prefix=${rootProject.projectDir.absolutePath}=.",
+    "--remap-path-prefix=/home/vagrant/.cargo=/",
+    "--remap-path-prefix=/usr/local/cargo=/",
+  ).joinToString("\u001f")
+
 val abiToTaskSuffix =
   mapOf(
     "arm64-v8a" to "Aarch64",
@@ -183,6 +196,7 @@ val abiToOnnxRuntimeTask =
         inputs.property("androidSdkRoot", androidSdkRoot)
         inputs.property("androidNdkRoot", ndk)
         inputs.property("cmakeCppStandard", "20")
+        inputs.property("cmakePathRemapFlags", cmakePathRemapFlags())
         outputs.file(onnxRuntimeSharedLibrary(abi))
         commandLine(
           "python3",
@@ -211,6 +225,8 @@ val abiToOnnxRuntimeTask =
           "CMAKE_CXX_STANDARD=20",
           "CMAKE_CXX_STANDARD_REQUIRED=ON",
           "CMAKE_CXX_EXTENSIONS=OFF",
+          "CMAKE_C_FLAGS=${cmakePathRemapFlags()}",
+          "CMAKE_CXX_FLAGS=${cmakePathRemapFlags()}",
           "onnxruntime_USE_ARM_NEON_NCHWC=ON",
           "--skip_submodule_sync",
         )
@@ -240,6 +256,7 @@ val abiToBindingsTask =
       inputs.property("cargoTarget", cargoTarget)
       inputs.property("androidApi", bindingsAndroidApi)
       inputs.property("androidNdkRoot", ndk)
+      inputs.property("cargoEncodedRustflags", cargoEncodedRustflags())
       outputs.file(File(jniLibAbiDir(abi), "libbindings.so"))
       outputs.file(File(jniLibAbiDir(abi), "libc++_shared.so"))
 
@@ -250,6 +267,7 @@ val abiToBindingsTask =
           environment("ANDROID_NDK_HOME", ndk)
           environment("ORT_LIB_LOCATION", onnxRuntimeConfigDir(abi).absolutePath)
           environment("ORT_PREFER_DYNAMIC_LINK", "1")
+          environment("CARGO_ENCODED_RUSTFLAGS", cargoEncodedRustflags())
           commandLine(
             "cargo",
             "ndk",
