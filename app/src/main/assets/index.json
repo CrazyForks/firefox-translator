@@ -1693,6 +1693,23 @@
           "tesseract": "ocr-tesseract-zh_hant"
         },
         "dictionary": "dict-zh"
+      },
+      "tts": {
+        "defaultRegion": "TW",
+        "regions": {
+          "TW": {
+            "displayName": "Taiwan",
+            "voices": [
+              "tts-piper-zh-tw-mandarin-traditional-medium"
+            ]
+          },
+          "HK": {
+            "displayName": "Hong Kong",
+            "voices": [
+              "tts-sherpa_vits-zh-hk-cantonese-medium"
+            ]
+          }
+        }
       }
     }
   },
@@ -10649,6 +10666,78 @@
       "dependsOn": [
         "tts-espeak-dict-cmn"
       ]
+    },
+    "tts-piper-zh-tw-mandarin-traditional-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "language": "zh_hant",
+      "locale": "zh_TW",
+      "region": "TW",
+      "voice": "Mandarin (Traditional)",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "yt-chinese_female.onnx",
+          "sizeBytes": 63531476,
+          "installPath": "bin/piper/zh_hant/zh_TW/mandarin_traditional/medium/yt-chinese_female.onnx",
+          "url": "https://huggingface.co/colafly/piper_zh_tw/resolve/main/yt-chinese_female.onnx"
+        },
+        {
+          "name": "yt-chinese_female.onnx.json",
+          "sizeBytes": 7352,
+          "installPath": "bin/piper/zh_hant/zh_TW/mandarin_traditional/medium/yt-chinese_female.onnx.json",
+          "url": "https://huggingface.co/colafly/piper_zh_tw/resolve/main/yt-chinese_female.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-cmn"
+      ]
+    },
+    "tts-sherpa_vits-zh-hk-cantonese-medium": {
+      "feature": "tts",
+      "engine": "sherpa_vits",
+      "language": "zh_hant",
+      "locale": "zh_HK",
+      "region": "HK",
+      "voice": "Cantonese",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "vits-cantonese-hf-xiaomaiiwn.onnx",
+          "sizeBytes": 114059955,
+          "installPath": "bin/sherpa_vits/zh_hant/zh_HK/cantonese/medium/vits-cantonese-hf-xiaomaiiwn.onnx",
+          "url": "https://huggingface.co/csukuangfj/vits-cantonese-hf-xiaomaiiwn/resolve/main/vits-cantonese-hf-xiaomaiiwn.onnx"
+        },
+        {
+          "name": "config.json",
+          "sizeBytes": 2746,
+          "installPath": "bin/sherpa_vits/zh_hant/zh_HK/cantonese/medium/config.json",
+          "url": "https://huggingface.co/csukuangfj/vits-cantonese-hf-xiaomaiiwn/resolve/main/config.json"
+        },
+        {
+          "name": "lexicon.txt",
+          "sizeBytes": 294061,
+          "installPath": "bin/sherpa_vits/zh_hant/zh_HK/cantonese/medium/lexicon.txt",
+          "url": "https://huggingface.co/csukuangfj/vits-cantonese-hf-xiaomaiiwn/resolve/main/lexicon.txt"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 529,
+          "installPath": "bin/sherpa_vits/zh_hant/zh_HK/cantonese/medium/tokens.txt",
+          "url": "https://huggingface.co/csukuangfj/vits-cantonese-hf-xiaomaiiwn/resolve/main/tokens.txt"
+        },
+        {
+          "name": "rule.fst",
+          "sizeBytes": 64482,
+          "installPath": "bin/sherpa_vits/zh_hant/zh_HK/cantonese/medium/rule.fst",
+          "url": "https://huggingface.co/csukuangfj/vits-cantonese-hf-xiaomaiiwn/resolve/main/rule.fst"
+        }
+      ],
+      "dependsOn": []
     }
   }
 }

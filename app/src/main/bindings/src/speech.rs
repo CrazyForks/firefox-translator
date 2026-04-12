@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use piper_rs::{
     Backend, BoundaryAfter, CoquiVitsModel, KokoroModel, MmsModel, PhonemeChunk, PiperModel,
+    SherpaVitsModel,
 };
 
 use crate::logging::{ANDROID_LOG_DEBUG, ANDROID_LOG_ERROR, android_log_with_level};
@@ -47,6 +48,7 @@ enum SpeechModel {
     Kokoro(KokoroModel),
     Mms(MmsModel),
     CoquiVits(CoquiVitsModel),
+    SherpaVits(SherpaVitsModel),
 }
 
 struct CachedSpeechModel {
@@ -144,6 +146,15 @@ fn available_voices(model: &SpeechModel) -> Vec<(String, i64)> {
             })
             .unwrap_or_default(),
         SpeechModel::CoquiVits(model) => model
+            .voices()
+            .map(|voices| {
+                voices
+                    .iter()
+                    .map(|(name, id)| (name.clone(), *id))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default(),
+        SpeechModel::SherpaVits(model) => model
             .voices()
             .map(|voices| {
                 voices
@@ -334,6 +345,13 @@ fn load_speech_model(
         )
         .map(SpeechModel::CoquiVits)
         .map_err(|err| format!("Failed to load Coqui VITS voice: {err}")),
+        "sherpa_vits" => SherpaVitsModel::new(
+            Path::new(model_path),
+            Path::new(aux_path),
+            &Backend::Cpu,
+        )
+        .map(SpeechModel::SherpaVits)
+        .map_err(|err| format!("Failed to load Sherpa VITS voice: {err}")),
         "piper" => PiperModel::new(Path::new(model_path), Path::new(aux_path), &Backend::Cpu)
             .map(SpeechModel::Piper)
             .map_err(|err| format!("Failed to load Piper voice: {err}")),
@@ -460,6 +478,9 @@ fn phonemize(model: &mut SpeechModel, text: &str) -> Result<String, String> {
         SpeechModel::CoquiVits(model) => model
             .phonemize(text)
             .map_err(|err| format!("Speech synthesis failed: {err}")),
+        SpeechModel::SherpaVits(model) => model
+            .phonemize(text)
+            .map_err(|err| format!("Speech synthesis failed: {err}")),
     }
 }
 
@@ -535,6 +556,17 @@ fn synthesize(
             }
         }
         SpeechModel::CoquiVits(model) => {
+            if is_phonemes {
+                model
+                    .synthesize_phonemes(text, effective_speaker_id, Some(clamped_speech_speed))
+                    .map_err(|err| format!("Speech synthesis failed: {err}"))
+            } else {
+                model
+                    .synthesize(text, effective_speaker_id, Some(clamped_speech_speed))
+                    .map_err(|err| format!("Speech synthesis failed: {err}"))
+            }
+        }
+        SpeechModel::SherpaVits(model) => {
             if is_phonemes {
                 model
                     .synthesize_phonemes(text, effective_speaker_id, Some(clamped_speech_speed))

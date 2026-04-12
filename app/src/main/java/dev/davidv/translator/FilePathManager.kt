@@ -121,7 +121,7 @@ class FilePathManager(
           speakerId = voicePack.defaultSpeakerId,
         )
       }
-      "coqui_vits" -> {
+      "coqui_vits", "sherpa_vits" -> {
         val configAsset = packFiles.firstOrNull { it.name == "config.json" } ?: return null
         val auxFile = resolveInstallPath(configAsset.installPath)
         if (!auxFile.exists()) return null
