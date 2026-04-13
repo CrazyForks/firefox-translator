@@ -265,7 +265,10 @@ fun MainScreen(
                     )
                   }
                   ShareImage(onMessage)
-                  ClearInput(onMessage)
+                  ClearInput(
+                    onMessage = onMessage,
+                    showBackdrop = true,
+                  )
                 }
               }
             }
@@ -459,6 +462,7 @@ fun ShareImage(onMessage: (TranslatorMessage) -> Unit) {
   ActionPillButton(
     iconRes = R.drawable.share,
     contentDescription = "Share image",
+    showBackdrop = true,
     onClick = { onMessage(TranslatorMessage.ShareTranslatedImage) },
   )
 }
@@ -472,26 +476,35 @@ fun JapaneseOcrModeToggle(
   ActionPillButton(
     iconRes = if (isVertical) R.drawable.text_rotate_vertical else R.drawable.text_rotation_none,
     contentDescription = if (isVertical) "Japanese OCR vertical mode" else "Japanese OCR horizontal mode",
+    showBackdrop = true,
     onClick = { onMessage(TranslatorMessage.ToggleJapaneseOcrMode) },
   )
 }
 
 @Composable
-fun ClearInput(onMessage: (TranslatorMessage) -> Unit) {
+fun ClearInput(
+  onMessage: (TranslatorMessage) -> Unit,
+  showBackdrop: Boolean = false,
+) {
   ActionPillButton(
     iconRes = R.drawable.cancel,
     contentDescription = "Clear input",
+    showBackdrop = showBackdrop,
     onClick = { onMessage(TranslatorMessage.ClearInput) },
   )
 }
 
 @Composable
-fun PasteButton(onMessage: (TranslatorMessage) -> Unit) {
+fun PasteButton(
+  onMessage: (TranslatorMessage) -> Unit,
+  showBackdrop: Boolean = false,
+) {
   val context = LocalContext.current
 
   ActionPillButton(
     iconRes = R.drawable.paste,
     contentDescription = "Paste",
+    showBackdrop = showBackdrop,
     onClick = {
       val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
       val clipData = clipboardManager.primaryClip
@@ -507,12 +520,26 @@ fun PasteButton(onMessage: (TranslatorMessage) -> Unit) {
 private fun ActionPillButton(
   iconRes: Int,
   contentDescription: String,
+  showBackdrop: Boolean = false,
   onClick: () -> Unit,
 ) {
-  Surface(
-    shape = CircleShape,
-    color = Color(0xCC303030),
-  ) {
+  if (showBackdrop) {
+    Surface(
+      shape = CircleShape,
+      color = Color(0xCC303030),
+    ) {
+      IconButton(
+        onClick = onClick,
+        modifier = Modifier.size(36.dp),
+      ) {
+        Icon(
+          painterResource(id = iconRes),
+          contentDescription = contentDescription,
+          tint = Color.White,
+        )
+      }
+    }
+  } else {
     IconButton(
       onClick = onClick,
       modifier = Modifier.size(36.dp),
