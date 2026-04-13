@@ -42,8 +42,6 @@ import dev.davidv.translator.TranslationResult
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.TtsVoiceOption
 import dev.davidv.translator.WordWithTaggedEntries
-import dev.davidv.translator.canSwapLanguages
-import dev.davidv.translator.canTranslate
 import dev.davidv.translator.ui.screens.openDictionary
 import dev.davidv.translator.ui.screens.toggleFirstLetterCase
 import kotlinx.coroutines.flow.Flow
@@ -210,7 +208,7 @@ class TranslatorViewModel(
             if (preferredSource != null &&
               preferredAvail &&
               preferredSource != currentTo &&
-              (currentTo == null || canTranslate(preferredSource, currentTo, languageState.availableLanguageMap))
+              (currentTo == null || languageStateManager.canTranslate(preferredSource, currentTo))
             ) {
               preferredSource
             } else {
@@ -330,7 +328,7 @@ class TranslatorViewModel(
       TranslatorMessage.SwapLanguages -> {
         val oldFrom = _from.value ?: return
         val oldTo = _to.value ?: return
-        if (!canSwapLanguages(oldFrom, oldTo)) return
+        if (!languageStateManager.canSwapLanguages(oldFrom, oldTo)) return
         _from.value = oldTo
         _to.value = oldFrom
         _output.value = null
@@ -669,7 +667,7 @@ class TranslatorViewModel(
     availableLanguages.keys
       .asSequence()
       .filterNot { it == excluding }
-      .filter { canTranslate(it, target, availableLanguages) }
+      .filter { languageStateManager.canTranslate(it, target) }
       .firstOrNull()
 
   private fun firstAvailableTargetLanguage(
@@ -680,7 +678,7 @@ class TranslatorViewModel(
     availableLanguages.keys
       .asSequence()
       .filterNot { it == excluding }
-      .filter { canTranslate(source, it, availableLanguages) }
+      .filter { languageStateManager.canTranslate(source, it) }
       .firstOrNull()
 }
 

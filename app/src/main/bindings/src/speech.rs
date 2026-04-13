@@ -203,7 +203,11 @@ fn format_voice_display_name(name: &str) -> String {
         .join(" ")
 }
 
-fn visible_voices(engine: &str, language_code: &str, voices: &[(String, i64)]) -> Vec<TtsVoiceInfo> {
+fn visible_voices(
+    engine: &str,
+    language_code: &str,
+    voices: &[(String, i64)],
+) -> Vec<TtsVoiceInfo> {
     let filtered = if engine == "kokoro" {
         let prefixes = kokoro_voice_prefixes(language_code);
         let matching = voices
@@ -272,18 +276,15 @@ fn resolve_requested_voice(
     }
 
     if let Some(speaker_id) = speaker_id {
-        if let Some((name, id)) = cached_model
-            .voices
-            .iter()
-            .find(|(_, id)| *id == speaker_id)
-        {
+        if let Some((name, id)) = cached_model.voices.iter().find(|(_, id)| *id == speaker_id) {
             return Some((name.clone(), *id));
         }
     }
 
-    cached_model.default_voice.clone().or_else(|| {
-        speaker_id.map(|id| (format!("speaker_{id}"), id))
-    })
+    cached_model
+        .default_voice
+        .clone()
+        .or_else(|| speaker_id.map(|id| (format!("speaker_{id}"), id)))
 }
 
 fn clamp_speech_speed(speech_speed: f32) -> f32 {
@@ -345,16 +346,16 @@ fn load_speech_model(
         )
         .map(SpeechModel::CoquiVits)
         .map_err(|err| format!("Failed to load Coqui VITS voice: {err}")),
-        "sherpa_vits" => SherpaVitsModel::new(
-            Path::new(model_path),
-            Path::new(aux_path),
-            &Backend::Cpu,
-        )
-        .map(SpeechModel::SherpaVits)
-        .map_err(|err| format!("Failed to load Sherpa VITS voice: {err}")),
-        "mimic3" => PiperModel::from_mimic3(Path::new(model_path), Path::new(aux_path), &Backend::Cpu)
-            .map(SpeechModel::Piper)
-            .map_err(|err| format!("Failed to load Mimic3 voice: {err}")),
+        "sherpa_vits" => {
+            SherpaVitsModel::new(Path::new(model_path), Path::new(aux_path), &Backend::Cpu)
+                .map(SpeechModel::SherpaVits)
+                .map_err(|err| format!("Failed to load Sherpa VITS voice: {err}"))
+        }
+        "mimic3" => {
+            PiperModel::from_mimic3(Path::new(model_path), Path::new(aux_path), &Backend::Cpu)
+                .map(SpeechModel::Piper)
+                .map_err(|err| format!("Failed to load Mimic3 voice: {err}"))
+        }
         "piper" => PiperModel::new(Path::new(model_path), Path::new(aux_path), &Backend::Cpu)
             .map(SpeechModel::Piper)
             .map_err(|err| format!("Failed to load Piper voice: {err}")),

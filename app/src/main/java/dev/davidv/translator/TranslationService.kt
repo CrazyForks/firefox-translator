@@ -31,7 +31,6 @@ import kotlin.system.measureTimeMillis
 class TranslationService(
   private val settingsManager: SettingsManager,
   private val filePathManager: FilePathManager,
-  private val english: Language,
 ) {
   companion object {
     private const val CLAUSE_PAUSE_MS = 120
@@ -74,14 +73,12 @@ class TranslationService(
     from: Language,
     to: Language,
   ) = withContext(Dispatchers.IO) {
-    val translationPairs = getTranslationPairs(from, to)
-    for (pair in translationPairs) {
-      val config = generateConfig(pair.first, pair.second)
-      val languageCode = "${pair.first.code}${pair.second.code}"
-      Log.d("TranslationService", "Preloading model with key: $languageCode")
-      nativeLib.loadModelIntoCache(config, languageCode) // translate empty string to load the model
-      Log.d("TranslationService", "Preloaded model for ${pair.first} -> ${pair.second} with key: $languageCode")
-    }
+    if (from == to) return@withContext
+
+    val catalog = filePathManager.loadCatalog() ?: return@withContext
+    val baseDir = filePathManager.currentBaseDir().absolutePath
+    val plan = catalog.resolveTranslationPlan(baseDir, from, to) ?: return@withContext
+    loadPlanIntoCache(plan)
   }
 
   suspend fun translateMultiple(
@@ -93,33 +90,19 @@ class TranslationService(
       if (from == to) {
         return@withContext BatchTranslationResult.Success(texts.map { TranslatedText(it, null) })
       }
-      val translationPairs = getTranslationPairs(from, to)
-
-      // TODO: do once
-      for (pair in translationPairs) {
-        val lang =
-          if (pair.first.isEnglish) {
-            pair.second
-          } else {
-            pair.first
-          }
-        val dataFiles =
-          filePathManager
-            .getDataDir()
-            .listFiles()
-            ?.map { it.name }
-            ?.toSet() ?: emptySet()
-        // TODO: this should be checked on startup and on update only
-        if (missingFilesFrom(dataFiles, lang).second.isNotEmpty()) {
-          return@withContext BatchTranslationResult.Error("Language pair ${pair.first} -> ${pair.second} not installed")
-        }
-      }
-      preloadModel(from, to)
+      val catalog =
+        filePathManager.loadCatalog()
+          ?: return@withContext BatchTranslationResult.Error("Catalog unavailable")
+      val baseDir = filePathManager.currentBaseDir().absolutePath
+      val plan =
+        catalog.resolveTranslationPlan(baseDir, from, to)
+          ?: return@withContext BatchTranslationResult.Error("Language pair ${from.code} -> ${to.code} not installed")
+      loadPlanIntoCache(plan)
 
       val result: Array<String>
       val elapsed =
         measureTimeMillis {
-          result = performTranslations(translationPairs, texts)
+          result = performTranslations(plan, texts)
         }
       Log.d("TranslationService", "bulk translation took ${elapsed}ms")
       val translated =
@@ -153,33 +136,20 @@ class TranslationService(
         return@withContext TranslationResult.Success(TranslatedText("", null))
       }
 
-      val translationPairs = getTranslationPairs(from, to)
-
-      // Validate all required language pairs are available
-      for (pair in translationPairs) {
-        val lang =
-          if (pair.first.isEnglish) {
-            pair.second
-          } else {
-            pair.first
-          }
-        val dataFiles =
-          filePathManager
-            .getDataDir()
-            .listFiles()
-            ?.map { it.name }
-            ?.toSet() ?: emptySet()
-        // TODO: this should be checked on startup and on update only
-        if (missingFilesFrom(dataFiles, lang).second.isNotEmpty()) {
-          return@withContext TranslationResult.Error("Language pair ${pair.first} -> ${pair.second} not installed")
-        }
-      }
+      val catalog =
+        filePathManager.loadCatalog()
+          ?: return@withContext TranslationResult.Error("Catalog unavailable")
+      val baseDir = filePathManager.currentBaseDir().absolutePath
+      val plan =
+        catalog.resolveTranslationPlan(baseDir, from, to)
+          ?: return@withContext TranslationResult.Error("Language pair ${from.code} -> ${to.code} not installed")
+      loadPlanIntoCache(plan)
 
       try {
         val result: String
         val elapsed =
           measureTimeMillis {
-            result = performTranslations(translationPairs, arrayOf(text)).first()
+            result = performTranslations(plan, arrayOf(text)).first()
           }
         Log.d("TranslationService", "Translation took ${elapsed}ms")
         val transliterated =
@@ -206,34 +176,22 @@ class TranslationService(
           texts.map { TranslationWithAlignment(it, it, emptyArray()) },
         )
       }
-      val translationPairs = getTranslationPairs(from, to)
-
-      for (pair in translationPairs) {
-        val lang =
-          if (pair.first.isEnglish) {
-            pair.second
-          } else {
-            pair.first
-          }
-        val dataFiles =
-          filePathManager
-            .getDataDir()
-            .listFiles()
-            ?.map { it.name }
-            ?.toSet() ?: emptySet()
-        if (missingFilesFrom(dataFiles, lang).second.isNotEmpty()) {
-          return@withContext BatchAlignedTranslationResult.Error(
-            "Language pair ${pair.first} -> ${pair.second} not installed",
+      val catalog =
+        filePathManager.loadCatalog()
+          ?: return@withContext BatchAlignedTranslationResult.Error("Catalog unavailable")
+      val baseDir = filePathManager.currentBaseDir().absolutePath
+      val plan =
+        catalog.resolveTranslationPlan(baseDir, from, to)
+          ?: return@withContext BatchAlignedTranslationResult.Error(
+            "Language pair ${from.code} -> ${to.code} not installed",
           )
-        }
-      }
-      preloadModel(from, to)
+      loadPlanIntoCache(plan)
 
       try {
         val results: Array<TranslationWithAlignment>
         val elapsed =
           measureTimeMillis {
-            results = performTranslationsWithAlignment(translationPairs, texts)
+            results = performTranslationsWithAlignment(plan, texts)
           }
         Log.d("TranslationService", "aligned translation took ${elapsed}ms")
         BatchAlignedTranslationResult.Success(results.toList())
@@ -243,91 +201,36 @@ class TranslationService(
       }
     }
 
-  private fun getTranslationPairs(
-    from: Language,
-    to: Language,
-  ): List<Pair<Language, Language>> =
-    when {
-      from.isEnglish && to.isEnglish -> emptyList()
-      from.isEnglish -> listOf(from to to)
-      to.isEnglish -> listOf(from to to)
-      else -> listOf(from to english, english to to)
-    }
-
-  // pairs can be len 1 or len 2 only
   private fun performTranslations(
-    pairs: List<Pair<Language, Language>>,
+    plan: TranslationPlan,
     texts: Array<String>,
   ): Array<String> {
-    pairs.forEach { pair ->
-      val config = generateConfig(pair.first, pair.second)
-      val languageCode = "${pair.first.code}${pair.second.code}"
-      measureTimeMillis {
-        nativeLib.loadModelIntoCache(config, languageCode)
-      }
-    }
-    if (pairs.count() == 1) {
-      val code = "${pairs[0].first.code}${pairs[0].second.code}"
-      return nativeLib.translateMultiple(texts, code)
-    } else if (pairs.count() == 2) {
-      val toEng = "${pairs[0].first.code}${pairs[0].second.code}"
-      val fromEng = "${pairs[1].first.code}${pairs[1].second.code}"
-      return nativeLib.pivotMultiple(toEng, fromEng, texts)
+    if (plan.steps.size == 1) {
+      return nativeLib.translateMultiple(texts, plan.steps[0].cacheKey)
+    } else if (plan.steps.size == 2) {
+      return nativeLib.pivotMultiple(plan.steps[0].cacheKey, plan.steps[1].cacheKey, texts)
     }
     return emptyArray()
   }
 
   private fun performTranslationsWithAlignment(
-    pairs: List<Pair<Language, Language>>,
+    plan: TranslationPlan,
     texts: Array<String>,
   ): Array<TranslationWithAlignment> {
-    pairs.forEach { pair ->
-      val config = generateConfig(pair.first, pair.second)
-      val languageCode = "${pair.first.code}${pair.second.code}"
-      nativeLib.loadModelIntoCache(config, languageCode)
-    }
-    if (pairs.count() == 1) {
-      val code = "${pairs[0].first.code}${pairs[0].second.code}"
-      return nativeLib.translateMultipleWithAlignment(texts, code)
-    } else if (pairs.count() == 2) {
-      val toEng = "${pairs[0].first.code}${pairs[0].second.code}"
-      val fromEng = "${pairs[1].first.code}${pairs[1].second.code}"
-      return nativeLib.pivotMultipleWithAlignment(toEng, fromEng, texts)
+    if (plan.steps.size == 1) {
+      return nativeLib.translateMultipleWithAlignment(texts, plan.steps[0].cacheKey)
+    } else if (plan.steps.size == 2) {
+      return nativeLib.pivotMultipleWithAlignment(plan.steps[0].cacheKey, plan.steps[1].cacheKey, texts)
     }
     return emptyArray()
   }
 
-  private fun generateConfig(
-    fromLang: Language,
-    toLang: Language,
-  ): String {
-    val dataPath = filePathManager.getDataDir()
-    val languageFiles =
-      if (fromLang.isEnglish) {
-        toLang.fromEnglish
-      } else {
-        fromLang.toEnglish
-      } ?: throw IllegalArgumentException("No language files found for $fromLang -> $toLang")
-
-    return """
-models:
-  - $dataPath/${languageFiles.model.name}
-vocabs:
-  - $dataPath/${languageFiles.srcVocab.name}
-  - $dataPath/${languageFiles.tgtVocab.name}
-beam-size: 1
-normalize: 1.0
-word-penalty: 0
-max-length-break: 128
-mini-batch-words: 1024
-max-length-factor: 2.0
-skip-cost: true
-cpu-threads: 1
-quiet: true
-quiet-translation: true
-gemm-precision: int8shiftAlphaAll
-alignment: soft
-"""
+  private fun loadPlanIntoCache(plan: TranslationPlan) {
+    plan.steps.forEach { step ->
+      Log.d("TranslationService", "Preloading model with key: ${step.cacheKey}")
+      nativeLib.loadModelIntoCache(step.config, step.cacheKey)
+      Log.d("TranslationService", "Preloaded model ${step.fromCode} -> ${step.toCode} with key: ${step.cacheKey}")
+    }
   }
 
   fun transliterate(

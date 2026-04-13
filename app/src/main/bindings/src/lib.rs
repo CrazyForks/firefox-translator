@@ -1,3 +1,5 @@
+#[cfg(feature = "android")]
+pub mod catalog;
 pub mod logging;
 #[cfg(feature = "mucab")]
 pub mod mucab;

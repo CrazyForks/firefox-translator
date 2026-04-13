@@ -41,10 +41,9 @@ class TranslatorVoiceInteractionSessionService : VoiceInteractionSessionService(
     languageMetadataManager = LanguageMetadataManager(this, languagesFlow)
     ocrService = OCRService(filePathManager)
     imageProcessor = ImageProcessor(this, ocrService)
-    val english = catalog?.english ?: dev.davidv.translator.Language(code = "en", displayName = "English", shortDisplayName = "EN", tessName = "eng", script = "Latn", dictionaryCode = "en", tessdataSizeBytes = 0, toEnglish = null, fromEnglish = null, extraFiles = emptyList())
     translationCoordinator =
       TranslationCoordinator(
-        translationService = TranslationService(settingsManager, filePathManager, english),
+        translationService = TranslationService(settingsManager, filePathManager),
         languageDetector = LanguageDetector(langStateManager::languageByCode),
         imageProcessor = imageProcessor,
         settingsManager = settingsManager,

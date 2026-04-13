@@ -44,8 +44,7 @@ class TranslatorApplication : Application() {
     languageMetadataManager = LanguageMetadataManager(this, languagesFlow)
     ocrService = OCRService(filePathManager)
     imageProcessor = ImageProcessor(this, ocrService)
-    val english = languageCatalog?.english ?: Language(code = "en", displayName = "English", shortDisplayName = "EN", tessName = "eng", script = "Latn", dictionaryCode = "en", tessdataSizeBytes = 0, toEnglish = null, fromEnglish = null, extraFiles = emptyList())
-    translationService = TranslationService(settingsManager, filePathManager, english)
+    translationService = TranslationService(settingsManager, filePathManager)
     languageDetector = LanguageDetector { code -> languageCatalog?.languageByCode(code) }
     translationCoordinator =
       TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)

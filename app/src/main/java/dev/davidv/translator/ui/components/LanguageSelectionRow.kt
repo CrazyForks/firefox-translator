@@ -34,13 +34,13 @@ import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
-import dev.davidv.translator.canSwapLanguages
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 @Composable
 fun LanguageSelectionRow(
   from: Language,
   to: Language,
+  canSwap: Boolean,
   availableLanguages: Map<Language, LangAvailability>,
   languageMetadata: Map<Language, LanguageMetadata>,
   onMessage: (TranslatorMessage) -> Unit,
@@ -70,8 +70,6 @@ fun LanguageSelectionRow(
       },
       modifier = Modifier.weight(1f),
     )
-
-    val canSwap = canSwapLanguages(from, to, availableLanguages)
     IconButton(
       onClick = { onMessage(TranslatorMessage.SwapLanguages) },
       enabled = canSwap,
@@ -126,6 +124,7 @@ fun LanguageSelectionRowPreview() {
     LanguageSelectionRow(
       from = previewLanguage("en", "English"),
       to = previewLanguage("es", "Spanish"),
+      canSwap = true,
       availableLanguages = previewAvailability(),
       languageMetadata = mapOf(previewLanguage("es", "Spanish") to LanguageMetadata(favorite = true)),
       onMessage = {},
@@ -153,6 +152,7 @@ fun LanguageSelectionRowDarkPreview() {
     LanguageSelectionRow(
       from = previewLanguage("fr", "French"),
       to = previewLanguage("de", "German"),
+      canSwap = true,
       availableLanguages = previewAvailability(),
       languageMetadata = mapOf(previewLanguage("fr", "French") to LanguageMetadata(favorite = true)),
       onMessage = {},

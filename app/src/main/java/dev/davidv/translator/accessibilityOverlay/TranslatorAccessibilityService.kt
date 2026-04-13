@@ -29,7 +29,6 @@ import dev.davidv.translator.TranslatedStyledBlock
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationSegment
 import dev.davidv.translator.TranslationService
-import dev.davidv.translator.canSwapLanguages
 import dev.davidv.translator.clusterFragmentsIntoBlocks
 import dev.davidv.translator.mapStylesToSegmentedTranslation
 import kotlinx.coroutines.CoroutineScope
@@ -93,7 +92,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     serviceScope.launch {
       langStateManager.catalog.collect { catalog ->
         if (catalog == null) return@collect
-        val translationService = TranslationService(settingsManager, filePathManager, catalog.english)
+        val translationService = TranslationService(settingsManager, filePathManager)
         translationCoordinator = TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)
         val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow(catalog.languageList)
         overlayTextTranslationHelper =
@@ -185,7 +184,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
   fun swapLanguages() {
     val oldSource = forcedSourceLanguage ?: return
     val oldTarget = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
-    if (!canSwapLanguages(oldSource, oldTarget)) return
+    if (!langStateManager.canSwapLanguages(oldSource, oldTarget)) return
     forcedSourceLanguage = oldTarget
     forcedTargetLanguage = oldSource
     syncReadingOrderForSource()

@@ -119,6 +119,7 @@ fun MainScreen(
   isAudioLoading: Boolean = false,
   // Action requests
   onMessage: (TranslatorMessage) -> Unit,
+  canSwapLanguages: Boolean = true,
   onStopAudio: () -> Unit = {},
   // System integration
   availableLanguages: Map<Language, LangAvailability>,
@@ -200,6 +201,7 @@ fun MainScreen(
         LanguageSelectionRow(
           from = from,
           to = to,
+          canSwap = canSwapLanguages,
           availableLanguages = availableLanguages,
           languageMetadata = languageMetadata,
           onMessage = onMessage,

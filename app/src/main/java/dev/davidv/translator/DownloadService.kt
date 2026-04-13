@@ -102,7 +102,7 @@ class DownloadService : Service() {
   private fun getCatalog(): LanguageCatalog? {
     cachedCatalog?.let { return it }
     val catalog = filePathManager.loadCatalog()
-    cachedCatalog = catalog
+    replaceCachedCatalog(catalog)
     return catalog
   }
 
@@ -121,6 +121,8 @@ class DownloadService : Service() {
   private val downloadJobs = mutableMapOf<Language, Job>()
   private val dictionaryDownloadJobs = mutableMapOf<Language, Job>()
   private val ttsDownloadJobs = mutableMapOf<Language, Job>()
+  private val baseDirPath: String
+    get() = filePathManager.currentBaseDir().absolutePath
 
   companion object {
     fun startDownload(
@@ -282,15 +284,13 @@ class DownloadService : Service() {
       serviceScope.launch {
         try {
           val catalog = getCatalog() ?: return@launch
-          val resolver = PackResolver(catalog, filePathManager)
-          val rootPackIds = catalog.corePackIdsForLanguage(language.code)
-          val missingFiles = resolver.missingFiles(rootPackIds)
+          val downloadPlan = catalog.planLanguageDownload(baseDirPath, language.code)
           val downloadTasks = mutableListOf<suspend () -> Boolean>()
-          val toDownload = missingFiles.sumOf { it.file.sizeBytes }
+          val toDownload = downloadPlan.totalSize
 
-          missingFiles.forEach { missing ->
+          downloadPlan.tasks.forEach { task ->
             downloadTasks.add {
-              downloadPackFile(catalog, missing.pack, missing.file, language)
+              downloadPackFile(task, language)
             }
           }
 
@@ -349,15 +349,13 @@ class DownloadService : Service() {
     val job =
       serviceScope.launch {
         val catalog = getCatalog() ?: return@launch
-        val resolver = PackResolver(catalog, filePathManager)
-        val dictPackId = catalog.dictionaryPackIdForLanguage(language.code) ?: return@launch
-        val missingFiles = resolver.missingFiles(setOf(dictPackId))
+        val downloadPlan = catalog.planDictionaryDownload(baseDirPath, language.code) ?: return@launch
         val downloadTasks = mutableListOf<suspend () -> Boolean>()
-        val toDownload = if (missingFiles.isNotEmpty()) missingFiles.sumOf { it.file.sizeBytes } else dictionarySize
+        val toDownload = if (downloadPlan.tasks.isNotEmpty()) downloadPlan.totalSize else dictionarySize
 
-        missingFiles.forEach { missing ->
+        downloadPlan.tasks.forEach { task ->
           downloadTasks.add {
-            downloadPackFile(catalog, missing.pack, missing.file, language, incrementDictionary = true)
+            downloadPackFile(task, language, incrementDictionary = true)
           }
         }
 
@@ -425,19 +423,18 @@ class DownloadService : Service() {
       serviceScope.launch {
         try {
           val catalog = getCatalog() ?: return@launch
-          val resolver = PackResolver(catalog, filePathManager)
           val ttsPackId = requestedPackId ?: catalog.defaultTtsPackIdForLanguage(language.code) ?: return@launch
-          if (ttsPackId !in catalog.ttsPackIdsForLanguage(language.code)) {
-            Log.w("DownloadService", "Ignoring invalid TTS pack $ttsPackId for ${language.code}")
-            return@launch
-          }
-          val missingFiles = resolver.missingFiles(setOf(ttsPackId))
+          val downloadPlan =
+            catalog.planTtsDownload(baseDirPath, language.code, ttsPackId) ?: run {
+              Log.w("DownloadService", "Ignoring invalid TTS pack $ttsPackId for ${language.code}")
+              return@launch
+            }
           val downloadTasks = mutableListOf<suspend () -> Boolean>()
-          val toDownload = missingFiles.sumOf { it.file.sizeBytes }
+          val toDownload = downloadPlan.totalSize
 
-          missingFiles.forEach { missing ->
+          downloadPlan.tasks.forEach { task ->
             downloadTasks.add {
-              downloadPackFile(catalog, missing.pack, missing.file, language, incrementTts = true)
+              downloadPackFile(task, language, incrementTts = true)
             }
           }
 
@@ -494,28 +491,9 @@ class DownloadService : Service() {
     language: Language,
     selectedPackId: String,
   ) {
-    val resolver = PackResolver(catalog, filePathManager)
-    val supersededRootPacks =
-      catalog
-        .ttsPackIdsForLanguage(language.code)
-        .filter { it != selectedPackId && resolver.isInstalled(it) }
-        .toSet()
-    if (supersededRootPacks.isEmpty()) return
-
-    val keepRootPacks =
-      buildSet {
-        if (resolver.isInstalled(selectedPackId)) {
-          add(selectedPackId)
-        }
-        catalog.languageList
-          .filter { it.code != language.code }
-          .flatMap { other -> catalog.ttsPackIdsForLanguage(other.code) }
-          .filter(resolver::isInstalled)
-          .forEach(::add)
-      }
-    val packsToDelete = catalog.dependencyClosure(supersededRootPacks) - catalog.dependencyClosure(keepRootPacks)
-    if (packsToDelete.isNotEmpty()) {
-      filePathManager.deletePackFiles(catalog, packsToDelete)
+    val deletePlan = catalog.planDeleteSupersededTts(baseDirPath, language.code, selectedPackId)
+    if (deletePlan.filePaths.isNotEmpty() || deletePlan.directoryPaths.isNotEmpty()) {
+      filePathManager.applyDeletePlan(deletePlan)
     }
   }
 
@@ -635,24 +613,22 @@ class DownloadService : Service() {
   }
 
   private suspend fun downloadPackFile(
-    catalog: LanguageCatalog,
-    pack: AssetPackV2,
-    file: AssetFileV2,
+    task: DownloadTask,
     targetLanguage: Language,
     incrementDictionary: Boolean = false,
     incrementTts: Boolean = false,
   ): Boolean {
-    val outputFile = filePathManager.resolveInstallPath(file.installPath)
-    val url = catalog.packDownloadUrl(pack, file)
+    val outputFile = filePathManager.resolveInstallPath(task.installPath)
+    val url = task.url
     return try {
       val success =
-        if (file.archiveFormat == "zip" && file.extractTo != null) {
+        if (task.archiveFormat == "zip" && task.extractTo != null) {
           downloadAndExtractZip(
             url = url,
             archiveFile = outputFile,
-            extractTo = filePathManager.resolveInstallPath(file.extractTo),
-            deleteAfterExtract = file.deleteAfterExtract,
-            installMarkerPath = file.installMarkerPath,
+            extractTo = filePathManager.resolveInstallPath(task.extractTo),
+            deleteAfterExtract = task.deleteAfterExtract,
+            installMarkerPath = task.installMarkerPath,
           ) { incrementalProgress ->
             if (incrementDictionary) {
               incrementDictionaryDownloadBytes(targetLanguage, incrementalProgress)
@@ -662,15 +638,15 @@ class DownloadService : Service() {
               incrementDownloadBytes(targetLanguage, incrementalProgress)
             }
           }.also { extracted ->
-            if (extracted && file.installMarkerPath != null && file.installMarkerVersion != null) {
-              filePathManager.writeInstallMarker(file.installMarkerPath, file.installMarkerVersion)
+            if (extracted && task.installMarkerPath != null && task.installMarkerVersion != null) {
+              filePathManager.writeInstallMarker(task.installMarkerPath, task.installMarkerVersion)
             }
           }
         } else {
           download(
             url,
             outputFile,
-            decompress = catalog.shouldDecompress(pack, file),
+            decompress = task.decompress,
           ) { incrementalProgress ->
             if (incrementDictionary) {
               incrementDictionaryDownloadBytes(targetLanguage, incrementalProgress)
@@ -681,10 +657,10 @@ class DownloadService : Service() {
             }
           }
         }
-      Log.i("DownloadService", "Downloaded ${pack.id}:${file.installPath} from $url = $success")
+      Log.i("DownloadService", "Downloaded ${task.packId}:${task.installPath} from $url = $success")
       success
     } catch (e: Exception) {
-      Log.e("DownloadService", "Failed to download ${pack.id}:${file.installPath} from $url", e)
+      Log.e("DownloadService", "Failed to download ${task.packId}:${task.installPath} from $url", e)
       false
     }
   }
@@ -861,10 +837,8 @@ class DownloadService : Service() {
 
         if (tempFile.renameTo(catalogFile)) {
           Log.i("DownloadService", "Downloaded catalog from $url to $catalogFile")
-          cachedCatalog = filePathManager.loadCatalog()
-          cachedCatalog?.let { catalog ->
-            _downloadEvents.emit(DownloadEvent.CatalogDownloaded(catalog))
-          }
+          replaceCachedCatalog(filePathManager.loadCatalog())
+          _downloadEvents.emit(DownloadEvent.CatalogDownloaded)
         } else {
           Log.e("DownloadService", "Failed to move temp catalog file $tempFile to final location $catalogFile")
           tempFile.delete()
@@ -881,7 +855,15 @@ class DownloadService : Service() {
   override fun onDestroy() {
     super.onDestroy()
     serviceScope.cancel()
+    replaceCachedCatalog(null)
     cleanupTempFiles()
+  }
+
+  private fun replaceCachedCatalog(newCatalog: LanguageCatalog?) {
+    val oldCatalog = cachedCatalog
+    if (oldCatalog === newCatalog) return
+    cachedCatalog = newCatalog
+    oldCatalog?.close()
   }
 
   private fun cleanupTempFiles() {

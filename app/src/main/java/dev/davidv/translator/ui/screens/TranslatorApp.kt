@@ -463,6 +463,7 @@ fun TranslatorApp(
                 isAudioPlaying = isAudioPlaying,
                 isAudioLoading = isAudioLoading,
                 onMessage = viewModel::handleMessage,
+                canSwapLanguages = viewModel.languageStateManager.canSwapLanguages(currentFrom, currentTo),
                 onStopAudio = {
                   isAudioLoading = false
                   pcmAudioPlayer.stop()

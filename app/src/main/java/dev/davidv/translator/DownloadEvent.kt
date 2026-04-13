@@ -30,9 +30,7 @@ sealed class DownloadEvent {
     val language: Language,
   ) : DownloadEvent()
 
-  data class CatalogDownloaded(
-    val catalog: LanguageCatalog,
-  ) : DownloadEvent()
+  data object CatalogDownloaded : DownloadEvent()
 
   data class DownloadError(
     val message: String,

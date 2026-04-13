@@ -95,6 +95,7 @@ android {
 }
 
 val bindingsRootDir = file("src/main/bindings")
+val translatorRootDir = rootProject.file("translator")
 val jniLibsRootDir = file("src/main/jniLibs")
 val androidSdkRoot =
   System.getenv("ANDROID_SDK_ROOT")
@@ -252,6 +253,8 @@ val abiToBindingsTask =
       inputs.file(bindingsRootDir.resolve("Cargo.lock"))
       inputs.file(bindingsRootDir.resolve(".cargo/config.toml"))
       inputs.dir(bindingsRootDir.resolve("src"))
+      inputs.file(translatorRootDir.resolve("Cargo.toml"))
+      inputs.dir(translatorRootDir.resolve("src"))
       inputs.file(onnxRuntimeSharedLibrary(abi))
       inputs.property("cargoTarget", cargoTarget)
       inputs.property("androidApi", bindingsAndroidApi)

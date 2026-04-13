@@ -471,7 +471,7 @@ fun LanguageAssetManagerScreen(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
               ) {
                 region.voices.forEach { packId ->
-                  val pack = pickerCatalog.pack(packId) ?: return@forEach
+                  val pack = pickerCatalog.ttsVoicePackInfo(packId) ?: return@forEach
                   Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -481,11 +481,11 @@ fun LanguageAssetManagerScreen(
                       verticalArrangement = Arrangement.spacedBy(1.dp),
                     ) {
                       Text(
-                        text = formatVoiceName(pack.voice ?: pack.id),
+                        text = formatVoiceName(pack.displayName),
                         style = MaterialTheme.typography.bodyMedium,
                       )
                       Text(
-                        text = "${formatSize(pickerCatalog.packSizeBytes(packId))}, ${formatQualityLabel(pack.quality)} quality",
+                        text = "${formatSize(pack.sizeBytes)}, ${formatQualityLabel(pack.quality)} quality",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
                       )
