@@ -185,6 +185,7 @@ dependencies = [
  "serde_json",
  "tarkka",
  "tesseract",
+ "thiserror 2.0.18",
  "translator",
  "uniffi",
 ]

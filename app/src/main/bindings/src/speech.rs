@@ -4,9 +4,10 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use piper_rs::{
-    Backend, BoundaryAfter, CoquiVitsModel, KokoroModel, MmsModel, PhonemeChunk, PiperModel,
-    SherpaVitsModel,
+    Backend, BoundaryAfter, CoquiVitsModel, KokoroModel, MmsModel,
+    PhonemeChunk as PiperPhonemeChunk, PiperModel, SherpaVitsModel,
 };
+use translator::{SpeechChunk, plan_speech_chunks};
 
 use crate::logging::{ANDROID_LOG_DEBUG, ANDROID_LOG_ERROR, android_log_with_level};
 
@@ -69,7 +70,7 @@ fn log_timing(step: &str, started_at: Instant) {
     ));
 }
 
-fn summarize_phoneme_chunk_sizes(chunks: &[PhonemeChunk]) -> String {
+fn summarize_phoneme_chunk_sizes(chunks: &[PiperPhonemeChunk]) -> String {
     const MAX_CHUNKS_TO_LOG: usize = 6;
 
     let preview = chunks
@@ -697,7 +698,7 @@ pub fn phonemize_chunks(
     support_data_root: Option<&str>,
     language_code: &str,
     text: &str,
-) -> Result<Vec<PhonemeChunk>, String> {
+) -> Result<Vec<PiperPhonemeChunk>, String> {
     if text.trim().is_empty() {
         return Err("Text is empty".to_owned());
     }
@@ -718,7 +719,7 @@ pub fn phonemize_chunks(
         |cached_model| {
             let phonemize_started_at = Instant::now();
             let phonemes = phonemize(&mut cached_model.model, text)?;
-            let phoneme_chunks = vec![PhonemeChunk {
+            let phoneme_chunks = vec![PiperPhonemeChunk {
                 phonemes,
                 boundary_after: BoundaryAfter::Paragraph,
             }];
@@ -732,6 +733,43 @@ pub fn phonemize_chunks(
             Ok(phoneme_chunks)
         },
     )
+}
+
+fn to_translator_phoneme_chunk(chunk: PiperPhonemeChunk) -> translator::PhonemeChunk {
+    translator::PhonemeChunk {
+        content: chunk.phonemes,
+        boundary_after: match chunk.boundary_after {
+            BoundaryAfter::None => translator::SpeechChunkBoundary::None,
+            BoundaryAfter::Sentence => translator::SpeechChunkBoundary::Sentence,
+            BoundaryAfter::Paragraph => translator::SpeechChunkBoundary::Paragraph,
+        },
+    }
+}
+
+pub fn plan_speech_chunks_for_text(
+    engine: &str,
+    model_path: &str,
+    aux_path: &str,
+    support_data_root: Option<&str>,
+    language_code: &str,
+    text: &str,
+) -> Result<Vec<SpeechChunk>, String> {
+    plan_speech_chunks(text, |chunk_text| {
+        phonemize_chunks(
+            engine,
+            model_path,
+            aux_path,
+            support_data_root,
+            language_code,
+            chunk_text,
+        )
+        .map(|chunks| {
+            chunks
+                .into_iter()
+                .map(to_translator_phoneme_chunk)
+                .collect::<Vec<_>>()
+        })
+    })
 }
 
 #[cfg(feature = "android")]
@@ -916,6 +954,102 @@ mod jni_bridge {
                 &[
                     JValue::Object(&java_text),
                     JValue::Int(boundary_after_code(chunk.boundary_after)),
+                ],
+            ) {
+                Ok(value) => value,
+                Err(_) => return std::ptr::null_mut(),
+            };
+            if env
+                .set_object_array_element(&array, index as i32, java_chunk)
+                .is_err()
+            {
+                return std::ptr::null_mut();
+            }
+        }
+
+        array.into_raw()
+    }
+
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn Java_dev_davidv_translator_SpeechBinding_nativePlanSpeechChunks(
+        mut env: JNIEnv,
+        _: JClass,
+        java_engine: JString,
+        java_model_path: JString,
+        java_aux_path: JString,
+        java_support_data_root: JString,
+        java_language_code: JString,
+        java_text: JString,
+    ) -> jobjectArray {
+        let engine: String = match env.get_string(&java_engine) {
+            Ok(value) => value.into(),
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let model_path: String = match env.get_string(&java_model_path) {
+            Ok(value) => value.into(),
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let aux_path: String = match env.get_string(&java_aux_path) {
+            Ok(value) => value.into(),
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let support_data_root: String = match env.get_string(&java_support_data_root) {
+            Ok(value) => value.into(),
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let language_code: String = match env.get_string(&java_language_code) {
+            Ok(value) => value.into(),
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let text: String = match env.get_string(&java_text) {
+            Ok(value) => value.into(),
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let planned_chunks = match plan_speech_chunks_for_text(
+            &engine,
+            &model_path,
+            &aux_path,
+            Some(support_data_root.as_str()),
+            &language_code,
+            &text,
+        ) {
+            Ok(chunks) => chunks,
+            Err(error) => {
+                log_error(error);
+                return std::ptr::null_mut();
+            }
+        };
+
+        let chunk_class = match env.find_class("dev/davidv/translator/NativeSpeechChunkPlan") {
+            Ok(class) => class,
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        let array =
+            match env.new_object_array(planned_chunks.len() as i32, chunk_class, JObject::null()) {
+                Ok(array) => array,
+                Err(_) => return std::ptr::null_mut(),
+            };
+
+        for (index, chunk) in planned_chunks.iter().enumerate() {
+            let java_text = match env.new_string(&chunk.content) {
+                Ok(value) => value,
+                Err(_) => return std::ptr::null_mut(),
+            };
+            let java_text = JObject::from(java_text);
+            let java_chunk = match env.new_object(
+                "dev/davidv/translator/NativeSpeechChunkPlan",
+                "(Ljava/lang/String;ZI)V",
+                &[
+                    JValue::Object(&java_text),
+                    JValue::Bool(if chunk.is_phonemes { 1 } else { 0 }),
+                    JValue::Int(chunk.pause_after_ms.unwrap_or(-1)),
                 ],
             ) {
                 Ok(value) => value,

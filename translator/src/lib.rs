@@ -28,4 +28,6 @@ pub use translate::{
     resolve_translation_plan, resolve_translation_plan_in_snapshot,
     resolve_translation_plan_with_checker,
 };
-pub use tts::{PcmAudio, PhonemeChunk, SpeechChunkBoundary, TtsVoiceOption};
+pub use tts::{
+    PcmAudio, PhonemeChunk, SpeechChunk, SpeechChunkBoundary, TtsVoiceOption, plan_speech_chunks,
+};

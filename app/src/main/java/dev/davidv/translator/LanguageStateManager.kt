@@ -247,9 +247,7 @@ class LanguageStateManager(
   }
 
   private fun setCatalog(newCatalog: LanguageCatalog?) {
-    val oldCatalog = catalogState.value
-    if (oldCatalog === newCatalog) return
+    if (catalogState.value === newCatalog) return
     catalogState.value = newCatalog
-    oldCatalog?.close()
   }
 }

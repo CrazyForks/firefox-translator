@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde_json::Value;
+use thiserror::Error;
 use translator::{
     CatalogSnapshot, PackInstallChecker, build_catalog_snapshot, can_translate_in_snapshot,
     parse_and_validate_catalog, plan_delete_dictionary_in_snapshot,
@@ -61,6 +62,12 @@ fn parse_selected_catalog(
     parse_and_validate_catalog(preferred)
         .ok()
         .or_else(|| fallback.and_then(|json| parse_and_validate_catalog(json).ok()))
+}
+
+#[derive(Debug, Error, uniffi::Error)]
+pub enum CatalogOpenError {
+    #[error("failed to parse any catalog")]
+    ParseFailed,
 }
 
 #[derive(uniffi::Record)]
@@ -270,14 +277,14 @@ impl CatalogHandle {
         bundled_json: String,
         disk_json: Option<String>,
         base_dir: String,
-    ) -> Arc<Self> {
+    ) -> Result<Arc<Self>, CatalogOpenError> {
         let catalog = parse_selected_catalog(&bundled_json, disk_json.as_deref())
-            .expect("failed to parse any catalog");
+            .ok_or(CatalogOpenError::ParseFailed)?;
         let checker = FsInstallChecker {
             base_dir: PathBuf::from(&base_dir),
         };
         let snapshot = build_catalog_snapshot(catalog, base_dir, &checker);
-        Arc::new(CatalogHandle { snapshot })
+        Ok(Arc::new(CatalogHandle { snapshot }))
     }
 
     fn format_version(&self) -> i32 {
@@ -373,12 +380,8 @@ impl CatalogHandle {
         language_code: String,
         selected_pack_id: Option<String>,
     ) -> Option<DownloadPlan> {
-        plan_tts_download_in_snapshot(
-            &self.snapshot,
-            &language_code,
-            selected_pack_id.as_deref(),
-        )
-        .map(Into::into)
+        plan_tts_download_in_snapshot(&self.snapshot, &language_code, selected_pack_id.as_deref())
+            .map(Into::into)
     }
 
     fn plan_delete_language(&self, language_code: String) -> DeletePlan {
@@ -398,12 +401,8 @@ impl CatalogHandle {
         language_code: String,
         selected_pack_id: String,
     ) -> DeletePlan {
-        plan_delete_superseded_tts_in_snapshot(
-            &self.snapshot,
-            &language_code,
-            &selected_pack_id,
-        )
-        .into()
+        plan_delete_superseded_tts_in_snapshot(&self.snapshot, &language_code, &selected_pack_id)
+            .into()
     }
 
     fn tts_size_bytes(&self, language_code: String) -> i64 {

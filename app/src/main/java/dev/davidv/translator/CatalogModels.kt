@@ -3,8 +3,6 @@ package dev.davidv.translator
 import uniffi.bindings.CatalogHandle
 import java.io.Closeable
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 
 data class LanguageTtsRegionV2(
   val displayName: String,
@@ -53,27 +51,20 @@ data class DeletePlan(
 )
 
 class LanguageCatalog private constructor(
-  private val sharedHandle: SharedCatalogHandle,
+  private val handle: CatalogHandle,
   val formatVersion: Int,
   val generatedAt: Long,
   val dictionaryVersion: Int,
   val languageList: List<Language>,
   private val availabilityMap: Map<Language, LangAvailability>,
 ) : Closeable {
-  private val isClosed = AtomicBoolean(false)
-
   companion object {
     fun open(
       bundledJson: String,
       diskJson: String?,
       baseDir: String,
     ): LanguageCatalog? {
-      val handle =
-        try {
-          CatalogHandle.open(bundledJson, diskJson, baseDir)
-        } catch (_: Exception) {
-          return null
-        }
+      val handle = CatalogHandle.open(bundledJson, diskJson, baseDir)
 
       val languageList =
         handle.languages().map {
@@ -105,7 +96,7 @@ class LanguageCatalog private constructor(
           }
         }
       return LanguageCatalog(
-        sharedHandle = SharedCatalogHandle(handle),
+        handle = handle,
         formatVersion = handle.formatVersion(),
         generatedAt = handle.generatedAt(),
         dictionaryVersion = handle.dictionaryVersion(),
@@ -124,66 +115,66 @@ class LanguageCatalog private constructor(
   fun dictionaryInfoFor(language: Language): DictionaryInfo? = dictionaryInfo(language.dictionaryCode)
 
   fun dictionaryInfo(dictionaryCode: String): DictionaryInfo? =
-    handle().dictionaryInfo(dictionaryCode)?.let {
+    handle.dictionaryInfo(dictionaryCode)?.let {
       DictionaryInfo(date = it.date, filename = it.filename, size = it.size, type = it.typeName, wordCount = it.wordCount)
     }
 
   fun computeLanguageAvailability(): Map<Language, LangAvailability> = availabilityMap
 
-  fun ttsPackIdsForLanguage(languageCode: String): List<String> = handle().ttsPackIds(languageCode)
+  fun ttsPackIdsForLanguage(languageCode: String): List<String> = handle.ttsPackIds(languageCode)
 
   fun orderedTtsRegionsForLanguage(languageCode: String): List<Pair<String, LanguageTtsRegionV2>> =
-    handle().orderedTtsRegions(languageCode).map { it.code to LanguageTtsRegionV2(it.displayName, it.voices) }
+    handle.orderedTtsRegions(languageCode).map { it.code to LanguageTtsRegionV2(it.displayName, it.voices) }
 
   fun ttsVoicePackInfo(packId: String): TtsVoicePackInfo? =
-    handle().ttsVoicePackInfo(packId)?.let { TtsVoicePackInfo(it.packId, it.displayName, it.quality, it.sizeBytes) }
+    handle.ttsVoicePackInfo(packId)?.let { TtsVoicePackInfo(it.packId, it.displayName, it.quality, it.sizeBytes) }
 
   fun canSwapLanguages(
     from: Language,
     to: Language,
-  ): Boolean = handle().canSwapLanguages(from.code, to.code)
+  ): Boolean = handle.canSwapLanguages(from.code, to.code)
 
   fun canTranslate(
     from: Language,
     to: Language,
-  ): Boolean = handle().canTranslate(from.code, to.code)
+  ): Boolean = handle.canTranslate(from.code, to.code)
 
   fun resolveTranslationPlan(
     from: Language,
     to: Language,
   ): TranslationPlan? =
-    handle().resolveTranslationPlan(from.code, to.code)?.let { plan ->
+    handle.resolveTranslationPlan(from.code, to.code)?.let { plan ->
       TranslationPlan(plan.steps.map { TranslationPlanStep(it.fromCode, it.toCode, it.cacheKey, it.config) })
     }
 
-  fun planLanguageDownload(languageCode: String): DownloadPlan = handle().planLanguageDownload(languageCode).toDownloadPlan()
+  fun planLanguageDownload(languageCode: String): DownloadPlan = handle.planLanguageDownload(languageCode).toDownloadPlan()
 
-  fun planDictionaryDownload(languageCode: String): DownloadPlan? = handle().planDictionaryDownload(languageCode)?.toDownloadPlan()
+  fun planDictionaryDownload(languageCode: String): DownloadPlan? = handle.planDictionaryDownload(languageCode)?.toDownloadPlan()
 
   fun planTtsDownload(
     languageCode: String,
     selectedPackId: String? = null,
-  ): DownloadPlan? = handle().planTtsDownload(languageCode, selectedPackId)?.toDownloadPlan()
+  ): DownloadPlan? = handle.planTtsDownload(languageCode, selectedPackId)?.toDownloadPlan()
 
-  fun planDeleteLanguage(languageCode: String): DeletePlan = handle().planDeleteLanguage(languageCode).toDeletePlan()
+  fun planDeleteLanguage(languageCode: String): DeletePlan = handle.planDeleteLanguage(languageCode).toDeletePlan()
 
-  fun planDeleteDictionary(languageCode: String): DeletePlan = handle().planDeleteDictionary(languageCode).toDeletePlan()
+  fun planDeleteDictionary(languageCode: String): DeletePlan = handle.planDeleteDictionary(languageCode).toDeletePlan()
 
-  fun planDeleteTts(languageCode: String): DeletePlan = handle().planDeleteTts(languageCode).toDeletePlan()
+  fun planDeleteTts(languageCode: String): DeletePlan = handle.planDeleteTts(languageCode).toDeletePlan()
 
   fun planDeleteSupersededTts(
     languageCode: String,
     selectedPackId: String,
-  ): DeletePlan = handle().planDeleteSupersededTts(languageCode, selectedPackId).toDeletePlan()
+  ): DeletePlan = handle.planDeleteSupersededTts(languageCode, selectedPackId).toDeletePlan()
 
-  fun defaultTtsPackIdForLanguage(languageCode: String): String? = handle().defaultTtsPackId(languageCode)
+  fun defaultTtsPackIdForLanguage(languageCode: String): String? = handle.defaultTtsPackId(languageCode)
 
-  fun ttsSizeBytesForLanguage(languageCode: String): Long = handle().ttsSizeBytes(languageCode)
+  fun ttsSizeBytesForLanguage(languageCode: String): Long = handle.ttsSizeBytes(languageCode)
 
-  fun translationSizeBytesForLanguage(languageCode: String): Long = handle().translationSizeBytes(languageCode)
+  fun translationSizeBytesForLanguage(languageCode: String): Long = handle.translationSizeBytes(languageCode)
 
   fun resolveTtsVoiceFiles(languageCode: String): TtsVoiceFiles? =
-    handle().resolveTtsVoiceFiles(languageCode)?.let { files ->
+    handle.resolveTtsVoiceFiles(languageCode)?.let { files ->
       TtsVoiceFiles(
         engine = files.engine,
         model = File(files.modelPath),
@@ -193,58 +184,9 @@ class LanguageCatalog private constructor(
       )
     }
 
-  fun duplicate(): LanguageCatalog {
-    check(!isClosed.get()) { "LanguageCatalog is closed" }
-    sharedHandle.retain()
-    return LanguageCatalog(
-      sharedHandle = sharedHandle,
-      formatVersion = formatVersion,
-      generatedAt = generatedAt,
-      dictionaryVersion = dictionaryVersion,
-      languageList = languageList,
-      availabilityMap = availabilityMap,
-    )
-  }
-
   @Synchronized
   override fun close() {
-    if (isClosed.compareAndSet(false, true)) {
-      sharedHandle.release()
-    }
-  }
-
-  @Suppress("deprecation")
-  protected fun finalize() {
-    close()
-  }
-
-  private fun handle(): CatalogHandle {
-    check(!isClosed.get()) { "LanguageCatalog is closed" }
-    return sharedHandle.handle
-  }
-}
-
-private class SharedCatalogHandle(
-  val handle: CatalogHandle,
-) {
-  private val refCount = AtomicInteger(1)
-
-  fun retain() {
-    while (true) {
-      val current = refCount.get()
-      check(current > 0) { "Catalog handle already released" }
-      if (refCount.compareAndSet(current, current + 1)) {
-        return
-      }
-    }
-  }
-
-  fun release() {
-    val remaining = refCount.decrementAndGet()
-    check(remaining >= 0) { "Catalog handle reference count underflow" }
-    if (remaining == 0) {
-      handle.close()
-    }
+    handle.close()
   }
 }
 

@@ -90,7 +90,7 @@ class FilePathManager(
 
   fun getTtsVoiceFiles(language: Language): TtsVoiceFiles? {
     val catalog = loadCatalog() ?: return null
-    return catalog.use { it.resolveTtsVoiceFiles(language.code) }
+    return catalog.resolveTtsVoiceFiles(language.code)
   }
 
   fun getTtsSupportDataRoot(): File? {
@@ -120,10 +120,10 @@ class FilePathManager(
   fun loadCatalog(): LanguageCatalog? {
     val baseDirPath = currentBaseDir().absolutePath
     synchronized(catalogLock) {
-      cachedCatalog?.takeIf { cachedCatalogBaseDir == baseDirPath }?.let { return it.duplicate() }
+      cachedCatalog?.takeIf { cachedCatalogBaseDir == baseDirPath }?.let { return it }
       val catalog = openCatalog(baseDirPath)
       replaceCachedCatalogLocked(catalog, baseDirPath)
-      return catalog?.duplicate()
+      return catalog
     }
   }
 
@@ -132,7 +132,7 @@ class FilePathManager(
       val baseDirPath = currentBaseDir().absolutePath
       val catalog = openCatalog(baseDirPath)
       replaceCachedCatalogLocked(catalog, baseDirPath)
-      catalog?.duplicate()
+      catalog
     }
 
   fun invalidateCatalog() {
@@ -181,11 +181,7 @@ class FilePathManager(
     baseDirPath: String?,
   ) {
     if (cachedCatalog === newCatalog && cachedCatalogBaseDir == baseDirPath) return
-    val oldCatalog = cachedCatalog
     cachedCatalog = newCatalog
     cachedCatalogBaseDir = baseDirPath
-    if (oldCatalog != null && oldCatalog !== newCatalog) {
-      oldCatalog.close()
-    }
   }
 }

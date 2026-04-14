@@ -1,38 +1,27 @@
 package dev.davidv.translator
 
-enum class SpeechChunkBoundary(
-  val nativeValue: Int,
-) {
-  None(0),
-  Sentence(1),
-  Paragraph(2),
-  ;
-
-  companion object {
-    fun fromNative(value: Int): SpeechChunkBoundary = entries.firstOrNull { it.nativeValue == value } ?: None
-  }
-}
-
-data class NativePhonemeChunk(
-  val content: String,
-  val boundaryAfter: Int,
-)
-
 data class NativeTtsVoice(
   val name: String,
   val speakerId: Int,
   val displayName: String,
 )
 
-data class PhonemeChunk(
+data class NativeSpeechChunkPlan(
   val content: String,
-  val boundaryAfter: SpeechChunkBoundary,
+  val isPhonemes: Boolean,
+  val pauseAfterMs: Int,
 )
 
 data class TtsVoiceOption(
   val name: String,
   val speakerId: Int,
   val displayName: String,
+)
+
+data class SpeechChunkPlan(
+  val content: String,
+  val isPhonemes: Boolean,
+  val pauseAfterMs: Int?,
 )
 
 class SpeechBinding {
@@ -67,15 +56,15 @@ class SpeechBinding {
       isPhonemes,
     )
 
-  fun phonemizeChunks(
+  fun planSpeechChunks(
     engine: String,
     modelPath: String,
     auxPath: String,
     supportDataPath: String?,
     languageCode: String,
     text: String,
-  ): List<PhonemeChunk>? =
-    nativePhonemizeChunks(
+  ): List<SpeechChunkPlan>? =
+    nativePlanSpeechChunks(
       engine,
       modelPath,
       auxPath,
@@ -83,7 +72,13 @@ class SpeechBinding {
       languageCode,
       text,
     )
-      ?.map { chunk -> PhonemeChunk(content = chunk.content, boundaryAfter = SpeechChunkBoundary.fromNative(chunk.boundaryAfter)) }
+      ?.map { chunk ->
+        SpeechChunkPlan(
+          content = chunk.content,
+          isPhonemes = chunk.isPhonemes,
+          pauseAfterMs = chunk.pauseAfterMs.takeIf { it >= 0 },
+        )
+      }
       ?.toList()
 
   fun listVoices(
@@ -116,14 +111,14 @@ class SpeechBinding {
     isPhonemes: Boolean,
   ): PcmAudio?
 
-  private external fun nativePhonemizeChunks(
+  private external fun nativePlanSpeechChunks(
     engine: String,
     modelPath: String,
     auxPath: String,
     supportDataPath: String,
     languageCode: String,
     text: String,
-  ): Array<NativePhonemeChunk>?
+  ): Array<NativeSpeechChunkPlan>?
 
   private external fun nativeListVoices(
     engine: String,

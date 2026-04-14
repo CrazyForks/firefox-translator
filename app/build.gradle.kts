@@ -352,7 +352,7 @@ ktlint {
     reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.CHECKSTYLE)
   }
   filter {
-    exclude { it.file.path.contains("generated/") || it.file.path.contains("uniffi") }
+    exclude { it.file.path.contains("generated/") }
   }
 }
 
