@@ -34,7 +34,8 @@ class AidlTranslationService : Service() {
       langStateManager.catalog.collect { catalog ->
         if (catalog == null) return@collect
         val translationService = TranslationService(settingsManager, filePathManager)
-        translationCoordinator = TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)
+        val speechService = SpeechService(settingsManager, filePathManager)
+        translationCoordinator = TranslationCoordinator(translationService, speechService, languageDetector, imageProcessor, settingsManager)
         Log.d(tag, "TranslationCoordinator initialized")
       }
     }

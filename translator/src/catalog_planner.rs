@@ -41,6 +41,12 @@ pub struct CatalogSnapshot {
     pub availability_by_code: HashMap<String, LangAvailability>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LanguageAvailabilityRow {
+    pub language: Language,
+    pub availability: LangAvailability,
+}
+
 impl<'a, C> PackResolver<'a, C>
 where
     C: PackInstallChecker,
@@ -153,6 +159,25 @@ where
         pack_statuses,
         availability_by_code,
     }
+}
+
+pub fn language_rows_in_snapshot(snapshot: &CatalogSnapshot) -> Vec<LanguageAvailabilityRow> {
+    snapshot
+        .catalog
+        .language_list()
+        .into_iter()
+        .map(|language| {
+            let availability = snapshot
+                .availability_by_code
+                .get(&language.code)
+                .copied()
+                .unwrap_or_default();
+            LanguageAvailabilityRow {
+                language,
+                availability,
+            }
+        })
+        .collect()
 }
 
 fn pack_installed_in_snapshot(snapshot: &CatalogSnapshot, pack_id: &str) -> bool {

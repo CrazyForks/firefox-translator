@@ -25,6 +25,7 @@ import dev.davidv.translator.OCRService
 import dev.davidv.translator.OverlayTextTranslationHelper
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.SpeechService
 import dev.davidv.translator.TranslatedStyledBlock
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationSegment
@@ -93,7 +94,8 @@ class TranslatorAccessibilityService : AccessibilityService() {
       langStateManager.catalog.collect { catalog ->
         if (catalog == null) return@collect
         val translationService = TranslationService(settingsManager, filePathManager)
-        translationCoordinator = TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)
+        val speechService = SpeechService(settingsManager, filePathManager)
+        translationCoordinator = TranslationCoordinator(translationService, speechService, languageDetector, imageProcessor, settingsManager)
         val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow(catalog.languageList)
         overlayTextTranslationHelper =
           OverlayTextTranslationHelper(

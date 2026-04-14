@@ -56,7 +56,8 @@ class LanguageCatalog private constructor(
   val generatedAt: Long,
   val dictionaryVersion: Int,
   val languageList: List<Language>,
-  private val availabilityMap: Map<Language, LangAvailability>,
+  private val languagesByCode: Map<String, Language>,
+  private val availabilityByCode: Map<String, LangAvailability>,
 ) : Closeable {
   companion object {
     fun open(
@@ -65,35 +66,32 @@ class LanguageCatalog private constructor(
       baseDir: String,
     ): LanguageCatalog? {
       val handle = CatalogHandle.open(bundledJson, diskJson, baseDir)
-
+      val rows = handle.languageRows()
       val languageList =
-        handle.languages().map {
-          Language(
-            code = it.code,
-            displayName = it.displayName,
-            shortDisplayName = it.shortDisplayName,
-            tessName = it.tessName,
-            script = it.script,
-            dictionaryCode = it.dictionaryCode,
-            tessdataSizeBytes = it.tessdataSizeBytes,
-          )
-        }
-      val languagesByCode = languageList.associateBy { it.code }
-      val availabilityMap =
-        buildMap {
-          handle.languageAvailability().forEach { (code, avail) ->
-            val language = languagesByCode[code] ?: return@forEach
-            put(
-              language,
-              LangAvailability(
-                hasFromEnglish = avail.hasFromEnglish,
-                hasToEnglish = avail.hasToEnglish,
-                ocrFiles = avail.ocrFiles,
-                dictionaryFiles = avail.dictionaryFiles,
-                ttsFiles = avail.ttsFiles,
-              ),
+        rows.map { row ->
+          row.language.let {
+            Language(
+              code = it.code,
+              displayName = it.displayName,
+              shortDisplayName = it.shortDisplayName,
+              tessName = it.tessName,
+              script = it.script,
+              dictionaryCode = it.dictionaryCode,
+              tessdataSizeBytes = it.tessdataSizeBytes,
             )
           }
+        }
+      val languagesByCode = languageList.associateBy { it.code }
+      val availabilityByCode =
+        rows.associate { row ->
+          row.language.code to
+            LangAvailability(
+              hasFromEnglish = row.availability.hasFromEnglish,
+              hasToEnglish = row.availability.hasToEnglish,
+              ocrFiles = row.availability.ocrFiles,
+              dictionaryFiles = row.availability.dictionaryFiles,
+              ttsFiles = row.availability.ttsFiles,
+            )
         }
       return LanguageCatalog(
         handle = handle,
@@ -101,16 +99,17 @@ class LanguageCatalog private constructor(
         generatedAt = handle.generatedAt(),
         dictionaryVersion = handle.dictionaryVersion(),
         languageList = languageList,
-        availabilityMap = availabilityMap,
+        languagesByCode = languagesByCode,
+        availabilityByCode = availabilityByCode,
       )
     }
   }
 
   val english: Language by lazy {
-    languageList.first { it.code == "en" }
+    languagesByCode.getValue("en")
   }
 
-  fun languageByCode(code: String): Language? = languageList.firstOrNull { it.code == code }
+  fun languageByCode(code: String): Language? = languagesByCode[code]
 
   fun dictionaryInfoFor(language: Language): DictionaryInfo? = dictionaryInfo(language.dictionaryCode)
 
@@ -119,7 +118,13 @@ class LanguageCatalog private constructor(
       DictionaryInfo(date = it.date, filename = it.filename, size = it.size, type = it.typeName, wordCount = it.wordCount)
     }
 
-  fun computeLanguageAvailability(): Map<Language, LangAvailability> = availabilityMap
+  fun computeLanguageAvailability(): Map<Language, LangAvailability> =
+    languageList.associateWith { language ->
+      availabilityByCode[language.code] ?: LangAvailability(false, false, false, false)
+    }
+
+  fun availabilityFor(language: Language): LangAvailability =
+    availabilityByCode[language.code] ?: LangAvailability(false, false, false, false)
 
   fun ttsPackIdsForLanguage(languageCode: String): List<String> = handle.ttsPackIds(languageCode)
 

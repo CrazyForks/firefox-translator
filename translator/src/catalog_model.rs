@@ -73,7 +73,6 @@ pub enum PackKind {
     Tts(TtsPack),
     Dictionary(DictionaryPack),
     Support(SupportPack),
-    Other(OtherPack),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,16 +107,6 @@ pub struct DictionaryPack {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SupportPack {
-    pub language: Option<String>,
-    pub languages: Vec<String>,
-    pub aliases: Vec<String>,
-    pub kind: Option<String>,
-    pub metadata: Option<AssetPackMetadataV2>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct OtherPack {
-    pub feature: String,
     pub language: Option<String>,
     pub languages: Vec<String>,
     pub aliases: Vec<String>,
@@ -290,7 +279,6 @@ impl LanguageCatalog {
         let metadata = match &pack.kind {
             PackKind::Dictionary(dictionary) => dictionary.metadata.as_ref(),
             PackKind::Support(support) => support.metadata.as_ref(),
-            PackKind::Other(other) => other.metadata.as_ref(),
             _ => None,
         };
         Some(DictionaryInfo {
@@ -312,17 +300,7 @@ impl LanguageCatalog {
         let Some(tts) = self.tts(language_code) else {
             return Vec::new();
         };
-
-        let mut seen = HashSet::new();
-        let mut pack_ids = Vec::new();
-        for (_, region) in &tts.regions {
-            for voice in &region.voices {
-                if seen.insert(voice.clone()) {
-                    pack_ids.push(voice.clone());
-                }
-            }
-        }
-        pack_ids
+        tts_pack_ids_from_config(tts)
     }
 
     pub fn ordered_tts_regions_for_language(
@@ -525,4 +503,17 @@ impl LanguageCatalog {
         }
         files
     }
+}
+
+pub(crate) fn tts_pack_ids_from_config(tts: &LanguageTtsV2) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut pack_ids = Vec::new();
+    for (_, region) in &tts.regions {
+        for voice in &region.voices {
+            if seen.insert(voice.clone()) {
+                pack_ids.push(voice.clone());
+            }
+        }
+    }
+    pack_ids
 }

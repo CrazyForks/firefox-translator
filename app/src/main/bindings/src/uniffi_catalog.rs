@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -7,7 +6,7 @@ use serde_json::Value;
 use thiserror::Error;
 use translator::{
     CatalogSnapshot, PackInstallChecker, build_catalog_snapshot, can_translate_in_snapshot,
-    parse_and_validate_catalog, plan_delete_dictionary_in_snapshot,
+    language_rows_in_snapshot, parse_and_validate_catalog, plan_delete_dictionary_in_snapshot,
     plan_delete_language_in_snapshot, plan_delete_superseded_tts_in_snapshot,
     plan_delete_tts_in_snapshot, plan_dictionary_download_in_snapshot,
     plan_language_download_in_snapshot, plan_tts_download_in_snapshot,
@@ -114,6 +113,12 @@ impl From<translator::LangAvailability> for LangAvailability {
             tts_files: a.tts_files,
         }
     }
+}
+
+#[derive(uniffi::Record)]
+pub struct LanguageRow {
+    pub language: LanguageInfo,
+    pub availability: LangAvailability,
 }
 
 #[derive(uniffi::Record)]
@@ -299,20 +304,13 @@ impl CatalogHandle {
         self.snapshot.catalog.dictionary_version
     }
 
-    fn languages(&self) -> Vec<LanguageInfo> {
-        self.snapshot
-            .catalog
-            .language_list()
-            .iter()
-            .map(Into::into)
-            .collect()
-    }
-
-    fn language_availability(&self) -> HashMap<String, LangAvailability> {
-        self.snapshot
-            .availability_by_code
-            .iter()
-            .map(|(code, avail)| (code.clone(), (*avail).into()))
+    fn language_rows(&self) -> Vec<LanguageRow> {
+        language_rows_in_snapshot(&self.snapshot)
+            .into_iter()
+            .map(|row| LanguageRow {
+                language: (&row.language).into(),
+                availability: row.availability.into(),
+            })
             .collect()
     }
 

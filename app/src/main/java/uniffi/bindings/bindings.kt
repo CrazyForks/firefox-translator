@@ -760,8 +760,6 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
-
-
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -791,9 +789,7 @@ fun uniffi_bindings_checksum_method_cataloghandle_format_version(
 ): Short
 fun uniffi_bindings_checksum_method_cataloghandle_generated_at(
 ): Short
-fun uniffi_bindings_checksum_method_cataloghandle_language_availability(
-): Short
-fun uniffi_bindings_checksum_method_cataloghandle_languages(
+fun uniffi_bindings_checksum_method_cataloghandle_language_rows(
 ): Short
 fun uniffi_bindings_checksum_method_cataloghandle_ordered_tts_regions(
 ): Short
@@ -894,9 +890,7 @@ fun uniffi_bindings_fn_method_cataloghandle_format_version(`ptr`: Pointer,uniffi
 ): Int
 fun uniffi_bindings_fn_method_cataloghandle_generated_at(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): Long
-fun uniffi_bindings_fn_method_cataloghandle_language_availability(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-fun uniffi_bindings_fn_method_cataloghandle_languages(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_bindings_fn_method_cataloghandle_language_rows(`ptr`: Pointer,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_ordered_tts_regions(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -1073,10 +1067,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bindings_checksum_method_cataloghandle_generated_at() != 11555.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bindings_checksum_method_cataloghandle_language_availability() != 32255.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_bindings_checksum_method_cataloghandle_languages() != 62094.toShort()) {
+    if (lib.uniffi_bindings_checksum_method_cataloghandle_language_rows() != 43539.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bindings_checksum_method_cataloghandle_ordered_tts_regions() != 9747.toShort()) {
@@ -1508,9 +1499,7 @@ public interface CatalogHandleInterface {
     
     fun `generatedAt`(): kotlin.Long
     
-    fun `languageAvailability`(): Map<kotlin.String, LangAvailability>
-    
-    fun `languages`(): List<LanguageInfo>
+    fun `languageRows`(): List<LanguageRow>
     
     fun `orderedTtsRegions`(`languageCode`: kotlin.String): List<TtsRegionEntry>
     
@@ -1709,23 +1698,11 @@ open class CatalogHandle: Disposable, AutoCloseable, CatalogHandleInterface
     }
     
 
-    override fun `languageAvailability`(): Map<kotlin.String, LangAvailability> {
-            return FfiConverterMapStringTypeLangAvailability.lift(
+    override fun `languageRows`(): List<LanguageRow> {
+            return FfiConverterSequenceTypeLanguageRow.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
-    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_language_availability(
-        it, _status)
-}
-    }
-    )
-    }
-    
-
-    override fun `languages`(): List<LanguageInfo> {
-            return FfiConverterSequenceTypeLanguageInfo.lift(
-    callWithPointer {
-    uniffiRustCall() { _status ->
-    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_languages(
+    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_language_rows(
         it, _status)
 }
     }
@@ -2214,6 +2191,38 @@ public object FfiConverterTypeLanguageInfo: FfiConverterRustBuffer<LanguageInfo>
             FfiConverterString.write(value.`script`, buf)
             FfiConverterString.write(value.`dictionaryCode`, buf)
             FfiConverterLong.write(value.`tessdataSizeBytes`, buf)
+    }
+}
+
+
+
+data class LanguageRow (
+    var `language`: LanguageInfo, 
+    var `availability`: LangAvailability
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLanguageRow: FfiConverterRustBuffer<LanguageRow> {
+    override fun read(buf: ByteBuffer): LanguageRow {
+        return LanguageRow(
+            FfiConverterTypeLanguageInfo.read(buf),
+            FfiConverterTypeLangAvailability.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: LanguageRow) = (
+            FfiConverterTypeLanguageInfo.allocationSize(value.`language`) +
+            FfiConverterTypeLangAvailability.allocationSize(value.`availability`)
+    )
+
+    override fun write(value: LanguageRow, buf: ByteBuffer) {
+            FfiConverterTypeLanguageInfo.write(value.`language`, buf)
+            FfiConverterTypeLangAvailability.write(value.`availability`, buf)
     }
 }
 
@@ -2744,24 +2753,24 @@ public object FfiConverterSequenceTypeDownloadTask: FfiConverterRustBuffer<List<
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeLanguageInfo: FfiConverterRustBuffer<List<LanguageInfo>> {
-    override fun read(buf: ByteBuffer): List<LanguageInfo> {
+public object FfiConverterSequenceTypeLanguageRow: FfiConverterRustBuffer<List<LanguageRow>> {
+    override fun read(buf: ByteBuffer): List<LanguageRow> {
         val len = buf.getInt()
-        return List<LanguageInfo>(len) {
-            FfiConverterTypeLanguageInfo.read(buf)
+        return List<LanguageRow>(len) {
+            FfiConverterTypeLanguageRow.read(buf)
         }
     }
 
-    override fun allocationSize(value: List<LanguageInfo>): ULong {
+    override fun allocationSize(value: List<LanguageRow>): ULong {
         val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeLanguageInfo.allocationSize(it) }.sum()
+        val sizeForItems = value.map { FfiConverterTypeLanguageRow.allocationSize(it) }.sum()
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<LanguageInfo>, buf: ByteBuffer) {
+    override fun write(value: List<LanguageRow>, buf: ByteBuffer) {
         buf.putInt(value.size)
         value.iterator().forEach {
-            FfiConverterTypeLanguageInfo.write(it, buf)
+            FfiConverterTypeLanguageRow.write(it, buf)
         }
     }
 }
@@ -2818,45 +2827,6 @@ public object FfiConverterSequenceTypeTtsRegionEntry: FfiConverterRustBuffer<Lis
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeTtsRegionEntry.write(it, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterMapStringTypeLangAvailability: FfiConverterRustBuffer<Map<kotlin.String, LangAvailability>> {
-    override fun read(buf: ByteBuffer): Map<kotlin.String, LangAvailability> {
-        val len = buf.getInt()
-        return buildMap<kotlin.String, LangAvailability>(len) {
-            repeat(len) {
-                val k = FfiConverterString.read(buf)
-                val v = FfiConverterTypeLangAvailability.read(buf)
-                this[k] = v
-            }
-        }
-    }
-
-    override fun allocationSize(value: Map<kotlin.String, LangAvailability>): ULong {
-        val spaceForMapSize = 4UL
-        val spaceForChildren = value.map { (k, v) ->
-            FfiConverterString.allocationSize(k) +
-            FfiConverterTypeLangAvailability.allocationSize(v)
-        }.sum()
-        return spaceForMapSize + spaceForChildren
-    }
-
-    override fun write(value: Map<kotlin.String, LangAvailability>, buf: ByteBuffer) {
-        buf.putInt(value.size)
-        // The parens on `(k, v)` here ensure we're calling the right method,
-        // which is important for compatibility with older android devices.
-        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
-        value.forEach { (k, v) ->
-            FfiConverterString.write(k, buf)
-            FfiConverterTypeLangAvailability.write(v, buf)
         }
     }
 }

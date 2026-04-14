@@ -27,6 +27,7 @@ import kotlin.system.measureTimeMillis
 
 class TranslationCoordinator(
   private val translationService: TranslationService,
+  private val speechService: SpeechService,
   private val languageDetector: LanguageDetector,
   private val imageProcessor: ImageProcessor,
   private val settingsManager: SettingsManager,
@@ -248,9 +249,9 @@ class TranslationCoordinator(
   suspend fun synthesizeSpeech(
     language: Language,
     text: String,
-  ): SpeechSynthesisResult = translationService.synthesizeSpeech(language, text)
+  ): SpeechSynthesisResult = speechService.synthesizeSpeech(language, text)
 
-  suspend fun availableTtsVoices(language: Language): List<TtsVoiceOption> = translationService.availableTtsVoices(language)
+  suspend fun availableTtsVoices(language: Language): List<TtsVoiceOption> = speechService.availableTtsVoices(language)
 }
 
 data class ProcessedImageResult(

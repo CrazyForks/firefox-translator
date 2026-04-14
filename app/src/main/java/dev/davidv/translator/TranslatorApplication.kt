@@ -27,6 +27,7 @@ class TranslatorApplication : Application() {
   lateinit var ocrService: OCRService
   lateinit var imageProcessor: ImageProcessor
   lateinit var translationService: TranslationService
+  lateinit var speechService: SpeechService
   lateinit var languageDetector: LanguageDetector
   lateinit var translationCoordinator: TranslationCoordinator
   val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow<List<Language>>(emptyList())
@@ -45,8 +46,9 @@ class TranslatorApplication : Application() {
     ocrService = OCRService(filePathManager)
     imageProcessor = ImageProcessor(this, ocrService)
     translationService = TranslationService(settingsManager, filePathManager)
+    speechService = SpeechService(settingsManager, filePathManager)
     languageDetector = LanguageDetector { code -> languageCatalog?.languageByCode(code) }
     translationCoordinator =
-      TranslationCoordinator(translationService, languageDetector, imageProcessor, settingsManager)
+      TranslationCoordinator(translationService, speechService, languageDetector, imageProcessor, settingsManager)
   }
 }

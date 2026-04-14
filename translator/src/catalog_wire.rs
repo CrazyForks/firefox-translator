@@ -7,7 +7,7 @@ use crate::language::Language;
 use super::model::{
     AssetFileV2, AssetPackMetadataV2, CatalogSourcesV2, DictionaryPack, LanguageCatalog,
     LanguageFeature, LanguageInfo, LanguageResources, LanguageTtsRegionV2, LanguageTtsV2, OcrPack,
-    PackKind, PackRecord, SupportPack, TranslationPack, TtsPack,
+    PackKind, PackRecord, SupportPack, TranslationPack, TtsPack, tts_pack_ids_from_config,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -431,22 +431,7 @@ pub fn parse_language_catalog(json: &str) -> Result<LanguageCatalog, String> {
             (language_code.clone(), LanguageFeature::Dictionary),
             info.resources.dictionary_pack_id.iter().cloned().collect(),
         );
-        let tts_pack_ids = info
-            .tts
-            .as_ref()
-            .map(|tts| {
-                let mut seen = std::collections::HashSet::new();
-                let mut pack_ids = Vec::new();
-                for (_, region) in &tts.regions {
-                    for voice in &region.voices {
-                        if seen.insert(voice.clone()) {
-                            pack_ids.push(voice.clone());
-                        }
-                    }
-                }
-                pack_ids
-            })
-            .unwrap_or_default();
+        let tts_pack_ids = info.tts.as_ref().map(tts_pack_ids_from_config).unwrap_or_default();
         root_pack_ids_by_language_feature
             .insert((language_code.clone(), LanguageFeature::Tts), tts_pack_ids);
     }

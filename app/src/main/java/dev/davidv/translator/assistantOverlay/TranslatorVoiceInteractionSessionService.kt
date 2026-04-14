@@ -12,6 +12,7 @@ import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.OCRService
 import dev.davidv.translator.OverlayTextTranslationHelper
 import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.SpeechService
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +45,7 @@ class TranslatorVoiceInteractionSessionService : VoiceInteractionSessionService(
     translationCoordinator =
       TranslationCoordinator(
         translationService = TranslationService(settingsManager, filePathManager),
+        speechService = SpeechService(settingsManager, filePathManager),
         languageDetector = LanguageDetector(langStateManager::languageByCode),
         imageProcessor = imageProcessor,
         settingsManager = settingsManager,
