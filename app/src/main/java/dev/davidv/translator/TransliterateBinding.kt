@@ -12,7 +12,7 @@ class TransliterateBinding {
     languageCode: String,
     sourceScript: String,
     targetScript: String = "Latn",
-    japaneseDictPtr: Long = 0L,
+    japaneseDictPath: String? = null,
     japaneseSpaced: Boolean = true,
   ): String? =
     nativeTransliterateWithPolicy(
@@ -20,7 +20,7 @@ class TransliterateBinding {
       languageCode,
       sourceScript,
       targetScript,
-      japaneseDictPtr,
+      japaneseDictPath.orEmpty(),
       japaneseSpaced,
     )
 
@@ -29,7 +29,7 @@ class TransliterateBinding {
     languageCode: String,
     sourceScript: String,
     targetScript: String,
-    japaneseDictPtr: Long,
+    japaneseDictPath: String,
     japaneseSpaced: Boolean,
   ): String?
 }

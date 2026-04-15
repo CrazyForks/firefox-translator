@@ -26,19 +26,6 @@ private object NativeBindingsLoader {
   }
 }
 
-data class TokenAlignment(
-  val srcBegin: Int,
-  val srcEnd: Int,
-  val tgtBegin: Int,
-  val tgtEnd: Int,
-)
-
-data class TranslationWithAlignment(
-  val source: String,
-  val target: String,
-  val alignments: Array<TokenAlignment>,
-)
-
 internal data class DetectionResult(
   val language: String,
   val isReliable: Boolean,

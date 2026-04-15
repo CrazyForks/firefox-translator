@@ -84,7 +84,6 @@ class LanguageStateManager(
       connectToDownloadEvents(downloadEvents)
     }
     loadCatalog()
-    loadMucabFile()
   }
 
   private fun loadCatalog() {
@@ -106,7 +105,6 @@ class LanguageStateManager(
             is DownloadEvent.NewTranslationAvailable -> {
               setCatalog(withContext(Dispatchers.IO) { filePathManager.reloadCatalog() })
               refreshLanguageAvailability()
-              loadMucabFile()
             }
 
             is DownloadEvent.NewDictionaryAvailable -> {
@@ -222,26 +220,6 @@ class LanguageStateManager(
       .filterNot { it == excluding }
       .filter { canTranslate(source, it) }
       .firstOrNull()
-  }
-
-  private fun loadMucabFile() {
-    scope.launch {
-      withContext(Dispatchers.IO) {
-        val mucabFile = filePathManager.getMucabFile()
-        if (mucabFile.exists()) {
-          val binding = MucabBinding()
-          val success = binding.open(mucabFile.absolutePath)
-          if (success) {
-            _fileEvents.emit(FileEvent.MucabFileLoaded(binding))
-            Log.i("LanguageStateManager", "Mucab file loaded successfully")
-          } else {
-            Log.w("LanguageStateManager", "Failed to open mucab file")
-          }
-        } else {
-          Log.i("LanguageStateManager", "Mucab file not found")
-        }
-      }
-    }
   }
 
   private fun setCatalog(newCatalog: LanguageCatalog?) {

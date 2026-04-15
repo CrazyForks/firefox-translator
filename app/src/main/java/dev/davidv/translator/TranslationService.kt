@@ -32,12 +32,7 @@ class TranslationService(
     }
   }
 
-  private var mucabBinding: MucabBinding? = null
   private val transliterateBinding = TransliterateBinding()
-
-  fun setMucabBinding(binding: MucabBinding?) {
-    mucabBinding = binding
-  }
 
   // / Requires the translation pairs to be available
   suspend fun preloadModel(
@@ -185,50 +180,18 @@ class TranslationService(
       }
     }
 
-  suspend fun translateMultipleWithAlignment(
-    from: Language,
-    to: Language,
-    texts: Array<String>,
-  ): BatchAlignedTranslationResult =
-    withContext(Dispatchers.IO) {
-      if (from == to) {
-        return@withContext BatchAlignedTranslationResult.Success(
-          texts.map { TranslationWithAlignment(it, it, emptyArray()) },
-        )
-      }
-      val catalog =
-        filePathManager.loadCatalog()
-          ?: return@withContext BatchAlignedTranslationResult.Error("Catalog unavailable")
-      val results =
-        catalog.translateTextsWithAlignment(from, to, texts)
-          ?: return@withContext BatchAlignedTranslationResult.Error(
-            "Language pair ${from.code} -> ${to.code} not installed",
-          )
-
-      try {
-        val elapsed =
-          measureTimeMillis {
-            // translation already executed in native layer
-          }
-        Log.d("TranslationService", "aligned translation took ${elapsed}ms")
-        BatchAlignedTranslationResult.Success(results.toList())
-      } catch (e: Exception) {
-        Log.e("TranslationService", "Aligned translation failed", e)
-        BatchAlignedTranslationResult.Error("Translation failed: ${e.message}")
-      }
-    }
-
   fun transliterate(
     text: String,
     from: Language,
   ): String? {
     val settings = settingsManager.settings.value
+    val mucabPath = filePathManager.getMucabFile().takeIf { it.exists() }?.absolutePath
     return try {
       transliterateBinding.transliterate(
         text = text,
         languageCode = from.code,
         sourceScript = from.script,
-        japaneseDictPtr = mucabBinding?.dictionaryHandle() ?: 0L,
+        japaneseDictPath = mucabPath,
         japaneseSpaced = settings.addSpacesForJapaneseTransliteration,
       )
     } catch (e: Exception) {
@@ -256,16 +219,6 @@ sealed class BatchTranslationResult {
   data class Error(
     val message: String,
   ) : BatchTranslationResult()
-}
-
-sealed class BatchAlignedTranslationResult {
-  data class Success(
-    val results: List<TranslationWithAlignment>,
-  ) : BatchAlignedTranslationResult()
-
-  data class Error(
-    val message: String,
-  ) : BatchAlignedTranslationResult()
 }
 
 sealed class StructuredFragmentTranslationOutput {

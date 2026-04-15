@@ -46,26 +46,25 @@ mod jni_bridge {
     use super::*;
     use jni::JNIEnv;
     use jni::objects::{JClass, JString};
-    use jni::sys::{jlong, jstring};
+    use jni::sys::jstring;
 
     #[cfg(feature = "mucab")]
     fn preprocess_japanese(
         text: &str,
-        dict_ptr: jlong,
+        dict_path: Option<&str>,
         japanese_spaced: bool,
     ) -> Option<String> {
-        if dict_ptr == 0 {
+        let dict_path = dict_path?;
+        if dict_path.is_empty() {
             return None;
         }
-
-        let dict = unsafe { &mut *(dict_ptr as *mut mucab::Dictionary) };
-        Some(mucab::transliterate(text, dict, japanese_spaced))
+        crate::mucab::transliterate_with_path(dict_path, text, japanese_spaced).ok()
     }
 
     #[cfg(not(feature = "mucab"))]
     fn preprocess_japanese(
         _text: &str,
-        _dict_ptr: jlong,
+        _dict_path: Option<&str>,
         _japanese_spaced: bool,
     ) -> Option<String> {
         None
@@ -79,7 +78,7 @@ mod jni_bridge {
         java_language_code: JString,
         java_source_script: JString,
         java_target_script: JString,
-        japanese_dict_ptr: jlong,
+        java_japanese_dict_path: JString,
         japanese_spaced: bool,
     ) -> jstring {
         let text: String = match env.get_string(&java_text) {
@@ -102,8 +101,13 @@ mod jni_bridge {
             Err(_) => return std::ptr::null_mut(),
         };
 
+        let japanese_dict_path: String = match env.get_string(&java_japanese_dict_path) {
+            Ok(s) => s.into(),
+            Err(_) => return std::ptr::null_mut(),
+        };
+
         let japanese_preprocessed = if language_code == "ja" {
-            preprocess_japanese(&text, japanese_dict_ptr, japanese_spaced)
+            preprocess_japanese(&text, Some(japanese_dict_path.as_str()), japanese_spaced)
         } else {
             None
         };

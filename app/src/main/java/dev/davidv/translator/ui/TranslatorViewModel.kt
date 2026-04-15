@@ -573,14 +573,7 @@ class TranslatorViewModel(
             actualFrom?.let { firstAvailableTargetLanguage(it, langs, excluding = actualFrom) }
               ?: catalog?.english
         }
-        if (event.language.code == "ja") {
-          translationCoordinator.setMucabBinding(null)
-        }
         Log.d("TranslatorViewModel", "Language deleted: ${event.language}")
-      }
-      is FileEvent.MucabFileLoaded -> {
-        translationCoordinator.setMucabBinding(event.mucabBinding)
-        Log.d("TranslatorViewModel", "Mucab file loaded and set in TranslationCoordinator")
       }
       is FileEvent.Error -> {
         viewModelScope.launch {

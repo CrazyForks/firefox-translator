@@ -44,10 +44,6 @@ class TranslationCoordinator(
 
   var lastTranslatedInput: String = ""
 
-  fun setMucabBinding(binding: MucabBinding?) {
-    translationService.setMucabBinding(binding)
-  }
-
   suspend fun preloadModel(
     from: Language,
     to: Language,
@@ -95,28 +91,6 @@ class TranslationCoordinator(
           result = translationService.translateMultiple(from, to, texts)
         }
       Log.d("TranslationCoordinator", "Translating ${texts.size} texts from ${from.displayName} to ${to.displayName} took ${elapsed}ms")
-    } finally {
-      lastTranslatedInput = texts.lastOrNull() ?: ""
-      _isTranslating.value = false
-    }
-    return result
-  }
-
-  suspend fun translateTextsWithAlignment(
-    from: Language,
-    to: Language,
-    texts: Array<String>,
-  ): BatchAlignedTranslationResult {
-    if (texts.isEmpty()) return BatchAlignedTranslationResult.Success(emptyList())
-
-    _isTranslating.value = true
-    val result: BatchAlignedTranslationResult
-    try {
-      val elapsed =
-        measureTimeMillis {
-          result = translationService.translateMultipleWithAlignment(from, to, texts)
-        }
-      Log.d("TranslationCoordinator", "Aligned translation of ${texts.size} texts took ${elapsed}ms")
     } finally {
       lastTranslatedInput = texts.lastOrNull() ?: ""
       _isTranslating.value = false

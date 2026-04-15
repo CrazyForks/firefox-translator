@@ -162,27 +162,6 @@ class LanguageCatalog private constructor(
     texts: Array<String>,
   ): Array<String>? = handle.translateTexts(from.code, to.code, texts.toList())?.toTypedArray()
 
-  fun translateTextsWithAlignment(
-    from: Language,
-    to: Language,
-    texts: Array<String>,
-  ): Array<TranslationWithAlignment>? =
-    handle.translateTextsWithAlignment(from.code, to.code, texts.toList())?.map { value ->
-      TranslationWithAlignment(
-        source = value.sourceText,
-        target = value.translatedText,
-        alignments =
-          value.alignments.map { alignment ->
-            TokenAlignment(
-              srcBegin = alignment.srcBegin.toInt(),
-              srcEnd = alignment.srcEnd.toInt(),
-              tgtBegin = alignment.tgtBegin.toInt(),
-              tgtEnd = alignment.tgtEnd.toInt(),
-            )
-          }.toTypedArray(),
-      )
-    }?.toTypedArray()
-
   fun translateMixedTexts(
     inputs: List<String>,
     forcedSourceLanguage: Language?,

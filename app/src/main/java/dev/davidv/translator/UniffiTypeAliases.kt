@@ -3,6 +3,8 @@ package dev.davidv.translator
 typealias ReadingOrder = uniffi.translator.ReadingOrder
 typealias NothingReason = uniffi.translator.NothingReason
 typealias BackgroundMode = uniffi.translator.BackgroundMode
+typealias TokenAlignment = uniffi.translator.TokenAlignment
+typealias TranslationWithAlignment = uniffi.translator.TranslationWithAlignment
 
 val BackgroundMode.displayName: String
   get() =
