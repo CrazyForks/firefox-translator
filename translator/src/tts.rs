@@ -1,4 +1,5 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Enum))]
 pub enum SpeechChunkBoundary {
     #[default]
     None,
@@ -7,12 +8,14 @@ pub enum SpeechChunkBoundary {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PhonemeChunk {
     pub content: String,
     pub boundary_after: SpeechChunkBoundary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct TtsVoiceOption {
     pub name: String,
     pub speaker_id: i64,
@@ -20,6 +23,7 @@ pub struct TtsVoiceOption {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct PcmAudio {
     pub sample_rate: i32,
     pub pcm_samples: Vec<i16>,
@@ -37,6 +41,7 @@ impl PcmAudio {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct SpeechChunk {
     pub content: String,
     pub is_phonemes: bool,

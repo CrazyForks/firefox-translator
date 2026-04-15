@@ -1,6 +1,7 @@
 use cld2::{Format, Hints, Reliable, detect_language_ext};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "uniffi", derive(uniffi::Record))]
 pub struct DetectionResult {
     pub language: String,
     pub is_reliable: bool,

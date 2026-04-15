@@ -17,34 +17,20 @@
 
 package dev.davidv.translator
 
-import android.util.Log
+import uniffi.bindings.detectLanguageRecord
+import uniffi.bindings.detectLanguageRobustCodeRecord
 
-private object NativeBindingsLoader {
-  init {
-    Log.d("TranslationRuntime", "Loading bindings library")
-    System.loadLibrary("bindings")
-  }
-}
-
-internal data class DetectionResult(
-  val language: String,
-  val isReliable: Boolean,
-  val confidence: Int,
-)
+internal typealias DetectionResult = uniffi.translator.DetectionResult
 
 internal class NativeLanguageRuntime {
-  init {
-    NativeBindingsLoader
-  }
-
-  external fun detectLanguage(
+  fun detectLanguage(
     text: String,
     langCode: String?,
-  ): DetectionResult?
+  ): DetectionResult? = detectLanguageRecord(text, langCode)
 
-  external fun detectLanguageRobustCode(
+  fun detectLanguageRobustCode(
     text: String,
     hintCode: String?,
     availableLanguageCodes: Array<String>,
-  ): String?
+  ): String? = detectLanguageRobustCodeRecord(text, hintCode, availableLanguageCodes.toList())
 }

@@ -979,6 +979,29 @@ object NoPointer
 /**
  * @suppress
  */
+public object FfiConverterShort: FfiConverter<Short, Short> {
+    override fun lift(value: Short): Short {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Short {
+        return buf.getShort()
+    }
+
+    override fun lower(value: Short): Short {
+        return value
+    }
+
+    override fun allocationSize(value: Short) = 2UL
+
+    override fun write(value: Short, buf: ByteBuffer) {
+        buf.putShort(value)
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterUInt: FfiConverter<UInt, Int> {
     override fun lift(value: Int): UInt {
         return value.toUInt()
@@ -1219,6 +1242,42 @@ public object FfiConverterTypeDeletePlan: FfiConverterRustBuffer<DeletePlan> {
     override fun write(value: DeletePlan, buf: ByteBuffer) {
             FfiConverterSequenceString.write(value.`filePaths`, buf)
             FfiConverterSequenceString.write(value.`directoryPaths`, buf)
+    }
+}
+
+
+
+data class DetectionResult (
+    var `language`: kotlin.String, 
+    var `isReliable`: kotlin.Boolean, 
+    var `confidence`: kotlin.Int
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDetectionResult: FfiConverterRustBuffer<DetectionResult> {
+    override fun read(buf: ByteBuffer): DetectionResult {
+        return DetectionResult(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: DetectionResult) = (
+            FfiConverterString.allocationSize(value.`language`) +
+            FfiConverterBoolean.allocationSize(value.`isReliable`) +
+            FfiConverterInt.allocationSize(value.`confidence`)
+    )
+
+    override fun write(value: DetectionResult, buf: ByteBuffer) {
+            FfiConverterString.write(value.`language`, buf)
+            FfiConverterBoolean.write(value.`isReliable`, buf)
+            FfiConverterInt.write(value.`confidence`, buf)
     }
 }
 
@@ -1592,6 +1651,70 @@ public object FfiConverterTypeOverlayScreenshot: FfiConverterRustBuffer<OverlayS
 
 
 
+data class PcmAudio (
+    var `sampleRate`: kotlin.Int, 
+    var `pcmSamples`: List<kotlin.Short>
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePcmAudio: FfiConverterRustBuffer<PcmAudio> {
+    override fun read(buf: ByteBuffer): PcmAudio {
+        return PcmAudio(
+            FfiConverterInt.read(buf),
+            FfiConverterSequenceShort.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PcmAudio) = (
+            FfiConverterInt.allocationSize(value.`sampleRate`) +
+            FfiConverterSequenceShort.allocationSize(value.`pcmSamples`)
+    )
+
+    override fun write(value: PcmAudio, buf: ByteBuffer) {
+            FfiConverterInt.write(value.`sampleRate`, buf)
+            FfiConverterSequenceShort.write(value.`pcmSamples`, buf)
+    }
+}
+
+
+
+data class PhonemeChunk (
+    var `content`: kotlin.String, 
+    var `boundaryAfter`: SpeechChunkBoundary
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePhonemeChunk: FfiConverterRustBuffer<PhonemeChunk> {
+    override fun read(buf: ByteBuffer): PhonemeChunk {
+        return PhonemeChunk(
+            FfiConverterString.read(buf),
+            FfiConverterTypeSpeechChunkBoundary.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: PhonemeChunk) = (
+            FfiConverterString.allocationSize(value.`content`) +
+            FfiConverterTypeSpeechChunkBoundary.allocationSize(value.`boundaryAfter`)
+    )
+
+    override fun write(value: PhonemeChunk, buf: ByteBuffer) {
+            FfiConverterString.write(value.`content`, buf)
+            FfiConverterTypeSpeechChunkBoundary.write(value.`boundaryAfter`, buf)
+    }
+}
+
+
+
 data class PreparedImageOverlay (
     var `rgbaBytes`: kotlin.ByteArray, 
     var `width`: kotlin.UInt, 
@@ -1767,6 +1890,42 @@ public object FfiConverterTypeRect: FfiConverterRustBuffer<Rect> {
             FfiConverterUInt.write(value.`top`, buf)
             FfiConverterUInt.write(value.`right`, buf)
             FfiConverterUInt.write(value.`bottom`, buf)
+    }
+}
+
+
+
+data class SpeechChunk (
+    var `content`: kotlin.String, 
+    var `isPhonemes`: kotlin.Boolean, 
+    var `pauseAfterMs`: kotlin.Int?
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSpeechChunk: FfiConverterRustBuffer<SpeechChunk> {
+    override fun read(buf: ByteBuffer): SpeechChunk {
+        return SpeechChunk(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalInt.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: SpeechChunk) = (
+            FfiConverterString.allocationSize(value.`content`) +
+            FfiConverterBoolean.allocationSize(value.`isPhonemes`) +
+            FfiConverterOptionalInt.allocationSize(value.`pauseAfterMs`)
+    )
+
+    override fun write(value: SpeechChunk, buf: ByteBuffer) {
+            FfiConverterString.write(value.`content`, buf)
+            FfiConverterBoolean.write(value.`isPhonemes`, buf)
+            FfiConverterOptionalInt.write(value.`pauseAfterMs`, buf)
     }
 }
 
@@ -2096,6 +2255,42 @@ public object FfiConverterTypeTranslationWithAlignment: FfiConverterRustBuffer<T
 
 
 
+data class TtsVoiceOption (
+    var `name`: kotlin.String, 
+    var `speakerId`: kotlin.Long, 
+    var `displayName`: kotlin.String
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTtsVoiceOption: FfiConverterRustBuffer<TtsVoiceOption> {
+    override fun read(buf: ByteBuffer): TtsVoiceOption {
+        return TtsVoiceOption(
+            FfiConverterString.read(buf),
+            FfiConverterLong.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: TtsVoiceOption) = (
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterLong.allocationSize(value.`speakerId`) +
+            FfiConverterString.allocationSize(value.`displayName`)
+    )
+
+    override fun write(value: TtsVoiceOption, buf: ByteBuffer) {
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterLong.write(value.`speakerId`, buf)
+            FfiConverterString.write(value.`displayName`, buf)
+    }
+}
+
+
+
 data class TtsVoicePackInfo (
     var `packId`: kotlin.String, 
     var `displayName`: kotlin.String, 
@@ -2256,6 +2451,37 @@ public object FfiConverterTypeReadingOrder: FfiConverterRustBuffer<ReadingOrder>
     override fun allocationSize(value: ReadingOrder) = 4UL
 
     override fun write(value: ReadingOrder, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class SpeechChunkBoundary {
+    
+    NONE,
+    SENTENCE,
+    PARAGRAPH;
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSpeechChunkBoundary: FfiConverterRustBuffer<SpeechChunkBoundary> {
+    override fun read(buf: ByteBuffer) = try {
+        SpeechChunkBoundary.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: SpeechChunkBoundary) = 4UL
+
+    override fun write(value: SpeechChunkBoundary, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }
@@ -2450,6 +2676,34 @@ public object FfiConverterOptionalTypeNothingReason: FfiConverterRustBuffer<Noth
         } else {
             buf.put(1)
             FfiConverterTypeNothingReason.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceShort: FfiConverterRustBuffer<List<kotlin.Short>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Short> {
+        val len = buf.getInt()
+        return List<kotlin.Short>(len) {
+            FfiConverterShort.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Short>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterShort.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.Short>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterShort.write(it, buf)
         }
     }
 }

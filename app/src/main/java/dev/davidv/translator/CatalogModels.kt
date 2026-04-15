@@ -3,7 +3,6 @@ package dev.davidv.translator
 import android.graphics.Bitmap
 import uniffi.bindings.CatalogHandle
 import uniffi.bindings.sampleOverlayColorsRgba
-import java.io.File
 import java.nio.ByteBuffer
 
 private fun rgbaBytes(bitmap: Bitmap): ByteArray =
@@ -234,10 +233,6 @@ class LanguageCatalog private constructor(
     word: String,
   ): WordWithTaggedEntries? = handle.lookupDictionary(language.code, word)
 
-  fun closeDictionaryCache(language: Language) {
-    handle.closeDictionaryCache(language.code)
-  }
-
   fun availabilityFor(language: Language?): LangAvailability? = language?.let { availabilityByCode[it.code] }
 
   fun hasTtsVoices(languageCode: String): Boolean = handle.hasTtsVoices(languageCode)
@@ -369,15 +364,36 @@ class LanguageCatalog private constructor(
 
   fun translationSizeBytesForLanguage(languageCode: String): Long = handle.translationSizeBytes(languageCode).toLong()
 
-  fun resolveTtsVoiceFiles(languageCode: String): TtsVoiceFiles? =
-    handle.resolveTtsVoiceFiles(languageCode)?.let { files ->
-      TtsVoiceFiles(
-        engine = files.engine,
-        model = File(files.modelPath),
-        aux = File(files.auxPath),
-        languageCode = files.languageCode,
-        speakerId = files.speakerId,
+  fun availableTtsVoices(languageCode: String): List<TtsVoiceOption> =
+    handle.availableTtsVoices(languageCode).map { voice ->
+      TtsVoiceOption(
+        name = voice.name,
+        speakerId = voice.speakerId.toInt(),
+        displayName = voice.displayName,
       )
+    }
+
+  fun planSpeechChunks(
+    languageCode: String,
+    text: String,
+  ): List<SpeechChunkPlan> =
+    handle.planSpeechChunks(languageCode, text).map { chunk ->
+      SpeechChunkPlan(
+        content = chunk.content,
+        isPhonemes = chunk.isPhonemes,
+        pauseAfterMs = chunk.pauseAfterMs,
+      )
+    }
+
+  fun synthesizeSpeechPcm(
+    languageCode: String,
+    text: String,
+    speechSpeed: Float,
+    voiceName: String?,
+    isPhonemes: Boolean,
+  ): PcmAudio? =
+    handle.synthesizeSpeechPcm(languageCode, text, speechSpeed, voiceName, isPhonemes)?.let { audio ->
+      PcmAudio(sampleRate = audio.sampleRate, pcmSamples = audio.pcmSamples.toShortArray())
     }
 }
 

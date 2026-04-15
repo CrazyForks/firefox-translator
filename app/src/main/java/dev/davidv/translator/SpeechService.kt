@@ -29,8 +29,6 @@ class SpeechService(
   private val settingsManager: SettingsManager,
   private val filePathManager: FilePathManager,
 ) {
-  private val speechBinding = SpeechBinding()
-
   suspend fun synthesizeSpeech(
     language: Language,
     text: String,
@@ -40,30 +38,27 @@ class SpeechService(
         return@withContext SpeechSynthesisResult.Error("Nothing to speak")
       }
 
-      val voiceFiles =
-        filePathManager.getTtsVoiceFiles(language)
-          ?: return@withContext SpeechSynthesisResult.Error(
-            "No TTS voice installed for ${language.displayName}",
-          )
+      val catalog =
+        filePathManager.loadCatalog()
+          ?: return@withContext SpeechSynthesisResult.Error("Catalog unavailable")
+      if (!catalog.hasTtsVoices(language.code)) {
+        return@withContext SpeechSynthesisResult.Error(
+          "No TTS voice installed for ${language.displayName}",
+        )
+      }
 
-      val supportDataPath = filePathManager.getTtsSupportDataRoot()?.absolutePath
       val speechSpeed = settingsManager.settings.value.ttsPlaybackSpeed.coerceIn(0.5f, 2.0f)
-      val selectedVoiceName = settingsManager.settings.value.ttsVoiceOverrides[voiceFiles.languageCode]
-      val speakerId = voiceFiles.speakerId
+      val selectedVoiceName = settingsManager.settings.value.ttsVoiceOverrides[language.code]
       Log.d(
         "SpeechService",
-        "Using TTS speakerId=$speakerId voiceName=$selectedVoiceName speechSpeed=$speechSpeed engine=${voiceFiles.engine} language=${voiceFiles.languageCode}",
+        "Using TTS voiceName=$selectedVoiceName speechSpeed=$speechSpeed language=${language.code}",
       )
       val chunkRequests =
-        speechBinding.planSpeechChunks(
-          engine = voiceFiles.engine,
-          modelPath = voiceFiles.model.absolutePath,
-          auxPath = voiceFiles.aux.absolutePath,
-          supportDataPath = supportDataPath,
-          languageCode = voiceFiles.languageCode,
+        catalog.planSpeechChunks(
+          languageCode = language.code,
           text = text,
         )
-      if (chunkRequests.isNullOrEmpty()) {
+      if (chunkRequests.isEmpty()) {
         return@withContext SpeechSynthesisResult.Error(
           "Speech synthesis failed for ${language.displayName}",
         )
@@ -78,16 +73,11 @@ class SpeechService(
               "Speech chunk ${index + 1}/${chunkRequests.size}: synth start isPhonemes=${chunkRequest.isPhonemes} textLen=${chunkRequest.content.length} pauseAfterMs=${chunkRequest.pauseAfterMs}",
             )
             val pcmAudio =
-              speechBinding.synthesizePcm(
-                engine = voiceFiles.engine,
-                modelPath = voiceFiles.model.absolutePath,
-                auxPath = voiceFiles.aux.absolutePath,
-                supportDataPath = supportDataPath,
-                languageCode = voiceFiles.languageCode,
+              catalog.synthesizeSpeechPcm(
+                languageCode = language.code,
                 text = chunkRequest.content,
                 speechSpeed = speechSpeed,
                 voiceName = selectedVoiceName,
-                speakerId = speakerId,
                 isPhonemes = chunkRequest.isPhonemes,
               ) ?: throw IllegalStateException(
                 "Speech synthesis failed for ${language.displayName}",
@@ -114,15 +104,8 @@ class SpeechService(
 
   suspend fun availableTtsVoices(language: Language): List<TtsVoiceOption> =
     withContext(Dispatchers.IO) {
-      val voiceFiles = filePathManager.getTtsVoiceFiles(language) ?: return@withContext emptyList()
-      val supportDataPath = filePathManager.getTtsSupportDataRoot()?.absolutePath
-      speechBinding.listVoices(
-        engine = voiceFiles.engine,
-        modelPath = voiceFiles.model.absolutePath,
-        auxPath = voiceFiles.aux.absolutePath,
-        supportDataPath = supportDataPath,
-        languageCode = voiceFiles.languageCode,
-      ) ?: emptyList()
+      val catalog = filePathManager.loadCatalog() ?: return@withContext emptyList()
+      catalog.availableTtsVoices(language.code)
     }
 }
 

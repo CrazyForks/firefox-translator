@@ -33,48 +33,60 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import uniffi.translator.BackgroundMode
 import uniffi.translator.DeletePlan
+import uniffi.translator.DetectionResult
 import uniffi.translator.DictionaryInfo
 import uniffi.translator.DownloadPlan
 import uniffi.translator.FfiConverterTypeBackgroundMode
 import uniffi.translator.FfiConverterTypeDeletePlan
+import uniffi.translator.FfiConverterTypeDetectionResult
 import uniffi.translator.FfiConverterTypeDictionaryInfo
 import uniffi.translator.FfiConverterTypeDownloadPlan
 import uniffi.translator.FfiConverterTypeLanguageAvailabilityRow
 import uniffi.translator.FfiConverterTypeMixedTextTranslationResult
 import uniffi.translator.FfiConverterTypeOverlayColors
 import uniffi.translator.FfiConverterTypeOverlayScreenshot
+import uniffi.translator.FfiConverterTypePcmAudio
 import uniffi.translator.FfiConverterTypePreparedImageOverlay
 import uniffi.translator.FfiConverterTypeReadingOrder
 import uniffi.translator.FfiConverterTypeRect
+import uniffi.translator.FfiConverterTypeSpeechChunk
 import uniffi.translator.FfiConverterTypeStructuredTranslationResult
 import uniffi.translator.FfiConverterTypeStyledFragment
 import uniffi.translator.FfiConverterTypeTranslationWithAlignment
+import uniffi.translator.FfiConverterTypeTtsVoiceOption
 import uniffi.translator.FfiConverterTypeTtsVoicePickerRegion
 import uniffi.translator.LanguageAvailabilityRow
 import uniffi.translator.MixedTextTranslationResult
 import uniffi.translator.OverlayColors
 import uniffi.translator.OverlayScreenshot
+import uniffi.translator.PcmAudio
 import uniffi.translator.PreparedImageOverlay
 import uniffi.translator.ReadingOrder
 import uniffi.translator.Rect
+import uniffi.translator.SpeechChunk
 import uniffi.translator.StructuredTranslationResult
 import uniffi.translator.StyledFragment
 import uniffi.translator.TranslationWithAlignment
+import uniffi.translator.TtsVoiceOption
 import uniffi.translator.TtsVoicePickerRegion
 import uniffi.translator.RustBuffer as RustBufferBackgroundMode
 import uniffi.translator.RustBuffer as RustBufferDeletePlan
+import uniffi.translator.RustBuffer as RustBufferDetectionResult
 import uniffi.translator.RustBuffer as RustBufferDictionaryInfo
 import uniffi.translator.RustBuffer as RustBufferDownloadPlan
 import uniffi.translator.RustBuffer as RustBufferLanguageAvailabilityRow
 import uniffi.translator.RustBuffer as RustBufferMixedTextTranslationResult
 import uniffi.translator.RustBuffer as RustBufferOverlayColors
 import uniffi.translator.RustBuffer as RustBufferOverlayScreenshot
+import uniffi.translator.RustBuffer as RustBufferPcmAudio
 import uniffi.translator.RustBuffer as RustBufferPreparedImageOverlay
 import uniffi.translator.RustBuffer as RustBufferReadingOrder
 import uniffi.translator.RustBuffer as RustBufferRect
+import uniffi.translator.RustBuffer as RustBufferSpeechChunk
 import uniffi.translator.RustBuffer as RustBufferStructuredTranslationResult
 import uniffi.translator.RustBuffer as RustBufferStyledFragment
 import uniffi.translator.RustBuffer as RustBufferTranslationWithAlignment
+import uniffi.translator.RustBuffer as RustBufferTtsVoiceOption
 import uniffi.translator.RustBuffer as RustBufferTtsVoicePickerRegion
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
@@ -817,6 +829,14 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 
 
 
+
+
+
+
+
+
+
+
 // For large crates we prevent `MethodTooLargeException` (see #2340)
 // N.B. the name of the extension is very misleading, since it is 
 // rather `InterfaceTooLargeException`, caused by too many methods 
@@ -832,13 +852,19 @@ internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
 // when the library is loaded.
 internal interface IntegrityCheckingUniffiLib : Library {
     // Integrity check functions only
-    fun uniffi_bindings_checksum_func_sample_overlay_colors_rgba(
+    fun uniffi_bindings_checksum_func_detect_language_record(
+): Short
+fun uniffi_bindings_checksum_func_detect_language_robust_code_record(
+): Short
+fun uniffi_bindings_checksum_func_sample_overlay_colors_rgba(
+): Short
+fun uniffi_bindings_checksum_func_transliterate_with_policy_record(
+): Short
+fun uniffi_bindings_checksum_method_cataloghandle_available_tts_voices(
 ): Short
 fun uniffi_bindings_checksum_method_cataloghandle_can_swap_languages(
 ): Short
 fun uniffi_bindings_checksum_method_cataloghandle_can_translate(
-): Short
-fun uniffi_bindings_checksum_method_cataloghandle_close_dictionary_cache(
 ): Short
 fun uniffi_bindings_checksum_method_cataloghandle_default_tts_pack_id(
 ): Short
@@ -868,9 +894,11 @@ fun uniffi_bindings_checksum_method_cataloghandle_plan_dictionary_download(
 ): Short
 fun uniffi_bindings_checksum_method_cataloghandle_plan_language_download(
 ): Short
+fun uniffi_bindings_checksum_method_cataloghandle_plan_speech_chunks(
+): Short
 fun uniffi_bindings_checksum_method_cataloghandle_plan_tts_download(
 ): Short
-fun uniffi_bindings_checksum_method_cataloghandle_resolve_tts_voice_files(
+fun uniffi_bindings_checksum_method_cataloghandle_synthesize_speech_pcm(
 ): Short
 fun uniffi_bindings_checksum_method_cataloghandle_translate_image_plan(
 ): Short
@@ -946,12 +974,12 @@ fun uniffi_bindings_fn_free_cataloghandle(`ptr`: Pointer,uniffi_out_err: UniffiR
 ): Unit
 fun uniffi_bindings_fn_constructor_cataloghandle_open(`bundledJson`: RustBuffer.ByValue,`diskJson`: RustBuffer.ByValue,`baseDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Pointer
+fun uniffi_bindings_fn_method_cataloghandle_available_tts_voices(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_can_swap_languages(`ptr`: Pointer,`fromCode`: RustBuffer.ByValue,`toCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
 fun uniffi_bindings_fn_method_cataloghandle_can_translate(`ptr`: Pointer,`fromCode`: RustBuffer.ByValue,`toCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): Byte
-fun uniffi_bindings_fn_method_cataloghandle_close_dictionary_cache(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
 fun uniffi_bindings_fn_method_cataloghandle_default_tts_pack_id(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_dictionary_info(`ptr`: Pointer,`dictionaryCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -980,9 +1008,11 @@ fun uniffi_bindings_fn_method_cataloghandle_plan_dictionary_download(`ptr`: Poin
 ): RustBuffer.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_plan_language_download(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBufferDownloadPlan.ByValue
+fun uniffi_bindings_fn_method_cataloghandle_plan_speech_chunks(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,`text`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_plan_tts_download(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,`selectedPackId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
-fun uniffi_bindings_fn_method_cataloghandle_resolve_tts_voice_files(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+fun uniffi_bindings_fn_method_cataloghandle_synthesize_speech_pcm(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,`text`: RustBuffer.ByValue,`speechSpeed`: Float,`voiceName`: RustBuffer.ByValue,`isPhonemes`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_translate_image_plan(`ptr`: Pointer,`rgbaBytes`: RustBuffer.ByValue,`width`: Int,`height`: Int,`sourceCode`: RustBuffer.ByValue,`targetCode`: RustBuffer.ByValue,`minConfidence`: Int,`readingOrder`: RustBufferReadingOrder.ByValue,`backgroundMode`: RustBufferBackgroundMode.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -1000,7 +1030,13 @@ fun uniffi_bindings_fn_method_cataloghandle_tts_size_bytes(`ptr`: Pointer,`langu
 ): Long
 fun uniffi_bindings_fn_method_cataloghandle_tts_voice_picker_regions(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
+fun uniffi_bindings_fn_func_detect_language_record(`text`: RustBuffer.ByValue,`hint`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_bindings_fn_func_detect_language_robust_code_record(`text`: RustBuffer.ByValue,`hint`: RustBuffer.ByValue,`availableLanguageCodes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
 fun uniffi_bindings_fn_func_sample_overlay_colors_rgba(`rgbaBytes`: RustBuffer.ByValue,`width`: Int,`height`: Int,`bounds`: RustBufferRect.ByValue,`backgroundMode`: RustBufferBackgroundMode.ByValue,`wordRects`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+): RustBuffer.ByValue
+fun uniffi_bindings_fn_func_transliterate_with_policy_record(`text`: RustBuffer.ByValue,`languageCode`: RustBuffer.ByValue,`sourceScript`: RustBuffer.ByValue,`targetScript`: RustBuffer.ByValue,`japaneseDictPath`: RustBuffer.ByValue,`japaneseSpaced`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun ffi_bindings_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
@@ -1128,16 +1164,25 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if (lib.uniffi_bindings_checksum_func_detect_language_record() != 52449.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bindings_checksum_func_detect_language_robust_code_record() != 28857.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bindings_checksum_func_sample_overlay_colors_rgba() != 4535.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bindings_checksum_func_transliterate_with_policy_record() != 58618.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_bindings_checksum_method_cataloghandle_available_tts_voices() != 36795.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bindings_checksum_method_cataloghandle_can_swap_languages() != 51048.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bindings_checksum_method_cataloghandle_can_translate() != 60654.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_bindings_checksum_method_cataloghandle_close_dictionary_cache() != 28211.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bindings_checksum_method_cataloghandle_default_tts_pack_id() != 12955.toShort()) {
@@ -1182,10 +1227,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bindings_checksum_method_cataloghandle_plan_language_download() != 44260.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_bindings_checksum_method_cataloghandle_plan_speech_chunks() != 9071.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_bindings_checksum_method_cataloghandle_plan_tts_download() != 25659.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bindings_checksum_method_cataloghandle_resolve_tts_voice_files() != 40314.toShort()) {
+    if (lib.uniffi_bindings_checksum_method_cataloghandle_synthesize_speech_pcm() != 53126.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bindings_checksum_method_cataloghandle_translate_image_plan() != 46779.toShort()) {
@@ -1453,6 +1501,29 @@ public object FfiConverterLong: FfiConverter<Long, Long> {
 /**
  * @suppress
  */
+public object FfiConverterFloat: FfiConverter<Float, Float> {
+    override fun lift(value: Float): Float {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Float {
+        return buf.getFloat()
+    }
+
+    override fun lower(value: Float): Float {
+        return value
+    }
+
+    override fun allocationSize(value: Float) = 4UL
+
+    override fun write(value: Float, buf: ByteBuffer) {
+        buf.putFloat(value)
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
     override fun lift(value: Byte): Boolean {
         return value.toInt() != 0
@@ -1650,11 +1721,11 @@ public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
 
 public interface CatalogHandleInterface {
     
+    fun `availableTtsVoices`(`languageCode`: kotlin.String): List<TtsVoiceOption>
+    
     fun `canSwapLanguages`(`fromCode`: kotlin.String, `toCode`: kotlin.String): kotlin.Boolean
     
     fun `canTranslate`(`fromCode`: kotlin.String, `toCode`: kotlin.String): kotlin.Boolean
-    
-    fun `closeDictionaryCache`(`languageCode`: kotlin.String)
     
     fun `defaultTtsPackId`(`languageCode`: kotlin.String): kotlin.String?
     
@@ -1684,9 +1755,11 @@ public interface CatalogHandleInterface {
     
     fun `planLanguageDownload`(`languageCode`: kotlin.String): DownloadPlan
     
+    fun `planSpeechChunks`(`languageCode`: kotlin.String, `text`: kotlin.String): List<SpeechChunk>
+    
     fun `planTtsDownload`(`languageCode`: kotlin.String, `selectedPackId`: kotlin.String?): DownloadPlan?
     
-    fun `resolveTtsVoiceFiles`(`languageCode`: kotlin.String): TtsVoiceFiles?
+    fun `synthesizeSpeechPcm`(`languageCode`: kotlin.String, `text`: kotlin.String, `speechSpeed`: kotlin.Float, `voiceName`: kotlin.String?, `isPhonemes`: kotlin.Boolean): PcmAudio?
     
     fun `translateImagePlan`(`rgbaBytes`: kotlin.ByteArray, `width`: kotlin.UInt, `height`: kotlin.UInt, `sourceCode`: kotlin.String, `targetCode`: kotlin.String, `minConfidence`: kotlin.UInt, `readingOrder`: ReadingOrder, `backgroundMode`: BackgroundMode): PreparedImageOverlay?
     
@@ -1789,6 +1862,18 @@ open class CatalogHandle: Disposable, AutoCloseable, CatalogHandleInterface
         }
     }
 
+    override fun `availableTtsVoices`(`languageCode`: kotlin.String): List<TtsVoiceOption> {
+            return FfiConverterSequenceTypeTtsVoiceOption.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_available_tts_voices(
+        it, FfiConverterString.lower(`languageCode`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `canSwapLanguages`(`fromCode`: kotlin.String, `toCode`: kotlin.String): kotlin.Boolean {
             return FfiConverterBoolean.lift(
     callWithPointer {
@@ -1811,17 +1896,6 @@ open class CatalogHandle: Disposable, AutoCloseable, CatalogHandleInterface
     }
     )
     }
-    
-
-    override fun `closeDictionaryCache`(`languageCode`: kotlin.String)
-        = 
-    callWithPointer {
-    uniffiRustCall() { _status ->
-    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_close_dictionary_cache(
-        it, FfiConverterString.lower(`languageCode`),_status)
-}
-    }
-    
     
 
     override fun `defaultTtsPackId`(`languageCode`: kotlin.String): kotlin.String? {
@@ -1992,6 +2066,18 @@ open class CatalogHandle: Disposable, AutoCloseable, CatalogHandleInterface
     }
     
 
+    override fun `planSpeechChunks`(`languageCode`: kotlin.String, `text`: kotlin.String): List<SpeechChunk> {
+            return FfiConverterSequenceTypeSpeechChunk.lift(
+    callWithPointer {
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_plan_speech_chunks(
+        it, FfiConverterString.lower(`languageCode`),FfiConverterString.lower(`text`),_status)
+}
+    }
+    )
+    }
+    
+
     override fun `planTtsDownload`(`languageCode`: kotlin.String, `selectedPackId`: kotlin.String?): DownloadPlan? {
             return FfiConverterOptionalTypeDownloadPlan.lift(
     callWithPointer {
@@ -2004,12 +2090,12 @@ open class CatalogHandle: Disposable, AutoCloseable, CatalogHandleInterface
     }
     
 
-    override fun `resolveTtsVoiceFiles`(`languageCode`: kotlin.String): TtsVoiceFiles? {
-            return FfiConverterOptionalTypeTtsVoiceFiles.lift(
+    override fun `synthesizeSpeechPcm`(`languageCode`: kotlin.String, `text`: kotlin.String, `speechSpeed`: kotlin.Float, `voiceName`: kotlin.String?, `isPhonemes`: kotlin.Boolean): PcmAudio? {
+            return FfiConverterOptionalTypePcmAudio.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
-    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_resolve_tts_voice_files(
-        it, FfiConverterString.lower(`languageCode`),_status)
+    UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_synthesize_speech_pcm(
+        it, FfiConverterString.lower(`languageCode`),FfiConverterString.lower(`text`),FfiConverterFloat.lower(`speechSpeed`),FfiConverterOptionalString.lower(`voiceName`),FfiConverterBoolean.lower(`isPhonemes`),_status)
 }
     }
     )
@@ -2298,50 +2384,6 @@ public object FfiConverterTypeDictionaryWordRecord: FfiConverterRustBuffer<Dicti
 
 
 
-data class TtsVoiceFiles (
-    var `engine`: kotlin.String, 
-    var `modelPath`: kotlin.String, 
-    var `auxPath`: kotlin.String, 
-    var `languageCode`: kotlin.String, 
-    var `speakerId`: kotlin.Int?
-) {
-    
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeTtsVoiceFiles: FfiConverterRustBuffer<TtsVoiceFiles> {
-    override fun read(buf: ByteBuffer): TtsVoiceFiles {
-        return TtsVoiceFiles(
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalInt.read(buf),
-        )
-    }
-
-    override fun allocationSize(value: TtsVoiceFiles) = (
-            FfiConverterString.allocationSize(value.`engine`) +
-            FfiConverterString.allocationSize(value.`modelPath`) +
-            FfiConverterString.allocationSize(value.`auxPath`) +
-            FfiConverterString.allocationSize(value.`languageCode`) +
-            FfiConverterOptionalInt.allocationSize(value.`speakerId`)
-    )
-
-    override fun write(value: TtsVoiceFiles, buf: ByteBuffer) {
-            FfiConverterString.write(value.`engine`, buf)
-            FfiConverterString.write(value.`modelPath`, buf)
-            FfiConverterString.write(value.`auxPath`, buf)
-            FfiConverterString.write(value.`languageCode`, buf)
-            FfiConverterOptionalInt.write(value.`speakerId`, buf)
-    }
-}
-
-
-
 
 
 sealed class CatalogOpenException: kotlin.Exception() {
@@ -2391,38 +2433,6 @@ public object FfiConverterTypeCatalogOpenError : FfiConverterRustBuffer<CatalogO
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterOptionalInt: FfiConverterRustBuffer<kotlin.Int?> {
-    override fun read(buf: ByteBuffer): kotlin.Int? {
-        if (buf.get().toInt() == 0) {
-            return null
-        }
-        return FfiConverterInt.read(buf)
-    }
-
-    override fun allocationSize(value: kotlin.Int?): ULong {
-        if (value == null) {
-            return 1UL
-        } else {
-            return 1UL + FfiConverterInt.allocationSize(value)
-        }
-    }
-
-    override fun write(value: kotlin.Int?, buf: ByteBuffer) {
-        if (value == null) {
-            buf.put(0)
-        } else {
-            buf.put(1)
-            FfiConverterInt.write(value, buf)
-        }
-    }
 }
 
 
@@ -2495,28 +2505,28 @@ public object FfiConverterOptionalTypeDictionaryWordRecord: FfiConverterRustBuff
 /**
  * @suppress
  */
-public object FfiConverterOptionalTypeTtsVoiceFiles: FfiConverterRustBuffer<TtsVoiceFiles?> {
-    override fun read(buf: ByteBuffer): TtsVoiceFiles? {
+public object FfiConverterOptionalTypeDetectionResult: FfiConverterRustBuffer<DetectionResult?> {
+    override fun read(buf: ByteBuffer): DetectionResult? {
         if (buf.get().toInt() == 0) {
             return null
         }
-        return FfiConverterTypeTtsVoiceFiles.read(buf)
+        return FfiConverterTypeDetectionResult.read(buf)
     }
 
-    override fun allocationSize(value: TtsVoiceFiles?): ULong {
+    override fun allocationSize(value: DetectionResult?): ULong {
         if (value == null) {
             return 1UL
         } else {
-            return 1UL + FfiConverterTypeTtsVoiceFiles.allocationSize(value)
+            return 1UL + FfiConverterTypeDetectionResult.allocationSize(value)
         }
     }
 
-    override fun write(value: TtsVoiceFiles?, buf: ByteBuffer) {
+    override fun write(value: DetectionResult?, buf: ByteBuffer) {
         if (value == null) {
             buf.put(0)
         } else {
             buf.put(1)
-            FfiConverterTypeTtsVoiceFiles.write(value, buf)
+            FfiConverterTypeDetectionResult.write(value, buf)
         }
     }
 }
@@ -2645,6 +2655,38 @@ public object FfiConverterOptionalTypeOverlayScreenshot: FfiConverterRustBuffer<
         } else {
             buf.put(1)
             FfiConverterTypeOverlayScreenshot.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypePcmAudio: FfiConverterRustBuffer<PcmAudio?> {
+    override fun read(buf: ByteBuffer): PcmAudio? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypePcmAudio.read(buf)
+    }
+
+    override fun allocationSize(value: PcmAudio?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypePcmAudio.allocationSize(value)
+        }
+    }
+
+    override fun write(value: PcmAudio?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypePcmAudio.write(value, buf)
         }
     }
 }
@@ -2951,6 +2993,34 @@ public object FfiConverterSequenceTypeRect: FfiConverterRustBuffer<List<Rect>> {
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeSpeechChunk: FfiConverterRustBuffer<List<SpeechChunk>> {
+    override fun read(buf: ByteBuffer): List<SpeechChunk> {
+        val len = buf.getInt()
+        return List<SpeechChunk>(len) {
+            FfiConverterTypeSpeechChunk.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<SpeechChunk>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeSpeechChunk.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<SpeechChunk>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeSpeechChunk.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeStyledFragment: FfiConverterRustBuffer<List<StyledFragment>> {
     override fun read(buf: ByteBuffer): List<StyledFragment> {
         val len = buf.getInt()
@@ -2997,6 +3067,34 @@ public object FfiConverterSequenceTypeTranslationWithAlignment: FfiConverterRust
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeTranslationWithAlignment.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeTtsVoiceOption: FfiConverterRustBuffer<List<TtsVoiceOption>> {
+    override fun read(buf: ByteBuffer): List<TtsVoiceOption> {
+        val len = buf.getInt()
+        return List<TtsVoiceOption>(len) {
+            FfiConverterTypeTtsVoiceOption.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<TtsVoiceOption>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeTtsVoiceOption.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<TtsVoiceOption>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeTtsVoiceOption.write(it, buf)
         }
     }
 }
@@ -3057,11 +3155,46 @@ public object FfiConverterSequenceTypeTtsVoicePickerRegion: FfiConverterRustBuff
 
 
 
+
+
+
+
+
+
+
+
+ fun `detectLanguageRecord`(`text`: kotlin.String, `hint`: kotlin.String?): DetectionResult? {
+            return FfiConverterOptionalTypeDetectionResult.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_bindings_fn_func_detect_language_record(
+        FfiConverterString.lower(`text`),FfiConverterOptionalString.lower(`hint`),_status)
+}
+    )
+    }
+    
+ fun `detectLanguageRobustCodeRecord`(`text`: kotlin.String, `hint`: kotlin.String?, `availableLanguageCodes`: List<kotlin.String>): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_bindings_fn_func_detect_language_robust_code_record(
+        FfiConverterString.lower(`text`),FfiConverterOptionalString.lower(`hint`),FfiConverterSequenceString.lower(`availableLanguageCodes`),_status)
+}
+    )
+    }
+    
  fun `sampleOverlayColorsRgba`(`rgbaBytes`: kotlin.ByteArray, `width`: kotlin.UInt, `height`: kotlin.UInt, `bounds`: Rect, `backgroundMode`: BackgroundMode, `wordRects`: List<Rect>?): OverlayColors? {
             return FfiConverterOptionalTypeOverlayColors.lift(
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_bindings_fn_func_sample_overlay_colors_rgba(
         FfiConverterByteArray.lower(`rgbaBytes`),FfiConverterUInt.lower(`width`),FfiConverterUInt.lower(`height`),FfiConverterTypeRect.lower(`bounds`),FfiConverterTypeBackgroundMode.lower(`backgroundMode`),FfiConverterOptionalSequenceTypeRect.lower(`wordRects`),_status)
+}
+    )
+    }
+    
+ fun `transliterateWithPolicyRecord`(`text`: kotlin.String, `languageCode`: kotlin.String, `sourceScript`: kotlin.String, `targetScript`: kotlin.String, `japaneseDictPath`: kotlin.String?, `japaneseSpaced`: kotlin.Boolean): kotlin.String? {
+            return FfiConverterOptionalString.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.INSTANCE.uniffi_bindings_fn_func_transliterate_with_policy_record(
+        FfiConverterString.lower(`text`),FfiConverterString.lower(`languageCode`),FfiConverterString.lower(`sourceScript`),FfiConverterString.lower(`targetScript`),FfiConverterOptionalString.lower(`japaneseDictPath`),FfiConverterBoolean.lower(`japaneseSpaced`),_status)
 }
     )
     }

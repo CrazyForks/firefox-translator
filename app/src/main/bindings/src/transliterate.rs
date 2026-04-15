@@ -41,91 +41,50 @@ pub fn transliterate_with_policy(
     transliterate(input, source_script)
 }
 
-#[cfg(feature = "android")]
-mod jni_bridge {
-    use super::*;
-    use jni::JNIEnv;
-    use jni::objects::{JClass, JString};
-    use jni::sys::jstring;
-
-    #[cfg(feature = "mucab")]
-    fn preprocess_japanese(
-        text: &str,
-        dict_path: Option<&str>,
-        japanese_spaced: bool,
-    ) -> Option<String> {
-        let dict_path = dict_path?;
-        if dict_path.is_empty() {
-            return None;
-        }
-        crate::mucab::transliterate_with_path(dict_path, text, japanese_spaced).ok()
+#[cfg(feature = "mucab")]
+fn preprocess_japanese(
+    text: &str,
+    dict_path: Option<&str>,
+    japanese_spaced: bool,
+) -> Option<String> {
+    let dict_path = dict_path?;
+    if dict_path.is_empty() {
+        return None;
     }
+    crate::mucab::transliterate_with_path(dict_path, text, japanese_spaced).ok()
+}
 
-    #[cfg(not(feature = "mucab"))]
-    fn preprocess_japanese(
-        _text: &str,
-        _dict_path: Option<&str>,
-        _japanese_spaced: bool,
-    ) -> Option<String> {
+#[cfg(not(feature = "mucab"))]
+fn preprocess_japanese(
+    _text: &str,
+    _dict_path: Option<&str>,
+    _japanese_spaced: bool,
+) -> Option<String> {
+    None
+}
+
+#[uniffi::export]
+pub fn transliterate_with_policy_record(
+    text: String,
+    language_code: String,
+    source_script: String,
+    target_script: String,
+    japanese_dict_path: Option<String>,
+    japanese_spaced: bool,
+) -> Option<String> {
+    let japanese_preprocessed = if language_code == "ja" {
+        preprocess_japanese(&text, japanese_dict_path.as_deref(), japanese_spaced)
+    } else {
         None
-    }
+    };
 
-    #[unsafe(no_mangle)]
-    pub unsafe extern "C" fn Java_dev_davidv_translator_TransliterateBinding_nativeTransliterateWithPolicy(
-        mut env: JNIEnv,
-        _: JClass,
-        java_text: JString,
-        java_language_code: JString,
-        java_source_script: JString,
-        java_target_script: JString,
-        java_japanese_dict_path: JString,
-        japanese_spaced: bool,
-    ) -> jstring {
-        let text: String = match env.get_string(&java_text) {
-            Ok(s) => s.into(),
-            Err(_) => return std::ptr::null_mut(),
-        };
-
-        let language_code: String = match env.get_string(&java_language_code) {
-            Ok(s) => s.into(),
-            Err(_) => return std::ptr::null_mut(),
-        };
-
-        let source_script: String = match env.get_string(&java_source_script) {
-            Ok(s) => s.into(),
-            Err(_) => return std::ptr::null_mut(),
-        };
-
-        let target_script: String = match env.get_string(&java_target_script) {
-            Ok(s) => s.into(),
-            Err(_) => return std::ptr::null_mut(),
-        };
-
-        let japanese_dict_path: String = match env.get_string(&java_japanese_dict_path) {
-            Ok(s) => s.into(),
-            Err(_) => return std::ptr::null_mut(),
-        };
-
-        let japanese_preprocessed = if language_code == "ja" {
-            preprocess_japanese(&text, Some(japanese_dict_path.as_str()), japanese_spaced)
-        } else {
-            None
-        };
-
-        match transliterate_with_policy(
-            &text,
-            &language_code,
-            &source_script,
-            &target_script,
-            japanese_preprocessed.as_deref(),
-        ) {
-            Some(result) => match env.new_string(&result) {
-                Ok(jstring) => jstring.into_raw(),
-                Err(_) => std::ptr::null_mut(),
-            },
-            None => std::ptr::null_mut(),
-        }
-    }
+    transliterate_with_policy(
+        &text,
+        &language_code,
+        &source_script,
+        &target_script,
+        japanese_preprocessed.as_deref(),
+    )
 }
 
 #[cfg(test)]

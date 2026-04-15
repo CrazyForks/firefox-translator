@@ -1,12 +1,8 @@
 package dev.davidv.translator
 
-class TransliterateBinding {
-  companion object {
-    init {
-      System.loadLibrary("bindings")
-    }
-  }
+import uniffi.bindings.transliterateWithPolicyRecord
 
+class TransliterateBinding {
   fun transliterate(
     text: String,
     languageCode: String,
@@ -15,21 +11,12 @@ class TransliterateBinding {
     japaneseDictPath: String? = null,
     japaneseSpaced: Boolean = true,
   ): String? =
-    nativeTransliterateWithPolicy(
+    transliterateWithPolicyRecord(
       text,
       languageCode,
       sourceScript,
       targetScript,
-      japaneseDictPath.orEmpty(),
+      japaneseDictPath,
       japaneseSpaced,
     )
-
-  private external fun nativeTransliterateWithPolicy(
-    text: String,
-    languageCode: String,
-    sourceScript: String,
-    targetScript: String,
-    japaneseDictPath: String,
-    japaneseSpaced: Boolean,
-  ): String?
 }

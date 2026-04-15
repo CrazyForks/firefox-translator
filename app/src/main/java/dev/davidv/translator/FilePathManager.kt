@@ -8,14 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONObject
 import java.io.File
 
-data class TtsVoiceFiles(
-  val engine: String,
-  val model: File,
-  val aux: File,
-  val languageCode: String,
-  val speakerId: Int? = null,
-)
-
 class FilePathManager(
   private val context: Context,
   private val settingsFlow: StateFlow<AppSettings>,
@@ -89,17 +81,6 @@ class FilePathManager(
         .toString(),
     )
     invalidateCatalog()
-  }
-
-  fun getTtsVoiceFiles(language: Language): TtsVoiceFiles? {
-    val catalog = loadCatalog() ?: return null
-    return catalog.resolveTtsVoiceFiles(language.code)
-  }
-
-  fun getTtsSupportDataRoot(): File? {
-    val dataDir = getDataDir()
-    val espeakDataDir = File(dataDir, "espeak-ng-data")
-    return dataDir.takeIf { espeakDataDir.exists() }
   }
 
   fun applyDeletePlan(plan: DeletePlan) {

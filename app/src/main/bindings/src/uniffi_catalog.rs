@@ -1,9 +1,13 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+#[cfg(any(feature = "dictionary", feature = "tesseract", feature = "tts"))]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
 #[cfg(feature = "dictionary")]
 use crate::tarkka::{close_dictionary, lookup_dictionary};
+#[cfg(feature = "tts")]
+use crate::speech::{clear_cached_model, list_voices, plan_speech_chunks_for_text, synthesize_pcm};
 #[cfg(feature = "tesseract")]
 use crate::tesseract::TesseractWrapper;
 use serde_json::Value;
@@ -17,12 +21,13 @@ use translator::{
     can_translate_in_snapshot, language_rows_in_snapshot, parse_and_validate_catalog,
     plan_delete_dictionary_in_snapshot, plan_delete_language_in_snapshot,
     plan_delete_superseded_tts_in_snapshot, plan_delete_tts_in_snapshot,
-    plan_dictionary_download_in_snapshot, plan_language_download_in_snapshot,
-    plan_tts_download_in_snapshot, resolve_tts_voice_files_in_snapshot, sample_overlay_colors,
-    select_best_catalog, translate_structured_fragments_in_snapshot,
+    plan_dictionary_download_in_snapshot, plan_language_download_in_snapshot, plan_tts_download_in_snapshot,
+    sample_overlay_colors, select_best_catalog, translate_structured_fragments_in_snapshot,
     translate_mixed_texts_in_snapshot, translate_texts_in_snapshot,
     translate_texts_with_alignment_in_snapshot,
 };
+#[cfg(feature = "tts")]
+use translator::resolve_tts_voice_files_in_snapshot;
 
 struct FsInstallChecker {
     base_dir: PathBuf,
@@ -93,15 +98,6 @@ fn parse_selected_catalog(
 pub enum CatalogOpenError {
     #[error("failed to parse any catalog")]
     ParseFailed,
-}
-
-#[derive(uniffi::Record)]
-pub struct TtsVoiceFiles {
-    pub engine: String,
-    pub model_path: String,
-    pub aux_path: String,
-    pub language_code: String,
-    pub speaker_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
@@ -204,6 +200,50 @@ fn close_dictionary_in_snapshot(
     _snapshot: &CatalogSnapshot,
     _language_code: &str,
 ) {
+}
+
+#[cfg(feature = "tts")]
+struct ResolvedSpeechAssets {
+    engine: String,
+    model_path: String,
+    aux_path: String,
+    language_code: String,
+    speaker_id: Option<i64>,
+    support_data_root: Option<String>,
+}
+
+#[cfg(feature = "tts")]
+fn support_data_root(snapshot: &CatalogSnapshot) -> Option<String> {
+    let data_dir = Path::new(&snapshot.base_dir).join("bin");
+    data_dir
+        .join("espeak-ng-data")
+        .exists()
+        .then(|| data_dir.to_string_lossy().into_owned())
+}
+
+#[cfg(feature = "tts")]
+fn resolve_speech_assets(
+    snapshot: &CatalogSnapshot,
+    language_code: &str,
+) -> Option<ResolvedSpeechAssets> {
+    let files = resolve_tts_voice_files_in_snapshot(snapshot, language_code)?;
+    let base = Path::new(&snapshot.base_dir);
+    let model_path = base.join(&files.model_install_path);
+    if !model_path.exists() {
+        return None;
+    }
+    let aux_path = base.join(&files.aux_install_path);
+    if !aux_path.exists() {
+        return None;
+    }
+    Some(ResolvedSpeechAssets {
+        engine: files.engine,
+        model_path: model_path.to_string_lossy().into_owned(),
+        aux_path: aux_path.to_string_lossy().into_owned(),
+        language_code: files.language_code,
+        speaker_id: files.speaker_id.map(i64::from),
+        support_data_root: support_data_root(snapshot),
+    })
 }
 
 #[cfg(feature = "tesseract")]
@@ -451,10 +491,6 @@ impl CatalogHandle {
         lookup_dictionary_in_snapshot(&self.snapshot, &language_code, normalized)
     }
 
-    fn close_dictionary_cache(&self, language_code: String) {
-        close_dictionary_in_snapshot(&self.snapshot, &language_code)
-    }
-
     fn has_tts_voices(&self, language_code: String) -> bool {
         self.snapshot.catalog.has_tts_voices(&language_code)
     }
@@ -609,14 +645,20 @@ impl CatalogHandle {
     }
 
     fn plan_delete_language(&self, language_code: String) -> translator::DeletePlan {
+        close_dictionary_in_snapshot(&self.snapshot, &language_code);
+        #[cfg(feature = "tts")]
+        clear_cached_model();
         plan_delete_language_in_snapshot(&self.snapshot, &language_code)
     }
 
     fn plan_delete_dictionary(&self, language_code: String) -> translator::DeletePlan {
+        close_dictionary_in_snapshot(&self.snapshot, &language_code);
         plan_delete_dictionary_in_snapshot(&self.snapshot, &language_code)
     }
 
     fn plan_delete_tts(&self, language_code: String) -> translator::DeletePlan {
+        #[cfg(feature = "tts")]
+        clear_cached_model();
         plan_delete_tts_in_snapshot(&self.snapshot, &language_code)
     }
 
@@ -625,6 +667,8 @@ impl CatalogHandle {
         language_code: String,
         selected_pack_id: String,
     ) -> translator::DeletePlan {
+        #[cfg(feature = "tts")]
+        clear_cached_model();
         plan_delete_superseded_tts_in_snapshot(&self.snapshot, &language_code, &selected_pack_id)
     }
 
@@ -646,23 +690,98 @@ impl CatalogHandle {
             .default_tts_pack_id_for_language(&language_code)
     }
 
-    fn resolve_tts_voice_files(&self, language_code: String) -> Option<TtsVoiceFiles> {
-        let files = resolve_tts_voice_files_in_snapshot(&self.snapshot, &language_code)?;
-        let base = Path::new(&self.snapshot.base_dir);
-        let model_path = base.join(&files.model_install_path);
-        if !model_path.exists() {
-            return None;
+    fn available_tts_voices(&self, language_code: String) -> Vec<translator::TtsVoiceOption> {
+        #[cfg(feature = "tts")]
+        {
+            let Some(assets) = resolve_speech_assets(&self.snapshot, &language_code) else {
+                return Vec::new();
+            };
+            return list_voices(
+                &assets.engine,
+                &assets.model_path,
+                &assets.aux_path,
+                assets.support_data_root.as_deref(),
+                &assets.language_code,
+            )
+            .unwrap_or_default()
+            .into_iter()
+            .map(|voice| translator::TtsVoiceOption {
+                name: voice.name,
+                speaker_id: voice.speaker_id,
+                display_name: voice.display_name,
+            })
+            .collect();
         }
-        let aux_path = base.join(&files.aux_install_path);
-        if !aux_path.exists() {
-            return None;
+
+        #[cfg(not(feature = "tts"))]
+        {
+            let _ = language_code;
+            Vec::new()
         }
-        Some(TtsVoiceFiles {
-            engine: files.engine,
-            model_path: model_path.to_string_lossy().into_owned(),
-            aux_path: aux_path.to_string_lossy().into_owned(),
-            language_code: files.language_code,
-            speaker_id: files.speaker_id,
-        })
+    }
+
+    fn plan_speech_chunks(
+        &self,
+        language_code: String,
+        text: String,
+    ) -> Vec<translator::SpeechChunk> {
+        #[cfg(feature = "tts")]
+        {
+            let Some(assets) = resolve_speech_assets(&self.snapshot, &language_code) else {
+                return Vec::new();
+            };
+            return plan_speech_chunks_for_text(
+                &assets.engine,
+                &assets.model_path,
+                &assets.aux_path,
+                assets.support_data_root.as_deref(),
+                &assets.language_code,
+                &text,
+            )
+            .unwrap_or_default();
+        }
+
+        #[cfg(not(feature = "tts"))]
+        {
+            let _ = (language_code, text);
+            Vec::new()
+        }
+    }
+
+    fn synthesize_speech_pcm(
+        &self,
+        language_code: String,
+        text: String,
+        speech_speed: f32,
+        voice_name: Option<String>,
+        is_phonemes: bool,
+    ) -> Option<translator::PcmAudio> {
+        #[cfg(feature = "tts")]
+        {
+            let assets = resolve_speech_assets(&self.snapshot, &language_code)?;
+            let audio = synthesize_pcm(
+                &assets.engine,
+                &assets.model_path,
+                &assets.aux_path,
+                assets.support_data_root.as_deref(),
+                &assets.language_code,
+                &text,
+                speech_speed,
+                voice_name.as_deref(),
+                assets.speaker_id,
+                is_phonemes,
+            )
+            .ok()?;
+            return Some(translator::PcmAudio {
+                sample_rate: audio.sample_rate,
+                pcm_samples: audio.pcm_samples,
+            });
+        }
+
+        #[cfg(not(feature = "tts"))]
+        {
+            let _ = (language_code, text, speech_speed, voice_name, is_phonemes);
+            None
+        }
     }
 }

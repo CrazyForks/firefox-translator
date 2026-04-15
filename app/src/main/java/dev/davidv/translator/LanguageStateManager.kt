@@ -155,7 +155,6 @@ class LanguageStateManager(
 
   fun deleteDict(language: Language) {
     val catalog = catalogState.value ?: filePathManager.loadCatalog() ?: return
-    catalog.closeDictionaryCache(language)
     filePathManager.applyDeletePlan(catalog.planDeleteDictionary(language.code))
 
     refreshLanguageAvailability()
