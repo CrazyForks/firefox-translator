@@ -265,7 +265,13 @@ class DownloadService : Service() {
 
   override fun onBind(intent: Intent): IBinder = binder
 
-  private fun startLanguageDownload(language: Language) {
+  private fun startPrimaryDownload(
+    language: Language,
+    actionLabel: String,
+    failureLabel: String,
+    planProvider: (LanguageCatalog) -> DownloadPlan,
+    onSuccess: suspend (LanguageCatalog, LanguageCatalog) -> Unit = { _, _ -> },
+  ) {
     if (_downloadStates.value[language]?.isDownloading == true) return
     updateDownloadState(language) {
       DownloadState(
@@ -278,15 +284,11 @@ class DownloadService : Service() {
       serviceScope.launch {
         try {
           val catalog = getCatalog() ?: return@launch
-          val downloadPlan = catalog.planLanguageDownload(language.code)
-          val downloadTasks = mutableListOf<suspend () -> Boolean>()
-          val toDownload = downloadPlan.totalSize
-
-          downloadPlan.tasks.forEach { task ->
-            downloadTasks.add {
-              downloadPackFile(task, language)
+          val downloadPlan = planProvider(catalog)
+          val downloadTasks =
+            downloadPlan.tasks.map { task ->
+              suspend { downloadPackFile(task, language) }
             }
-          }
 
           var success = true
           if (downloadTasks.isNotEmpty()) {
@@ -294,12 +296,12 @@ class DownloadService : Service() {
               it.copy(
                 isDownloading = true,
                 downloaded = 1,
-                totalSize = toDownload,
+                totalSize = downloadPlan.totalSize,
               )
             }
-            Log.i("DownloadService", "Starting ${downloadTasks.count()} download jobs")
-            val downloadJobs = downloadTasks.map { task -> async { task() } }
-            success = downloadJobs.awaitAll().all { it }
+            Log.i("DownloadService", "Starting $actionLabel for ${language.displayName}")
+            val activeJobs = downloadTasks.map { task -> async { task() } }
+            success = activeJobs.awaitAll().all { it }
           }
           updateDownloadState(language) {
             DownloadState(
@@ -308,24 +310,34 @@ class DownloadService : Service() {
             )
           }
           if (success) {
-            filePathManager.reloadCatalog()
-            Log.i("DownloadService", "Download complete: ${language.displayName}")
+            val refreshedCatalog = filePathManager.reloadCatalog() ?: catalog
+            onSuccess(catalog, refreshedCatalog)
+            Log.i("DownloadService", "${actionLabel.replaceFirstChar(Char::titlecase)} complete: ${language.displayName}")
             _downloadEvents.emit(DownloadEvent.NewTranslationAvailable(language))
           } else {
-            _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} download failed"))
+            _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} $failureLabel failed"))
           }
         } catch (e: Exception) {
-          Log.e("DownloadService", "Download failed for ${language.displayName}", e)
+          Log.e("DownloadService", "${actionLabel.replaceFirstChar(Char::titlecase)} failed for ${language.displayName}", e)
           updateDownloadState(language) {
             it.copy(isDownloading = false, error = e.message)
           }
-          _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} download failed"))
+          _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} $failureLabel failed"))
         } finally {
           downloadJobs.remove(language)
         }
       }
 
     downloadJobs[language] = job
+  }
+
+  private fun startLanguageDownload(language: Language) {
+    startPrimaryDownload(
+      language = language,
+      actionLabel = "download",
+      failureLabel = "download",
+      planProvider = { catalog -> catalog.planLanguageDownload(language.code) },
+    )
   }
 
   private fun startDictionaryDownload(
