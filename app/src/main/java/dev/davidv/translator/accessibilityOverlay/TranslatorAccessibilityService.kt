@@ -25,6 +25,7 @@ import dev.davidv.translator.SpeechService
 import dev.davidv.translator.StructuredFragmentTranslationOutput
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
+import dev.davidv.translator.bounds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

@@ -14,7 +14,9 @@ import dev.davidv.translator.OverlayColors
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.StyledFragment
 import dev.davidv.translator.areEquivalentFragmentTexts
+import dev.davidv.translator.bounds
 import dev.davidv.translator.getOverlayColors
+import dev.davidv.translator.makeStyledFragment
 import dev.davidv.translator.Rect as TranslatorRect
 
 data class TapTextBlock(
@@ -394,9 +396,9 @@ class OverlayInput(
           fallbackNode.getBoundsInScreen(fb)
           android.util.Log.d("A11yTap", "Fallback to single node: '${fallbackText.take(40)}' bounds=${fb.toShortString()}")
           return listOf(
-            StyledFragment(
-              fallbackText,
-              TranslatorRect(fb.left, fb.top, fb.right, fb.bottom),
+            makeStyledFragment(
+              text = fallbackText,
+              bounds = TranslatorRect(fb.left, fb.top, fb.right, fb.bottom),
             ),
           )
         }
@@ -405,9 +407,9 @@ class OverlayInput(
     }
 
     return bestFragments.map { fragment ->
-      StyledFragment(
-        fragment.text,
-        TranslatorRect(fragment.bounds.left, fragment.bounds.top, fragment.bounds.right, fragment.bounds.bottom),
+      makeStyledFragment(
+        text = fragment.text,
+        bounds = TranslatorRect(fragment.bounds.left, fragment.bounds.top, fragment.bounds.right, fragment.bounds.bottom),
         clusterGroup = if (fragment.recyclerViewItemId >= 0) fragment.recyclerViewItemId + 1 else 0,
       )
     }
@@ -416,9 +418,9 @@ class OverlayInput(
   fun collectVisibleStyledFragments(root: AccessibilityNodeInfo): List<StyledFragment> {
     val fragments = collectTextFragments(root, skipButtons = true)
     return fragments.map { fragment ->
-      StyledFragment(
-        fragment.text,
-        TranslatorRect(fragment.bounds.left, fragment.bounds.top, fragment.bounds.right, fragment.bounds.bottom),
+      makeStyledFragment(
+        text = fragment.text,
+        bounds = TranslatorRect(fragment.bounds.left, fragment.bounds.top, fragment.bounds.right, fragment.bounds.bottom),
         clusterGroup = if (fragment.recyclerViewItemId >= 0) fragment.recyclerViewItemId + 1 else 0,
       )
     }

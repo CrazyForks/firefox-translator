@@ -21,6 +21,9 @@ class FilePathManager(
   private val settingsFlow: StateFlow<AppSettings>,
 ) {
   private val catalogLock = Any()
+
+  // Kotlin treats LanguageCatalog as an immutable snapshot.
+  // FilePathManager owns the current cached snapshot reference and swaps it on reload.
   private var cachedCatalog: LanguageCatalog? = null
   private var cachedCatalogBaseDir: String? = null
 

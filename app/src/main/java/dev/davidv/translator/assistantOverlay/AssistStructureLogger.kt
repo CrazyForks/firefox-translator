@@ -6,6 +6,7 @@ import android.os.Build
 import android.util.Log
 import android.view.View
 import androidx.annotation.RequiresApi
+import dev.davidv.translator.bounds
 
 class AssistStructureLogger(
   private val tag: String,

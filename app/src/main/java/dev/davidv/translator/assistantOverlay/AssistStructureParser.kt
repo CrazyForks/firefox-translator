@@ -8,7 +8,10 @@ import android.graphics.RectF
 import android.view.View
 import dev.davidv.translator.StyledFragment
 import dev.davidv.translator.TextStyle
+import dev.davidv.translator.bounds
 import dev.davidv.translator.dedupeFragmentsByBoundsAndText
+import dev.davidv.translator.makeStyledFragment
+import dev.davidv.translator.makeTextStyle
 import dev.davidv.translator.normalizeFragmentText
 import dev.davidv.translator.Rect as TranslatorRect
 
@@ -45,7 +48,7 @@ class AssistStructureParser(
         text = { it.text },
       )
     var currentTransGroup = 0
-    var lastBgColor: Int? = null
+    var lastBgColor: UInt? = null
     var lastRecyclerItemId: Int = -1
     return distinct.map {
       val bgColor = it.style?.bgColor
@@ -54,10 +57,10 @@ class AssistStructureParser(
         lastBgColor = bgColor
       }
       lastRecyclerItemId = it.recyclerViewItemId
-      StyledFragment(
-        it.text,
-        TranslatorRect(it.bounds.left, it.bounds.top, it.bounds.right, it.bounds.bottom),
-        it.style,
+      makeStyledFragment(
+        text = it.text,
+        bounds = TranslatorRect(it.bounds.left, it.bounds.top, it.bounds.right, it.bounds.bottom),
+        style = it.style,
         layoutGroup = if (!it.fromWebView) 1 else 0,
         translationGroup = currentTransGroup,
         clusterGroup = if (it.recyclerViewItemId >= 0) it.recyclerViewItemId + 1 else 0,
@@ -147,7 +150,7 @@ class AssistStructureParser(
         text = text,
         bounds = bounds,
         style =
-          TextStyle(
+          makeTextStyle(
             textColor = node.textColor,
             bgColor = effectiveBg,
             textSize = textSize,

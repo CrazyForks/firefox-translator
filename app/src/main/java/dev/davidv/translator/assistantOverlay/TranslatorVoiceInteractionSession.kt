@@ -32,6 +32,7 @@ import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.StructuredFragmentTranslationOutput
 import dev.davidv.translator.StyledFragment
 import dev.davidv.translator.TranslationCoordinator
+import dev.davidv.translator.bounds
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager

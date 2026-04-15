@@ -456,6 +456,24 @@ fn resolve_block_colors(
     first_style: Option<&TextStyle>,
     background_mode: BackgroundMode,
 ) -> Result<OverlayColors, String> {
+    if screenshot.is_none() {
+        let fixed_colors = match background_mode {
+            BackgroundMode::WhiteOnBlack => Some(OverlayColors {
+                background_argb: 0xFF00_0000,
+                foreground_argb: 0xFFFF_FFFF,
+            }),
+            BackgroundMode::BlackOnWhite => Some(OverlayColors {
+                background_argb: 0xFFFF_FFFF,
+                foreground_argb: 0xFF00_0000,
+            }),
+            BackgroundMode::AutoDetect => None,
+        };
+
+        if let Some(colors) = fixed_colors {
+            return Ok(colors);
+        }
+    }
+
     let sampled_colors = match screenshot {
         Some(screenshot) => Some(sample_overlay_colors(
             &screenshot.rgba_bytes,
