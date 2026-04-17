@@ -1,43 +1,20 @@
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 
 use serde_json::Value;
 use thiserror::Error;
 use translator::{
-    BergamotEngine, CatalogSnapshot, PackInstallChecker, TextTranslationOutcome,
-    TranslationWarmOutcome, Translator, build_catalog_snapshot, language_rows_in_snapshot,
-    parse_and_validate_catalog, plan_delete_dictionary_in_snapshot,
-    plan_delete_language_in_snapshot, plan_delete_superseded_tts_in_snapshot,
-    plan_delete_tts_in_snapshot, plan_dictionary_download_in_snapshot,
-    plan_language_download_in_snapshot, plan_tts_download_in_snapshot, sample_overlay_colors,
-    select_best_catalog,
+    CatalogSnapshot, Feature, PackInstallChecker, TextTranslationOutcome,
+    TranslationWarmOutcome, TranslatorSession, language_rows_in_snapshot, sample_overlay_colors,
 };
 #[cfg(feature = "dictionary")]
-use translator::{
-    DictionaryLookupOutcome, close_dictionary_in_snapshot, lookup_dictionary_in_snapshot,
-};
+use translator::DictionaryLookupOutcome;
 #[cfg(feature = "tts")]
-use translator::{
-    PcmSynthesisOutcome, SpeechChunkPlanningOutcome, TtsVoicesOutcome,
-    available_tts_voices_in_snapshot, clear_cached_model, plan_speech_chunks_for_text_in_snapshot,
-    synthesize_pcm_in_snapshot,
-};
+use translator::{PcmSynthesisOutcome, SpeechChunkPlanningOutcome, TtsVoicesOutcome};
+
 struct FsInstallChecker {
     base_dir: PathBuf,
-}
-
-static ENGINE: OnceLock<Mutex<BergamotEngine>> = OnceLock::new();
-
-fn with_engine<T, F>(f: F) -> Result<T, String>
-where
-    F: FnOnce(&mut BergamotEngine) -> Result<T, String>,
-{
-    let mut engine = ENGINE
-        .get_or_init(|| Mutex::new(BergamotEngine::new()))
-        .lock()
-        .map_err(|_| "Bergamot engine mutex poisoned".to_string())?;
-    f(&mut engine)
 }
 
 impl FsInstallChecker {
@@ -68,22 +45,6 @@ impl PackInstallChecker for FsInstallChecker {
             .and_then(|value| i32::try_from(value).ok())
             == Some(expected_version)
     }
-}
-
-fn parse_selected_catalog(
-    bundled_json: &str,
-    disk_json: Option<&str>,
-) -> Option<translator::LanguageCatalog> {
-    let preferred = select_best_catalog(bundled_json, disk_json).ok()?;
-    let fallback = if std::ptr::eq(preferred, bundled_json) {
-        disk_json
-    } else {
-        Some(bundled_json)
-    };
-
-    parse_and_validate_catalog(preferred)
-        .ok()
-        .or_else(|| fallback.and_then(|json| parse_and_validate_catalog(json).ok()))
 }
 
 #[derive(Debug, Error, uniffi::Error)]
@@ -149,49 +110,6 @@ fn map_dictionary_word(word: translator::tarkka::WordWithTaggedEntries) -> Dicti
     }
 }
 
-#[cfg(feature = "tesseract")]
-fn translate_image_plan_in_snapshot(
-    snapshot: &CatalogSnapshot,
-    rgba_bytes: &[u8],
-    width: u32,
-    height: u32,
-    source_code: &translator::LanguageCode,
-    target_code: &translator::LanguageCode,
-    min_confidence: u32,
-    reading_order: translator::ReadingOrder,
-    background_mode: translator::BackgroundMode,
-) -> Result<translator::ImageTranslationOutcome, String> {
-    with_engine(|engine| {
-        Translator::new(engine, snapshot)
-            .translate_image_rgba(
-                rgba_bytes,
-                width,
-                height,
-                source_code,
-                target_code,
-                min_confidence,
-                reading_order,
-                background_mode,
-            )
-            .map_err(|error| error.message)
-    })
-}
-
-#[cfg(not(feature = "tesseract"))]
-fn translate_image_plan_in_snapshot(
-    _snapshot: &CatalogSnapshot,
-    _rgba_bytes: &[u8],
-    _width: u32,
-    _height: u32,
-    _source_code: &translator::LanguageCode,
-    _target_code: &translator::LanguageCode,
-    _min_confidence: u32,
-    _reading_order: translator::ReadingOrder,
-    _background_mode: translator::BackgroundMode,
-) -> Result<translator::ImageTranslationOutcome, String> {
-    Ok(translator::ImageTranslationOutcome::MissingLanguagePair)
-}
-
 #[uniffi::export]
 fn sample_overlay_colors_rgba(
     rgba_bytes: Vec<u8>,
@@ -214,7 +132,13 @@ fn sample_overlay_colors_rgba(
 
 #[derive(uniffi::Object)]
 pub struct CatalogHandle {
-    snapshot: CatalogSnapshot,
+    session: TranslatorSession,
+}
+
+impl CatalogHandle {
+    fn snapshot(&self) -> Arc<CatalogSnapshot> {
+        self.session.snapshot()
+    }
 }
 
 #[uniffi::export]
@@ -225,36 +149,36 @@ impl CatalogHandle {
         disk_json: Option<String>,
         base_dir: String,
     ) -> Result<Arc<Self>, CatalogOpenError> {
-        let catalog = parse_selected_catalog(&bundled_json, disk_json.as_deref())
-            .ok_or(CatalogOpenError::ParseFailed)?;
         let checker = FsInstallChecker {
             base_dir: PathBuf::from(&base_dir),
         };
-        let snapshot = build_catalog_snapshot(catalog, base_dir, &checker);
-        Ok(Arc::new(CatalogHandle { snapshot }))
+        let session =
+            TranslatorSession::open(&bundled_json, disk_json.as_deref(), base_dir, &checker)
+                .map_err(|_| CatalogOpenError::ParseFailed)?;
+        Ok(Arc::new(CatalogHandle { session }))
     }
 
     fn format_version(&self) -> i32 {
-        self.snapshot.catalog.format_version
+        self.snapshot().catalog.format_version
     }
 
     fn generated_at(&self) -> i64 {
-        self.snapshot.catalog.generated_at
+        self.snapshot().catalog.generated_at
     }
 
     fn dictionary_version(&self) -> i32 {
-        self.snapshot.catalog.dictionary_version
+        self.snapshot().catalog.dictionary_version
     }
 
     fn language_rows(&self) -> Vec<translator::LanguageAvailabilityRow> {
-        language_rows_in_snapshot(&self.snapshot)
+        language_rows_in_snapshot(&self.snapshot())
     }
 
     fn dictionary_info(
         &self,
         dictionary_code: translator::DictionaryCode,
     ) -> Option<translator::DictionaryInfo> {
-        self.snapshot.catalog.dictionary_info(&dictionary_code)
+        self.snapshot().catalog.dictionary_info(&dictionary_code)
     }
 
     fn lookup_dictionary(
@@ -269,7 +193,7 @@ impl CatalogHandle {
         }
 
         #[cfg(feature = "dictionary")]
-        match lookup_dictionary_in_snapshot(&self.snapshot, &language_code, &word) {
+        match self.session.lookup_dictionary(language_code.as_str(), &word) {
             Ok(DictionaryLookupOutcome::Found(word)) => Some(map_dictionary_word(word)),
             Ok(DictionaryLookupOutcome::NotFound | DictionaryLookupOutcome::MissingDictionary) => {
                 None
@@ -279,14 +203,14 @@ impl CatalogHandle {
     }
 
     fn has_tts_voices(&self, language_code: translator::LanguageCode) -> bool {
-        self.snapshot.catalog.has_tts_voices(&language_code)
+        self.snapshot().catalog.has_tts_voices(&language_code)
     }
 
     fn tts_voice_picker_regions(
         &self,
         language_code: translator::LanguageCode,
     ) -> Vec<translator::TtsVoicePickerRegion> {
-        self.snapshot
+        self.snapshot()
             .catalog
             .tts_voice_picker_regions(&language_code)
     }
@@ -296,7 +220,7 @@ impl CatalogHandle {
         from_code: translator::LanguageCode,
         to_code: translator::LanguageCode,
     ) -> bool {
-        self.snapshot
+        self.snapshot()
             .catalog
             .can_swap_languages(&from_code, &to_code)
     }
@@ -306,7 +230,7 @@ impl CatalogHandle {
         from_code: translator::LanguageCode,
         to_code: translator::LanguageCode,
     ) -> bool {
-        self.snapshot.can_translate(&from_code, &to_code)
+        self.snapshot().can_translate(&from_code, &to_code)
     }
 
     fn warm_translation_models(
@@ -314,13 +238,10 @@ impl CatalogHandle {
         from_code: translator::LanguageCode,
         to_code: translator::LanguageCode,
     ) -> bool {
-        with_engine(|engine| {
-            Translator::new(engine, &self.snapshot)
-                .warm(&from_code, &to_code)
-                .map_err(|error| error.message)
-        })
-        .map(|outcome| matches!(outcome, TranslationWarmOutcome::Warmed))
-        .unwrap_or(false)
+        self.session
+            .warm(from_code.as_str(), to_code.as_str())
+            .map(|outcome| matches!(outcome, TranslationWarmOutcome::Warmed))
+            .unwrap_or(false)
     }
 
     fn translate_text(
@@ -329,17 +250,14 @@ impl CatalogHandle {
         to_code: translator::LanguageCode,
         text: String,
     ) -> Option<String> {
-        with_engine(|engine| {
-            Translator::new(engine, &self.snapshot)
-                .translate_text(&from_code, &to_code, &text)
-                .map_err(|error| error.message)
-        })
-        .ok()
-        .and_then(|outcome| match outcome {
-            TextTranslationOutcome::Translated(value)
-            | TextTranslationOutcome::Passthrough(value) => Some(value),
-            TextTranslationOutcome::MissingLanguagePair => None,
-        })
+        self.session
+            .translate_text(from_code.as_str(), to_code.as_str(), &text)
+            .ok()
+            .and_then(|outcome| match outcome {
+                TextTranslationOutcome::Translated(value)
+                | TextTranslationOutcome::Passthrough(value) => Some(value),
+                TextTranslationOutcome::MissingLanguagePair => None,
+            })
     }
 
     fn translate_mixed_texts(
@@ -349,17 +267,14 @@ impl CatalogHandle {
         target_code: translator::LanguageCode,
         available_language_codes: Vec<translator::LanguageCode>,
     ) -> translator::MixedTextTranslationResult {
-        with_engine(|engine| {
-            Translator::new(engine, &self.snapshot)
-                .translate_mixed_texts(
-                    &inputs,
-                    forced_source_code.as_ref(),
-                    &target_code,
-                    &available_language_codes,
-                )
-                .map_err(|error| error.message)
-        })
-        .unwrap_or_else(|_| translator::MixedTextTranslationResult::default())
+        self.session
+            .translate_mixed_texts(
+                &inputs,
+                forced_source_code.as_ref().map(translator::LanguageCode::as_str),
+                target_code.as_str(),
+                &available_language_codes,
+            )
+            .unwrap_or_else(|_| translator::MixedTextTranslationResult::default())
     }
 
     fn translate_structured_fragments(
@@ -371,23 +286,20 @@ impl CatalogHandle {
         screenshot: Option<translator::OverlayScreenshot>,
         background_mode: translator::BackgroundMode,
     ) -> translator::StructuredTranslationResult {
-        with_engine(|engine| {
-            Translator::new(engine, &self.snapshot)
-                .translate_structured_fragments(
-                    &fragments,
-                    forced_source_code.as_ref(),
-                    &target_code,
-                    &available_language_codes,
-                    screenshot.as_ref(),
-                    background_mode,
-                )
-                .map_err(|error| error.message)
-        })
-        .unwrap_or_else(|error| translator::StructuredTranslationResult {
-            blocks: Vec::new(),
-            nothing_reason: None,
-            error_message: Some(error),
-        })
+        self.session
+            .translate_structured_fragments(
+                &fragments,
+                forced_source_code.as_ref().map(translator::LanguageCode::as_str),
+                target_code.as_str(),
+                &available_language_codes,
+                screenshot.as_ref(),
+                background_mode,
+            )
+            .unwrap_or_else(|error| translator::StructuredTranslationResult {
+                blocks: Vec::new(),
+                nothing_reason: None,
+                error_message: Some(error.message),
+            })
     }
 
     fn translate_image_plan(
@@ -401,32 +313,56 @@ impl CatalogHandle {
         reading_order: translator::ReadingOrder,
         background_mode: translator::BackgroundMode,
     ) -> translator::ImageTranslationOutcome {
-        translate_image_plan_in_snapshot(
-            &self.snapshot,
-            &rgba_bytes,
-            width,
-            height,
-            &source_code,
-            &target_code,
-            min_confidence,
-            reading_order,
-            background_mode,
-        )
-        .unwrap_or(translator::ImageTranslationOutcome::MissingLanguagePair)
+        #[cfg(feature = "tesseract")]
+        {
+            return self
+                .session
+                .translate_image_rgba(
+                    &rgba_bytes,
+                    width,
+                    height,
+                    source_code.as_str(),
+                    target_code.as_str(),
+                    min_confidence,
+                    reading_order,
+                    background_mode,
+                )
+                .unwrap_or(translator::ImageTranslationOutcome::MissingLanguagePair);
+        }
+        #[cfg(not(feature = "tesseract"))]
+        {
+            let _ = (
+                rgba_bytes,
+                width,
+                height,
+                source_code,
+                target_code,
+                min_confidence,
+                reading_order,
+                background_mode,
+            );
+            translator::ImageTranslationOutcome::MissingLanguagePair
+        }
     }
 
     fn plan_language_download(
         &self,
         language_code: translator::LanguageCode,
     ) -> translator::DownloadPlan {
-        plan_language_download_in_snapshot(&self.snapshot, &language_code)
+        self.session
+            .plan_download(language_code.as_str(), Feature::Core, None)
+            .unwrap_or_else(|| translator::DownloadPlan {
+                total_size: 0,
+                tasks: Vec::new(),
+            })
     }
 
     fn plan_dictionary_download(
         &self,
         language_code: translator::LanguageCode,
     ) -> Option<translator::DownloadPlan> {
-        plan_dictionary_download_in_snapshot(&self.snapshot, &language_code)
+        self.session
+            .plan_download(language_code.as_str(), Feature::Dictionary, None)
     }
 
     fn plan_tts_download(
@@ -434,33 +370,32 @@ impl CatalogHandle {
         language_code: translator::LanguageCode,
         selected_pack_id: Option<String>,
     ) -> Option<translator::DownloadPlan> {
-        plan_tts_download_in_snapshot(&self.snapshot, &language_code, selected_pack_id.as_deref())
+        self.session.plan_download(
+            language_code.as_str(),
+            Feature::Tts,
+            selected_pack_id.as_deref(),
+        )
     }
 
     fn plan_delete_language(
         &self,
         language_code: translator::LanguageCode,
     ) -> translator::DeletePlan {
-        #[cfg(feature = "dictionary")]
-        let _ = close_dictionary_in_snapshot(&self.snapshot, &language_code);
-        #[cfg(feature = "tts")]
-        clear_cached_model();
-        plan_delete_language_in_snapshot(&self.snapshot, &language_code)
+        self.session
+            .prepare_delete(language_code.as_str(), Feature::Core)
     }
 
     fn plan_delete_dictionary(
         &self,
         language_code: translator::LanguageCode,
     ) -> translator::DeletePlan {
-        #[cfg(feature = "dictionary")]
-        let _ = close_dictionary_in_snapshot(&self.snapshot, &language_code);
-        plan_delete_dictionary_in_snapshot(&self.snapshot, &language_code)
+        self.session
+            .prepare_delete(language_code.as_str(), Feature::Dictionary)
     }
 
     fn plan_delete_tts(&self, language_code: translator::LanguageCode) -> translator::DeletePlan {
-        #[cfg(feature = "tts")]
-        clear_cached_model();
-        plan_delete_tts_in_snapshot(&self.snapshot, &language_code)
+        self.session
+            .prepare_delete(language_code.as_str(), Feature::Tts)
     }
 
     fn plan_delete_superseded_tts(
@@ -468,25 +403,21 @@ impl CatalogHandle {
         language_code: translator::LanguageCode,
         selected_pack_id: String,
     ) -> translator::DeletePlan {
-        #[cfg(feature = "tts")]
-        clear_cached_model();
-        plan_delete_superseded_tts_in_snapshot(&self.snapshot, &language_code, &selected_pack_id)
+        self.session
+            .prepare_delete_superseded_tts(language_code.as_str(), &selected_pack_id)
     }
 
     fn tts_size_bytes(&self, language_code: translator::LanguageCode) -> u64 {
-        self.snapshot
-            .catalog
-            .tts_size_bytes_for_language(&language_code)
+        self.session.size_bytes(language_code.as_str(), Feature::Tts)
     }
 
     fn translation_size_bytes(&self, language_code: translator::LanguageCode) -> u64 {
-        self.snapshot
-            .catalog
-            .translation_size_bytes_for_language(&language_code)
+        self.session
+            .size_bytes(language_code.as_str(), Feature::Core)
     }
 
     fn default_tts_pack_id(&self, language_code: translator::LanguageCode) -> Option<String> {
-        self.snapshot
+        self.snapshot()
             .catalog
             .default_tts_pack_id_for_language(&language_code)
     }
@@ -497,7 +428,7 @@ impl CatalogHandle {
     ) -> Vec<translator::TtsVoiceOption> {
         #[cfg(feature = "tts")]
         {
-            return match available_tts_voices_in_snapshot(&self.snapshot, &language_code) {
+            return match self.session.available_tts_voices(language_code.as_str()) {
                 Ok(TtsVoicesOutcome::Available(voices)) => voices,
                 Ok(TtsVoicesOutcome::MissingLanguage) | Err(_) => Vec::new(),
             };
@@ -517,11 +448,7 @@ impl CatalogHandle {
     ) -> Vec<translator::SpeechChunk> {
         #[cfg(feature = "tts")]
         {
-            return match plan_speech_chunks_for_text_in_snapshot(
-                &self.snapshot,
-                &language_code,
-                &text,
-            ) {
+            return match self.session.plan_speech_chunks(language_code.as_str(), &text) {
                 Ok(SpeechChunkPlanningOutcome::Planned(chunks)) => chunks,
                 Ok(SpeechChunkPlanningOutcome::MissingLanguage) | Err(_) => Vec::new(),
             };
@@ -544,12 +471,11 @@ impl CatalogHandle {
     ) -> Option<translator::PcmAudio> {
         #[cfg(feature = "tts")]
         {
-            return match synthesize_pcm_in_snapshot(
-                &self.snapshot,
-                &language_code,
+            return match self.session.synthesize_pcm(
+                language_code.as_str(),
                 &text,
                 speech_speed,
-                voice_name.as_ref(),
+                voice_name.as_ref().map(translator::VoiceName::as_str),
                 is_phonemes,
             ) {
                 Ok(PcmSynthesisOutcome::Ready(audio)) => Some(audio),
