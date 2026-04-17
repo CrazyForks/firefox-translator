@@ -5,37 +5,31 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::Value;
-#[cfg(feature = "tesseract")]
-use translator::PageSegMode;
 use thiserror::Error;
-#[cfg(feature = "tesseract")]
-use translator::build_text_blocks;
-#[cfg(feature = "dictionary")]
-use translator::{close_dictionary, lookup_dictionary};
 #[cfg(feature = "tts")]
-use translator::{clear_cached_model, list_voices, plan_speech_chunks_for_text, synthesize_pcm};
-#[cfg(feature = "tesseract")]
-use translator::TesseractWrapper;
+use translator::resolve_tts_voice_files_in_snapshot;
 use translator::{
     BergamotEngine, CatalogSnapshot, PackInstallChecker, build_catalog_snapshot,
     can_translate_in_snapshot, language_rows_in_snapshot, parse_and_validate_catalog,
     plan_delete_dictionary_in_snapshot, plan_delete_language_in_snapshot,
     plan_delete_superseded_tts_in_snapshot, plan_delete_tts_in_snapshot,
-    plan_dictionary_download_in_snapshot, plan_language_download_in_snapshot, plan_tts_download_in_snapshot,
-    sample_overlay_colors, select_best_catalog, translate_structured_fragments_in_snapshot,
-    translate_mixed_texts_in_snapshot, translate_texts_in_snapshot,
-    translate_texts_with_alignment_in_snapshot,
+    plan_dictionary_download_in_snapshot, plan_language_download_in_snapshot,
+    plan_tts_download_in_snapshot, sample_overlay_colors, select_best_catalog,
+    translate_mixed_texts_in_snapshot, translate_structured_fragments_in_snapshot,
+    translate_texts_in_snapshot, translate_texts_with_alignment_in_snapshot,
 };
+#[cfg(feature = "tesseract")]
+use translator::translate_image_rgba_in_snapshot;
 #[cfg(feature = "tts")]
-use translator::resolve_tts_voice_files_in_snapshot;
+use translator::{clear_cached_model, list_voices, plan_speech_chunks_for_text, synthesize_pcm};
+#[cfg(feature = "dictionary")]
+use translator::{close_dictionary, lookup_dictionary};
 
 struct FsInstallChecker {
     base_dir: PathBuf,
 }
 
 static ENGINE: OnceLock<Mutex<BergamotEngine>> = OnceLock::new();
-#[cfg(feature = "tesseract")]
-static OCR_ENGINE: OnceLock<Mutex<Option<OcrEngineState>>> = OnceLock::new();
 
 fn with_engine<T, F>(f: F) -> Result<T, String>
 where
@@ -173,7 +167,10 @@ fn lookup_dictionary_in_snapshot(
     word: &str,
 ) -> Option<DictionaryWordRecord> {
     let path = dictionary_path_for_language(snapshot, language_code)?;
-    lookup_dictionary(&path, word).ok().flatten().map(map_dictionary_word)
+    lookup_dictionary(&path, word)
+        .ok()
+        .flatten()
+        .map(map_dictionary_word)
 }
 
 #[cfg(not(feature = "dictionary"))]
@@ -186,21 +183,14 @@ fn lookup_dictionary_in_snapshot(
 }
 
 #[cfg(feature = "dictionary")]
-fn close_dictionary_in_snapshot(
-    snapshot: &CatalogSnapshot,
-    language_code: &str,
-) {
+fn close_dictionary_in_snapshot(snapshot: &CatalogSnapshot, language_code: &str) {
     if let Some(path) = dictionary_path_for_language(snapshot, language_code) {
         let _ = close_dictionary(&path);
     }
 }
 
 #[cfg(not(feature = "dictionary"))]
-fn close_dictionary_in_snapshot(
-    _snapshot: &CatalogSnapshot,
-    _language_code: &str,
-) {
-}
+fn close_dictionary_in_snapshot(_snapshot: &CatalogSnapshot, _language_code: &str) {}
 
 #[cfg(feature = "tts")]
 struct ResolvedSpeechAssets {
@@ -247,73 +237,6 @@ fn resolve_speech_assets(
 }
 
 #[cfg(feature = "tesseract")]
-struct OcrEngineState {
-    engine: TesseractWrapper,
-    language_spec: String,
-    reading_order: translator::ReadingOrder,
-    tessdata_path: String,
-}
-
-#[cfg(feature = "tesseract")]
-fn with_ocr_engine<T, F>(
-    snapshot: &CatalogSnapshot,
-    source_code: &str,
-    reading_order: translator::ReadingOrder,
-    f: F,
-) -> Result<T, String>
-where
-    F: FnOnce(&mut TesseractWrapper) -> Result<T, String>,
-{
-    let language = snapshot
-        .catalog
-        .language_by_code(source_code)
-        .ok_or_else(|| format!("unknown source language: {source_code}"))?;
-    let tessdata_path = Path::new(&snapshot.base_dir)
-        .join("tesseract")
-        .join("tessdata");
-    let has_japanese_vertical_model =
-        source_code == "ja" && tessdata_path.join("jpn_vert.traineddata").exists();
-    let language_spec = match (source_code, reading_order, has_japanese_vertical_model) {
-        ("ja", translator::ReadingOrder::TopToBottomLeftToRight, true) => "jpn_vert".to_string(),
-        _ => format!("{}+eng", language.tess_name),
-    };
-
-    let mut slot = OCR_ENGINE
-        .get_or_init(|| Mutex::new(None))
-        .lock()
-        .map_err(|_| "OCR engine mutex poisoned".to_string())?;
-
-    let needs_reinit = slot.as_ref().is_none_or(|state| {
-        state.language_spec != language_spec
-            || state.reading_order != reading_order
-            || state.tessdata_path != tessdata_path.to_string_lossy()
-    });
-
-    if needs_reinit {
-        let engine = TesseractWrapper::new(
-            Some(
-                tessdata_path
-                    .to_str()
-                    .ok_or_else(|| "invalid tessdata path".to_string())?,
-            ),
-            Some(&language_spec),
-        )
-        .map_err(|err| format!("failed to initialize tesseract: {err}"))?;
-        *slot = Some(OcrEngineState {
-            engine,
-            language_spec,
-            reading_order,
-            tessdata_path: tessdata_path.to_string_lossy().into_owned(),
-        });
-    }
-
-    let state = slot
-        .as_mut()
-        .ok_or_else(|| "OCR engine unavailable".to_string())?;
-    f(&mut state.engine)
-}
-
-#[cfg(feature = "tesseract")]
 fn translate_image_plan_in_snapshot(
     snapshot: &CatalogSnapshot,
     rgba_bytes: &[u8],
@@ -324,82 +247,21 @@ fn translate_image_plan_in_snapshot(
     min_confidence: u32,
     reading_order: translator::ReadingOrder,
     background_mode: translator::BackgroundMode,
-) -> Result<Option<translator::PreparedImageOverlay>, String> {
-    let bytes_per_pixel = 4i32;
-    let i_width = width as i32;
-    let i_height = height as i32;
-    let bytes_per_line = i_width
-        .checked_mul(bytes_per_pixel)
-        .ok_or_else(|| "image width overflow".to_string())?;
-
-    let page_seg_mode = match reading_order {
-        translator::ReadingOrder::LeftToRight => PageSegMode::PsmAutoOsd,
-        translator::ReadingOrder::TopToBottomLeftToRight => PageSegMode::PsmSingleBlockVertText,
-    };
-
-    let join_without_spaces = source_code == "ja";
-    let relax_single_char_confidence =
-        reading_order == translator::ReadingOrder::TopToBottomLeftToRight;
-
-    let blocks = with_ocr_engine(snapshot, source_code, reading_order, |engine| {
-        engine.set_page_seg_mode(page_seg_mode);
-        engine
-            .set_frame(rgba_bytes, i_width, i_height, bytes_per_pixel, bytes_per_line)
-            .map_err(|err| format!("failed to set OCR frame: {err}"))?;
-        let words = engine
-            .get_word_boxes()
-            .map_err(|err| format!("failed to read OCR words: {err}"))?;
-        let detected_words = words
-            .into_iter()
-            .map(|word| translator::DetectedWord {
-                text: word.text,
-                confidence: word.confidence,
-                bounding_box: translator::Rect {
-                    left: word.bounding_rect.left as u32,
-                    top: word.bounding_rect.top as u32,
-                    right: word.bounding_rect.right as u32,
-                    bottom: word.bounding_rect.bottom as u32,
-                },
-                is_at_beginning_of_para: word.is_at_beginning_of_para,
-                end_para: word.end_para,
-                end_line: word.end_line,
-            })
-            .collect::<Vec<_>>();
-        Ok(build_text_blocks(
-            &detected_words,
+) -> Result<translator::ImageTranslationOutcome, String> {
+    with_engine(|engine| {
+        translate_image_rgba_in_snapshot(
+            engine,
+            snapshot,
+            rgba_bytes,
+            width,
+            height,
+            source_code,
+            target_code,
             min_confidence,
-            join_without_spaces,
-            relax_single_char_confidence,
-        ))
-    })?;
-
-    let source_texts = blocks
-        .iter()
-        .map(translator::TextBlock::translation_text)
-        .collect::<Vec<_>>();
-    let translated_blocks = if source_code == target_code {
-        source_texts.clone()
-    } else {
-        match with_engine(|engine| {
-            translate_texts_in_snapshot(engine, snapshot, source_code, target_code, &source_texts)
-                .transpose()
-        }) {
-            Ok(Some(values)) => values,
-            Ok(None) => return Ok(None),
-            Err(err) => return Err(err),
-        }
-    };
-
-    translator::prepare_overlay_image(
-        rgba_bytes,
-        width,
-        height,
-        &blocks,
-        &translated_blocks,
-        background_mode,
-        reading_order,
-    )
-    .map(Some)
+            reading_order,
+            background_mode,
+        )
+    })
 }
 
 #[cfg(not(feature = "tesseract"))]
@@ -413,8 +275,8 @@ fn translate_image_plan_in_snapshot(
     _min_confidence: u32,
     _reading_order: translator::ReadingOrder,
     _background_mode: translator::BackgroundMode,
-) -> Result<Option<translator::PreparedImageOverlay>, String> {
-    Ok(None)
+) -> Result<translator::ImageTranslationOutcome, String> {
+    Ok(translator::ImageTranslationOutcome::MissingLanguagePair)
 }
 
 #[uniffi::export]
@@ -606,7 +468,7 @@ impl CatalogHandle {
         min_confidence: u32,
         reading_order: translator::ReadingOrder,
         background_mode: translator::BackgroundMode,
-    ) -> Option<translator::PreparedImageOverlay> {
+    ) -> translator::ImageTranslationOutcome {
         translate_image_plan_in_snapshot(
             &self.snapshot,
             &rgba_bytes,
@@ -618,21 +480,14 @@ impl CatalogHandle {
             reading_order,
             background_mode,
         )
-        .ok()
-        .flatten()
+        .unwrap_or(translator::ImageTranslationOutcome::MissingLanguagePair)
     }
 
-    fn plan_language_download(
-        &self,
-        language_code: String,
-    ) -> translator::DownloadPlan {
+    fn plan_language_download(&self, language_code: String) -> translator::DownloadPlan {
         plan_language_download_in_snapshot(&self.snapshot, &language_code)
     }
 
-    fn plan_dictionary_download(
-        &self,
-        language_code: String,
-    ) -> Option<translator::DownloadPlan> {
+    fn plan_dictionary_download(&self, language_code: String) -> Option<translator::DownloadPlan> {
         plan_dictionary_download_in_snapshot(&self.snapshot, &language_code)
     }
 

@@ -41,12 +41,12 @@ import uniffi.translator.FfiConverterTypeDeletePlan
 import uniffi.translator.FfiConverterTypeDetectionResult
 import uniffi.translator.FfiConverterTypeDictionaryInfo
 import uniffi.translator.FfiConverterTypeDownloadPlan
+import uniffi.translator.FfiConverterTypeImageTranslationOutcome
 import uniffi.translator.FfiConverterTypeLanguageAvailabilityRow
 import uniffi.translator.FfiConverterTypeMixedTextTranslationResult
 import uniffi.translator.FfiConverterTypeOverlayColors
 import uniffi.translator.FfiConverterTypeOverlayScreenshot
 import uniffi.translator.FfiConverterTypePcmAudio
-import uniffi.translator.FfiConverterTypePreparedImageOverlay
 import uniffi.translator.FfiConverterTypeReadingOrder
 import uniffi.translator.FfiConverterTypeRect
 import uniffi.translator.FfiConverterTypeSpeechChunk
@@ -55,12 +55,12 @@ import uniffi.translator.FfiConverterTypeStyledFragment
 import uniffi.translator.FfiConverterTypeTranslationWithAlignment
 import uniffi.translator.FfiConverterTypeTtsVoiceOption
 import uniffi.translator.FfiConverterTypeTtsVoicePickerRegion
+import uniffi.translator.ImageTranslationOutcome
 import uniffi.translator.LanguageAvailabilityRow
 import uniffi.translator.MixedTextTranslationResult
 import uniffi.translator.OverlayColors
 import uniffi.translator.OverlayScreenshot
 import uniffi.translator.PcmAudio
-import uniffi.translator.PreparedImageOverlay
 import uniffi.translator.ReadingOrder
 import uniffi.translator.Rect
 import uniffi.translator.SpeechChunk
@@ -74,12 +74,12 @@ import uniffi.translator.RustBuffer as RustBufferDeletePlan
 import uniffi.translator.RustBuffer as RustBufferDetectionResult
 import uniffi.translator.RustBuffer as RustBufferDictionaryInfo
 import uniffi.translator.RustBuffer as RustBufferDownloadPlan
+import uniffi.translator.RustBuffer as RustBufferImageTranslationOutcome
 import uniffi.translator.RustBuffer as RustBufferLanguageAvailabilityRow
 import uniffi.translator.RustBuffer as RustBufferMixedTextTranslationResult
 import uniffi.translator.RustBuffer as RustBufferOverlayColors
 import uniffi.translator.RustBuffer as RustBufferOverlayScreenshot
 import uniffi.translator.RustBuffer as RustBufferPcmAudio
-import uniffi.translator.RustBuffer as RustBufferPreparedImageOverlay
 import uniffi.translator.RustBuffer as RustBufferReadingOrder
 import uniffi.translator.RustBuffer as RustBufferRect
 import uniffi.translator.RustBuffer as RustBufferSpeechChunk
@@ -1015,7 +1015,7 @@ fun uniffi_bindings_fn_method_cataloghandle_plan_tts_download(`ptr`: Pointer,`la
 fun uniffi_bindings_fn_method_cataloghandle_synthesize_speech_pcm(`ptr`: Pointer,`languageCode`: RustBuffer.ByValue,`text`: RustBuffer.ByValue,`speechSpeed`: Float,`voiceName`: RustBuffer.ByValue,`isPhonemes`: Byte,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBuffer.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_translate_image_plan(`ptr`: Pointer,`rgbaBytes`: RustBuffer.ByValue,`width`: Int,`height`: Int,`sourceCode`: RustBuffer.ByValue,`targetCode`: RustBuffer.ByValue,`minConfidence`: Int,`readingOrder`: RustBufferReadingOrder.ByValue,`backgroundMode`: RustBufferBackgroundMode.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
+): RustBufferImageTranslationOutcome.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_translate_mixed_texts(`ptr`: Pointer,`inputs`: RustBuffer.ByValue,`forcedSourceCode`: RustBuffer.ByValue,`targetCode`: RustBuffer.ByValue,`availableLanguageCodes`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
 ): RustBufferMixedTextTranslationResult.ByValue
 fun uniffi_bindings_fn_method_cataloghandle_translate_structured_fragments(`ptr`: Pointer,`fragments`: RustBuffer.ByValue,`forcedSourceCode`: RustBuffer.ByValue,`targetCode`: RustBuffer.ByValue,`availableLanguageCodes`: RustBuffer.ByValue,`screenshot`: RustBuffer.ByValue,`backgroundMode`: RustBufferBackgroundMode.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1236,7 +1236,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_bindings_checksum_method_cataloghandle_synthesize_speech_pcm() != 53126.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_bindings_checksum_method_cataloghandle_translate_image_plan() != 46779.toShort()) {
+    if (lib.uniffi_bindings_checksum_method_cataloghandle_translate_image_plan() != 5136.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_bindings_checksum_method_cataloghandle_translate_mixed_texts() != 25431.toShort()) {
@@ -1761,7 +1761,7 @@ public interface CatalogHandleInterface {
     
     fun `synthesizeSpeechPcm`(`languageCode`: kotlin.String, `text`: kotlin.String, `speechSpeed`: kotlin.Float, `voiceName`: kotlin.String?, `isPhonemes`: kotlin.Boolean): PcmAudio?
     
-    fun `translateImagePlan`(`rgbaBytes`: kotlin.ByteArray, `width`: kotlin.UInt, `height`: kotlin.UInt, `sourceCode`: kotlin.String, `targetCode`: kotlin.String, `minConfidence`: kotlin.UInt, `readingOrder`: ReadingOrder, `backgroundMode`: BackgroundMode): PreparedImageOverlay?
+    fun `translateImagePlan`(`rgbaBytes`: kotlin.ByteArray, `width`: kotlin.UInt, `height`: kotlin.UInt, `sourceCode`: kotlin.String, `targetCode`: kotlin.String, `minConfidence`: kotlin.UInt, `readingOrder`: ReadingOrder, `backgroundMode`: BackgroundMode): ImageTranslationOutcome
     
     fun `translateMixedTexts`(`inputs`: List<kotlin.String>, `forcedSourceCode`: kotlin.String?, `targetCode`: kotlin.String, `availableLanguageCodes`: List<kotlin.String>): MixedTextTranslationResult
     
@@ -2102,8 +2102,8 @@ open class CatalogHandle: Disposable, AutoCloseable, CatalogHandleInterface
     }
     
 
-    override fun `translateImagePlan`(`rgbaBytes`: kotlin.ByteArray, `width`: kotlin.UInt, `height`: kotlin.UInt, `sourceCode`: kotlin.String, `targetCode`: kotlin.String, `minConfidence`: kotlin.UInt, `readingOrder`: ReadingOrder, `backgroundMode`: BackgroundMode): PreparedImageOverlay? {
-            return FfiConverterOptionalTypePreparedImageOverlay.lift(
+    override fun `translateImagePlan`(`rgbaBytes`: kotlin.ByteArray, `width`: kotlin.UInt, `height`: kotlin.UInt, `sourceCode`: kotlin.String, `targetCode`: kotlin.String, `minConfidence`: kotlin.UInt, `readingOrder`: ReadingOrder, `backgroundMode`: BackgroundMode): ImageTranslationOutcome {
+            return FfiConverterTypeImageTranslationOutcome.lift(
     callWithPointer {
     uniffiRustCall() { _status ->
     UniffiLib.INSTANCE.uniffi_bindings_fn_method_cataloghandle_translate_image_plan(
@@ -2687,38 +2687,6 @@ public object FfiConverterOptionalTypePcmAudio: FfiConverterRustBuffer<PcmAudio?
         } else {
             buf.put(1)
             FfiConverterTypePcmAudio.write(value, buf)
-        }
-    }
-}
-
-
-
-
-/**
- * @suppress
- */
-public object FfiConverterOptionalTypePreparedImageOverlay: FfiConverterRustBuffer<PreparedImageOverlay?> {
-    override fun read(buf: ByteBuffer): PreparedImageOverlay? {
-        if (buf.get().toInt() == 0) {
-            return null
-        }
-        return FfiConverterTypePreparedImageOverlay.read(buf)
-    }
-
-    override fun allocationSize(value: PreparedImageOverlay?): ULong {
-        if (value == null) {
-            return 1UL
-        } else {
-            return 1UL + FfiConverterTypePreparedImageOverlay.allocationSize(value)
-        }
-    }
-
-    override fun write(value: PreparedImageOverlay?, buf: ByteBuffer) {
-        if (value == null) {
-            buf.put(0)
-        } else {
-            buf.put(1)
-            FfiConverterTypePreparedImageOverlay.write(value, buf)
         }
     }
 }

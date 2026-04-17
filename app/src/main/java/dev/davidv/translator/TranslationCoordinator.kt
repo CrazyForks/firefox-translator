@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import uniffi.translator.ImageTranslationOutcome
 import uniffi.translator.PreparedImageOverlay
 import java.nio.ByteBuffer
 import kotlin.system.measureTimeMillis
@@ -184,9 +185,13 @@ class TranslationCoordinator(
         val catalog = imageProcessor.loadCatalog() ?: return@withContext null
         val minConfidence = settingsManager.settings.value.minConfidence
         val backgroundMode = settingsManager.settings.value.backgroundMode
-        val plan =
+        val imageTranslationOutcome =
           catalog.translateImagePlan(finalBitmap, from, to, minConfidence, readingOrder, backgroundMode)
-            ?: return@withContext null
+        val plan =
+          when (imageTranslationOutcome) {
+            is ImageTranslationOutcome.Ready -> imageTranslationOutcome.v1
+            ImageTranslationOutcome.MissingLanguagePair -> return@withContext null
+          }
         _isOcrInProgress.value = false
 
         Log.d("OCR", "complete, blocks=${plan.blocks.size}")

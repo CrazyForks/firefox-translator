@@ -1615,6 +1615,38 @@ public object FfiConverterTypeOverlayColors: FfiConverterRustBuffer<OverlayColor
 
 
 
+data class OverlayLayoutHints (
+    var `layoutMode`: OverlayLayoutMode, 
+    var `suggestedFontSizePx`: kotlin.Float
+) {
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOverlayLayoutHints: FfiConverterRustBuffer<OverlayLayoutHints> {
+    override fun read(buf: ByteBuffer): OverlayLayoutHints {
+        return OverlayLayoutHints(
+            FfiConverterTypeOverlayLayoutMode.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: OverlayLayoutHints) = (
+            FfiConverterTypeOverlayLayoutMode.allocationSize(value.`layoutMode`) +
+            FfiConverterFloat.allocationSize(value.`suggestedFontSizePx`)
+    )
+
+    override fun write(value: OverlayLayoutHints, buf: ByteBuffer) {
+            FfiConverterTypeOverlayLayoutMode.write(value.`layoutMode`, buf)
+            FfiConverterFloat.write(value.`suggestedFontSizePx`, buf)
+    }
+}
+
+
+
 data class OverlayScreenshot (
     var `rgbaBytes`: kotlin.ByteArray, 
     var `width`: kotlin.UInt, 
@@ -1768,6 +1800,7 @@ data class PreparedTextBlock (
     var `translatedText`: kotlin.String, 
     var `boundingBox`: Rect, 
     var `lines`: List<PreparedTextLine>, 
+    var `layoutHints`: OverlayLayoutHints, 
     var `backgroundArgb`: kotlin.UInt, 
     var `foregroundArgb`: kotlin.UInt
 ) {
@@ -1785,6 +1818,7 @@ public object FfiConverterTypePreparedTextBlock: FfiConverterRustBuffer<Prepared
             FfiConverterString.read(buf),
             FfiConverterTypeRect.read(buf),
             FfiConverterSequenceTypePreparedTextLine.read(buf),
+            FfiConverterTypeOverlayLayoutHints.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
         )
@@ -1795,6 +1829,7 @@ public object FfiConverterTypePreparedTextBlock: FfiConverterRustBuffer<Prepared
             FfiConverterString.allocationSize(value.`translatedText`) +
             FfiConverterTypeRect.allocationSize(value.`boundingBox`) +
             FfiConverterSequenceTypePreparedTextLine.allocationSize(value.`lines`) +
+            FfiConverterTypeOverlayLayoutHints.allocationSize(value.`layoutHints`) +
             FfiConverterUInt.allocationSize(value.`backgroundArgb`) +
             FfiConverterUInt.allocationSize(value.`foregroundArgb`)
     )
@@ -1804,6 +1839,7 @@ public object FfiConverterTypePreparedTextBlock: FfiConverterRustBuffer<Prepared
             FfiConverterString.write(value.`translatedText`, buf)
             FfiConverterTypeRect.write(value.`boundingBox`, buf)
             FfiConverterSequenceTypePreparedTextLine.write(value.`lines`, buf)
+            FfiConverterTypeOverlayLayoutHints.write(value.`layoutHints`, buf)
             FfiConverterUInt.write(value.`backgroundArgb`, buf)
             FfiConverterUInt.write(value.`foregroundArgb`, buf)
     }
@@ -2398,6 +2434,70 @@ public object FfiConverterTypeBackgroundMode: FfiConverterRustBuffer<BackgroundM
 
 
 
+sealed class ImageTranslationOutcome {
+    
+    data class Ready(
+        val v1: PreparedImageOverlay) : ImageTranslationOutcome() {
+        companion object
+    }
+    
+    object MissingLanguagePair : ImageTranslationOutcome()
+    
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeImageTranslationOutcome : FfiConverterRustBuffer<ImageTranslationOutcome>{
+    override fun read(buf: ByteBuffer): ImageTranslationOutcome {
+        return when(buf.getInt()) {
+            1 -> ImageTranslationOutcome.Ready(
+                FfiConverterTypePreparedImageOverlay.read(buf),
+                )
+            2 -> ImageTranslationOutcome.MissingLanguagePair
+            else -> throw RuntimeException("invalid enum value, something is very wrong!!")
+        }
+    }
+
+    override fun allocationSize(value: ImageTranslationOutcome) = when(value) {
+        is ImageTranslationOutcome.Ready -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypePreparedImageOverlay.allocationSize(value.v1)
+            )
+        }
+        is ImageTranslationOutcome.MissingLanguagePair -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+    }
+
+    override fun write(value: ImageTranslationOutcome, buf: ByteBuffer) {
+        when(value) {
+            is ImageTranslationOutcome.Ready -> {
+                buf.putInt(1)
+                FfiConverterTypePreparedImageOverlay.write(value.v1, buf)
+                Unit
+            }
+            is ImageTranslationOutcome.MissingLanguagePair -> {
+                buf.putInt(2)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+
+
+
+
 
 enum class NothingReason {
     
@@ -2421,6 +2521,36 @@ public object FfiConverterTypeNothingReason: FfiConverterRustBuffer<NothingReaso
     override fun allocationSize(value: NothingReason) = 4UL
 
     override fun write(value: NothingReason, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
+
+enum class OverlayLayoutMode {
+    
+    PER_LINE,
+    BLOCK_RECT;
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOverlayLayoutMode: FfiConverterRustBuffer<OverlayLayoutMode> {
+    override fun read(buf: ByteBuffer) = try {
+        OverlayLayoutMode.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: OverlayLayoutMode) = 4UL
+
+    override fun write(value: OverlayLayoutMode, buf: ByteBuffer) {
         buf.putInt(value.ordinal + 1)
     }
 }

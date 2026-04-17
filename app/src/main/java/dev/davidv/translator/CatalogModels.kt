@@ -316,7 +316,7 @@ class LanguageCatalog private constructor(
     minConfidence: Int,
     readingOrder: ReadingOrder,
     backgroundMode: BackgroundMode,
-  ): uniffi.translator.PreparedImageOverlay? {
+  ): uniffi.translator.ImageTranslationOutcome {
     return handle.translateImagePlan(
       rgbaBytes(bitmap),
       bitmap.width.toUInt(),

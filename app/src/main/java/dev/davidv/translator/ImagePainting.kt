@@ -181,19 +181,13 @@ fun paintTranslatedTextOver(
       block = block,
     )
 
-    val blockAvgPixelHeight =
-      block.lines
-        .map { line -> line.boundingBox.height() }
-        .average()
-        .toFloat()
-
     val translated = block.translatedText
 
     allTranslatedText = "${allTranslatedText}\n$translated"
 
     val minTextSize = 8f
 
-    textPaint.textSize = floor(blockAvgPixelHeight)
+    textPaint.textSize = floor(block.layoutHints.suggestedFontSizePx).coerceAtLeast(minTextSize)
     var fitResult = doesTextFitInLines(translated, block.lines, textPaint)
     while (fitResult is TextFitResult.DoesNotFit && textPaint.textSize > minTextSize) {
       textPaint.textSize -= 1f
@@ -267,12 +261,7 @@ fun paintTranslatedTextOverVerticalBlocks(
     val blockBounds = block.boundingBox
     val minTextSize = 8f
     val initialTextSize =
-      floor(
-        block.lines
-          .map { line -> line.boundingBox.width() }
-          .average()
-          .toFloat(),
-      ).coerceAtLeast(minTextSize)
+      floor(block.layoutHints.suggestedFontSizePx).coerceAtLeast(minTextSize)
 
     textPaint.textSize = initialTextSize
     var fitResult = doesTextFitInRect(translated, blockBounds, textPaint)
