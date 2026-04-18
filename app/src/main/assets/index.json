@@ -1,10 +1,10 @@
 {
   "formatVersion": 2,
-  "generatedAt": 1776533655,
+  "generatedAt": 1776550317,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1776533655,
+    "languageIndexUpdatedAt": 1776550317,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -290,8 +290,8 @@
             "voices": [
               "tts-piper-de-de-thorsten-medium",
               "tts-piper-de-de-thorsten-emotional-medium",
-              "tts-piper-de-de-mls-medium",
-              "tts-piper-de-de-karlsson-low"
+              "tts-piper-de-de-karlsson-low",
+              "tts-piper-de-de-kerstin-low"
             ]
           }
         }
@@ -1135,8 +1135,7 @@
             "voices": [
               "tts-piper-nl-nl-ronnie-medium",
               "tts-piper-nl-nl-pim-medium",
-              "tts-piper-nl-nl-alex-medium",
-              "tts-piper-nl-nl-mls-medium"
+              "tts-piper-nl-nl-alex-medium"
             ]
           }
         }
@@ -7316,35 +7315,6 @@
         "tts-espeak-dict-de"
       ]
     },
-    "tts-piper-de-de-mls-medium": {
-      "feature": "tts",
-      "engine": "piper",
-      "language": "de",
-      "locale": "de_DE",
-      "region": "DE",
-      "voice": "mls",
-      "quality": "medium",
-      "numSpeakers": 236,
-      "defaultSpeakerId": 0,
-      "aliases": [],
-      "files": [
-        {
-          "name": "de_DE-mls-medium.onnx",
-          "sizeBytes": 76961079,
-          "installPath": "bin/piper/de/de_DE/mls/medium/de_DE-mls-medium.onnx",
-          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/mls/medium/de_DE-mls-medium.onnx"
-        },
-        {
-          "name": "de_DE-mls-medium.onnx.json",
-          "sizeBytes": 8948,
-          "installPath": "bin/piper/de/de_DE/mls/medium/de_DE-mls-medium.onnx.json",
-          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/mls/medium/de_DE-mls-medium.onnx.json"
-        }
-      ],
-      "dependsOn": [
-        "tts-espeak-dict-de"
-      ]
-    },
     "tts-piper-de-de-karlsson-low": {
       "feature": "tts",
       "engine": "piper",
@@ -7369,6 +7339,36 @@
           "sizeBytes": 4159,
           "installPath": "bin/piper/de/de_DE/karlsson/low/de_DE-karlsson-low.onnx.json",
           "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/karlsson/low/de_DE-karlsson-low.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-de"
+      ]
+    },
+    "tts-piper-de-de-kerstin-low": {
+      "feature": "tts",
+      "engine": "piper",
+      "language": "de",
+      "locale": "de_DE",
+      "region": "DE",
+      "voice": "kerstin",
+      "quality": "low",
+      "numSpeakers": 1,
+      "aliases": [
+        "de-kerstin-low"
+      ],
+      "files": [
+        {
+          "name": "de_DE-kerstin-low.onnx",
+          "sizeBytes": 63104526,
+          "installPath": "bin/piper/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx"
+        },
+        {
+          "name": "de_DE-kerstin-low.onnx.json",
+          "sizeBytes": 4158,
+          "installPath": "bin/piper/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx.json",
+          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx.json"
         }
       ],
       "dependsOn": [
@@ -9068,35 +9068,6 @@
           "sizeBytes": 4965,
           "installPath": "bin/piper/nl/nl_NL/alex/medium/nl_NL-alex-medium.onnx.json",
           "url": "https://offline-translator.davidv.dev/tts/1/nl/nl_NL/alex/medium/nl_NL-alex-medium.onnx.json"
-        }
-      ],
-      "dependsOn": [
-        "tts-espeak-dict-nl"
-      ]
-    },
-    "tts-piper-nl-nl-mls-medium": {
-      "feature": "tts",
-      "engine": "piper",
-      "language": "nl",
-      "locale": "nl_NL",
-      "region": "NL",
-      "voice": "mls",
-      "quality": "medium",
-      "numSpeakers": 52,
-      "defaultSpeakerId": 0,
-      "aliases": [],
-      "files": [
-        {
-          "name": "nl_NL-mls-medium.onnx",
-          "sizeBytes": 76584246,
-          "installPath": "bin/piper/nl/nl_NL/mls/medium/nl_NL-mls-medium.onnx",
-          "url": "https://offline-translator.davidv.dev/tts/1/nl/nl_NL/mls/medium/nl_NL-mls-medium.onnx"
-        },
-        {
-          "name": "nl_NL-mls-medium.onnx.json",
-          "sizeBytes": 5856,
-          "installPath": "bin/piper/nl/nl_NL/mls/medium/nl_NL-mls-medium.onnx.json",
-          "url": "https://offline-translator.davidv.dev/tts/1/nl/nl_NL/mls/medium/nl_NL-mls-medium.onnx.json"
         }
       ],
       "dependsOn": [

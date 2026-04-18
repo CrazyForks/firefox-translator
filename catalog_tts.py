@@ -49,6 +49,11 @@ BANNED_TTS_VOICES = {
     # Broken Spanish Piper MLS voices. Keep them out of the generated TTS catalog.
     "es_ES-mls_10246-low",
     "es_ES-mls_9972-low",
+    # de/nl mls voices completely break on short sentences
+    "de_DE-mls-medium",
+    "nl_NL-mls-medium",
+    "nl_NL-mls_5809-low",
+    "nl_NL-mls_7432-low",
     # Upstream Piper metadata still lists this voice, but the files 404 on Hugging Face.
     "no_NO-nvcc-medium",
     # Piper pinyin-frontend Mandarin voices are not supported by the runtime frontend.
@@ -62,7 +67,9 @@ BANNED_TTS_VOICES = {
 # positive values downrank (may fall out of the top 4). Keys are voice keys
 # (locale_code-name-quality); add one line per voice you want to move.
 VOICE_RANK_PREFERENCES: dict[str, int] = {
+    # amy sounds pretty good, fine to default
     "en_US-amy-medium": -1,
+    # sam sounds like a robot
     "en_US-sam-medium": 1,
 }
 EXTRA_TTS_VOICES = {
