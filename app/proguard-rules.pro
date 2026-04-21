@@ -1,17 +1,3 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
 # Preserve file names and line numbers for readable stack traces
 -keepattributes SourceFile,LineNumberTable
 
@@ -21,39 +7,18 @@
 # Disable obfuscation entirely
 -dontobfuscate
 
-
-# bergamot
--keep class dev.davidv.bergamot.DetectionResult { *; }
--keep class dev.davidv.bergamot.TokenAlignment { *; }
--keep class dev.davidv.bergamot.TranslationWithAlignment { *; }
-
-# Keep Tarkka native library integration
--keep class dev.davidv.translator.TarkkaBinding { *; }
--keep class dev.davidv.translator.TarkkaData** { *; }
--keep class dev.davidv.translator.AggregatedWord { *; }
--keep class dev.davidv.translator.PosGlosses { *; }
--keep class dev.davidv.translator.Gloss { *; }
--keep class dev.davidv.translator.WordWithTaggedEntries { *; }
--keep class dev.davidv.translator.WordWithTaggedEntries$WordTag { *; }
--keep class dev.davidv.translator.WordEntryComplete { *; }
--keep class dev.davidv.translator.Sense { *; }
-
-# Keep Tesseract native library integration
--keep class dev.davidv.translator.TesseractBinding { *; }
--keep class dev.davidv.translator.TesseractOCR { *; }
--keep class dev.davidv.translator.DetectedWord { *; }
--keep class dev.davidv.translator.PageSegMode { *; }
--keep class dev.davidv.translator.TesseractData** { *; }
-
-# Keep Mucab native library integration
--keep class dev.davidv.translator.MucabBinding { *; }
-
-# Keep speech JNI entrypoints and classes instantiated directly from Rust/JNI
--keep class dev.davidv.translator.SpeechBinding { *; }
--keep class dev.davidv.translator.PcmAudio { *; }
--keep class dev.davidv.translator.NativePhonemeChunk { *; }
--keep class dev.davidv.translator.NativeTtsVoice { *; }
-
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+
+# JNA: native code looks up methods/fields reflectively via initIDs
+-dontwarn java.awt.*
+-dontwarn com.sun.jna.**
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+-keep class * implements com.sun.jna.** { *; }
+
+# uniffi-generated bindings: Structure subclasses, Callback interfaces, and
+# enum/data classes crossing the FFI boundary must retain their fields.
+-keep class uniffi.bindings.** { *; }
+-keep class uniffi.translator.** { *; }
