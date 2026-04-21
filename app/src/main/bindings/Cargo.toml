@@ -18,15 +18,15 @@ path = "src/lib.rs"
 [dependencies]
 translator = { git = "https://github.com/DavidVentura/translator-rs.git", default-features = false, features = ["uniffi", "transliterate"] }
 # translator = { path = "/home/david/git/translator-rs", default-features = false, features = ["uniffi", "transliterate"] }
-uniffi = { version = "0.29", features = ["cli"] }
+uniffi = "0.29"
 thiserror = "2"
+log = "0.4"
 
-[[bin]]
-name = "uniffi-bindgen"
-path = "src/bin/uniffi-bindgen.rs"
+[target.'cfg(target_os = "android")'.dependencies]
+android_logger = "0.14"
 
 [profile.release]
 lto = "fat"
 codegen-units = 1
 debug = false
-strip = true
+strip = "debuginfo"

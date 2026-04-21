@@ -19,6 +19,7 @@ android {
   sourceSets {
     getByName("main") {
       aidl.srcDir("src/main/aidl")
+      java.srcDir(layout.buildDirectory.dir("generated/source/uniffi/kotlin"))
     }
     getByName("androidTest") {
       assets {
@@ -95,6 +96,7 @@ android {
 }
 
 val bindingsRootDir = file("src/main/bindings")
+val bindingsBindgenRootDir = file("bindings-bindgen")
 val jniLibsRootDir = file("src/main/jniLibs")
 val androidSdkRoot =
   System.getenv("ANDROID_SDK_ROOT")
@@ -141,12 +143,31 @@ fun cmakePathRemapFlags(): String =
     "-fdebug-prefix-map=${rootProject.projectDir.absolutePath}=.",
   ).joinToString(" ")
 
-fun cargoEncodedRustflags(): String =
-  listOf(
-    "--remap-path-prefix=${rootProject.projectDir.absolutePath}=.",
-    "--remap-path-prefix=/home/vagrant/.cargo=/",
-    "--remap-path-prefix=/usr/local/cargo=/",
+fun cargoEncodedRustflags(abi: String? = null): String {
+  val base =
+    listOf(
+      "--remap-path-prefix=${rootProject.projectDir.absolutePath}=.",
+      "--remap-path-prefix=/home/vagrant/.cargo=/",
+      "--remap-path-prefix=/usr/local/cargo=/",
+    )
+  if (abi == null) return base.joinToString("\u001f")
+  val rtArch =
+    when (abi) {
+      "arm64-v8a" -> "aarch64-android"
+      "armeabi-v7a" -> "arm-android"
+      "x86" -> "i686-android"
+      "x86_64" -> "x86_64-android"
+      else -> error("Unknown abi $abi")
+    }
+  val rtLib = "$ndk/toolchains/llvm/prebuilt/linux-x86_64/lib/clang/19/lib/linux/libclang_rt.builtins-$rtArch.a"
+  return (
+    base +
+      listOf(
+        "-C",
+        "link-arg=$rtLib",
+      )
   ).joinToString("\u001f")
+}
 
 val abiToTaskSuffix =
   mapOf(
@@ -256,7 +277,7 @@ val abiToBindingsTask =
       inputs.property("cargoTarget", cargoTarget)
       inputs.property("androidApi", bindingsAndroidApi)
       inputs.property("androidNdkRoot", ndk)
-      inputs.property("cargoEncodedRustflags", cargoEncodedRustflags())
+      inputs.property("cargoEncodedRustflags", cargoEncodedRustflags(abi))
       outputs.file(File(jniLibAbiDir(abi), "libbindings.so"))
       outputs.file(File(jniLibAbiDir(abi), "libc++_shared.so"))
 
@@ -267,7 +288,7 @@ val abiToBindingsTask =
           environment("ANDROID_NDK_HOME", ndk)
           environment("ORT_LIB_LOCATION", onnxRuntimeConfigDir(abi).absolutePath)
           environment("ORT_PREFER_DYNAMIC_LINK", "1")
-          environment("CARGO_ENCODED_RUSTFLAGS", cargoEncodedRustflags())
+          environment("CARGO_ENCODED_RUSTFLAGS", cargoEncodedRustflags(abi))
           commandLine(
             "cargo",
             "ndk",
@@ -300,15 +321,64 @@ tasks.register("buildBindingsAll") {
 }
 
 val targetAbi = project.findProperty("targetAbi")?.toString()
-val bindingsTasks =
+val selectedAbis =
   if (targetAbi != null) {
-    listOfNotNull(abiToBindingsTask[targetAbi])
+    listOf(targetAbi)
   } else {
-    defaultDevAbis.mapNotNull { abiToBindingsTask[it] }
+    defaultDevAbis
+  }
+val bindingsTasks = selectedAbis.mapNotNull { abiToBindingsTask[it] }
+
+val bindgenHostBinary = File(bindingsBindgenRootDir, "target/release/uniffi-bindgen")
+
+val buildUniffiBindgen =
+  tasks.register("buildUniffiBindgen", Exec::class) {
+    group = "build"
+    description = "Build the host uniffi-bindgen binary"
+    workingDir = bindingsBindgenRootDir
+    inputs.file(bindingsBindgenRootDir.resolve("Cargo.toml"))
+    inputs.dir(bindingsBindgenRootDir.resolve("src"))
+    outputs.file(bindgenHostBinary)
+    commandLine("cargo", "build", "--release")
+  }
+
+val generatedBindingsDir = layout.buildDirectory.dir("generated/source/uniffi/kotlin")
+
+val bindgenSourceAbi = selectedAbis.first()
+val bindgenSourceLib = File(jniLibAbiDir(bindgenSourceAbi), "libbindings.so")
+
+val generateUniffiBindings =
+  tasks.register("generateUniffiBindings", Exec::class) {
+    group = "build"
+    description = "Generate Kotlin bindings from the compiled libbindings.so"
+    dependsOn(buildUniffiBindgen)
+    dependsOn(abiToBindingsTask.getValue(bindgenSourceAbi))
+    workingDir = bindingsRootDir
+    inputs.file(bindgenHostBinary)
+    inputs.file(bindgenSourceLib)
+    outputs.dir(generatedBindingsDir)
+    doFirst {
+      val outDir = generatedBindingsDir.get().asFile
+      outDir.deleteRecursively()
+      outDir.mkdirs()
+    }
+    commandLine(
+      bindgenHostBinary.absolutePath,
+      "generate",
+      "--library",
+      bindgenSourceLib.absolutePath,
+      "--language",
+      "kotlin",
+      "--out-dir",
+      generatedBindingsDir.get().asFile.absolutePath,
+      "--no-format",
+      "--metadata-no-deps",
+    )
   }
 
 tasks.named("preBuild") {
   dependsOn(bindingsTasks)
+  dependsOn(generateUniffiBindings)
 }
 
 dependencies {
