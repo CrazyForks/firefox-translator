@@ -1,0 +1,2 @@
+- Small UI fixes
+- Improve TTS pacing
