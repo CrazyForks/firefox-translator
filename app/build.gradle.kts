@@ -149,14 +149,6 @@ fun cargoEncodedRustflags(abi: String? = null): String {
       "--remap-path-prefix=${rootProject.projectDir.absolutePath}=.",
       "--remap-path-prefix=/home/vagrant/.cargo=/",
       "--remap-path-prefix=/usr/local/cargo=/",
-      "-C",
-      "link-arg=-Wl,--threads=1",
-      "-C",
-      "link-arg=-Wl,--sort-section=name",
-      "-C",
-      "link-arg=-Wl,--sort-common",
-      "-C",
-      "link-arg=-Wl,--exclude-libs,ALL",
     )
   if (abi == null) return base.joinToString("\u001f")
   val rtArch =
@@ -171,6 +163,14 @@ fun cargoEncodedRustflags(abi: String? = null): String {
   return (
     base +
       listOf(
+        "-C",
+        "link-arg=-Wl,--threads=1",
+        "-C",
+        "link-arg=-Wl,--sort-section=name",
+        "-C",
+        "link-arg=-Wl,--sort-common",
+        "-C",
+        "link-arg=-Wl,--exclude-libs,ALL",
         "-C",
         "link-arg=$rtLib",
       )
