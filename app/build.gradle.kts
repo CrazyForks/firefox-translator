@@ -170,8 +170,6 @@ fun cargoEncodedRustflags(abi: String? = null): String {
         "-C",
         "link-arg=-Wl,--sort-common",
         "-C",
-        "link-arg=-Wl,--exclude-libs,ALL",
-        "-C",
         "link-arg=$rtLib",
       )
   ).joinToString("\u001f")
