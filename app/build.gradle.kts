@@ -151,6 +151,8 @@ fun cargoEncodedRustflags(abi: String? = null): String {
       "--remap-path-prefix=/usr/local/cargo=/",
       "-C",
       "link-arg=-Wl,--threads=1",
+      "-C",
+      "link-arg=-Wl,--exclude-libs,ALL",
     )
   if (abi == null) return base.joinToString("\u001f")
   val rtArch =
