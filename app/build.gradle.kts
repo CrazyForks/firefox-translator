@@ -149,6 +149,8 @@ fun cargoEncodedRustflags(abi: String? = null): String {
       "--remap-path-prefix=${rootProject.projectDir.absolutePath}=.",
       "--remap-path-prefix=/home/vagrant/.cargo=/",
       "--remap-path-prefix=/usr/local/cargo=/",
+      "-C",
+      "link-arg=-Wl,--threads=1",
     )
   if (abi == null) return base.joinToString("\u001f")
   val rtArch =
