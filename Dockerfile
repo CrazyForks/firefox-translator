@@ -1,7 +1,7 @@
 FROM registry.gitlab.com/fdroid/fdroidserver:buildserver
 
 ENV ANDROID_SDK_ROOT=/opt/android-sdk
-ENV ANDROID_NDK_VERSION=28.1.13356709
+ENV ANDROID_NDK_VERSION=28.0.13004108
 ENV ANDROID_HOME=$ANDROID_SDK_ROOT
 ENV PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
 
