@@ -72,6 +72,7 @@ import dev.davidv.translator.ReadonlyModalOutputAlignment
 import dev.davidv.translator.displayName
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -295,6 +296,31 @@ fun SettingsScreen(
               overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
           }
+        }
+      }
+
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors =
+          CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+          ),
+      ) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Text(
+            text = "Popup settings",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.primary,
+          )
+
+          Text(
+            text = "Popup shows up when selecting 'Translate' from the long-press menu",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
 
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -303,7 +329,7 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Hide input when acting as a popup",
+                text = "Hide input",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
               )
@@ -317,49 +343,65 @@ fun SettingsScreen(
             )
           }
 
-          if (settings.onlyShowOutputOnReadonlyModal) {
-            var readonlyModalAlignmentExpanded by remember { mutableStateOf(false) }
+          var readonlyModalAlignmentExpanded by remember { mutableStateOf(false) }
 
-            Text(
-              text = "Readonly popup vertical position",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurface,
+          Text(
+            text = "Popup position",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+
+          ExposedDropdownMenuBox(
+            expanded = readonlyModalAlignmentExpanded,
+            onExpandedChange = { readonlyModalAlignmentExpanded = it },
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            OutlinedTextField(
+              value = settings.readonlyModalOutputAlignment.displayName,
+              onValueChange = {},
+              readOnly = true,
+              trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = readonlyModalAlignmentExpanded)
+              },
+              modifier =
+                Modifier
+                  .menuAnchor()
+                  .fillMaxWidth(),
+              colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             )
-
-            ExposedDropdownMenuBox(
+            ExposedDropdownMenu(
               expanded = readonlyModalAlignmentExpanded,
-              onExpandedChange = { readonlyModalAlignmentExpanded = it },
-              modifier = Modifier.fillMaxWidth(),
+              onDismissRequest = { readonlyModalAlignmentExpanded = false },
             ) {
-              OutlinedTextField(
-                value = settings.readonlyModalOutputAlignment.displayName,
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = {
-                  ExposedDropdownMenuDefaults.TrailingIcon(expanded = readonlyModalAlignmentExpanded)
-                },
-                modifier =
-                  Modifier
-                    .menuAnchor()
-                    .fillMaxWidth(),
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-              )
-              ExposedDropdownMenu(
-                expanded = readonlyModalAlignmentExpanded,
-                onDismissRequest = { readonlyModalAlignmentExpanded = false },
-              ) {
-                ReadonlyModalOutputAlignment.entries.forEach { alignment ->
-                  DropdownMenuItem(
-                    text = { Text(alignment.displayName) },
-                    onClick = {
-                      onSettingsChange(settings.copy(readonlyModalOutputAlignment = alignment))
-                      readonlyModalAlignmentExpanded = false
-                    },
-                  )
-                }
+              ReadonlyModalOutputAlignment.entries.forEach { alignment ->
+                DropdownMenuItem(
+                  text = { Text(alignment.displayName) },
+                  onClick = {
+                    onSettingsChange(settings.copy(readonlyModalOutputAlignment = alignment))
+                    readonlyModalAlignmentExpanded = false
+                  },
+                )
               }
             }
           }
+
+          Text(
+            text = "Popup size: ${(settings.readonlyModalCompactHeightFactor * 100).toInt()}%",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+
+          Slider(
+            value = settings.readonlyModalCompactHeightFactor,
+            onValueChange = { value ->
+              onSettingsChange(
+                settings.copy(readonlyModalCompactHeightFactor = (value * 20f).roundToInt() / 20f),
+              )
+            },
+            valueRange = 0.2f..0.8f,
+            steps = 11,
+            modifier = Modifier.fillMaxWidth(),
+          )
         }
       }
 

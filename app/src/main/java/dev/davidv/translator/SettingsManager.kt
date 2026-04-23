@@ -96,6 +96,11 @@ class SettingsManager(
       } else {
         defaults.readonlyModalOutputAlignment
       }
+    val readonlyModalCompactHeightFactor =
+      prefs.getFloat(
+        "readonly_modal_compact_height_factor",
+        defaults.readonlyModalCompactHeightFactor,
+      )
     val addSpacesForJapaneseTransliteration =
       prefs.getBoolean(
         "add_spaces_for_japanese_transliteration",
@@ -125,6 +130,7 @@ class SettingsManager(
       showTransliterationOnInput = showTransliterationOnInput,
       onlyShowOutputOnReadonlyModal = onlyShowOutputOnReadonlyModal,
       readonlyModalOutputAlignment = readonlyModalOutputAlignment,
+      readonlyModalCompactHeightFactor = readonlyModalCompactHeightFactor,
       addSpacesForJapaneseTransliteration = addSpacesForJapaneseTransliteration,
       ttsPlaybackSpeed = ttsPlaybackSpeed,
       ttsVoiceOverrides = ttsVoiceOverrides,
@@ -202,6 +208,10 @@ class SettingsManager(
       if (newSettings.readonlyModalOutputAlignment != currentSettings.readonlyModalOutputAlignment) {
         putString("readonly_modal_output_alignment", newSettings.readonlyModalOutputAlignment.name)
         modifiedSettings.add("readonly_modal_output_alignment")
+      }
+      if (newSettings.readonlyModalCompactHeightFactor != currentSettings.readonlyModalCompactHeightFactor) {
+        putFloat("readonly_modal_compact_height_factor", newSettings.readonlyModalCompactHeightFactor)
+        modifiedSettings.add("readonly_modal_compact_height_factor")
       }
       if (newSettings.addSpacesForJapaneseTransliteration != currentSettings.addSpacesForJapaneseTransliteration) {
         putBoolean("add_spaces_for_japanese_transliteration", newSettings.addSpacesForJapaneseTransliteration)

@@ -38,6 +38,7 @@ data class AppSettings(
   val showTransliterationOnInput: Boolean = false,
   val onlyShowOutputOnReadonlyModal: Boolean = false,
   val readonlyModalOutputAlignment: ReadonlyModalOutputAlignment = ReadonlyModalOutputAlignment.MIDDLE,
+  val readonlyModalCompactHeightFactor: Float = 0.35f,
   val addSpacesForJapaneseTransliteration: Boolean = true,
   val ttsPlaybackSpeed: Float = 1.0f,
   val ttsVoiceOverrides: Map<String, String> = emptyMap(),

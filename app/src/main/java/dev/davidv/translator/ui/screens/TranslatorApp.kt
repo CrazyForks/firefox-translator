@@ -264,18 +264,17 @@ fun TranslatorApp(
     animationSpec = tween(300),
     label = "opacity",
   )
-  val useCompactReadonlyModal =
-    currentLaunchMode == LaunchMode.ReadonlyModal && settings.onlyShowOutputOnReadonlyModal
-  val compactReadonlyModalHeightPx =
+  val isReadonlyPopup = currentLaunchMode == LaunchMode.ReadonlyModal
+  val readonlyPopupHeightPx =
     with(LocalDensity.current) {
-      (LocalConfiguration.current.screenHeightDp.dp * (0.46f * 0.75f)).roundToPx()
+      (LocalConfiguration.current.screenHeightDp.dp * settings.readonlyModalCompactHeightFactor).roundToPx()
     }
 
   val heightFactor by animateFloatAsState(
     targetValue =
       when {
         currentLaunchMode == LaunchMode.Normal -> 1f
-        useCompactReadonlyModal -> 1f
+        isReadonlyPopup -> 1f
         else -> 0.6f
       },
     animationSpec = tween(300),
@@ -288,7 +287,7 @@ fun TranslatorApp(
   )
   val modalGravity =
     when {
-      currentLaunchMode == LaunchMode.ReadonlyModal && settings.onlyShowOutputOnReadonlyModal ->
+      isReadonlyPopup ->
         when (settings.readonlyModalOutputAlignment) {
           dev.davidv.translator.ReadonlyModalOutputAlignment.TOP -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
           dev.davidv.translator.ReadonlyModalOutputAlignment.MIDDLE -> Gravity.CENTER
@@ -309,8 +308,8 @@ fun TranslatorApp(
       window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
     }
     when {
-      useCompactReadonlyModal && modalGravity != null -> {
-        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, compactReadonlyModalHeightPx)
+      isReadonlyPopup && modalGravity != null -> {
+        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, readonlyPopupHeightPx)
         window.setGravity(modalGravity)
       }
       modalGravity != null -> {
