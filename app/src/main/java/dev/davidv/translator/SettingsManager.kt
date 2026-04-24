@@ -107,6 +107,7 @@ class SettingsManager(
         defaults.addSpacesForJapaneseTransliteration,
       )
     val ttsPlaybackSpeed = prefs.getFloat("tts_playback_speed", defaults.ttsPlaybackSpeed)
+    val tapToTranslateEnabled = prefs.getBoolean("tap_to_translate_enabled", defaults.tapToTranslateEnabled)
     val ttsVoiceOverrides =
       prefs
         .getString("tts_voice_overrides", null)
@@ -134,6 +135,7 @@ class SettingsManager(
       addSpacesForJapaneseTransliteration = addSpacesForJapaneseTransliteration,
       ttsPlaybackSpeed = ttsPlaybackSpeed,
       ttsVoiceOverrides = ttsVoiceOverrides,
+      tapToTranslateEnabled = tapToTranslateEnabled,
     )
   }
 
@@ -224,6 +226,10 @@ class SettingsManager(
       if (newSettings.ttsVoiceOverrides != currentSettings.ttsVoiceOverrides) {
         putString("tts_voice_overrides", serializeVoiceOverrides(newSettings.ttsVoiceOverrides))
         modifiedSettings.add("tts_voice_overrides")
+      }
+      if (newSettings.tapToTranslateEnabled != currentSettings.tapToTranslateEnabled) {
+        putBoolean("tap_to_translate_enabled", newSettings.tapToTranslateEnabled)
+        modifiedSettings.add("tap_to_translate_enabled")
       }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")

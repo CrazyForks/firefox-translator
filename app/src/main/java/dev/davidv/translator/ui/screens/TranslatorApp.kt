@@ -30,10 +30,9 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,9 +40,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,9 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat.startActivity
 import androidx.core.content.FileProvider
@@ -259,22 +256,13 @@ fun TranslatorApp(
     }
   }
 
-  val opacity by animateFloatAsState(
-    targetValue = if (modalVisible) 0.4f else 0f,
-    animationSpec = tween(300),
-    label = "opacity",
-  )
   val isReadonlyPopup = currentLaunchMode == LaunchMode.ReadonlyModal
-  val readonlyPopupHeightPx =
-    with(LocalDensity.current) {
-      (LocalConfiguration.current.screenHeightDp.dp * settings.readonlyModalCompactHeightFactor).roundToPx()
-    }
 
   val heightFactor by animateFloatAsState(
     targetValue =
       when {
         currentLaunchMode == LaunchMode.Normal -> 1f
-        isReadonlyPopup -> 1f
+        isReadonlyPopup -> settings.readonlyModalCompactHeightFactor
         else -> 0.6f
       },
     animationSpec = tween(300),
@@ -285,58 +273,36 @@ fun TranslatorApp(
     animationSpec = tween(300),
     label = "widthFactor",
   )
-  val modalGravity =
-    when {
-      isReadonlyPopup ->
-        when (settings.readonlyModalOutputAlignment) {
-          dev.davidv.translator.ReadonlyModalOutputAlignment.TOP -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
-          dev.davidv.translator.ReadonlyModalOutputAlignment.MIDDLE -> Gravity.CENTER
-          dev.davidv.translator.ReadonlyModalOutputAlignment.BOTTOM -> Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        }
-      currentLaunchMode != LaunchMode.Normal -> Gravity.CENTER
-      else -> null
+  val popupAlignment =
+    when (settings.readonlyModalOutputAlignment) {
+      dev.davidv.translator.ReadonlyModalOutputAlignment.TOP -> Alignment.TopCenter
+      dev.davidv.translator.ReadonlyModalOutputAlignment.MIDDLE -> Alignment.Center
+      dev.davidv.translator.ReadonlyModalOutputAlignment.BOTTOM -> Alignment.BottomCenter
     }
 
   SideEffect {
     val activity = context as? Activity ?: return@SideEffect
     val window = activity.window ?: return@SideEffect
-    if (currentLaunchMode != LaunchMode.Normal && modalVisible) {
-      window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-      window.setDimAmount(0.12f)
-    } else {
-      window.setDimAmount(0f)
-      window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-    }
-    when {
-      isReadonlyPopup && modalGravity != null -> {
-        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, readonlyPopupHeightPx)
-        window.setGravity(modalGravity)
-      }
-      modalGravity != null -> {
-        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        window.setGravity(modalGravity)
-      }
-      else -> {
-        window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-        window.setGravity(Gravity.CENTER)
-      }
-    }
+    window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+    window.setDimAmount(0f)
+    window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+    window.setGravity(Gravity.CENTER)
   }
 
   Box(
     modifier = Modifier.fillMaxSize(),
     contentAlignment = Alignment.Center,
   ) {
-    // Background scrim for modal modes
+    // Click-outside-to-dismiss (invisible)
     if (currentLaunchMode != LaunchMode.Normal) {
       Box(
         modifier =
           Modifier
             .fillMaxSize()
-            .background(
-              androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
-                .copy(alpha = opacity),
-            ).clickable {
+            .clickable(
+              interactionSource = remember { MutableInteractionSource() },
+              indication = null,
+            ) {
               viewModel.setModalVisible(false)
               kotlinx.coroutines.MainScope().launch {
                 kotlinx.coroutines.delay(400)
@@ -346,17 +312,34 @@ fun TranslatorApp(
       )
     }
 
+    val slideFromTop = popupAlignment != Alignment.BottomCenter
+    val slideMultiplier = if (popupAlignment == Alignment.Center) 2.5f else 1.5f
+    val modalTransitionState =
+      remember { androidx.compose.animation.core.MutableTransitionState(false) }
+    LaunchedEffect(modalVisible) { modalTransitionState.targetState = modalVisible }
     AnimatedVisibility(
-      visible = modalVisible,
-      enter =
-        slideInVertically(
-          animationSpec = tween(500, delayMillis = 100),
-          initialOffsetY = { fullHeight -> fullHeight },
-        ),
+      visibleState = modalTransitionState,
+      modifier =
+        Modifier
+          .align(popupAlignment)
+          .then(
+            if (currentLaunchMode != LaunchMode.Normal) {
+              Modifier
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(vertical = 8.dp)
+            } else {
+              Modifier
+            },
+          ),
+      enter = androidx.compose.animation.EnterTransition.None,
       exit =
         slideOutVertically(
           animationSpec = tween(300),
-          targetOffsetY = { fullHeight -> (fullHeight * 1.5f).toInt() },
+          targetOffsetY = { fullHeight ->
+            val sign = if (slideFromTop) -1 else 1
+            (fullHeight * slideMultiplier).toInt() * sign
+          },
         ),
     ) {
       Box(

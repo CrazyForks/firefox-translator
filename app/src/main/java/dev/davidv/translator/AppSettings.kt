@@ -42,4 +42,5 @@ data class AppSettings(
   val addSpacesForJapaneseTransliteration: Boolean = true,
   val ttsPlaybackSpeed: Float = 1.0f,
   val ttsVoiceOverrides: Map<String, String> = emptyMap(),
+  val tapToTranslateEnabled: Boolean = false,
 )

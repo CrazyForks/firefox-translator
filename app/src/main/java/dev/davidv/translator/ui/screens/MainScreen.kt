@@ -289,7 +289,9 @@ fun MainScreen(
                 modifier =
                   Modifier
                     .fillMaxWidth()
-                    .height(parentHeight * 0.5f),
+                    .let { m ->
+                      if (displayImage == null) m.weight(1f, fill = true) else m.height(parentHeight * 0.5f)
+                    },
               ) {
                 Box(
                   modifier =
@@ -403,12 +405,8 @@ fun MainScreen(
               modifier =
                 Modifier
                   .fillMaxWidth()
-                  .let { modifier ->
-                    if (showOnlyOutputInReadonlyModal && displayImage == null) {
-                      modifier.weight(1f, fill = true)
-                    } else {
-                      modifier.height(parentHeight * 0.5f)
-                    }
+                  .let { m ->
+                    if (displayImage == null) m.weight(1f, fill = true) else m.height(parentHeight * 0.5f)
                   },
             ) {
               TranslationField(

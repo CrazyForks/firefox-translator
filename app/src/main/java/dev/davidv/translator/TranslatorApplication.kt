@@ -48,5 +48,9 @@ class TranslatorApplication : Application() {
     languageDetector = LanguageDetector { code -> languageCatalog?.languageByCode(code) }
     translationCoordinator =
       TranslationCoordinator(translationService, speechService, languageDetector, imageProcessor, settingsManager)
+
+    if (settingsManager.settings.value.tapToTranslateEnabled) {
+      TapToTranslateNotification.show(this)
+    }
   }
 }

@@ -69,6 +69,7 @@ import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.PermissionHelper
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadonlyModalOutputAlignment
+import dev.davidv.translator.TapToTranslateNotification
 import dev.davidv.translator.displayName
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.delay
@@ -163,6 +164,16 @@ fun SettingsScreen(
       contract = ActivityResultContracts.StartActivityForResult(),
     ) { _ ->
       assistantRoleHeld = isAssistantRoleHeld(context)
+    }
+
+  val notificationPermissionLauncher =
+    rememberLauncherForActivityResult(
+      contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+      if (granted) {
+        onSettingsChange(settings.copy(tapToTranslateEnabled = true))
+        TapToTranslateNotification.show(context)
+      }
     }
   Scaffold(
     topBar = {
@@ -294,6 +305,47 @@ fun SettingsScreen(
               color = MaterialTheme.colorScheme.onSurface,
               maxLines = 1,
               overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Tap to Translate notification",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Text(
+                text = "Persistent notification that opens the popup.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+
+            Switch(
+              checked = settings.tapToTranslateEnabled,
+              onCheckedChange = { checked ->
+                if (checked) {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                      context,
+                      android.Manifest.permission.POST_NOTIFICATIONS,
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                  ) {
+                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                  } else {
+                    onSettingsChange(settings.copy(tapToTranslateEnabled = true))
+                    TapToTranslateNotification.show(context)
+                  }
+                } else {
+                  onSettingsChange(settings.copy(tapToTranslateEnabled = false))
+                  TapToTranslateNotification.hide(context)
+                }
+              },
             )
           }
         }

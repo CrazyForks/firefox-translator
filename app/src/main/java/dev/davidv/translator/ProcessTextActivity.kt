@@ -119,6 +119,10 @@ class ProcessTextActivity : ComponentActivity() {
     }
 
     when (intent?.action) {
+      TapToTranslateNotification.ACTION_OPEN_POPUP -> {
+        launchMode = LaunchMode.ReadonlyModal
+        textToTranslate = ""
+      }
       Intent.ACTION_TRANSLATE -> {
         val isReadonly = intent.getBooleanExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true)
         Log.i("IntentMessage", "is RO: $isReadonly")

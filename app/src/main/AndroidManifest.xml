@@ -20,6 +20,8 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".TranslatorApplication"
@@ -66,6 +68,11 @@
           <category android:name="android.intent.category.DEFAULT" />
           <action android:name="android.intent.action.TRANSLATE" />
         </intent-filter>
+
+        <intent-filter>
+          <action android:name="dev.davidv.translator.OPEN_POPUP" />
+          <category android:name="android.intent.category.DEFAULT" />
+        </intent-filter>
       </activity>
 
       <activity
@@ -100,6 +107,29 @@
             android:name=".DownloadService"
             android:enabled="true"
             android:exported="false" />
+
+        <receiver
+            android:name=".TapToTranslateDismissReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".TapToTranslateBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".QuickTranslateTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_translate_button"
+            android:label="@string/quick_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".AidlTranslationService"

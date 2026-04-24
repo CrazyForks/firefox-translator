@@ -2,4 +2,9 @@
     <string name="app_name">Translator</string>
     <string name="translate_text">Translate</string>
     <string name="accessibility_service_description">Enable this service to translate text on screen. Tap the floating translate button, then tap any text to translate it in place.</string>
+    <string name="tap_to_translate_title">Tap to Translate is on</string>
+    <string name="tap_to_translate_body">Tap to open the translator popup</string>
+    <string name="tap_to_translate_channel">Tap to Translate</string>
+    <string name="tap_to_translate_channel_description">Persistent notification for quick access to the translator popup</string>
+    <string name="quick_tile_label">Translate</string>
 </resources>
