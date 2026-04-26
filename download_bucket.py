@@ -20,6 +20,7 @@ if str(TRANSLATOR_DIR) not in sys.path:
     sys.path.insert(0, str(TRANSLATOR_DIR))
 
 import catalog_mirror
+import catalog_adblock
 
 
 DEFAULT_MANIFEST = SCRIPT_DIR / "catalog_sources/source_catalog.json"
@@ -34,6 +35,7 @@ class DownloadEntry:
     url: str
     dest: Path
     size_bytes: int | None
+    refresh_always: bool
 
 
 def known_size(size_bytes: int | None) -> int | None:
@@ -88,6 +90,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print every resolved file path in dry-run mode and every completed file in download mode.",
     )
+    parser.add_argument(
+        "--refresh-adblock",
+        action="store_true",
+        help="Re-download adblock source lists even when they already exist.",
+    )
     return parser.parse_args()
 
 
@@ -141,19 +148,21 @@ def resolve_destination(pack: dict, file_info: dict, output_dir: Path) -> Path:
     return output_dir / feature / relative
 
 
-def build_download_entries(manifest: dict, output_dir: Path) -> list[DownloadEntry]:
+def build_download_entries(manifest: dict, output_dir: Path, refresh_adblock: bool) -> list[DownloadEntry]:
     entries_by_dest: dict[Path, DownloadEntry] = {}
 
     for pack_id, pack in manifest.get("packs", {}).items():
         feature = pack.get("feature", "misc")
         for file_info in pack.get("files", []):
             dest = resolve_destination(pack, file_info, output_dir)
+            size_bytes = known_size(file_info.get("sizeBytes"))
             entry = DownloadEntry(
                 pack_id=pack_id,
                 feature=feature,
                 url=file_info["url"],
                 dest=dest,
-                size_bytes=known_size(file_info.get("sizeBytes")),
+                size_bytes=size_bytes,
+                refresh_always=refresh_adblock and pack.get("kind") == catalog_adblock.ADBLOCK_KIND,
             )
 
             existing = entries_by_dest.get(dest)
@@ -178,7 +187,7 @@ def summarize(entries: Iterable[DownloadEntry], output_dir: Path) -> tuple[int, 
     for entry in entries:
         total_files += 1
         total_bytes += entry.size_bytes or 0
-        if entry.dest.exists():
+        if should_skip(entry):
             present_files += 1
             present_bytes += entry.size_bytes or 0
         else:
@@ -204,7 +213,26 @@ def format_size(num_bytes: int) -> str:
 
 
 def should_skip(entry: DownloadEntry) -> bool:
-    return entry.dest.exists()
+    return entry.dest.exists() and not entry.refresh_always
+
+
+def update_manifest_sizes(manifest: dict, output_dir: Path, manifest_path: Path) -> None:
+    changed = False
+    for pack in manifest.get("packs", {}).values():
+        refresh_pack = pack.get("kind") == catalog_adblock.ADBLOCK_KIND
+        for file_info in pack.get("files", []):
+            dest = resolve_destination(pack, file_info, output_dir)
+            if not dest.exists():
+                continue
+            current_size = file_info.get("sizeBytes")
+            actual_size = dest.stat().st_size
+            if not isinstance(current_size, int) or current_size <= 0:
+                if current_size != actual_size:
+                    file_info["sizeBytes"] = actual_size
+                    changed = True
+    if changed:
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"updated_manifest_sizes={manifest_path}")
 
 
 def download_once(entry: DownloadEntry, timeout: int) -> str:
@@ -275,7 +303,7 @@ async def fetch_all(entries: list[DownloadEntry], concurrency: int, timeout: int
 async def main() -> int:
     args = parse_args()
     manifest = load_manifest(args.manifest)
-    entries = build_download_entries(manifest, args.output)
+    entries = build_download_entries(manifest, args.output, args.refresh_adblock)
     total_files, total_bytes, missing_files, missing_bytes = summarize(entries, args.output)
     print(f"size_pretty={format_size(total_bytes)}")
     print(f"bytes_to_download_pretty={format_size(missing_bytes)}")
@@ -291,9 +319,18 @@ async def main() -> int:
         return 0
     if missing_files == 0:
         print("All files already present.")
-        return 0
+    else:
+        result = await fetch_all(entries, args.concurrency, args.timeout, args.retries, args.verbose)
+        if result != 0:
+            return result
 
-    return await fetch_all(entries, args.concurrency, args.timeout, args.retries, args.verbose)
+    update_manifest_sizes(manifest, args.output, args.manifest)
+    adblock_size = await asyncio.to_thread(catalog_adblock.build_adblock_zip, manifest, args.output)
+    if adblock_size > 0:
+        print(f"adblock_bundle={catalog_adblock.adblock_bundle_path(args.output)}")
+        print(f"adblock_bundle_size={adblock_size}")
+        print(f"adblock_bundle_size_pretty={format_size(adblock_size)}")
+    return 0
 
 
 if __name__ == "__main__":

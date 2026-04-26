@@ -59,6 +59,25 @@ pub struct DictionaryWordRecord {
     pub redirects: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct CatalogFileRecord {
+    pub name: String,
+    pub size_bytes: u64,
+    pub install_path: String,
+    pub url: String,
+}
+
+impl From<translator::catalog::AssetFileV2> for CatalogFileRecord {
+    fn from(file: translator::catalog::AssetFileV2) -> Self {
+        Self {
+            name: file.name,
+            size_bytes: file.size_bytes,
+            install_path: file.install_path,
+            url: file.url,
+        }
+    }
+}
+
 #[cfg(feature = "dictionary")]
 fn map_dictionary_word(word: translator::tarkka::WordWithTaggedEntries) -> DictionaryWordRecord {
     DictionaryWordRecord {
@@ -158,6 +177,15 @@ impl CatalogHandle {
             .dictionary_info(&translator::DictionaryCode::from(dictionary_code))
     }
 
+    fn support_files_by_kind(&self, support_kind: String) -> Vec<CatalogFileRecord> {
+        self.snapshot()
+            .catalog
+            .support_files_by_kind(&support_kind)
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
     fn lookup_dictionary(
         &self,
         language_code: String,
@@ -219,6 +247,17 @@ impl CatalogHandle {
     ) -> Result<String, CatalogError> {
         self.session
             .translate_text(&from_code, &to_code, &text)
+            .map_err(CatalogError::from)
+    }
+
+    fn translate_html_fragments(
+        &self,
+        from_code: String,
+        to_code: String,
+        fragments: Vec<String>,
+    ) -> Result<Vec<String>, CatalogError> {
+        self.session
+            .translate_html_fragments(&from_code, &to_code, &fragments)
             .map_err(CatalogError::from)
     }
 
@@ -327,8 +366,19 @@ impl CatalogHandle {
             .plan_download(&language_code, feature, selected_tts_pack_id.as_deref())
     }
 
+    fn plan_support_download_by_kind(
+        &self,
+        support_kind: String,
+    ) -> Option<translator::DownloadPlan> {
+        self.session.plan_support_download_by_kind(&support_kind)
+    }
+
     fn prepare_delete(&self, language_code: String, feature: Feature) -> translator::DeletePlan {
         self.session.prepare_delete(&language_code, feature)
+    }
+
+    fn prepare_delete_support_by_kind(&self, support_kind: String) -> translator::DeletePlan {
+        self.session.prepare_delete_support_by_kind(&support_kind)
     }
 
     fn prepare_delete_superseded_tts(
@@ -342,6 +392,10 @@ impl CatalogHandle {
 
     fn size_bytes(&self, language_code: String, feature: Feature) -> u64 {
         self.session.size_bytes(&language_code, feature)
+    }
+
+    fn support_size_bytes_by_kind(&self, support_kind: String) -> u64 {
+        self.session.support_size_bytes_by_kind(&support_kind)
     }
 
     fn default_tts_pack_id(&self, language_code: String) -> Option<String> {

@@ -124,6 +124,13 @@ data class LanguageAvailabilityEntry(
   val availability: LangAvailability,
 )
 
+data class CatalogFileEntry(
+  val name: String,
+  val sizeBytes: Long,
+  val installPath: String,
+  val url: String,
+)
+
 class LanguageCatalog private constructor(
   private val handle: CatalogHandle,
   val formatVersion: Int,
@@ -195,6 +202,16 @@ class LanguageCatalog private constructor(
       DictionaryInfo(date = it.date, filename = it.filename, size = it.size.toLong(), type = it.typeName, wordCount = it.wordCount.toLong())
     }
 
+  fun supportFilesByKind(kind: String): List<CatalogFileEntry> =
+    handle.supportFilesByKind(kind).map { file ->
+      CatalogFileEntry(
+        name = file.name,
+        sizeBytes = file.sizeBytes.toLong(),
+        installPath = file.installPath,
+        url = file.url,
+      )
+    }
+
   @Throws(CatalogException::class)
   fun lookupDictionary(
     language: Language,
@@ -241,6 +258,13 @@ class LanguageCatalog private constructor(
       targetLanguage.code,
       availableLanguages.map { it.code },
     )
+
+  @Throws(CatalogException::class)
+  fun translateHtmlFragments(
+    from: Language,
+    to: Language,
+    fragments: List<String>,
+  ): List<String> = handle.translateHtmlFragments(from.code, to.code, fragments)
 
   fun translateStructuredFragments(
     fragments: List<StyledFragment>,
@@ -302,10 +326,14 @@ class LanguageCatalog private constructor(
     selectedTtsPackId: String? = null,
   ): DownloadPlan? = handle.planDownload(languageCode, feature, selectedTtsPackId)
 
+  fun planSupportDownloadByKind(kind: String): DownloadPlan? = handle.planSupportDownloadByKind(kind)
+
   fun prepareDelete(
     languageCode: String,
     feature: Feature,
   ): DeletePlan = handle.prepareDelete(languageCode, feature)
+
+  fun prepareDeleteSupportByKind(kind: String): DeletePlan = handle.prepareDeleteSupportByKind(kind)
 
   fun prepareDeleteSupersededTts(
     languageCode: String,
@@ -318,6 +346,14 @@ class LanguageCatalog private constructor(
     languageCode: String,
     feature: Feature,
   ): Long = handle.sizeBytes(languageCode, feature).toLong()
+
+  fun supportSizeBytesByKind(kind: String): Long = handle.supportSizeBytesByKind(kind).toLong()
+
+  fun supportInstalledByKind(kind: String): Boolean {
+    val sizeBytes = supportSizeBytesByKind(kind)
+    val plan = planSupportDownloadByKind(kind) ?: return false
+    return sizeBytes > 0 && plan.tasks.isEmpty()
+  }
 
   fun availableTtsVoices(languageCode: String): List<TtsVoiceOption> =
     handle.availableTtsVoices(languageCode).map { voice ->
