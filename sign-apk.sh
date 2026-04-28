@@ -18,7 +18,7 @@ STORE_PASSWORD="$2"
 KEY_PASSWORD="$3"
 KEY_ALIAS="$4"
 
-ARCHS=("arm64-v8a:arm64" "armeabi-v7a:armv7")
+ARCHS=("arm64-v8a:arm64" "armeabi-v7a:armv7" "x86_64:x86_64")
 
 if [ -n "${SIGN_DEBUG:-}" ]; then
   pattern="*-debug.apk"
