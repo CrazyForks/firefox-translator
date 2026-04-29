@@ -85,7 +85,6 @@ fun TranslationField(
   onVoiceSelected: (String) -> Unit = {},
 ) {
   val context = LocalContext.current
-  var showSpeechOptions by remember { mutableStateOf(false) }
 
   val actionModeCallback =
     remember(onDictionaryLookup) {
@@ -185,118 +184,147 @@ fun TranslationField(
         }
 
         if (canSpeak || isAudioLoading || isAudioPlaying) {
-          Box(
-            modifier =
-              Modifier
-                .padding(top = 6.dp)
-                .size(24.dp),
-          ) {
-            Box(
-              modifier =
-                Modifier
-                  .matchParentSize()
-                  .clip(RoundedCornerShape(8.dp))
-                  .combinedClickable(
-                    onClick = onSpeak,
-                    onLongClick = {
-                      showSpeechOptions = true
-                    },
-                  ).semantics {
-                    contentDescription = if (isAudioPlaying) "Stop audio" else "Speak translation"
-                  },
-              contentAlignment = Alignment.Center,
-            ) {
-              if (isAudioLoading && !isAudioPlaying) {
-                CircularProgressIndicator(
-                  modifier = Modifier.size(18.dp),
-                  strokeWidth = 2.dp,
-                  color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                )
-              } else {
-                Icon(
-                  painter = painterResource(id = if (isAudioPlaying) R.drawable.stop else R.drawable.volume_up),
-                  contentDescription = null,
-                  tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                )
-              }
-            }
+          SpeechPlaybackButton(
+            isAudioPlaying = isAudioPlaying,
+            isAudioLoading = isAudioLoading,
+            speechPlaybackSpeed = speechPlaybackSpeed,
+            selectedVoiceName = selectedVoiceName,
+            availableVoices = availableVoices,
+            onSpeak = onSpeak,
+            onSpeechPlaybackSpeedChange = onSpeechPlaybackSpeedChange,
+            onVoiceSelected = onVoiceSelected,
+            contentDescription = if (isAudioPlaying) "Stop audio" else "Speak translation",
+            modifier = Modifier.padding(top = 6.dp),
+          )
+        }
+      }
+    }
+  }
+}
 
-            DropdownMenu(
-              expanded = showSpeechOptions,
-              onDismissRequest = { showSpeechOptions = false },
-            ) {
-              Column(
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun SpeechPlaybackButton(
+  isAudioPlaying: Boolean,
+  isAudioLoading: Boolean,
+  speechPlaybackSpeed: Float,
+  selectedVoiceName: String?,
+  availableVoices: List<TtsVoiceOption>,
+  onSpeak: () -> Unit,
+  onSpeechPlaybackSpeedChange: (Float) -> Unit,
+  onVoiceSelected: (String) -> Unit,
+  contentDescription: String,
+  modifier: Modifier = Modifier,
+) {
+  var showSpeechOptions by remember { mutableStateOf(false) }
+
+  Box(
+    modifier =
+      modifier
+        .size(24.dp),
+  ) {
+    Box(
+      modifier =
+        Modifier
+          .matchParentSize()
+          .clip(RoundedCornerShape(8.dp))
+          .combinedClickable(
+            onClick = onSpeak,
+            onLongClick = {
+              showSpeechOptions = true
+            },
+          ).semantics {
+            this.contentDescription = contentDescription
+          },
+      contentAlignment = Alignment.Center,
+    ) {
+      if (isAudioLoading && !isAudioPlaying) {
+        CircularProgressIndicator(
+          modifier = Modifier.size(18.dp),
+          strokeWidth = 2.dp,
+          color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+      } else {
+        Icon(
+          painter = painterResource(id = if (isAudioPlaying) R.drawable.stop else R.drawable.volume_up),
+          contentDescription = null,
+          tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+        )
+      }
+    }
+
+    DropdownMenu(
+      expanded = showSpeechOptions,
+      onDismissRequest = { showSpeechOptions = false },
+    ) {
+      Column(
+        modifier =
+          Modifier
+            .widthIn(min = 220.dp, max = 280.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+      ) {
+        Text(
+          text = "Playback speed",
+          style = MaterialTheme.typography.labelLarge,
+        )
+        SpeechSpeedControl(
+          speed = speechPlaybackSpeed,
+          onSpeedChange = onSpeechPlaybackSpeedChange,
+          modifier =
+            Modifier
+              .padding(top = 8.dp),
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+        Text(
+          text = "Voice",
+          style = MaterialTheme.typography.labelLarge,
+        )
+        Column(
+          modifier =
+            Modifier
+              .padding(top = 8.dp)
+              .heightIn(max = 220.dp)
+              .verticalScroll(rememberScrollState()),
+        ) {
+          if (availableVoices.isEmpty()) {
+            Text(
+              text = "Default voice",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          } else {
+            availableVoices.forEach { voice ->
+              val isSelected = voice.name == selectedVoiceName
+              Text(
+                text = voice.displayName,
                 modifier =
                   Modifier
-                    .widthIn(min = 220.dp, max = 280.dp)
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-              ) {
-                Text(
-                  text = "Playback speed",
-                  style = MaterialTheme.typography.labelLarge,
-                )
-                SpeechSpeedControl(
-                  speed = speechPlaybackSpeed,
-                  onSpeedChange = onSpeechPlaybackSpeedChange,
-                  modifier =
-                    Modifier
-                      .padding(top = 8.dp),
-                )
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                Text(
-                  text = "Voice",
-                  style = MaterialTheme.typography.labelLarge,
-                )
-                Column(
-                  modifier =
-                    Modifier
-                      .padding(top = 8.dp)
-                      .heightIn(max = 220.dp)
-                      .verticalScroll(rememberScrollState()),
-                ) {
-                  if (availableVoices.isEmpty()) {
-                    Text(
-                      text = "Default voice",
-                      style = MaterialTheme.typography.bodyMedium,
-                      color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                      if (isSelected) {
+                        MaterialTheme.colorScheme.secondaryContainer
+                      } else {
+                        MaterialTheme.colorScheme.surface
+                      },
+                    ).combinedClickable(
+                      onClick = {
+                        onVoiceSelected(voice.name)
+                        showSpeechOptions = false
+                      },
+                      onLongClick = {},
+                    ).padding(horizontal = 10.dp, vertical = 8.dp),
+                color =
+                  if (isSelected) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
                   } else {
-                    availableVoices.forEach { voice ->
-                      val isSelected = voice.name == selectedVoiceName
-                      Text(
-                        text = voice.displayName,
-                        modifier =
-                          Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                              if (isSelected) {
-                                MaterialTheme.colorScheme.secondaryContainer
-                              } else {
-                                MaterialTheme.colorScheme.surface
-                              },
-                            ).combinedClickable(
-                              onClick = {
-                                onVoiceSelected(voice.name)
-                                showSpeechOptions = false
-                              },
-                              onLongClick = {},
-                            ).padding(horizontal = 10.dp, vertical = 8.dp),
-                        color =
-                          if (isSelected) {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                          } else {
-                            MaterialTheme.colorScheme.onSurface
-                          },
-                        style = MaterialTheme.typography.bodyMedium,
-                      )
-                      Spacer(modifier = Modifier.size(4.dp))
-                    }
-                  }
-                }
-              }
+                    MaterialTheme.colorScheme.onSurface
+                  },
+                style = MaterialTheme.typography.bodyMedium,
+              )
+              Spacer(modifier = Modifier.size(4.dp))
             }
           }
         }

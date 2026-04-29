@@ -41,6 +41,7 @@ data class AppSettings(
   val readonlyModalCompactHeightFactor: Float = 0.35f,
   val addSpacesForJapaneseTransliteration: Boolean = true,
   val ttsPlaybackSpeed: Float = 1.0f,
+  val ttsPlaybackSpeedOverrides: Map<String, Float> = emptyMap(),
   val ttsVoiceOverrides: Map<String, String> = emptyMap(),
   val tapToTranslateEnabled: Boolean = false,
 )

@@ -47,11 +47,19 @@ class SpeechService(
         )
       }
 
-      val speechSpeed = settingsManager.settings.value.ttsPlaybackSpeed.coerceIn(0.5f, 2.0f)
-      val selectedVoiceName = settingsManager.settings.value.ttsVoiceOverrides[language.code]
+      val settings = settingsManager.settings.value
+      val selectedVoiceName = settings.ttsVoiceOverrides[language.code]
+      val speechSpeedVoiceName =
+        selectedVoiceName
+          ?: catalog.availableTtsVoices(language.code).firstOrNull()?.name
+      val speechSpeed =
+        speechSpeedVoiceName
+          ?.let { settings.ttsPlaybackSpeedOverrides[it] }
+          ?: settings.ttsPlaybackSpeed
+      val boundedSpeechSpeed = speechSpeed.coerceIn(0.5f, 2.0f)
       Log.d(
         "SpeechService",
-        "Using TTS voiceName=$selectedVoiceName speechSpeed=$speechSpeed language=${language.code}",
+        "Using TTS voiceName=$selectedVoiceName speechSpeed=$boundedSpeechSpeed language=${language.code}",
       )
       val chunkRequests =
         catalog.planSpeechChunks(
@@ -77,7 +85,7 @@ class SpeechService(
                 catalog.synthesizeSpeechPcm(
                   languageCode = language.code,
                   text = chunkRequest.content,
-                  speechSpeed = speechSpeed,
+                  speechSpeed = boundedSpeechSpeed,
                   voiceName = selectedVoiceName,
                   isPhonemes = chunkRequest.isPhonemes,
                 )

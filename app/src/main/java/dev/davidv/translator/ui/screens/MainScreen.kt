@@ -93,6 +93,7 @@ import dev.davidv.translator.ui.components.ImageCaptureHandler
 import dev.davidv.translator.ui.components.ImageDisplaySection
 import dev.davidv.translator.ui.components.LanguageEvent
 import dev.davidv.translator.ui.components.LanguageSelectionRow
+import dev.davidv.translator.ui.components.SpeechPlaybackButton
 import dev.davidv.translator.ui.components.StyledTextField
 import dev.davidv.translator.ui.components.StyledTextFieldFocusController
 import dev.davidv.translator.ui.components.TranslationField
@@ -122,6 +123,10 @@ fun MainScreen(
   dictionaryLookupLanguage: Language?,
   isAudioPlaying: Boolean = false,
   isAudioLoading: Boolean = false,
+  isInputAudioPlaying: Boolean = false,
+  isInputAudioLoading: Boolean = false,
+  isOutputAudioPlaying: Boolean = false,
+  isOutputAudioLoading: Boolean = false,
   // Action requests
   onMessage: (TranslatorMessage) -> Unit,
   canSwapLanguages: Boolean = true,
@@ -131,10 +136,18 @@ fun MainScreen(
   languageMetadata: Map<Language, LanguageMetadata>,
   downloadStates: Map<Language, DownloadState> = emptyMap(),
   settings: AppSettings,
+  availableSourceTtsVoices: List<TtsVoiceOption> = emptyList(),
+  selectedSourceTtsVoiceName: String? = null,
+  sourceTtsPlaybackSpeed: Float = 1.0f,
   availableTtsVoices: List<TtsVoiceOption> = emptyList(),
   selectedTtsVoiceName: String? = null,
+  targetTtsPlaybackSpeed: Float = 1.0f,
   onTtsPlaybackSpeedChange: (Float) -> Unit = {},
+  onSourceTtsPlaybackSpeedChange: (Float) -> Unit = {},
+  onSourceTtsVoiceSelected: (String) -> Unit = {},
   onTtsVoiceSelected: (String) -> Unit = {},
+  onSpeakInput: (String, Language) -> Unit = { _, _ -> },
+  onSpeakOutput: (String, Language) -> Unit = { _, _ -> },
   launchMode: LaunchMode,
 ) {
   var showFullScreenImage by remember { mutableStateOf(false) }
@@ -324,11 +337,37 @@ fun MainScreen(
                     focusController = inputFocusController,
                   )
                   if (displayImage == null) {
-                    Row(modifier = Modifier.align(Alignment.TopEnd)) {
-                      if (input.isNotEmpty()) {
-                        ClearInput(onMessage)
-                      } else {
-                        PasteButton(onMessage)
+                    Column(
+                      modifier = Modifier.align(Alignment.TopEnd),
+                      horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                      Row {
+                        if (input.isNotEmpty()) {
+                          ClearInput(onMessage)
+                        } else {
+                          PasteButton(onMessage)
+                        }
+                      }
+                      val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isInputAudioPlaying && !isInputAudioLoading
+                      if (input.isNotBlank() && languageState.availabilityFor(from)?.ttsFiles == true && !isOtherAudioActive) {
+                        SpeechPlaybackButton(
+                          isAudioPlaying = isInputAudioPlaying,
+                          isAudioLoading = isInputAudioLoading,
+                          speechPlaybackSpeed = sourceTtsPlaybackSpeed,
+                          selectedVoiceName = selectedSourceTtsVoiceName,
+                          availableVoices = availableSourceTtsVoices,
+                          onSpeak = {
+                            if (isInputAudioPlaying || isInputAudioLoading) {
+                              onStopAudio()
+                            } else {
+                              onSpeakInput(input, from)
+                            }
+                          },
+                          onSpeechPlaybackSpeedChange = onSourceTtsPlaybackSpeedChange,
+                          onVoiceSelected = onSourceTtsVoiceSelected,
+                          contentDescription = if (isInputAudioPlaying) "Stop audio" else "Speak input",
+                          modifier = Modifier.padding(top = 6.dp),
+                        )
                       }
                     }
                   }
@@ -409,6 +448,7 @@ fun MainScreen(
                     if (displayImage == null) m.weight(1f, fill = true) else m.height(parentHeight * 0.5f)
                   },
             ) {
+              val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isOutputAudioPlaying && !isOutputAudioLoading
               TranslationField(
                 text = output,
                 textStyle =
@@ -419,18 +459,18 @@ fun MainScreen(
                 onDictionaryLookup = {
                   onMessage(TranslatorMessage.DictionaryLookup(it, to))
                 },
-                canSpeak = languageState.availabilityFor(to)?.ttsFiles == true,
-                isAudioPlaying = isAudioPlaying,
-                isAudioLoading = isAudioLoading,
-                speechPlaybackSpeed = settings.ttsPlaybackSpeed,
+                canSpeak = languageState.availabilityFor(to)?.ttsFiles == true && !isOtherAudioActive,
+                isAudioPlaying = isOutputAudioPlaying,
+                isAudioLoading = isOutputAudioLoading,
+                speechPlaybackSpeed = targetTtsPlaybackSpeed,
                 selectedVoiceName = selectedTtsVoiceName,
                 availableVoices = availableTtsVoices,
                 onSpeak = {
-                  if (isAudioPlaying || isAudioLoading) {
+                  if (isOutputAudioPlaying || isOutputAudioLoading) {
                     onStopAudio()
                   } else {
                     output?.translated?.takeIf { it.isNotBlank() }?.let { translatedText ->
-                      onMessage(TranslatorMessage.SpeakTranslatedText(translatedText, to))
+                      onSpeakOutput(translatedText, to)
                     }
                   }
                 },

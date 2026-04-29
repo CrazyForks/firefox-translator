@@ -107,6 +107,11 @@ class SettingsManager(
         defaults.addSpacesForJapaneseTransliteration,
       )
     val ttsPlaybackSpeed = prefs.getFloat("tts_playback_speed", defaults.ttsPlaybackSpeed)
+    val ttsPlaybackSpeedOverrides =
+      prefs
+        .getString("tts_playback_speed_overrides", null)
+        ?.let(::parsePlaybackSpeedOverrides)
+        ?: defaults.ttsPlaybackSpeedOverrides
     val tapToTranslateEnabled = prefs.getBoolean("tap_to_translate_enabled", defaults.tapToTranslateEnabled)
     val ttsVoiceOverrides =
       prefs
@@ -134,6 +139,7 @@ class SettingsManager(
       readonlyModalCompactHeightFactor = readonlyModalCompactHeightFactor,
       addSpacesForJapaneseTransliteration = addSpacesForJapaneseTransliteration,
       ttsPlaybackSpeed = ttsPlaybackSpeed,
+      ttsPlaybackSpeedOverrides = ttsPlaybackSpeedOverrides,
       ttsVoiceOverrides = ttsVoiceOverrides,
       tapToTranslateEnabled = tapToTranslateEnabled,
     )
@@ -223,6 +229,10 @@ class SettingsManager(
         putFloat("tts_playback_speed", newSettings.ttsPlaybackSpeed)
         modifiedSettings.add("tts_playback_speed")
       }
+      if (newSettings.ttsPlaybackSpeedOverrides != currentSettings.ttsPlaybackSpeedOverrides) {
+        putString("tts_playback_speed_overrides", serializePlaybackSpeedOverrides(newSettings.ttsPlaybackSpeedOverrides))
+        modifiedSettings.add("tts_playback_speed_overrides")
+      }
       if (newSettings.ttsVoiceOverrides != currentSettings.ttsVoiceOverrides) {
         putString("tts_voice_overrides", serializeVoiceOverrides(newSettings.ttsVoiceOverrides))
         modifiedSettings.add("tts_voice_overrides")
@@ -251,6 +261,27 @@ class SettingsManager(
     val root = JSONObject()
     overrides.toSortedMap().forEach { (languageCode, voiceName) ->
       root.put(languageCode, voiceName)
+    }
+    return root.toString()
+  }
+
+  private fun parsePlaybackSpeedOverrides(json: String): Map<String, Float> =
+    runCatching {
+      val root = JSONObject(json)
+      root.keys().asSequence().mapNotNull { voiceName ->
+        val speed = root.optDouble(voiceName, Double.NaN)
+        if (speed.isNaN()) {
+          null
+        } else {
+          voiceName to speed.toFloat().coerceIn(0.5f, 2.0f)
+        }
+      }.toMap()
+    }.getOrDefault(emptyMap())
+
+  private fun serializePlaybackSpeedOverrides(overrides: Map<String, Float>): String {
+    val root = JSONObject()
+    overrides.toSortedMap().forEach { (voiceName, speed) ->
+      root.put(voiceName, speed.coerceIn(0.5f, 2.0f))
     }
     return root.toString()
   }

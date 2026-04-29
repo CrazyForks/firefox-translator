@@ -63,6 +63,7 @@ import androidx.core.content.FileProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.davidv.translator.AppSettings
 import dev.davidv.translator.DownloadService
 import dev.davidv.translator.DownloadState
 import dev.davidv.translator.Language
@@ -84,7 +85,17 @@ import kotlin.math.roundToInt
 
 private fun defaultVoiceNameForLanguage(voices: List<TtsVoiceOption>): String? = voices.firstOrNull()?.name
 
+private enum class SpeechTarget { INPUT, OUTPUT }
+
 private fun quantizePlaybackSpeed(speed: Float): Float = ((speed.coerceIn(0.5f, 2.0f) * 10.0f).roundToInt() / 10.0f)
+
+private fun ttsPlaybackSpeedFor(
+  settings: AppSettings,
+  voiceName: String?,
+): Float =
+  voiceName
+    ?.let { settings.ttsPlaybackSpeedOverrides[it] }
+    ?: settings.ttsPlaybackSpeed
 
 fun shareImageUri(
   uri: Uri,
@@ -134,6 +145,7 @@ fun TranslatorApp(
   val context = LocalContext.current
   var isAudioPlaying by remember { mutableStateOf(false) }
   var isAudioLoading by remember { mutableStateOf(false) }
+  var activeSpeechTarget by remember { mutableStateOf<SpeechTarget?>(null) }
   val pcmAudioPlayer =
     remember {
       PcmAudioPlayer { playing ->
@@ -142,6 +154,7 @@ fun TranslatorApp(
           isAudioLoading = false
         } else if (!playing) {
           isAudioLoading = false
+          activeSpeechTarget = null
         }
       }
     }
@@ -183,6 +196,15 @@ fun TranslatorApp(
     }
   }
 
+  LaunchedEffect(from?.code, from?.let { languageState.availabilityFor(it)?.ttsFiles } == true) {
+    val sourceLanguage = from ?: return@LaunchedEffect
+    if (languageState.availabilityFor(sourceLanguage)?.ttsFiles == true) {
+      viewModel.refreshTtsVoices(sourceLanguage)
+    } else {
+      viewModel.clearTtsVoices(sourceLanguage.code)
+    }
+  }
+
   // Connect/disconnect download service
   LaunchedEffect(downloadService) {
     downloadService?.let { service ->
@@ -202,6 +224,7 @@ fun TranslatorApp(
         }
         UiEvent.AudioLoadingStopped -> {
           isAudioLoading = false
+          activeSpeechTarget = null
         }
         is UiEvent.ShareImage -> {
           val imageUri = saveImage(event.bitmap, context)
@@ -212,6 +235,7 @@ fun TranslatorApp(
         is UiEvent.PlayAudio -> {
           pcmAudioPlayer.play(event.audioChunks) { message ->
             isAudioLoading = false
+            activeSpeechTarget = null
             Toast.makeText(context, "Audio playback failed: $message", Toast.LENGTH_SHORT).show()
           }
         }
@@ -399,11 +423,18 @@ fun TranslatorApp(
             val currentFrom = from
             val currentTo = to
             if (currentFrom != null && currentTo != null) {
+              val availableSourceTtsVoices = ttsVoicesByLanguage[currentFrom.code].orEmpty()
+              val selectedSourceTtsVoiceName =
+                settings.ttsVoiceOverrides[currentFrom.code]
+                  ?.takeIf { voiceName -> availableSourceTtsVoices.any { it.name == voiceName } }
+                  ?: defaultVoiceNameForLanguage(availableSourceTtsVoices)
+              val sourceTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, selectedSourceTtsVoiceName)
               val availableTtsVoices = ttsVoicesByLanguage[currentTo.code].orEmpty()
               val selectedTtsVoiceName =
                 settings.ttsVoiceOverrides[currentTo.code]
                   ?.takeIf { voiceName -> availableTtsVoices.any { it.name == voiceName } }
                   ?: defaultVoiceNameForLanguage(availableTtsVoices)
+              val targetTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, selectedTtsVoiceName)
               MainScreen(
                 onSettings = { navController.navigate("settings") },
                 input = input,
@@ -421,21 +452,58 @@ fun TranslatorApp(
                 dictionaryLookupLanguage = dictionaryLookupLanguage,
                 isAudioPlaying = isAudioPlaying,
                 isAudioLoading = isAudioLoading,
+                isInputAudioPlaying = activeSpeechTarget == SpeechTarget.INPUT && isAudioPlaying,
+                isInputAudioLoading = activeSpeechTarget == SpeechTarget.INPUT && isAudioLoading,
+                isOutputAudioPlaying = activeSpeechTarget == SpeechTarget.OUTPUT && isAudioPlaying,
+                isOutputAudioLoading = activeSpeechTarget == SpeechTarget.OUTPUT && isAudioLoading,
                 onMessage = viewModel::handleMessage,
                 canSwapLanguages = viewModel.languageStateManager.canSwapLanguages(currentFrom, currentTo),
                 onStopAudio = {
                   isAudioLoading = false
+                  activeSpeechTarget = null
                   pcmAudioPlayer.stop()
                 },
                 languageState = languageState,
                 languageMetadata = languageMetadata,
                 downloadStates = downloadStates,
                 settings = settings,
+                availableSourceTtsVoices = availableSourceTtsVoices,
+                selectedSourceTtsVoiceName = selectedSourceTtsVoiceName,
+                sourceTtsPlaybackSpeed = sourceTtsPlaybackSpeed,
                 availableTtsVoices = availableTtsVoices,
                 selectedTtsVoiceName = selectedTtsVoiceName,
+                targetTtsPlaybackSpeed = targetTtsPlaybackSpeed,
                 onTtsPlaybackSpeedChange = { newSpeed ->
+                  val voiceName = selectedTtsVoiceName
+                  val quantizedSpeed = quantizePlaybackSpeed(newSpeed)
                   viewModel.settingsManager.updateSettings(
-                    settings.copy(ttsPlaybackSpeed = quantizePlaybackSpeed(newSpeed)),
+                    if (voiceName != null) {
+                      settings.copy(
+                        ttsPlaybackSpeedOverrides = settings.ttsPlaybackSpeedOverrides + (voiceName to quantizedSpeed),
+                      )
+                    } else {
+                      settings.copy(ttsPlaybackSpeed = quantizedSpeed)
+                    },
+                  )
+                },
+                onSourceTtsPlaybackSpeedChange = { newSpeed ->
+                  val voiceName = selectedSourceTtsVoiceName
+                  val quantizedSpeed = quantizePlaybackSpeed(newSpeed)
+                  viewModel.settingsManager.updateSettings(
+                    if (voiceName != null) {
+                      settings.copy(
+                        ttsPlaybackSpeedOverrides = settings.ttsPlaybackSpeedOverrides + (voiceName to quantizedSpeed),
+                      )
+                    } else {
+                      settings.copy(ttsPlaybackSpeed = quantizedSpeed)
+                    },
+                  )
+                },
+                onSourceTtsVoiceSelected = { voiceName ->
+                  viewModel.settingsManager.updateSettings(
+                    settings.copy(
+                      ttsVoiceOverrides = settings.ttsVoiceOverrides + (currentFrom.code to voiceName),
+                    ),
                   )
                 },
                 onTtsVoiceSelected = { voiceName ->
@@ -444,6 +512,14 @@ fun TranslatorApp(
                       ttsVoiceOverrides = settings.ttsVoiceOverrides + (currentTo.code to voiceName),
                     ),
                   )
+                },
+                onSpeakInput = { text, language ->
+                  activeSpeechTarget = SpeechTarget.INPUT
+                  viewModel.handleMessage(TranslatorMessage.SpeakTranslatedText(text, language))
+                },
+                onSpeakOutput = { text, language ->
+                  activeSpeechTarget = SpeechTarget.OUTPUT
+                  viewModel.handleMessage(TranslatorMessage.SpeakTranslatedText(text, language))
                 },
                 launchMode = currentLaunchMode,
               )
