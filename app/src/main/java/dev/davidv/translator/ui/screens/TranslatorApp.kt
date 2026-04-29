@@ -91,11 +91,17 @@ private fun quantizePlaybackSpeed(speed: Float): Float = ((speed.coerceIn(0.5f, 
 
 private fun ttsPlaybackSpeedFor(
   settings: AppSettings,
+  language: Language,
   voiceName: String?,
 ): Float =
   voiceName
-    ?.let { settings.ttsPlaybackSpeedOverrides[it] }
+    ?.let { settings.ttsPlaybackSpeedOverrides[ttsPlaybackSpeedOverrideKey(language, it)] }
     ?: settings.ttsPlaybackSpeed
+
+private fun ttsPlaybackSpeedOverrideKey(
+  language: Language,
+  voiceName: String,
+): String = "${language.code}:$voiceName"
 
 fun shareImageUri(
   uri: Uri,
@@ -428,13 +434,13 @@ fun TranslatorApp(
                 settings.ttsVoiceOverrides[currentFrom.code]
                   ?.takeIf { voiceName -> availableSourceTtsVoices.any { it.name == voiceName } }
                   ?: defaultVoiceNameForLanguage(availableSourceTtsVoices)
-              val sourceTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, selectedSourceTtsVoiceName)
+              val sourceTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, currentFrom, selectedSourceTtsVoiceName)
               val availableTtsVoices = ttsVoicesByLanguage[currentTo.code].orEmpty()
               val selectedTtsVoiceName =
                 settings.ttsVoiceOverrides[currentTo.code]
                   ?.takeIf { voiceName -> availableTtsVoices.any { it.name == voiceName } }
                   ?: defaultVoiceNameForLanguage(availableTtsVoices)
-              val targetTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, selectedTtsVoiceName)
+              val targetTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, currentTo, selectedTtsVoiceName)
               MainScreen(
                 onSettings = { navController.navigate("settings") },
                 input = input,
@@ -479,7 +485,9 @@ fun TranslatorApp(
                   viewModel.settingsManager.updateSettings(
                     if (voiceName != null) {
                       settings.copy(
-                        ttsPlaybackSpeedOverrides = settings.ttsPlaybackSpeedOverrides + (voiceName to quantizedSpeed),
+                        ttsPlaybackSpeedOverrides =
+                          settings.ttsPlaybackSpeedOverrides +
+                            (ttsPlaybackSpeedOverrideKey(currentTo, voiceName) to quantizedSpeed),
                       )
                     } else {
                       settings.copy(ttsPlaybackSpeed = quantizedSpeed)
@@ -492,7 +500,9 @@ fun TranslatorApp(
                   viewModel.settingsManager.updateSettings(
                     if (voiceName != null) {
                       settings.copy(
-                        ttsPlaybackSpeedOverrides = settings.ttsPlaybackSpeedOverrides + (voiceName to quantizedSpeed),
+                        ttsPlaybackSpeedOverrides =
+                          settings.ttsPlaybackSpeedOverrides +
+                            (ttsPlaybackSpeedOverrideKey(currentFrom, voiceName) to quantizedSpeed),
                       )
                     } else {
                       settings.copy(ttsPlaybackSpeed = quantizedSpeed)

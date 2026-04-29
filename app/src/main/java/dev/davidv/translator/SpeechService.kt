@@ -54,7 +54,7 @@ class SpeechService(
           ?: catalog.availableTtsVoices(language.code).firstOrNull()?.name
       val speechSpeed =
         speechSpeedVoiceName
-          ?.let { settings.ttsPlaybackSpeedOverrides[it] }
+          ?.let { voiceName -> settings.ttsPlaybackSpeedOverrides["${language.code}:$voiceName"] }
           ?: settings.ttsPlaybackSpeed
       val boundedSpeechSpeed = speechSpeed.coerceIn(0.5f, 2.0f)
       Log.d(
