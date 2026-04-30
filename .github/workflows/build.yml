@@ -26,7 +26,7 @@ jobs:
         push: false
         load: true
         tags: translator-app:latest
-        no-cache: true
+        cache-from: type=gha
         cache-to: type=gha,mode=max
 
   build:
@@ -56,7 +56,7 @@ jobs:
         push: false
         load: true
         tags: translator-app:latest
-        cache-from: type=gha,mode=max
+        cache-from: type=gha
 
     - name: Build ${{ matrix.label }}
       run: |
