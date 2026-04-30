@@ -1,6 +1,6 @@
 <h1><center>Translator</center></h1>
 
-An Android translator app that performs text and image translation completely offline using on-device models.
+An Android translator app that performs text, document and image translation completely offline using on-device models.
 
 Supports automatic language detection and transliteration for non-latin scripts. There's also a built-in word dictionary.
 
@@ -32,6 +32,7 @@ Language packs contain the full translation models, translation happens _on your
 - Dictionary is based on data from Wiktionary, exported by [Kaikki](https://kaikki.org/)
   - For Japanese specifically, there's a second "word dictionary" (Mecab) for transliterating Kanji
 - TTS uses [Piper](https://github.com/OHF-Voice/piper1-gpl), [Coqui](https://github.com/coqui-ai/tts), [Kokoro](https://github.com/hexgrad/kokoro), [MMS](https://huggingface.co/facebook/mms-tts), [Sherpa ONNX](https://github.com/k2-fsa/sherpa-onnx), [Mimic3](https://github.com/MycroftAI/mimic3) voices
+- PDF surgery uses [mupdf](https://github.com/ArtifexSoftware/mupdf) and [lopdf](https://github.com/J-F-Liu/lopdf).
 
 ### Translating other apps
 
@@ -63,22 +64,6 @@ This app exposes an API (see `ITranslationService.aidl`) that other apps can use
 If you want to use this app on a device with no internet access, you can put the language files on `Documents/dev.davidv.translator`. Check
 `OFFLINE_SETUP.md` for details.
 
-## Running on x86-64 emulator
-
-This app works fine on aarch64, and it "works" on x86-64 -- in quotes because it currently requires `AVX2`, which is not available on the standard emulator, nor in the ABI.
-
-You can be cheeky and run a VM with a good CPU configuration like this
-
-```bash
-cd $ANDROID_SDK/emulator
-export LD_LIBRARY_PATH=$PWD/lib64:$PWD/lib64/qt/lib
-$ANDROID_SDK/emulator/qemu/linux-x86_64/qemu-system-x86_64 -netdelay none -netspeed full -avd Medium_Phone_API_35 -qt-hide-window -grpc-use-token -idle-grpc-timeout 300 -qemu -cpu max
-# The important bit is
-# `-qemu -cpu max`
-```
-
-If you don't do this, you will just get a `SIGILL` when trying to load the library.
-
 ## Building
 
 ```sh
@@ -96,9 +81,9 @@ will trigger a build in a docker container, matching the CI environment.
 - Create a tag that is `v${versionName}` (eg: `v0.1.0`)
 - Create a Github release named `v${versionName}` (eg: `v0.1.0`)
   - Upload both signed APKs to the release
-  - `gh release create v0.2.7 -F fastlane/metadata/android/en-US/changelogs/12.txt signed/translator-arm64-0.2.7.apk signed/translator-armv7-0.2.7.apk`
+  - `gh release create v0.4.0 -F fastlane/metadata/android/en-US/changelogs/141.txt -F fastlane/metadata/android/en-US/changelogs/142.txt signed/translator-arm64-0.4.0.apk signed/translator-armv7-0.4.0.apk`
 
-Each ABI gets a unique versionCode: `versionCode * 10 + abiOffset` (armv7=1, arm64=2, x86=3, x86_64=4).
+Each ABI gets a unique versionCode: `versionCode * 10 + abiOffset` (armv7=1, arm64=2, x86=3, x86\_64=4).
 
 ## Signing APK
 ```sh
