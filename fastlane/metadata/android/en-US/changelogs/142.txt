@@ -7,4 +7,3 @@ New features:
 Improvements:
 - Better TTS pacing
 - Fix use-after-free on CLD2 causing crash on GrapheneOS
-- Re-add 'Auto' as source language option
