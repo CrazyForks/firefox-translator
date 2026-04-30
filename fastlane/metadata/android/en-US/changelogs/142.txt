@@ -1,7 +1,10 @@
-- Small UI fixes
-- Improve TTS pacing
-- Implement tap-to-translate notification
-- Implement quick settings launcher
-- Implement "translate website" - share a URL and it will be translated
+New features:
+- Translate website - share a URL and it will be translated
+- Translate document - supports ODT, PDF (digital, not scans), txt
+- TTS on input field
+- Can now launch the app from a persistent notification, or a quick settings tile
+
+Improvements:
+- Better TTS pacing
 - Fix use-after-free on CLD2 causing crash on GrapheneOS
-- Support TTS on input field
+- Re-add 'Auto' as source language option
