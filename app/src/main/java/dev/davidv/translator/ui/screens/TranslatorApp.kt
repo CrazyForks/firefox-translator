@@ -731,6 +731,7 @@ fun TranslatorApp(
                   viewModel.handleMessage(TranslatorMessage.SpeakTranslatedText(text, language))
                 },
                 launchMode = currentLaunchMode,
+                pendingSharedImage = viewModel.pendingSharedImage,
               )
             }
           }

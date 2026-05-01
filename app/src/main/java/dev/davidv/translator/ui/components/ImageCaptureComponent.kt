@@ -45,6 +45,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,6 +62,7 @@ import com.canhub.cropper.CropImageOptions
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -185,6 +187,7 @@ fun ImageCaptureHandler(
   showImageSourceSheet: Boolean,
   onDismissImageSourceSheet: () -> Unit,
   showFilePickerInImagePicker: Boolean = true,
+  pendingSharedImage: SharedFlow<Uri>? = null,
 ) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
@@ -214,6 +217,27 @@ fun ImageCaptureHandler(
         Log.d("ImageCrop", "Crop cancelled or failed: ${exception?.message}")
       }
     }
+
+  if (pendingSharedImage != null) {
+    LaunchedEffect(pendingSharedImage) {
+      pendingSharedImage.collect { uri ->
+        val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
+        pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
+        Log.d("SharedImage", "Launching crop for shared URI: $uri")
+        cropImage.launch(
+          CropImageContractOptions(
+            uri = uri,
+            cropImageOptions =
+              CropImageOptions(
+                customOutputUri = cropOutputUri,
+                outputCompressFormat = Bitmap.CompressFormat.JPEG,
+                outputCompressQuality = 95,
+              ),
+          ),
+        )
+      }
+    }
+  }
 
   val takePictureIntent =
     rememberLauncherForActivityResult(

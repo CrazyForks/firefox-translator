@@ -128,6 +128,9 @@ class TranslatorViewModel(
   private val _uiEvents = MutableSharedFlow<UiEvent>()
   val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
+  private val _pendingSharedImage = MutableSharedFlow<Uri>(replay = 1, extraBufferCapacity = 1)
+  val pendingSharedImage: SharedFlow<Uri> = _pendingSharedImage.asSharedFlow()
+
   val navigationState: StateFlow<NavigationState> =
     combine(languageStateManager.languageState, _from, _to) { langState, fromLang, toLang ->
       when {
@@ -236,6 +239,18 @@ class TranslatorViewModel(
           // Only run once
           return@collect
         }
+      }
+    }
+
+    // Run pending image OCR once both languages become available
+    viewModelScope.launch {
+      combine(_from, _to) { f, t -> f to t }.collect { (f, t) ->
+        if (f == null || t == null) return@collect
+        if (_inputType.value != InputType.IMAGE) return@collect
+        if (originalImage.value == null) return@collect
+        if (_output.value != null) return@collect
+        if (translationCoordinator.isTranslating.value) return@collect
+        triggerTranslation()
       }
     }
 
@@ -433,7 +448,7 @@ class TranslatorViewModel(
   }
 
   fun setSharedImageUri(uri: Uri) {
-    handleMessage(TranslatorMessage.SetImageUri(uri))
+    _pendingSharedImage.tryEmit(uri)
   }
 
   fun setModalVisible(visible: Boolean) {

@@ -100,6 +100,7 @@ import dev.davidv.translator.ui.components.TranslationField
 import dev.davidv.translator.ui.components.ZoomableImageViewer
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -149,6 +150,7 @@ fun MainScreen(
   onSpeakInput: (String, Language) -> Unit = { _, _ -> },
   onSpeakOutput: (String, Language) -> Unit = { _, _ -> },
   launchMode: LaunchMode,
+  pendingSharedImage: SharedFlow<android.net.Uri>? = null,
 ) {
   var showFullScreenImage by remember { mutableStateOf(false) }
   var showImageSourceSheet by remember { mutableStateOf(false) }
@@ -502,6 +504,7 @@ fun MainScreen(
     showImageSourceSheet = showImageSourceSheet,
     onDismissImageSourceSheet = { showImageSourceSheet = false },
     showFilePickerInImagePicker = settings.showFilePickerInImagePicker,
+    pendingSharedImage = pendingSharedImage,
   )
 
   // Full screen image viewer
