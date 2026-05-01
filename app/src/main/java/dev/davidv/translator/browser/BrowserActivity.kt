@@ -75,7 +75,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import org.json.JSONTokener
 import java.util.UUID
 
 class BrowserActivity : ComponentActivity() {
@@ -199,9 +198,10 @@ private fun BrowserScreen(
 
   var topBarVisible by remember { mutableStateOf(true) }
   var topBarScrollAccumulator by remember { mutableStateOf(0) }
-  var readerModeEnabled by remember { mutableStateOf(false) }
-  var readerModeAvailable by remember { mutableStateOf(false) }
-  var loadingReaderMode by remember { mutableStateOf(false) }
+  val readerController = remember { ReaderController(readabilityScript, readerModeScript) }
+  val readerPageState by readerController.state.collectAsStateWithLifecycle()
+  val readerActive = readerPageState.reader is ReaderState.Active
+  val readerVisible = readerPageState.reader != ReaderState.Idle
   val webViewRef = remember { arrayOfNulls<WebView>(1) }
 
   BackHandler {
@@ -251,21 +251,7 @@ private fun BrowserScreen(
         }
       },
       onWebViewReady = { webViewRef[0] = it },
-      onPageStarted = {
-        if (!loadingReaderMode) {
-          readerModeEnabled = false
-          readerModeAvailable = false
-        }
-      },
-      onPageFinished = { webView ->
-        loadingReaderMode = false
-        if (!readerModeEnabled) {
-          val js = buildReaderModeJs(readabilityScript, readerModeScript, probeOnly = true)
-          webView.evaluateJavascript(js) { result ->
-            readerModeAvailable = result == "true"
-          }
-        }
-      },
+      readerController = readerController,
     )
 
     AnimatedVisibility(
@@ -286,34 +272,16 @@ private fun BrowserScreen(
           onMessage = viewModel::onMessage,
           drawable =
             Pair(
-              if (readerModeEnabled) "Exit reader mode" else "Reader mode",
+              if (readerActive) "Exit reader mode" else "Reader mode",
               R.drawable.chrome_reader_mode,
             ),
           onSettings =
-            if (readerModeEnabled || readerModeAvailable) {
+            if (readerVisible) {
               {
                 val webView = webViewRef[0]
                 if (webView != null) {
-                  if (readerModeEnabled) {
-                    if (webView.canGoBack()) {
-                      webView.goBack()
-                    } else {
-                      webView.reload()
-                    }
-                  } else {
-                    val js = buildReaderModeJs(readabilityScript, readerModeScript, probeOnly = false)
-                    webView.evaluateJavascript(js) { result ->
-                      val readerHtml = decodeJavascriptString(result)
-                      if (readerHtml == null) {
-                        readerModeAvailable = false
-                        Toast.makeText(context, "Reader mode unavailable for this page", Toast.LENGTH_SHORT).show()
-                      } else {
-                        loadingReaderMode = true
-                        readerModeEnabled = true
-                        val baseUrl = webView.url
-                        webView.loadDataWithBaseURL(baseUrl, readerHtml, "text/html", "UTF-8", baseUrl)
-                      }
-                    }
+                  readerController.toggle(webView) {
+                    Toast.makeText(context, "Reader mode unavailable for this page", Toast.LENGTH_SHORT).show()
                   }
                 }
               }
@@ -339,8 +307,7 @@ private fun BrowserWebView(
   darkTheme: Boolean,
   onScrollDelta: (y: Int, dy: Int) -> Unit,
   onWebViewReady: (WebView) -> Unit,
-  onPageStarted: () -> Unit,
-  onPageFinished: (WebView) -> Unit,
+  readerController: ReaderController,
 ) {
   val scope = androidx.compose.runtime.rememberCoroutineScope()
   val bridgeRef = remember { arrayOfNulls<TranslatorJsBridge>(1) }
@@ -421,7 +388,7 @@ private fun BrowserWebView(
               favicon: Bitmap?,
             ) {
               Log.i("AdblockManager", "onPageStarted view=$view url=$url")
-              onPageStarted()
+              readerController.onPageStarted()
               currentPageUrlRef.set(url)
               val pageSerial = currentPageSerialRef.incrementAndGet()
               // Inject the translator content script as early as possible.
@@ -463,7 +430,7 @@ private fun BrowserWebView(
                   adblockCosmeticScript,
                 )
               }
-              if (view != null) onPageFinished(view)
+              if (view != null) readerController.probeOnPageFinished(view)
             }
 
             override fun shouldInterceptRequest(
@@ -506,18 +473,6 @@ private fun BrowserWebView(
   }
 }
 
-private fun buildReaderModeJs(
-  readabilityScript: String,
-  readerModeScript: String,
-  probeOnly: Boolean,
-): String {
-  val readabilityLiteral = JSONObject.quote(readabilityScript)
-  val readerModeLiteral = JSONObject.quote(readerModeScript)
-  return "window.__translatorReadabilityScript = $readabilityLiteral;\n" +
-    "window.__translatorReaderModeProbe = $probeOnly;\n" +
-    "(0, eval)($readerModeLiteral);"
-}
-
 private fun buildTranslatorContentJs(
   contentScript: String,
   bridgeName: String,
@@ -528,11 +483,6 @@ private fun buildTranslatorContentJs(
     "var __translatorBridgeToken = ${JSONObject.quote(bridgeToken)};\n" +
     contentScript +
     "\n})();"
-
-private fun decodeJavascriptString(value: String): String? {
-  if (value == "null") return null
-  return runCatching { JSONTokener(value).nextValue() as? String }.getOrNull()
-}
 
 private fun applyCosmeticFiltersAsync(
   scope: CoroutineScope,
