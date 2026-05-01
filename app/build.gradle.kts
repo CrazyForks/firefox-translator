@@ -246,7 +246,6 @@ val abiToOnnxRuntimeTask =
           "--disable_ml_ops",
           "--disable_generation_ops",
           "--no_kleidiai",
-          "--use_xnnpack",
           "--no_sve",
           "--cmake_extra_defines",
           "CMAKE_CXX_STANDARD=20",
