@@ -1,3 +1,4 @@
+import sys
 import time
 
 import catalog_base
@@ -285,7 +286,13 @@ def build_pair_files(manifest: dict) -> dict[tuple[str, str], dict]:
         src = best_entry["sourceLanguage"]
         tgt = best_entry["targetLanguage"]
 
-        if src not in LANGUAGE_NAMES or tgt not in LANGUAGE_NAMES:
+        missing_languages = [code for code in (src, tgt) if code not in LANGUAGE_NAMES]
+        if missing_languages:
+            missing = ", ".join(missing_languages)
+            print(
+                f"Skipping model pair {pair_key}: missing language metadata for {missing}",
+                file=sys.stderr,
+            )
             continue
 
         files = {}
