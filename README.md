@@ -81,7 +81,7 @@ will trigger a build in a docker container, matching the CI environment.
 - Create a tag that is `v${versionName}` (eg: `v0.1.0`)
 - Create a Github release named `v${versionName}` (eg: `v0.1.0`)
   - Upload both signed APKs to the release
-  - `gh release create v0.4.0 -F fastlane/metadata/android/en-US/changelogs/141.txt -F fastlane/metadata/android/en-US/changelogs/142.txt signed/translator-arm64-0.4.0.apk signed/translator-armv7-0.4.0.apk`
+  - `gh release create --prerelease v0.4.0-rc1 -F fastlane/metadata/android/en-US/changelogs/XX1.txt signed/translator-arm64-0.4.0.apk signed/translator-armv7-0.4.0.apk`
 
 Each ABI gets a unique versionCode: `versionCode * 10 + abiOffset` (armv7=1, arm64=2, x86=3, x86\_64=4).
 
