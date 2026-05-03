@@ -1,13 +1,13 @@
-A translator app that performs on-device translation of text and images without sending your data to external servers.
+A translator app that performs on-device translation of text, images and pdf/odt documents without sending your data to external servers.
 
 Features:
-• On-device translation using Mozilla's translation models
-  • No internet required for translation once models are downloaded
+• No internet required for translation once models are downloaded
+• Image translation overlay that preserves original formatting (OCR)
+• PDF/ODT file translation
+• Text-to-speech (TTS) for most languages
 • Automatic language detection
 • Transliteration of non-latin script
-• Image translation overlay that preserves original formatting (OCR)
 • Quick translation of on-screen content via Accessibility service or Device Assistant role
-• Text-to-speech (TTS) for most languages
 
 Supports 50 languages:
 

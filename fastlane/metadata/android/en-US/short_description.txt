@@ -1,1 +1,1 @@
-On-device translation of text and images, with TTS
+On-device translation of text, images and pdf/odt files, with TTS

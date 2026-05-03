@@ -7,3 +7,4 @@ Fix:
 Improve:
 - Translation speed
 - Translation of websites and documents
+- Translated PDFs have better layout matching

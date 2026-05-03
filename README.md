@@ -1,6 +1,6 @@
 <h1><center>Translator</center></h1>
 
-An Android translator app that performs text, document and image translation completely offline using on-device models.
+An Android translator app that performs text, PDF/ODT documents and image translation completely offline using on-device models.
 
 Supports automatic language detection and transliteration for non-latin scripts. There's also a built-in word dictionary.
 
