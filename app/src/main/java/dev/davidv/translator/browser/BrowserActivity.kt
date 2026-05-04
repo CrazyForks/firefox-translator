@@ -24,8 +24,10 @@ import android.os.Bundle
 import android.util.Log
 import android.view.ContextThemeWrapper
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
@@ -48,11 +50,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -182,6 +186,7 @@ private fun BrowserScreen(
   val languageState by viewModel.languageState.collectAsStateWithLifecycle()
   val languageMetadata by viewModel.languageMetadata.collectAsStateWithLifecycle()
   val url by viewModel.url.collectAsStateWithLifecycle()
+  val settings by viewModel.settings.collectAsStateWithLifecycle()
   val darkTheme = isSystemInDarkTheme()
 
   if (to == null) return
@@ -222,6 +227,7 @@ private fun BrowserScreen(
       adblockCosmeticScript = adblockCosmeticScript,
       translationService = translationService,
       adblockManager = adblockManager,
+      clearDataOnClose = settings.clearWebTranslatorDataOnClose,
       darkTheme = darkTheme,
       onScrollDelta = { y, dy ->
         if (y < TOPBAR_TOP_SHOW_PX) {
@@ -304,6 +310,7 @@ private fun BrowserWebView(
   adblockCosmeticScript: String,
   translationService: TranslationService,
   adblockManager: AdblockManager,
+  clearDataOnClose: Boolean,
   darkTheme: Boolean,
   onScrollDelta: (y: Int, dy: Int) -> Unit,
   onWebViewReady: (WebView) -> Unit,
@@ -318,6 +325,13 @@ private fun BrowserWebView(
   val bridgeToken = remember { UUID.randomUUID().toString() }
   val translatorBridgeName = remember { "__translatorBridge_${bridgeToken.filter { it != '-' }}" }
   val adblockBridgeName = remember { "__adblockBridge_${bridgeToken.filter { it != '-' }}" }
+  val clearDataOnCloseState = rememberUpdatedState(clearDataOnClose)
+
+  DisposableEffect(Unit) {
+    onDispose {
+      if (clearDataOnCloseState.value) clearWebTranslatorData(webViewRef[0])
+    }
+  }
 
   LaunchedEffect(adblockReady) {
     if (!adblockReady) return@LaunchedEffect
@@ -471,6 +485,15 @@ private fun BrowserWebView(
       },
     )
   }
+}
+
+private fun clearWebTranslatorData(webView: WebView?) {
+  webView?.clearCache(true)
+  CookieManager.getInstance().apply {
+    removeAllCookies(null)
+    flush()
+  }
+  WebStorage.getInstance().deleteAllData()
 }
 
 private fun buildTranslatorContentJs(

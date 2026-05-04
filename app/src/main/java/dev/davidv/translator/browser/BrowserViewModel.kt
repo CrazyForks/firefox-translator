@@ -44,6 +44,7 @@ class BrowserViewModel(
   initialSourceCode: String?,
   initialTargetCode: String?,
 ) : ViewModel() {
+  val settings = settingsManager.settings
   val languageStateManager = LanguageStateManager(viewModelScope, filePathManager)
 
   val languageState: StateFlow<LanguageAvailabilityState> = languageStateManager.languageState

@@ -389,6 +389,31 @@ fun SettingsScreen(
             onDelete = onDeleteAdblockSupport,
             onCancel = { DownloadService.cancelAdblockDownload(context) },
           )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Clear browsing data on close",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Text(
+                text = "Deletes cookies, cache and local storage.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Switch(
+              checked = settings.clearWebTranslatorDataOnClose,
+              onCheckedChange = { enabled ->
+                onSettingsChange(settings.copy(clearWebTranslatorDataOnClose = enabled))
+              },
+            )
+          }
         }
       }
 

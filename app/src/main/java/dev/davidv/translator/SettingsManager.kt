@@ -118,6 +118,11 @@ class SettingsManager(
         .getString("tts_voice_overrides", null)
         ?.let(::parseVoiceOverrides)
         ?: defaults.ttsVoiceOverrides
+    val clearWebTranslatorDataOnClose =
+      prefs.getBoolean(
+        "clear_web_translator_data_on_close",
+        defaults.clearWebTranslatorDataOnClose,
+      )
 
     return AppSettings(
       defaultTargetLanguageCode = defaultTargetLanguageCode,
@@ -142,6 +147,7 @@ class SettingsManager(
       ttsPlaybackSpeedOverrides = ttsPlaybackSpeedOverrides,
       ttsVoiceOverrides = ttsVoiceOverrides,
       tapToTranslateEnabled = tapToTranslateEnabled,
+      clearWebTranslatorDataOnClose = clearWebTranslatorDataOnClose,
     )
   }
 
@@ -240,6 +246,10 @@ class SettingsManager(
       if (newSettings.tapToTranslateEnabled != currentSettings.tapToTranslateEnabled) {
         putBoolean("tap_to_translate_enabled", newSettings.tapToTranslateEnabled)
         modifiedSettings.add("tap_to_translate_enabled")
+      }
+      if (newSettings.clearWebTranslatorDataOnClose != currentSettings.clearWebTranslatorDataOnClose) {
+        putBoolean("clear_web_translator_data_on_close", newSettings.clearWebTranslatorDataOnClose)
+        modifiedSettings.add("clear_web_translator_data_on_close")
       }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")

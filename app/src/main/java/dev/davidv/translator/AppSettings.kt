@@ -44,4 +44,5 @@ data class AppSettings(
   val ttsPlaybackSpeedOverrides: Map<String, Float> = emptyMap(),
   val ttsVoiceOverrides: Map<String, String> = emptyMap(),
   val tapToTranslateEnabled: Boolean = false,
+  val clearWebTranslatorDataOnClose: Boolean = true,
 )
