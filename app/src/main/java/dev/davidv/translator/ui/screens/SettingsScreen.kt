@@ -93,6 +93,10 @@ private fun LanguageDropdown(
   onLanguageSelected: (Language) -> Unit,
 ) {
   var expanded by remember { mutableStateOf(false) }
+  val languagesByDisplayName =
+    remember(availableLanguages) {
+      availableLanguages.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.displayName })
+    }
 
   Text(
     text = label,
@@ -120,7 +124,7 @@ private fun LanguageDropdown(
       expanded = expanded,
       onDismissRequest = { expanded = false },
     ) {
-      availableLanguages.forEach { language ->
+      languagesByDisplayName.forEach { language ->
         DropdownMenuItem(
           text = { Text(language.displayName) },
           onClick = {
