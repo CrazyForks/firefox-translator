@@ -34,25 +34,17 @@ Language packs contain the full translation models, translation happens _on your
 - TTS uses [Piper](https://github.com/OHF-Voice/piper1-gpl), [Coqui](https://github.com/coqui-ai/tts), [Kokoro](https://github.com/hexgrad/kokoro), [MMS](https://huggingface.co/facebook/mms-tts), [Sherpa ONNX](https://github.com/k2-fsa/sherpa-onnx), [Mimic3](https://github.com/MycroftAI/mimic3) voices
 - PDF surgery uses [mupdf](https://github.com/ArtifexSoftware/mupdf) and [lopdf](https://github.com/J-F-Liu/lopdf).
 
-### Translating other apps
+## Features & How to Use
 
-There are two ways to translate content from other apps.
-
-#### Digital assistant
-
-Press a button or use a gesture to translate whatever's on your screen. To enable it, go through the app settings, or on your phone:
-
-**Settings > Apps > Default apps > Digital assistant app** and select 'Translator'.
-
-Note: voice integration is not supported yet, and Android only allows one assistant at a time.
-
-#### Accessibility service
-
-Places a floating bubble on screen that you can tap to translate the current screen at any time. To enable it:
-
-**Settings > Accessibility** and enable 'Translator'.
-
-Apps tend to provide better data through accessibility than through the assistant interface, but your mileage may vary.
+| Feature | How to trigger |
+|---|---|
+| Translate text | Share text from any app, or type directly |
+| Translate text (mini popup) | Long-press text on any app → tap "Translate" in the copy/share bar |
+| Translate a URL | Share a link from any app |
+| Translate an image | Share an image from any app |
+| Translate a document | Open the documents tab inside the app |
+| Dictionary lookup | Long-press a word inside the app |
+| Change TTS voice / speed | Long-press the play button |
 
 #### For developers
 
