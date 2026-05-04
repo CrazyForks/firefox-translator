@@ -186,7 +186,6 @@ fun ImageCaptureHandler(
   onMessage: (TranslatorMessage) -> Unit,
   showImageSourceSheet: Boolean,
   onDismissImageSourceSheet: () -> Unit,
-  showFilePickerInImagePicker: Boolean = true,
   pendingSharedImage: SharedFlow<Uri>? = null,
 ) {
   val context = LocalContext.current
@@ -363,7 +362,6 @@ fun ImageCaptureHandler(
   if (showImageSourceSheet) {
     ImageSourceBottomSheet(
       onDismiss = onDismissImageSourceSheet,
-      showFilePickerOption = showFilePickerInImagePicker,
       onCameraClick = {
         onDismissImageSourceSheet()
         val cameraImageUri = createTemporaryImageUri(context, "camera_image")
@@ -401,7 +399,6 @@ fun ImageCaptureHandler(
 @Composable
 fun ImageSourceBottomSheet(
   onDismiss: () -> Unit,
-  showFilePickerOption: Boolean,
   onCameraClick: () -> Unit,
   onMediaPickerClick: () -> Unit,
   onGalleryClick: () -> Unit,
@@ -493,27 +490,25 @@ fun ImageSourceBottomSheet(
           }
         }
 
-        if (showFilePickerOption) {
-          // File picker
-          Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable { onFilePickerClick() },
-          ) {
-            Icon(
-              painter = painterResource(id = R.drawable.draft),
-              contentDescription = "Document",
-              modifier =
-                Modifier
-                  .size(48.dp)
-                  .padding(bottom = 8.dp),
-              tint = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-              text = "Document",
-              style = MaterialTheme.typography.bodyMedium,
-              textAlign = TextAlign.Center,
-            )
-          }
+        // File picker
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          modifier = Modifier.clickable { onFilePickerClick() },
+        ) {
+          Icon(
+            painter = painterResource(id = R.drawable.draft),
+            contentDescription = "Document",
+            modifier =
+              Modifier
+                .size(48.dp)
+                .padding(bottom = 8.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = "Document",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+          )
         }
       }
     }

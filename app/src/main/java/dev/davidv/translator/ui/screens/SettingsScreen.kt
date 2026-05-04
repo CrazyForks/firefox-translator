@@ -615,100 +615,97 @@ fun SettingsScreen(
         }
       }
 
-      // OCR Settings Section - Only show if OCR is not disabled
-      if (!settings.disableOcr) {
-        Card(
-          modifier = Modifier.fillMaxWidth(),
-          colors =
-            CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            ),
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors =
+          CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+          ),
+      ) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+          Text(
+            text = "OCR",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.primary,
+          )
+
+          // Background Mode
+          var backgroundModeExpanded by remember { mutableStateOf(false) }
+
+          Text(
+            text = "Background Mode",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+
+          ExposedDropdownMenuBox(
+            expanded = backgroundModeExpanded,
+            onExpandedChange = { backgroundModeExpanded = it },
+            modifier = Modifier.fillMaxWidth(),
           ) {
-            Text(
-              text = "OCR",
-              style = MaterialTheme.typography.headlineSmall,
-              color = MaterialTheme.colorScheme.primary,
+            OutlinedTextField(
+              value = settings.backgroundMode.displayName,
+              onValueChange = {},
+              readOnly = true,
+              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = backgroundModeExpanded) },
+              modifier =
+                Modifier
+                  .menuAnchor()
+                  .fillMaxWidth(),
+              colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             )
-
-            // Background Mode
-            var backgroundModeExpanded by remember { mutableStateOf(false) }
-
-            Text(
-              text = "Background Mode",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            ExposedDropdownMenuBox(
+            ExposedDropdownMenu(
               expanded = backgroundModeExpanded,
-              onExpandedChange = { backgroundModeExpanded = it },
-              modifier = Modifier.fillMaxWidth(),
+              onDismissRequest = { backgroundModeExpanded = false },
             ) {
-              OutlinedTextField(
-                value = settings.backgroundMode.displayName,
-                onValueChange = {},
-                readOnly = true,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = backgroundModeExpanded) },
-                modifier =
-                  Modifier
-                    .menuAnchor()
-                    .fillMaxWidth(),
-                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-              )
-              ExposedDropdownMenu(
-                expanded = backgroundModeExpanded,
-                onDismissRequest = { backgroundModeExpanded = false },
-              ) {
-                BackgroundMode.entries.forEach { mode ->
-                  DropdownMenuItem(
-                    text = { Text(mode.displayName) },
-                    onClick = {
-                      onSettingsChange(settings.copy(backgroundMode = mode))
-                      backgroundModeExpanded = false
-                    },
-                  )
-                }
+              BackgroundMode.entries.forEach { mode ->
+                DropdownMenuItem(
+                  text = { Text(mode.displayName) },
+                  onClick = {
+                    onSettingsChange(settings.copy(backgroundMode = mode))
+                    backgroundModeExpanded = false
+                  },
+                )
               }
             }
-
-            // Min Confidence Slider
-            Text(
-              text = "Min Confidence: ${settings.minConfidence}%",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            Slider(
-              value = settings.minConfidence.toFloat(),
-              onValueChange = { value ->
-                onSettingsChange(settings.copy(minConfidence = value.toInt()))
-              },
-              valueRange = 50f..100f,
-              steps = 9,
-              modifier = Modifier.fillMaxWidth(),
-            )
-
-            // Max Image Size Slider
-            Text(
-              text = "Max Image Size: ${settings.maxImageSize}px",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurface,
-            )
-
-            Slider(
-              value = settings.maxImageSize.toFloat(),
-              onValueChange = { value ->
-                onSettingsChange(settings.copy(maxImageSize = value.toInt()))
-              },
-              valueRange = 1500f..4000f,
-              steps = 24,
-              modifier = Modifier.fillMaxWidth(),
-            )
           }
+
+          // Min Confidence Slider
+          Text(
+            text = "Min Confidence: ${settings.minConfidence}%",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+
+          Slider(
+            value = settings.minConfidence.toFloat(),
+            onValueChange = { value ->
+              onSettingsChange(settings.copy(minConfidence = value.toInt()))
+            },
+            valueRange = 50f..100f,
+            steps = 9,
+            modifier = Modifier.fillMaxWidth(),
+          )
+
+          // Max Image Size Slider
+          Text(
+            text = "Max Image Size: ${settings.maxImageSize}px",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+
+          Slider(
+            value = settings.maxImageSize.toFloat(),
+            onValueChange = { value ->
+              onSettingsChange(settings.copy(maxImageSize = value.toInt()))
+            },
+            valueRange = 1500f..4000f,
+            steps = 24,
+            modifier = Modifier.fillMaxWidth(),
+          )
         }
       }
 
@@ -805,66 +802,24 @@ fun SettingsScreen(
               )
             }
 
-            // Disable OCR Toggle
+            // Show OCR Detection Toggle
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "Disable OCR",
+                text = "Show OCR detection",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
               )
 
               Switch(
-                checked = settings.disableOcr,
+                checked = settings.showOCRDetection,
                 onCheckedChange = { checked ->
-                  onSettingsChange(settings.copy(disableOcr = checked))
+                  onSettingsChange(settings.copy(showOCRDetection = checked))
                 },
               )
-            }
-
-            // Show OCR Detection Toggle
-            if (!settings.disableOcr) {
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                Text(
-                  text = "Show OCR detection",
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                Switch(
-                  checked = settings.showOCRDetection,
-                  onCheckedChange = { checked ->
-                    onSettingsChange(settings.copy(showOCRDetection = checked))
-                  },
-                )
-              }
-
-              // Show Gallery in Image Picker Toggle
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-              ) {
-                Text(
-                  text = "Show file picker for OCR",
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurface,
-                )
-
-                Switch(
-                  checked = settings.showFilePickerInImagePicker,
-                  onCheckedChange = { checked ->
-                    onSettingsChange(settings.copy(showFilePickerInImagePicker = checked))
-                  },
-                )
-              }
             }
 
             // Disable CLD Toggle

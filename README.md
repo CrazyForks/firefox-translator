@@ -20,7 +20,7 @@ Language packs contain the full translation models, translation happens _on your
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04_image_translation_big.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/04_image_translation_big.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png)
-[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png" width="360px">](fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png)
+[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png)
 
 ## Tech

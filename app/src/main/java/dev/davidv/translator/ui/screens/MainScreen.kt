@@ -173,48 +173,34 @@ fun MainScreen(
     floatingActionButton = {
       when (launchMode) {
         LaunchMode.Normal -> {
-          if (!settings.disableOcr) {
-            val fabDisabled = isAutoSource
-            FloatingActionButton(
-              onClick = {
-                if (fabDisabled) {
-                  android.widget.Toast
-                    .makeText(context, "Please select source language first", android.widget.Toast.LENGTH_SHORT)
-                    .show()
-                } else {
-                  showImageSourceSheet = true
-                }
+          val fabDisabled = isAutoSource
+          FloatingActionButton(
+            onClick = {
+              if (fabDisabled) {
+                android.widget.Toast
+                  .makeText(context, "Please select source language first", android.widget.Toast.LENGTH_SHORT)
+                  .show()
+              } else {
+                showImageSourceSheet = true
+              }
+            },
+            containerColor =
+              if (fabDisabled) {
+                MaterialTheme.colorScheme.surfaceVariant
+              } else {
+                FloatingActionButtonDefaults.containerColor
               },
-              containerColor =
-                if (fabDisabled) {
-                  MaterialTheme.colorScheme.surfaceVariant
-                } else {
-                  FloatingActionButtonDefaults.containerColor
-                },
-              contentColor =
-                if (fabDisabled) {
-                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                } else {
-                  MaterialTheme.colorScheme.onPrimaryContainer
-                },
-            ) {
-              Icon(
-                painterResource(
-                  id =
-                    if (settings.showFilePickerInImagePicker) {
-                      R.drawable.attach_file_add
-                    } else {
-                      R.drawable.add_photo
-                    },
-                ),
-                contentDescription =
-                  if (settings.showFilePickerInImagePicker) {
-                    "Translate image or file"
-                  } else {
-                    "Translate image"
-                  },
-              )
-            }
+            contentColor =
+              if (fabDisabled) {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+              } else {
+                MaterialTheme.colorScheme.onPrimaryContainer
+              },
+          ) {
+            Icon(
+              painterResource(id = R.drawable.attach_file_add),
+              contentDescription = "Translate image or file",
+            )
           }
         }
 
@@ -531,7 +517,6 @@ fun MainScreen(
     onMessage = onMessage,
     showImageSourceSheet = showImageSourceSheet,
     onDismissImageSourceSheet = { showImageSourceSheet = false },
-    showFilePickerInImagePicker = settings.showFilePickerInImagePicker,
     pendingSharedImage = pendingSharedImage,
   )
 
