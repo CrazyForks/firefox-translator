@@ -30,6 +30,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.ViewModelProvider
+import dev.davidv.translator.browser.BrowserActivity
 import dev.davidv.translator.ui.TranslatorViewModel
 import dev.davidv.translator.ui.TranslatorViewModelFactory
 import dev.davidv.translator.ui.screens.TranslatorApp
@@ -133,12 +134,7 @@ class MainActivity : ComponentActivity() {
         if (text != null) {
           val url = firstUrlInText(text)
           if (url != null) {
-            val browserIntent =
-              Intent(this, dev.davidv.translator.browser.BrowserActivity::class.java).apply {
-                putExtra(dev.davidv.translator.browser.BrowserActivity.EXTRA_URL, url)
-              }
-            startActivity(browserIntent)
-            finish()
+            openUrl(url)
             return
           }
           textToTranslate = text
@@ -147,13 +143,33 @@ class MainActivity : ComponentActivity() {
           textToTranslate = ""
         }
       }
+      Intent.ACTION_VIEW -> {
+        val url = intent.data?.toString()
+        if (!url.isNullOrBlank() && isWebUrl(url)) {
+          openUrl(url)
+          return
+        }
+      }
     }
+  }
+
+  private fun openUrl(url: String) {
+    val browserIntent =
+      Intent(this, BrowserActivity::class.java).apply {
+        putExtra(BrowserActivity.EXTRA_URL, url)
+      }
+    startActivity(browserIntent)
+    finish()
   }
 
   private fun firstUrlInText(text: String): String? {
     for (token in text.trim().split(Regex("\\s+"))) {
-      if (token.startsWith("http://") || token.startsWith("https://")) return token
+      if (isWebUrl(token)) return token
     }
     return null
+  }
+
+  private fun isWebUrl(text: String): Boolean {
+    return text.startsWith("http://") || text.startsWith("https://")
   }
 }
