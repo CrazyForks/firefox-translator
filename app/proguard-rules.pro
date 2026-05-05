@@ -22,3 +22,16 @@
 # enum/data classes crossing the FFI boundary must retain their fields.
 -keep class uniffi.bindings.** { *; }
 -keep class uniffi.translator.** { *; }
+
+# uCrop contains an optional HTTP(S) download path that depends on OkHttp, but
+# this app only sends local content/file URIs to the cropper.
+-dontwarn okhttp3.Call
+-dontwarn okhttp3.Dispatcher
+-dontwarn okhttp3.OkHttpClient
+-dontwarn okhttp3.Request$Builder
+-dontwarn okhttp3.Request
+-dontwarn okhttp3.Response
+-dontwarn okhttp3.ResponseBody
+-dontwarn okio.BufferedSource
+-dontwarn okio.Okio
+-dontwarn okio.Sink

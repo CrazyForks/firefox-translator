@@ -180,6 +180,8 @@ private fun isImageUri(
   uri: Uri,
 ): Boolean = context.contentResolver.getType(uri)?.startsWith("image/") == true
 
+private fun isRemoteUri(uri: Uri): Boolean = uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals("https", ignoreCase = true)
+
 @Composable
 fun ImageCaptureHandler(
   onMessage: (TranslatorMessage) -> Unit,
@@ -220,6 +222,14 @@ fun ImageCaptureHandler(
     sourceUri: Uri,
     destUri: Uri,
   ) {
+    if (isRemoteUri(sourceUri)) {
+      deleteTemporaryImageUri(context, destUri)
+      pendingImport.value = null
+      Log.w("ImageCrop", "Remote image crop is unsupported: $sourceUri")
+      Toast.makeText(context, "Remote images cannot be cropped directly", Toast.LENGTH_SHORT).show()
+      return
+    }
+
     val options =
       UCrop.Options().apply {
         setCompressionFormat(Bitmap.CompressFormat.JPEG)
