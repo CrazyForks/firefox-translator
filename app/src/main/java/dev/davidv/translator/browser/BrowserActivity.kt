@@ -266,32 +266,34 @@ private fun BrowserScreen(
       Surface(
         color = MaterialTheme.colorScheme.background,
       ) {
-        LanguageSelectionRow(
-          from = from!!,
-          to = to!!,
-          canSwap = viewModel.canSwapLanguages(from!!, to!!),
-          languageState = languageState,
-          languageMetadata = languageMetadata,
-          onMessage = viewModel::onMessage,
-          drawable =
-            Pair(
-              if (readerActive) "Exit reader mode" else "Reader mode",
-              R.drawable.chrome_reader_mode,
-            ),
-          onSettings =
-            if (readerVisible) {
-              {
-                val webView = webViewRef[0]
-                if (webView != null) {
-                  readerController.toggle(webView) {
-                    Toast.makeText(context, "Reader mode unavailable for this page", Toast.LENGTH_SHORT).show()
+        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+          LanguageSelectionRow(
+            from = from!!,
+            to = to!!,
+            canSwap = viewModel.canSwapLanguages(from!!, to!!),
+            languageState = languageState,
+            languageMetadata = languageMetadata,
+            onMessage = viewModel::onMessage,
+            drawable =
+              Pair(
+                if (readerActive) "Exit reader mode" else "Reader mode",
+                R.drawable.chrome_reader_mode,
+              ),
+            onSettings =
+              if (readerVisible) {
+                {
+                  val webView = webViewRef[0]
+                  if (webView != null) {
+                    readerController.toggle(webView) {
+                      Toast.makeText(context, "Reader mode unavailable for this page", Toast.LENGTH_SHORT).show()
+                    }
                   }
                 }
-              }
-            } else {
-              null
-            },
-        )
+              } else {
+                null
+              },
+          )
+        }
       }
     }
   }

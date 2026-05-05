@@ -20,7 +20,9 @@ package dev.davidv.translator.ui.components
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -106,6 +108,8 @@ fun LanguageSelectionRow(
           contentDescription = drawable.first,
         )
       }
+    } else {
+      Spacer(modifier = Modifier.size(48.dp))
     }
   }
 }
