@@ -37,6 +37,7 @@ use std::sync::OnceLock;
 
 use markup5ever::buffer_queue::BufferQueue;
 use translator::font_provider::{FontHandle, FontProvider, FontRequest};
+use translator::script::Script as TrScript;
 use xml5ever::tendril::StrTendril;
 use xml5ever::tokenizer::{EndTag, ProcessResult, StartTag, Token, TokenSink, XmlTokenizer};
 
@@ -238,6 +239,37 @@ fn non_latin_script(language: &str) -> Option<Script> {
     })
 }
 
+/// Map the translator's [`TrScript`] to this provider's internal enum. The
+/// internal enum exists because Android's `fonts.xml` distinguishes
+/// simplified vs traditional Han via `lang=zh-Hans` / `lang=zh-Hant`, which
+/// the translator's script enum collapses into a single `Han` variant.
+/// We pull the disambiguation from the BCP-47 hint when needed.
+fn script_from_translator(script: TrScript, language: &str) -> Option<Script> {
+    Some(match script {
+        TrScript::Cyrillic => Script::Cyrillic,
+        TrScript::Greek => Script::Greek,
+        TrScript::Arabic => Script::Arabic,
+        TrScript::Hebrew => Script::Hebrew,
+        TrScript::Thai => Script::Thai,
+        TrScript::Devanagari => Script::Devanagari,
+        TrScript::Bengali => Script::Bengali,
+        TrScript::Tamil => Script::Tamil,
+        TrScript::Telugu => Script::Telugu,
+        TrScript::Kannada => Script::Kannada,
+        TrScript::Malayalam => Script::Malayalam,
+        TrScript::Gujarati => Script::Gujarati,
+        TrScript::Hiragana | TrScript::Katakana => Script::Japanese,
+        TrScript::Hangul => Script::Korean,
+        TrScript::Han => match non_latin_script(language) {
+            Some(Script::HanTraditional) => Script::HanTraditional,
+            _ => Script::HanSimplified,
+        },
+        // Latin / Common / anything else: rides Helvetica or Roboto via the
+        // empty chain returned from `locate`.
+        _ => return None,
+    })
+}
+
 fn lang_tags(script: Script) -> &'static [&'static str] {
     match script {
         Script::Cyrillic | Script::Greek => &[],
@@ -360,18 +392,38 @@ fn locate_for(script: Script, bold: bool, italic: bool) -> Option<(PathBuf, u32)
 pub struct AndroidFontProvider;
 
 impl FontProvider for AndroidFontProvider {
-    fn locate(&self, request: &FontRequest) -> Option<FontHandle> {
-        let script = non_latin_script(&request.language)?;
-        let (path, ttc_index) = locate_for(script, request.bold, request.italic)?;
-        log::debug!(
-            "[font] {} bold={} italic={} -> {} (ttc={})",
-            request.language,
-            request.bold,
-            request.italic,
-            path.display(),
-            ttc_index
-        );
-        Some(FontHandle::new(path, ttc_index))
+    fn locate(&self, request: &FontRequest) -> Vec<FontHandle> {
+        let mut chain: Vec<FontHandle> = Vec::new();
+
+        if let Some(script) = script_from_translator(request.script, &request.language)
+            && let Some((path, ttc_index)) = locate_for(script, request.bold, request.italic)
+        {
+            log::debug!(
+                "[font] {:?} lang={} bold={} italic={} -> {} (ttc={})",
+                request.script,
+                request.language,
+                request.bold,
+                request.italic,
+                path.display(),
+                ttc_index,
+            );
+            chain.push(FontHandle::new(path, ttc_index));
+        }
+
+        // Always append Roboto (sans-serif default) as a Latin/Cyrillic/Greek
+        // fallback. Roboto covers Latin/Cyrillic/Greek out of the box on every
+        // Android release; it's the right fallback for ASCII embedded inside
+        // a non-Latin run.
+        if let Some(family) = families()
+            .iter()
+            .find(|f| f.name.as_deref() == Some("sans-serif"))
+            && let Some(font) = pick_font(family, if request.bold { 700 } else { 400 }, request.italic)
+            && let Some((path, ttc_index)) = resolve(&font.file_name, font.ttc_index)
+        {
+            chain.push(FontHandle::new(path, ttc_index));
+        }
+
+        chain
     }
 }
 

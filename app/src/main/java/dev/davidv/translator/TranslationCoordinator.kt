@@ -206,17 +206,12 @@ class TranslationCoordinator(
 
         val extractedText = plan.extractedText
         onMessage(TranslatorMessage.ImageTextDetected(extractedText))
-        val erasedBitmap = bitmapFromRgbaPlan(plan) ?: return@withContext null
         lateinit var overlayBitmap: Bitmap
         val translatePaint =
           measureTimeMillis {
-            overlayBitmap =
-              when (readingOrder) {
-                ReadingOrder.LEFT_TO_RIGHT ->
-                  paintTranslatedTextOver(erasedBitmap, plan.blocks).first
-                ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT ->
-                  paintTranslatedTextOverVerticalBlocks(erasedBitmap, plan.blocks).first
-              }
+            val rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
+            overlayBitmap = bitmapFromRgba(rendered, plan.width.toInt(), plan.height.toInt())
+              ?: return@withContext null
           }
         Log.i("TranslationCoordinator", "Overpainting took ${translatePaint}ms")
 
@@ -247,15 +242,23 @@ class TranslationCoordinator(
 
   suspend fun availableTtsVoices(language: Language): List<TtsVoiceOption> = speechService.availableTtsVoices(language)
 
-  private fun bitmapFromRgbaPlan(plan: PreparedImageOverlay): Bitmap? {
+  private fun bitmapFromRgba(
+    bytes: ByteArray,
+    width: Int,
+    height: Int,
+  ): Bitmap? {
     return try {
-      Bitmap.createBitmap(plan.width.toInt(), plan.height.toInt(), Bitmap.Config.ARGB_8888).apply {
-        copyPixelsFromBuffer(ByteBuffer.wrap(plan.rgbaBytes))
+      Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+        copyPixelsFromBuffer(ByteBuffer.wrap(bytes))
       }
     } catch (e: Exception) {
-      Log.e("TranslationCoordinator", "Failed to decode erased OCR bitmap", e)
+      Log.e("TranslationCoordinator", "Failed to decode rendered overlay bitmap", e)
       null
     }
+  }
+
+  private companion object {
+    const val MIN_OVERLAY_FONT_SIZE_PX: Float = 8.0f
   }
 }
 

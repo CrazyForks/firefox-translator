@@ -147,6 +147,30 @@ fn sample_overlay_colors_rgba(
     .ok()
 }
 
+/// Rasterize the translated overlay onto `prepared`. Returns the new RGBA
+/// buffer (same dimensions as `prepared.width` x `prepared.height`).
+///
+/// `language` is a BCP-47 hint for font selection (CJK regional variants);
+/// `min_font_size_px` floors the fit-loop's shrink (caller should pass the
+/// equivalent of the old Kotlin `minTextSize`, typically 8.0).
+#[cfg(feature = "image-render")]
+#[uniffi::export]
+fn render_translated_overlay(
+    prepared: translator::PreparedImageOverlay,
+    language: String,
+    min_font_size_px: f32,
+) -> Result<Vec<u8>, CatalogError> {
+    use translator::image_render::{RenderOptions, render_overlay};
+    let opts = RenderOptions {
+        language,
+        min_font_size_px,
+    };
+    let provider = crate::android_font_provider::AndroidFontProvider;
+    render_overlay(&prepared, &provider, &opts).map_err(|e| CatalogError::Other {
+        reason: e.to_string(),
+    })
+}
+
 fn document_extension(path: &str) -> String {
     Path::new(path)
         .extension()

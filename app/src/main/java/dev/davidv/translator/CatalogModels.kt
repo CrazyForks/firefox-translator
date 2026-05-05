@@ -356,6 +356,13 @@ class LanguageCatalog private constructor(
     )
 
   @Throws(CatalogException::class)
+  fun renderTranslatedOverlay(
+    plan: uniffi.translator.PreparedImageOverlay,
+    targetLanguage: Language,
+    minFontSizePx: Float,
+  ): ByteArray = uniffi.bindings.renderTranslatedOverlay(plan, targetLanguage.code, minFontSizePx)
+
+  @Throws(CatalogException::class)
   fun translateDocumentPath(
     inputPath: String,
     outputPath: String,
