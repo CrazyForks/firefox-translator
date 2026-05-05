@@ -24,6 +24,7 @@ import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.util.Log
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -84,11 +85,13 @@ import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
+import dev.davidv.translator.SUPPORTED_DOCUMENT_URL_TOAST
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.TtsVoiceOption
 import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.browser.BrowserActivity
+import dev.davidv.translator.isSupportedDocumentUrl
 import dev.davidv.translator.isWebUrl
 import dev.davidv.translator.ui.components.DetectedLanguageSection
 import dev.davidv.translator.ui.components.DictionaryBottomSheet
@@ -607,11 +610,15 @@ fun PasteButton(
         val text = clipData.getItemAt(0).text?.toString() ?: ""
         val trimmed = text.trim()
         if (isWebUrl(trimmed)) {
-          val browserIntent =
-            Intent(context, BrowserActivity::class.java).apply {
-              putExtra(BrowserActivity.EXTRA_URL, trimmed)
-            }
-          context.startActivity(browserIntent)
+          if (isSupportedDocumentUrl(trimmed)) {
+            Toast.makeText(context, SUPPORTED_DOCUMENT_URL_TOAST, Toast.LENGTH_LONG).show()
+          } else {
+            val browserIntent =
+              Intent(context, BrowserActivity::class.java).apply {
+                putExtra(BrowserActivity.EXTRA_URL, trimmed)
+              }
+            context.startActivity(browserIntent)
+          }
         } else {
           onMessage(TranslatorMessage.TextInput(text))
         }
