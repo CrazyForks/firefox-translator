@@ -1,0 +1,5 @@
+- App now shows as a 'browser', to translate links
+- Built-in browser can now clear browsing data on exit
+- Fix ARMv7 build
+- Pasting a link now translates the content
+- Improve the image cropper UX
