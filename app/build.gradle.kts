@@ -423,7 +423,7 @@ dependencies {
   implementation(libs.androidx.datastore.preferences)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.kotlinx.serialization.json.v162)
-  implementation("com.vanniktech:android-image-cropper:4.6.0")
+  implementation("com.github.yalantis:ucrop:2.2.11")
   implementation("net.java.dev.jna:jna:5.14.0@aar")
 }
 

@@ -51,14 +51,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import com.canhub.cropper.CropImageContract
-import com.canhub.cropper.CropImageContractOptions
-import com.canhub.cropper.CropImageOptions
+import com.yalantis.ucrop.UCrop
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
 import kotlinx.coroutines.Dispatchers
@@ -192,30 +191,54 @@ fun ImageCaptureHandler(
   val scope = rememberCoroutineScope()
   val pendingImport = remember { mutableStateOf<PendingImageImport?>(null) }
 
+  val colorScheme = MaterialTheme.colorScheme
+  val toolbarColor = colorScheme.surface.toArgb()
+  val toolbarWidgetColor = colorScheme.onSurface.toArgb()
+  val activeWidgetColor = colorScheme.primary.toArgb()
+  val rootBackgroundColor = colorScheme.background.toArgb()
+
   val cropImage =
-    rememberLauncherForActivityResult(CropImageContract()) { result ->
+    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
       val activeImport = pendingImport.value
-      if (result.isSuccessful) {
-        val croppedUri = result.uriContent ?: activeImport?.cropOutputUri
-        if (croppedUri != null) {
-          activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
-          pendingImport.value = null
-          Log.d("ImageCrop", "Image cropped: $croppedUri")
-          onMessage(TranslatorMessage.SetImageUri(croppedUri, deleteAfterLoad = true))
-        } else {
-          activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
-          activeImport?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
-          pendingImport.value = null
-          Log.d("ImageCrop", "Crop successful but no URI returned")
-        }
+      val resultIntent = result.data
+      val croppedUri = resultIntent?.let { UCrop.getOutput(it) }
+      val error = resultIntent?.let { UCrop.getError(it) }
+      if (result.resultCode == android.app.Activity.RESULT_OK && croppedUri != null) {
+        activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+        pendingImport.value = null
+        Log.d("ImageCrop", "Image cropped: $croppedUri")
+        onMessage(TranslatorMessage.SetImageUri(croppedUri, deleteAfterLoad = true))
       } else {
-        val exception = result.error
         activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
         activeImport?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
         pendingImport.value = null
-        Log.d("ImageCrop", "Crop cancelled or failed: ${exception?.message}")
+        Log.d("ImageCrop", "Crop cancelled or failed: ${error?.message}")
       }
     }
+
+  fun launchCrop(
+    sourceUri: Uri,
+    destUri: Uri,
+  ) {
+    val options =
+      UCrop.Options().apply {
+        setCompressionFormat(Bitmap.CompressFormat.JPEG)
+        setCompressionQuality(95)
+        setFreeStyleCropEnabled(true)
+        setHideBottomControls(false)
+        setToolbarColor(toolbarColor)
+        setToolbarWidgetColor(toolbarWidgetColor)
+        setActiveControlsWidgetColor(activeWidgetColor)
+        setRootViewBackgroundColor(rootBackgroundColor)
+      }
+    val intent =
+      UCrop
+        .of(sourceUri, destUri)
+        .withOptions(options)
+        .getIntent(context)
+        .setClass(context, AppCropActivity::class.java)
+    cropImage.launch(intent)
+  }
 
   if (pendingSharedImage != null) {
     LaunchedEffect(pendingSharedImage) {
@@ -223,17 +246,7 @@ fun ImageCaptureHandler(
         val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
         pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
         Log.d("SharedImage", "Launching crop for shared URI: $uri")
-        cropImage.launch(
-          CropImageContractOptions(
-            uri = uri,
-            cropImageOptions =
-              CropImageOptions(
-                customOutputUri = cropOutputUri,
-                outputCompressFormat = Bitmap.CompressFormat.JPEG,
-                outputCompressQuality = 95,
-              ),
-          ),
-        )
+        launchCrop(uri, cropOutputUri)
       }
     }
   }
@@ -250,17 +263,7 @@ fun ImageCaptureHandler(
           return@rememberLauncherForActivityResult
         }
         Log.d("Camera", "Photo captured: $cameraImageUri")
-        cropImage.launch(
-          CropImageContractOptions(
-            uri = cameraImageUri,
-            cropImageOptions =
-              CropImageOptions(
-                customOutputUri = activeImport.cropOutputUri,
-                outputCompressFormat = Bitmap.CompressFormat.JPEG,
-                outputCompressQuality = 95,
-              ),
-          ),
-        )
+        launchCrop(cameraImageUri, activeImport.cropOutputUri)
       } else {
         pendingImport.value?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
         pendingImport.value?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
@@ -275,17 +278,7 @@ fun ImageCaptureHandler(
         val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
         pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
         Log.d("PhotoPicker", "Selected URI: $uri")
-        cropImage.launch(
-          CropImageContractOptions(
-            uri = uri,
-            cropImageOptions =
-              CropImageOptions(
-                customOutputUri = cropOutputUri,
-                outputCompressFormat = Bitmap.CompressFormat.JPEG,
-                outputCompressQuality = 95,
-              ),
-          ),
-        )
+        launchCrop(uri, cropOutputUri)
       } else {
         Log.d("PhotoPicker", "No media selected")
       }
@@ -299,17 +292,7 @@ fun ImageCaptureHandler(
           val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
           pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
           Log.d("Gallery", "Selected URI: $imageUri")
-          cropImage.launch(
-            CropImageContractOptions(
-              uri = imageUri,
-              cropImageOptions =
-                CropImageOptions(
-                  customOutputUri = cropOutputUri,
-                  outputCompressFormat = Bitmap.CompressFormat.JPEG,
-                  outputCompressQuality = 95,
-                ),
-            ),
-          )
+          launchCrop(imageUri, cropOutputUri)
         } else {
           Log.d("Gallery", "No image selected")
         }
@@ -323,17 +306,7 @@ fun ImageCaptureHandler(
         if (isImageUri(context, uri)) {
           val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
           pendingImport.value = PendingImageImport(sourceUri = null, cropOutputUri = cropOutputUri)
-          cropImage.launch(
-            CropImageContractOptions(
-              uri = uri,
-              cropImageOptions =
-                CropImageOptions(
-                  customOutputUri = cropOutputUri,
-                  outputCompressFormat = Bitmap.CompressFormat.JPEG,
-                  outputCompressQuality = 95,
-                ),
-            ),
-          )
+          launchCrop(uri, cropOutputUri)
         } else {
           scope.launch {
             try {
