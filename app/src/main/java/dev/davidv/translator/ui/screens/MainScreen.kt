@@ -19,6 +19,7 @@ package dev.davidv.translator.ui.screens
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.util.Log
@@ -87,6 +88,8 @@ import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.TtsVoiceOption
 import dev.davidv.translator.WordWithTaggedEntries
+import dev.davidv.translator.browser.BrowserActivity
+import dev.davidv.translator.isWebUrl
 import dev.davidv.translator.ui.components.DetectedLanguageSection
 import dev.davidv.translator.ui.components.DictionaryBottomSheet
 import dev.davidv.translator.ui.components.ImageCaptureHandler
@@ -602,7 +605,16 @@ fun PasteButton(
       val clipData = clipboardManager.primaryClip
       if (clipData != null && clipData.itemCount > 0) {
         val text = clipData.getItemAt(0).text?.toString() ?: ""
-        onMessage(TranslatorMessage.TextInput(text))
+        val trimmed = text.trim()
+        if (isWebUrl(trimmed)) {
+          val browserIntent =
+            Intent(context, BrowserActivity::class.java).apply {
+              putExtra(BrowserActivity.EXTRA_URL, trimmed)
+            }
+          context.startActivity(browserIntent)
+        } else {
+          onMessage(TranslatorMessage.TextInput(text))
+        }
       }
     },
   )

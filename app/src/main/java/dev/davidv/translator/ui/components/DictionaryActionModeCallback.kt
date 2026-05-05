@@ -24,6 +24,8 @@ import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.TextView
+import dev.davidv.translator.browser.BrowserActivity
+import dev.davidv.translator.isWebUrl
 
 class DictionaryActionModeCallback(
   private val context: Context,
@@ -39,7 +41,7 @@ class DictionaryActionModeCallback(
     mode: ActionMode?,
     menu: Menu?,
   ): Boolean {
-    menu?.add(0, DICTIONARY_ID, 0, "Dictionary")
+    syncCustomItems(menu)
     return true
   }
 
@@ -59,9 +61,36 @@ class DictionaryActionModeCallback(
         }
       }
       itemsToRemove.forEach { m.removeItem(it) }
+
+      syncCustomItems(m)
     }
     Log.d("DictionaryActionMode", "Show menu now")
-    return false
+    return true
+  }
+
+  private fun syncCustomItems(menu: Menu?) {
+    menu ?: return
+    val selectionIsUrl = isSelectionUrl()
+    val hasDictionary = menu.findItem(DICTIONARY_ID) != null
+    val hasTranslateUrl = menu.findItem(TRANSLATE_URL_ID) != null
+
+    if (selectionIsUrl) {
+      if (hasDictionary) menu.removeItem(DICTIONARY_ID)
+      if (!hasTranslateUrl) menu.add(0, TRANSLATE_URL_ID, 0, "Translate URL")
+    } else {
+      if (hasTranslateUrl) menu.removeItem(TRANSLATE_URL_ID)
+      if (!hasDictionary) menu.add(0, DICTIONARY_ID, 0, "Dictionary")
+    }
+  }
+
+  private fun isSelectionUrl(): Boolean = selectedText()?.let { isWebUrl(it) } ?: false
+
+  private fun selectedText(): String? {
+    val tv = currentTextView ?: return null
+    val start = tv.selectionStart
+    val end = tv.selectionEnd
+    if (start < 0 || end <= start) return null
+    return tv.text?.subSequence(start, end)?.toString()
   }
 
   override fun onActionItemClicked(
@@ -71,19 +100,24 @@ class DictionaryActionModeCallback(
     Log.d("DictionaryActionMode", "Clicked '${item?.itemId}' == '${item?.title}'")
     return when (item?.itemId) {
       DICTIONARY_ID -> {
-        val textView = currentTextView
-        val selectedText =
-          textView
-            ?.text
-            ?.subSequence(
-              textView.selectionStart,
-              textView.selectionEnd,
-            )?.toString() ?: ""
-
-        if (selectedText.isNotBlank()) {
-          onDictionaryLookup(selectedText)
+        val selected = selectedText().orEmpty()
+        if (selected.isNotBlank()) {
+          onDictionaryLookup(selected)
         }
+        mode?.finish()
+        true
+      }
 
+      TRANSLATE_URL_ID -> {
+        val url = selectedText()?.trim()
+        if (!url.isNullOrBlank() && isWebUrl(url)) {
+          val intent =
+            Intent(context, BrowserActivity::class.java).apply {
+              putExtra(BrowserActivity.EXTRA_URL, url)
+              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+          context.startActivity(intent)
+        }
         mode?.finish()
         true
       }
@@ -96,5 +130,6 @@ class DictionaryActionModeCallback(
 
   companion object {
     private const val DICTIONARY_ID = 12345
+    private const val TRANSLATE_URL_ID = 12346
   }
 }

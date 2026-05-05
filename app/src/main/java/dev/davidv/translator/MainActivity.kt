@@ -132,9 +132,9 @@ class MainActivity : ComponentActivity() {
           }
 
         if (text != null) {
-          val url = firstUrlInText(text)
-          if (url != null) {
-            openUrl(url)
+          val trimmed = text.trim()
+          if (isWebUrl(trimmed)) {
+            openUrl(trimmed)
             return
           }
           textToTranslate = text
@@ -161,15 +161,10 @@ class MainActivity : ComponentActivity() {
     startActivity(browserIntent)
     finish()
   }
+}
 
-  private fun firstUrlInText(text: String): String? {
-    for (token in text.trim().split(Regex("\\s+"))) {
-      if (isWebUrl(token)) return token
-    }
-    return null
-  }
-
-  private fun isWebUrl(text: String): Boolean {
-    return text.startsWith("http://") || text.startsWith("https://")
-  }
+internal fun isWebUrl(text: String): Boolean {
+  val trimmed = text.trim()
+  if (trimmed.contains(Regex("\\s"))) return false
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://")
 }

@@ -72,6 +72,7 @@ import dev.davidv.translator.TranslatorApplication
 import dev.davidv.translator.adblock.AdblockManager
 import dev.davidv.translator.adblock.mapRequestType
 import dev.davidv.translator.adblock.refererOf
+import dev.davidv.translator.isWebUrl
 import dev.davidv.translator.ui.components.LanguageSelectionRow
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.CoroutineScope
@@ -148,18 +149,14 @@ class BrowserActivity : ComponentActivity() {
     if (!fromExtra.isNullOrBlank()) return fromExtra
     if (intent.action == Intent.ACTION_SEND) {
       val shared = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim()
-      if (!shared.isNullOrBlank()) return firstUrlInText(shared)
+      if (!shared.isNullOrBlank()) {
+        if (isWebUrl(shared)) return shared
+        Log.d(TAG, "ACTION_SEND had no URL; using full text as query target: $shared")
+        return shared
+      }
     }
     intent.data?.let { return it.toString() }
     return null
-  }
-
-  private fun firstUrlInText(text: String): String {
-    for (token in text.split(Regex("\\s+"))) {
-      if (token.startsWith("http://") || token.startsWith("https://")) return token
-    }
-    Log.d(TAG, "ACTION_SEND had no URL; using full text as query target: $text")
-    return text
   }
 }
 
