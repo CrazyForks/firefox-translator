@@ -3,3 +3,4 @@
 - Fix ARMv7 build
 - Pasting a link now translates the content
 - Improve the image cropper UX
+- Translate images that are _inside_ PDFs (also translate scanned PDFs)
