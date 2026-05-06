@@ -152,6 +152,7 @@ class TranslationService(
     from: Language,
     to: Language,
     availableLanguages: List<Language>,
+    translatePdfImages: Boolean,
     onProgress: (DocumentTranslationProgress) -> Unit = {},
     isCancelled: () -> Boolean = { false },
   ): Result<String> =
@@ -160,9 +161,14 @@ class TranslationService(
         filePathManager.loadCatalog()
           ?: return@withContext Result.failure(IllegalStateException("Catalog unavailable"))
       try {
-        Result.success(catalog.translateDocumentPath(inputPath, outputPath, from, to, availableLanguages, onProgress, isCancelled))
+        Result.success(
+          catalog.translateDocumentPath(inputPath, outputPath, from, to, availableLanguages, translatePdfImages, onProgress, isCancelled),
+        )
       } catch (e: CatalogException.MissingAsset) {
         Result.failure(IllegalStateException("Language pair ${from.code} -> ${to.code} not installed", e))
+      } catch (e: CatalogException.Cancelled) {
+        // User-initiated cancel — not an error, no stack trace logged.
+        Result.failure(kotlinx.coroutines.CancellationException("translation cancelled"))
       } catch (e: CatalogException.Other) {
         Log.e("TranslationService", "Document translation failed", e)
         Result.failure(IllegalStateException("Document translation failed: ${e.message}", e))

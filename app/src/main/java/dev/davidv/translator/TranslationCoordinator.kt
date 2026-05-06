@@ -82,6 +82,7 @@ class TranslationCoordinator(
     from: Language,
     to: Language,
     availableLanguages: List<Language>,
+    translatePdfImages: Boolean,
     onProgress: (DocumentTranslationProgress) -> Unit = {},
     isCancelled: () -> Boolean = { false },
   ): Result<String> {
@@ -94,6 +95,7 @@ class TranslationCoordinator(
           from = from,
           to = to,
           availableLanguages = availableLanguages,
+          translatePdfImages = translatePdfImages,
           onProgress = onProgress,
           isCancelled = isCancelled,
         )

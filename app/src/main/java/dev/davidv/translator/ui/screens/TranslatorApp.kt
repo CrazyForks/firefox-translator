@@ -240,23 +240,31 @@ private fun DocumentTranslationDialog(
           )
         }
         if (document.isTranslating) {
-          val progressFraction = document.progressFraction
-          if (progressFraction != null) {
-            LinearProgressIndicator(
-              progress = { progressFraction },
-              modifier = Modifier.fillMaxWidth(),
-            )
-            val current = document.progressCurrent ?: 0
-            val total = document.progressTotal ?: 0
-            val displayCurrent = if (current < total) current + 1 else current
-            val unit =
-              when (document.progressUnit) {
-                "page" -> "Page"
-                else -> "Block"
-              }
-            Text("$unit $displayCurrent/$total")
+          val phases = document.pdfPhases
+          if (phases != null) {
+            PdfPhaseRow("Pages", phases.textCurrent, phases.textTotal)
+            PdfPhaseRow("Images", phases.imageCurrent, phases.imageTotal)
+            PdfPhaseRow("Bitmap pages", phases.rasterCurrent, phases.rasterTotal)
           } else {
-            Text(document.progressLabel)
+            val progressFraction = document.progressFraction
+            if (progressFraction != null) {
+              LinearProgressIndicator(
+                progress = { progressFraction },
+                modifier = Modifier.fillMaxWidth(),
+              )
+              val current = document.progressCurrent ?: 0
+              val total = document.progressTotal ?: 0
+              val displayCurrent = if (current < total) current + 1 else current
+              val unit =
+                when (document.progressUnit) {
+                  "page" -> "Page"
+                  "image" -> "Image"
+                  else -> "Block"
+                }
+              Text("$unit $displayCurrent/$total")
+            } else {
+              Text(document.progressLabel)
+            }
           }
         }
         if (document.errorMessage != null) {
@@ -285,6 +293,28 @@ private fun DocumentTranslationDialog(
       }
     },
   )
+}
+
+@Composable
+private fun PdfPhaseRow(
+  label: String,
+  current: Int,
+  total: Int,
+) {
+  val fraction = if (total > 0) (current.toFloat() / total.toFloat()).coerceIn(0f, 1f) else 0f
+  Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(label, modifier = Modifier.weight(1f))
+      Text("$current/$total")
+    }
+    LinearProgressIndicator(
+      progress = { fraction },
+      modifier = Modifier.fillMaxWidth(),
+    )
+  }
 }
 
 @Composable

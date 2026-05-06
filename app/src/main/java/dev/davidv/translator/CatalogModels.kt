@@ -13,6 +13,12 @@ typealias CatalogError = CatalogException
 sealed class DocumentTranslationProgress {
   data object Preparing : DocumentTranslationProgress()
 
+  data class PdfPlan(
+    val textPages: Int,
+    val imageXobjects: Int,
+    val rasterPages: Int,
+  ) : DocumentTranslationProgress()
+
   data class Translating(
     val current: Int,
     val total: Int,
@@ -25,6 +31,12 @@ sealed class DocumentTranslationProgress {
 private fun DocumentProgressEvent.toDocumentTranslationProgress(): DocumentTranslationProgress =
   when (this) {
     DocumentProgressEvent.Preparing -> DocumentTranslationProgress.Preparing
+    is DocumentProgressEvent.PdfPlan ->
+      DocumentTranslationProgress.PdfPlan(
+        textPages = textPages.toInt(),
+        imageXobjects = imageXobjects.toInt(),
+        rasterPages = rasterPages.toInt(),
+      )
     is DocumentProgressEvent.Translating ->
       DocumentTranslationProgress.Translating(
         current = current.toInt(),
@@ -369,6 +381,7 @@ class LanguageCatalog private constructor(
     from: Language,
     to: Language,
     availableLanguages: List<Language>,
+    translatePdfImages: Boolean,
     onProgress: (DocumentTranslationProgress) -> Unit = {},
     isCancelled: () -> Boolean = { false },
   ): String =
@@ -378,6 +391,7 @@ class LanguageCatalog private constructor(
       from.code,
       to.code,
       availableLanguages.map { it.code },
+      translatePdfImages,
       object : DocumentProgressSink {
         override fun onProgress(event: DocumentProgressEvent) {
           onProgress(event.toDocumentTranslationProgress())

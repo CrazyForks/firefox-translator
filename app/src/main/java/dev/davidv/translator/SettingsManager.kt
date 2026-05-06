@@ -121,6 +121,8 @@ class SettingsManager(
         "clear_web_translator_data_on_close",
         defaults.clearWebTranslatorDataOnClose,
       )
+    val translatePdfImages =
+      prefs.getBoolean("translate_pdf_images", defaults.translatePdfImages)
 
     return AppSettings(
       defaultTargetLanguageCode = defaultTargetLanguageCode,
@@ -144,6 +146,7 @@ class SettingsManager(
       ttsVoiceOverrides = ttsVoiceOverrides,
       tapToTranslateEnabled = tapToTranslateEnabled,
       clearWebTranslatorDataOnClose = clearWebTranslatorDataOnClose,
+      translatePdfImages = translatePdfImages,
     )
   }
 
@@ -238,6 +241,10 @@ class SettingsManager(
       if (newSettings.clearWebTranslatorDataOnClose != currentSettings.clearWebTranslatorDataOnClose) {
         putBoolean("clear_web_translator_data_on_close", newSettings.clearWebTranslatorDataOnClose)
         modifiedSettings.add("clear_web_translator_data_on_close")
+      }
+      if (newSettings.translatePdfImages != currentSettings.translatePdfImages) {
+        putBoolean("translate_pdf_images", newSettings.translatePdfImages)
+        modifiedSettings.add("translate_pdf_images")
       }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")

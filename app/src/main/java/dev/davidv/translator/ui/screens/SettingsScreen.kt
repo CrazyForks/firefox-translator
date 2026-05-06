@@ -905,6 +905,32 @@ fun SettingsScreen(
                 },
               )
             }
+
+            // Translate images embedded in PDFs
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "Translate images in PDFs",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = "OCR and translate raster images embedded in PDF pages.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              Switch(
+                checked = settings.translatePdfImages,
+                onCheckedChange = { checked ->
+                  onSettingsChange(settings.copy(translatePdfImages = checked))
+                },
+              )
+            }
           }
         }
       }

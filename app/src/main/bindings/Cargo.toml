@@ -9,7 +9,7 @@ name = "bindings"
 path = "src/lib.rs"
 
 [features]
-default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "transliterate", "image-render"]
+default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "transliterate", "image-render", "pdf-image-translate"]
 dictionary = ["translator/dictionary"]
 mucab = ["translator/mucab"]
 tesseract = ["translator/tesseract"]
@@ -18,6 +18,7 @@ pdf = ["translator/pdf"]
 odt = ["translator/odt"]
 transliterate = ["translator/transliterate"]
 image-render = ["translator/image-render"]
+pdf-image-translate = ["translator/pdf-image-translate"]
 
 [dependencies]
 adblock = { version = "0.12.2", default-features = false, features = ["full-regex-handling", "embedded-domain-resolver"] }
@@ -30,9 +31,8 @@ markup5ever = "0.38"
 
 [dependencies.translator]
 default-features = false
-# git = "https://github.com/DavidVentura/translator-rs.git"
-path = "/home/david/git/translator-rs"
-#
+git = "https://github.com/DavidVentura/translator-rs.git"
+# path = "/home/david/git/translator-rs"
 features = ["uniffi", "html"]
 
 [target.'cfg(target_os = "android")'.dependencies]
@@ -46,3 +46,4 @@ lto = "thin"
 codegen-units = 2
 debug = false
 strip = "debuginfo"
+#

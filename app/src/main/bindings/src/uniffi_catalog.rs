@@ -19,6 +19,10 @@ pub enum CatalogError {
     MissingAsset { reason: String },
     #[error("{reason}")]
     Other { reason: String },
+    /// User-initiated cancel. The Kotlin side should treat this as a
+    /// silent stop, not as a translation failure.
+    #[error("cancelled")]
+    Cancelled,
 }
 
 impl From<TranslatorError> for CatalogError {
@@ -37,6 +41,22 @@ impl From<TranslatorError> for CatalogError {
 #[derive(Debug, Clone, uniffi::Enum)]
 pub enum DocumentProgressEvent {
     Preparing,
+    /// PDF-only: emitted once after inventory, before any pass starts.
+    /// Lets the UI render three labelled progress lines (pages /
+    /// images / raster pages) with their totals up-front, instead of
+    /// one bar that resets when each phase ends. Subsequent
+    /// `Translating` events update the matching counter via `unit`:
+    ///   - "page" → text-translation pages
+    ///   - "image" → image-XObject pass
+    ///   - "raster_page" → page-raster overlay pass
+    /// `raster_pages` is an upper bound; the raster pass refines it
+    /// once the image pass has narrowed the actual set, by reporting
+    /// the smaller `total` in its ticks.
+    PdfPlan {
+        text_pages: u32,
+        image_xobjects: u32,
+        raster_pages: u32,
+    },
     Translating {
         current: u32,
         total: u32,
@@ -193,14 +213,13 @@ fn translate_document_path_impl(
     forced_source_code: Option<String>,
     target_code: String,
     available_language_codes: Vec<String>,
+    translate_pdf_images: bool,
     mut on_progress: impl FnMut(DocumentProgressEvent),
-    is_cancelled: impl Fn() -> bool,
+    is_cancelled: impl Fn() -> bool + Send + Sync,
 ) -> Result<String, CatalogError> {
     let check_cancelled = || {
         if is_cancelled() {
-            Err(CatalogError::Other {
-                reason: "document translation cancelled".to_string(),
-            })
+            Err(CatalogError::Cancelled)
         } else {
             Ok(())
         }
@@ -272,8 +291,11 @@ fn translate_document_path_impl(
                         }
                     },
                 )
-                .map_err(|error| CatalogError::Other {
-                    reason: format!("failed to translate ODT: {error}"),
+                .map_err(|error| match error {
+                    translator::odt::OdtTranslateError::Cancelled => CatalogError::Cancelled,
+                    other => CatalogError::Other {
+                        reason: format!("failed to translate ODT: {other}"),
+                    },
                 })?
             }
             #[cfg(not(feature = "odt"))]
@@ -287,44 +309,179 @@ fn translate_document_path_impl(
         "pdf" => {
             #[cfg(feature = "pdf")]
             {
-                let translations = translator::pdf_translate::translate_pdf_with_progress(
-                    session,
-                    &input_bytes,
-                    forced_source_code.as_deref(),
-                    &target_code,
-                    &available,
-                    |progress| {
-                        if is_cancelled() {
-                            return Err(translator::pdf_translate::PdfTranslateError::Cancelled);
+                // Pipeline order: text translation FIRST, then image
+                // XObject translation, then page-raster overlay last.
+                //
+                // Why this order: each later pass depends on the input
+                // it sees being free of *its own* output. Text
+                // translation runs surgery on extractable PDF text;
+                // running it after the overlay pass would re-process
+                // the overlay's `Tj` operators, embed duplicate fonts,
+                // and bloat the output. Image-XObject translation
+                // re-encodes bitmaps; running it after page-raster
+                // overlay would bake redundant translated text into
+                // images that the overlay also covers. Keeping text →
+                // XObject → overlay means each pass sees only the
+                // upstream content it's designed for.
+                #[cfg(feature = "pdf-image-translate")]
+                let overlay_pages: std::collections::HashSet<usize> =
+                    if translate_pdf_images && forced_source_code.is_some() {
+                        translator::pdf_image_translate::log_page_inventory(&input_bytes);
+                        let pages = translator::pdf_image_translate::pages_without_extractable_text(
+                            &input_bytes,
+                        );
+                        // Emit a PdfPlan up-front so the UI can render
+                        // three labelled progress bars (text pages /
+                        // images / raster pages) with totals known
+                        // before any pass starts. raster_pages here is
+                        // the upper bound (pages with no extractable
+                        // text); the raster pass refines its `total`
+                        // down to whatever survives the image pass.
+                        if let Some(inv) =
+                            translator::pdf_image_translate::pdf_translation_inventory(
+                                &input_bytes,
+                            )
+                        {
+                            on_progress(DocumentProgressEvent::PdfPlan {
+                                text_pages: inv.total_pages,
+                                image_xobjects: inv.image_xobjects,
+                                raster_pages: inv.raster_pages,
+                            });
                         }
-                        let translator::pdf_translate::PdfTranslateProgress::TranslatingPage {
-                            current,
-                            total,
-                        } = progress;
-                        on_progress(DocumentProgressEvent::Translating {
-                            current: current as u32,
-                            total: total as u32,
-                            unit: "page".to_string(),
+                        pages
+                    } else {
+                        std::collections::HashSet::new()
+                    };
+
+                // Pass 1: text translation over the original bytes.
+                let translations_result =
+                    translator::pdf_translate::translate_pdf_with_progress(
+                        session,
+                        &input_bytes,
+                        forced_source_code.as_deref(),
+                        &target_code,
+                        &available,
+                        |progress| {
+                            if is_cancelled() {
+                                return Err(
+                                    translator::pdf_translate::PdfTranslateError::Cancelled,
+                                );
+                            }
+                            let translator::pdf_translate::PdfTranslateProgress::TranslatingPage {
+                                current,
+                                total,
+                            } = progress;
+                            on_progress(DocumentProgressEvent::Translating {
+                                current: current as u32,
+                                total: total as u32,
+                                unit: "page".to_string(),
+                            });
+                            if is_cancelled() {
+                                Err(translator::pdf_translate::PdfTranslateError::Cancelled)
+                            } else {
+                                Ok(())
+                            }
+                        },
+                    );
+                // If no native text was found but image translation
+                // can still add overlay content, proceed with an empty
+                // translation set so the writer round-trips the bytes.
+                let translations = match translations_result {
+                    Ok(t) => t,
+                    Err(translator::pdf_translate::PdfTranslateError::NoTextFound) => Vec::new(),
+                    Err(translator::pdf_translate::PdfTranslateError::Cancelled) => {
+                        return Err(CatalogError::Cancelled);
+                    }
+                    Err(error) => {
+                        return Err(CatalogError::Other {
+                            reason: format!("failed to translate PDF: {error}"),
                         });
-                        if is_cancelled() {
-                            Err(translator::pdf_translate::PdfTranslateError::Cancelled)
-                        } else {
-                            Ok(())
-                        }
-                    },
-                )
-                .map_err(|error| CatalogError::Other {
-                    reason: format!("failed to translate PDF: {error}"),
-                })?;
-                on_progress(DocumentProgressEvent::Writing);
-                translator::pdf_write::write_translated_pdf(
+                    }
+                };
+                // No Writing event here: we still have image/page-raster
+                // passes to do after `write_translated_pdf` produces the
+                // post-text bytes. The single Writing event lives at the
+                // end of `translate_document_path_impl`, right before
+                // `fs::write` actually persists the result.
+                let after_text = translator::pdf_write::write_translated_pdf(
                     &input_bytes,
                     &translations,
                     &crate::android_font_provider::AndroidFontProvider,
                 )
                 .map_err(|error| CatalogError::Other {
                     reason: format!("failed to write PDF: {error}"),
-                })?
+                })?;
+
+                // Passes 2 & 3 (only if image translation requested):
+                // image-XObject translation, then page-raster overlay.
+                #[cfg(feature = "pdf-image-translate")]
+                {
+                    if translate_pdf_images && forced_source_code.is_some() {
+                        let src = forced_source_code.as_deref().unwrap_or("");
+                        let xobject_progress = |current: usize, total: usize| {
+                            on_progress(DocumentProgressEvent::Translating {
+                                current: current as u32,
+                                total: total as u32,
+                                unit: "image".to_string(),
+                            });
+                        };
+                        let xobject_output =
+                            translator::pdf_image_translate::translate_pdf_images_in_place(
+                                &after_text,
+                                session,
+                                src,
+                                &target_code,
+                                &crate::android_font_provider::AndroidFontProvider,
+                                &overlay_pages,
+                                &is_cancelled,
+                                xobject_progress,
+                            )
+                            .map_err(|error| CatalogError::Other {
+                                reason: format!("failed to translate PDF images: {error}"),
+                            })?;
+                        check_cancelled()?;
+                        // Pages whose visible content was translated via
+                        // image XObjects don't need a page-raster overlay
+                        // on top — that would just OCR the freshly
+                        // translated bitmap and stamp the same Spanish
+                        // text again.
+                        let raster_pages: std::collections::HashSet<usize> = overlay_pages
+                            .difference(&xobject_output.translated_pages)
+                            .copied()
+                            .collect();
+                        let page_progress = |current: usize, total: usize| {
+                            on_progress(DocumentProgressEvent::Translating {
+                                current: current as u32,
+                                total: total as u32,
+                                unit: "raster_page".to_string(),
+                            });
+                        };
+                        let final_bytes =
+                            translator::pdf_image_translate::translate_pdf_pages_as_raster_in_place(
+                                &xobject_output.bytes,
+                                session,
+                                src,
+                                &target_code,
+                                &crate::android_font_provider::AndroidFontProvider,
+                                &raster_pages,
+                                &is_cancelled,
+                                page_progress,
+                            )
+                            .map_err(|error| CatalogError::Other {
+                                reason: format!("failed to rasterize PDF pages: {error}"),
+                            })?;
+                        check_cancelled()?;
+                        final_bytes
+                    } else {
+                        let _ = (translate_pdf_images, &overlay_pages);
+                        after_text
+                    }
+                }
+                #[cfg(not(feature = "pdf-image-translate"))]
+                {
+                    let _ = translate_pdf_images;
+                    after_text
+                }
             }
             #[cfg(not(feature = "pdf"))]
             {
@@ -369,6 +526,7 @@ impl CatalogHandle {
         disk_json: Option<String>,
         base_dir: String,
     ) -> Result<Arc<Self>, CatalogOpenError> {
+        crate::init_logging();
         let checker = FsPackInstallChecker::new(&base_dir);
         let session =
             TranslatorSession::open(&bundled_json, disk_json.as_deref(), base_dir, &checker)
@@ -584,6 +742,7 @@ impl CatalogHandle {
         forced_source_code: Option<String>,
         target_code: String,
         available_language_codes: Vec<String>,
+        translate_pdf_images: bool,
     ) -> Result<String, CatalogError> {
         translate_document_path_impl(
             &self.session,
@@ -592,6 +751,7 @@ impl CatalogHandle {
             forced_source_code,
             target_code,
             available_language_codes,
+            translate_pdf_images,
             |_| {},
             || false,
         )
@@ -604,6 +764,7 @@ impl CatalogHandle {
         forced_source_code: Option<String>,
         target_code: String,
         available_language_codes: Vec<String>,
+        translate_pdf_images: bool,
         progress: Arc<dyn DocumentProgressSink>,
     ) -> Result<String, CatalogError> {
         translate_document_path_impl(
@@ -613,6 +774,7 @@ impl CatalogHandle {
             forced_source_code,
             target_code,
             available_language_codes,
+            translate_pdf_images,
             |event| progress.on_progress(event),
             || progress.is_cancelled(),
         )

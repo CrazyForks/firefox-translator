@@ -35,6 +35,7 @@ import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.PcmAudio
+import dev.davidv.translator.PdfPhaseProgress
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.SpeechSynthesisResult
@@ -835,6 +836,7 @@ data class DocumentTranslationUiState(
   val outputMimeType: String? = null,
   val errorMessage: String? = null,
   val progressLabel: String = "Preparing file",
+  val pdfPhases: PdfPhaseProgress? = null,
   val progressCurrent: Int? = null,
   val progressTotal: Int? = null,
   val progressUnit: String? = null,
@@ -861,6 +863,7 @@ private fun DocumentTranslationServiceState.toUiState(): DocumentTranslationUiSt
     outputMimeType = outputPath?.let { mimeTypeForDocumentPath(it) },
     errorMessage = errorMessage,
     progressLabel = progressLabel,
+    pdfPhases = pdfPhases,
     progressCurrent = progressCurrent,
     progressTotal = progressTotal,
     progressUnit = progressUnit,

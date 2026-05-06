@@ -46,6 +46,17 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.coroutineContext
 import kotlin.system.measureTimeMillis
 
+private val pdfPhaseUnits = setOf("page", "image", "raster_page")
+
+data class PdfPhaseProgress(
+  val textCurrent: Int = 0,
+  val textTotal: Int,
+  val imageCurrent: Int = 0,
+  val imageTotal: Int,
+  val rasterCurrent: Int = 0,
+  val rasterTotal: Int,
+)
+
 data class DocumentTranslationServiceState(
   val taskId: Long,
   val fileName: String,
@@ -53,6 +64,11 @@ data class DocumentTranslationServiceState(
   val outputPath: String? = null,
   val errorMessage: String? = null,
   val progressLabel: String = "Preparing file",
+  // Set once a PdfPlan event arrives. While non-null the UI renders
+  // three labelled progress bars (text pages / images / raster
+  // pages); each phase ticks its own counter. Null for non-PDF
+  // (odt/txt) flows where the legacy single-bar fields drive the UI.
+  val pdfPhases: PdfPhaseProgress? = null,
   val progressCurrent: Int? = null,
   val progressTotal: Int? = null,
   val progressUnit: String? = null,
@@ -196,6 +212,7 @@ class DocumentTranslationService : Service() {
               from = from,
               to = to,
               availableLanguages = availableLanguages,
+              translatePdfImages = app.settingsManager.settings.value.translatePdfImages,
               onProgress = { progress ->
                 updateProgress(request.taskId, progress)
               },
@@ -218,6 +235,14 @@ class DocumentTranslationService : Service() {
               errorMessage = null,
               progressLabel = "Translated file",
               progressCurrent = it.progressTotal,
+              pdfPhases =
+                it.pdfPhases?.let { p ->
+                  p.copy(
+                    textCurrent = p.textTotal,
+                    imageCurrent = p.imageTotal,
+                    rasterCurrent = p.rasterTotal,
+                  )
+                },
             )
           }
         }.onFailure { error ->
@@ -264,27 +289,62 @@ class DocumentTranslationService : Service() {
         DocumentTranslationProgress.Preparing ->
           current.copy(
             progressLabel = "Preparing file",
-            progressCurrent = null,
-            progressTotal = null,
-            progressUnit = null,
+          )
+        is DocumentTranslationProgress.PdfPlan ->
+          current.copy(
+            progressLabel = "Translating",
+            pdfPhases =
+              PdfPhaseProgress(
+                textTotal = progress.textPages,
+                imageTotal = progress.imageXobjects,
+                rasterTotal = progress.rasterPages,
+              ),
           )
         is DocumentTranslationProgress.Translating ->
-          current.copy(
-            progressLabel =
+          if (current.pdfPhases != null && progress.unit in pdfPhaseUnits) {
+            // PDF flow: tick the matching phase counter and refresh
+            // its total (the raster pass narrows its denominator
+            // once the image pass has run).
+            val phases = current.pdfPhases
+            val updatedPhases =
               when (progress.unit) {
-                "page" -> "Translating page"
-                else -> "Translating block"
-              },
-            progressCurrent = progress.current,
-            progressTotal = progress.total,
-            progressUnit = progress.unit,
-          )
+                "page" ->
+                  phases.copy(
+                    textCurrent = progress.current,
+                    textTotal = progress.total,
+                  )
+                "image" ->
+                  phases.copy(
+                    imageCurrent = progress.current,
+                    imageTotal = progress.total,
+                  )
+                "raster_page" ->
+                  phases.copy(
+                    rasterCurrent = progress.current,
+                    rasterTotal = progress.total,
+                  )
+                else -> phases
+              }
+            current.copy(
+              progressLabel = "Translating",
+              pdfPhases = updatedPhases,
+            )
+          } else {
+            current.copy(
+              progressLabel =
+                when (progress.unit) {
+                  "page" -> "Translating page"
+                  "image" -> "Translating image"
+                  else -> "Translating block"
+                },
+              progressCurrent = progress.current,
+              progressTotal = progress.total,
+              progressUnit = progress.unit,
+            )
+          }
         DocumentTranslationProgress.Writing ->
           current.copy(
             progressLabel = "Saving translated file",
-            progressCurrent = null,
-            progressTotal = null,
-            progressUnit = null,
           )
       }
     }
@@ -326,10 +386,21 @@ class DocumentTranslationService : Service() {
         .setAutoCancel(!state.isTranslating)
         .setOnlyAlertOnce(true)
 
-    val current = state.progressCurrent
-    val total = state.progressTotal
-    if (state.isTranslating && current != null && total != null && total > 0) {
-      notification.setProgress(total, current.coerceIn(0, total), false)
+    if (state.isTranslating) {
+      val phases = state.pdfPhases
+      if (phases != null) {
+        val total = phases.textTotal + phases.imageTotal + phases.rasterTotal
+        if (total > 0) {
+          val current = phases.textCurrent + phases.imageCurrent + phases.rasterCurrent
+          notification.setProgress(total, current.coerceIn(0, total), false)
+        }
+      } else {
+        val current = state.progressCurrent
+        val total = state.progressTotal
+        if (current != null && total != null && total > 0) {
+          notification.setProgress(total, current.coerceIn(0, total), false)
+        }
+      }
     }
 
     return notification.build()
@@ -338,6 +409,18 @@ class DocumentTranslationService : Service() {
   private fun notificationText(state: DocumentTranslationServiceState): String {
     if (state.errorMessage != null) return state.errorMessage
     if (state.outputPath != null) return File(state.outputPath).name
+    val phases = state.pdfPhases
+    if (phases != null) {
+      // Show all three counters on one line so the user always sees
+      // total work; "0/N" entries make pending phases visible.
+      return buildString {
+        append("Pages ").append(phases.textCurrent).append('/').append(phases.textTotal)
+        append("  •  ")
+        append("Images ").append(phases.imageCurrent).append('/').append(phases.imageTotal)
+        append("  •  ")
+        append("Bitmap pages ").append(phases.rasterCurrent).append('/').append(phases.rasterTotal)
+      }
+    }
     val current = state.progressCurrent
     val total = state.progressTotal
     if (current != null && total != null && total > 0) {
@@ -345,6 +428,7 @@ class DocumentTranslationService : Service() {
       val unit =
         when (state.progressUnit) {
           "page" -> "Page"
+          "image" -> "Image"
           else -> "Block"
         }
       return "$unit $displayCurrent/$total"
