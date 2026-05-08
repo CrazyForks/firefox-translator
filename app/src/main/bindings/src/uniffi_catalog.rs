@@ -591,6 +591,12 @@ impl CatalogHandle {
             .has_tts_voices(&translator::LanguageCode::from(language_code))
     }
 
+    fn tts_sample_text(&self, language_code: String) -> Option<String> {
+        self.snapshot()
+            .catalog
+            .tts_sample_text(&translator::LanguageCode::from(language_code))
+    }
+
     fn tts_voice_picker_regions(
         &self,
         language_code: String,
@@ -598,6 +604,16 @@ impl CatalogHandle {
         self.snapshot()
             .catalog
             .tts_voice_picker_regions(&translator::LanguageCode::from(language_code))
+    }
+
+    fn installed_tts_voice_picker_regions(
+        &self,
+        language_code: String,
+    ) -> Vec<translator::TtsVoicePickerRegion> {
+        translator::installed_tts_voice_picker_regions(
+            &self.snapshot(),
+            &translator::LanguageCode::from(language_code),
+        )
     }
 
     fn can_swap_languages(&self, from_code: String, to_code: String) -> bool {

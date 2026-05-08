@@ -41,9 +41,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
+  companion object {
+    const val EXTRA_OPEN_LANGUAGE_MANAGER = "dev.davidv.translator.OPEN_LANGUAGE_MANAGER"
+  }
+
   private var textToTranslate: String = ""
   private var launchMode: LaunchMode = LaunchMode.Normal
   private var sharedImageUri: Uri? = null
+  private var openLanguageManager: Boolean = false
   private lateinit var viewModel: TranslatorViewModel
   private var downloadService: DownloadService? = null
   private lateinit var serviceConnection: ServiceConnection
@@ -80,6 +85,7 @@ class MainActivity : ComponentActivity() {
         TranslatorApp(
           viewModel = viewModel,
           downloadServiceState = downloadServiceState,
+          openLanguageManager = openLanguageManager,
         )
       }
     }
@@ -121,6 +127,7 @@ class MainActivity : ComponentActivity() {
 
   private fun handleIntent(intent: Intent?) {
     Log.d("MainActivity", "Got intent $intent")
+    openLanguageManager = intent?.getBooleanExtra(EXTRA_OPEN_LANGUAGE_MANAGER, false) == true
     when (intent?.action) {
       Intent.ACTION_SEND -> {
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)

@@ -271,6 +271,10 @@ class LanguageCatalog private constructor(
 
   fun ttsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.ttsVoicePickerRegions(languageCode)
 
+  fun installedTtsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.installedTtsVoicePickerRegions(languageCode)
+
+  fun ttsSampleText(languageCode: String): String? = handle.ttsSampleText(languageCode)
+
   fun canSwapLanguages(
     from: Language,
     to: Language,

@@ -1904,9 +1904,9 @@ dependencies = [
 
 [[package]]
 name = "psl"
-version = "2.1.206"
+version = "2.1.208"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0fd5dad387c0ff76cf1ac9f0f90ee4f1d966c969edfe7325e73141bf4352e0a"
+checksum = "4bde51f827dca976f8f9a8c91329a3193114dc076b8012a1ee3624f1588c3582"
 dependencies = [
  "psl-types",
 ]
@@ -2595,7 +2595,7 @@ dependencies = [
 [[package]]
 name = "translator"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#6960054d4009a1b031ef508083e9c9180664cdf2"
+source = "git+https://github.com/DavidVentura/translator-rs.git#b20bd950fe9afa22245a7d025949bc1e44b1bcd8"
 dependencies = [
  "cld2",
  "fax",

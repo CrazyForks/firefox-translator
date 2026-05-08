@@ -1,10 +1,10 @@
 {
   "formatVersion": 2,
-  "generatedAt": 1777135794,
+  "generatedAt": 1778226023,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1777135794,
+    "languageIndexUpdatedAt": 1778226023,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -39,7 +39,8 @@
               "tts-piper-ar-jo-kareem-low"
             ]
           }
-        }
+        },
+        "sampleText": "قوس قزح ظاهرة جوية تنتج عن انعكاس الضوء وانكساره وتشتته في قطرات الماء، مما يؤدي إلى ظهور طيف من الألوان في السماء."
       }
     },
     "az": {
@@ -68,7 +69,8 @@
               "tts-mms-az-az-north-latin-mms"
             ]
           }
-        }
+        },
+        "sampleText": "Göy qurşağı işığın su damcılarında əks olunması, sınması və səpilməsi nəticəsində yaranan meteoroloji hadisədir və bunun nəticəsində səmada işıq spektri görünür."
       }
     },
     "be": {
@@ -114,7 +116,8 @@
               "tts-piper-bg-bg-dimitar-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Дъгата е метеорологично явление, причинено от отражението, пречупването и разсейването на светлината във водните капки, в резултат на което в небето се появява светлинен спектър."
       }
     },
     "bn": {
@@ -143,7 +146,8 @@
               "tts-mms-bn-in-standard-mms"
             ]
           }
-        }
+        },
+        "sampleText": "রামধনু একটি আবহাওয়াগত ঘটনা, যা পানির ফোঁটার মধ্যে আলোর প্রতিফলন, প্রতিসরণ এবং বিচ্ছুরণের ফলে সৃষ্টি হয়, যার কারণে আকাশে আলোর বর্ণালী দেখা যায়।"
       }
     },
     "bs": {
@@ -172,7 +176,8 @@
               "tts-coqui_vits-bs-ba-cv-coqui-vits"
             ]
           }
-        }
+        },
+        "sampleText": "Duga je meteorološka pojava nastala refleksijom, refrakcijom i disperzijom svjetlosti u kapljicama vode, zbog čega se na nebu pojavljuje spektar svjetlosti."
       }
     },
     "ca": {
@@ -203,7 +208,8 @@
               "tts-piper-ca-es-upc-pau-x-low"
             ]
           }
-        }
+        },
+        "sampleText": "L'arc de Sant Martí és un fenomen meteorològic causat per la reflexió, la refracció i la dispersió de la llum en les gotes d'aigua, fet que dona lloc a un espectre de llum al cel."
       }
     },
     "cs": {
@@ -233,7 +239,8 @@
               "tts-piper-cs-cz-jirka-low"
             ]
           }
-        }
+        },
+        "sampleText": "Duha je meteorologický jev způsobený odrazem, lomem a rozptylem světla ve vodních kapkách, v důsledku čehož se na obloze objeví spektrum světla."
       }
     },
     "da": {
@@ -262,7 +269,8 @@
               "tts-piper-da-dk-talesyntese-medium"
             ]
           }
-        }
+        },
+        "sampleText": "En regnbue er et meteorologisk fænomen, der skyldes refleksion, brydning og spredning af lys i vanddråber, hvilket får et lysspektrum til at vise sig på himlen."
       }
     },
     "de": {
@@ -294,7 +302,8 @@
               "tts-piper-de-de-kerstin-low"
             ]
           }
-        }
+        },
+        "sampleText": "Ein Regenbogen ist ein meteorologisches Phänomen, das durch Reflexion, Brechung und Streuung von Licht in Wassertropfen entsteht, wodurch ein Lichtspektrum am Himmel erscheint."
       }
     },
     "el": {
@@ -324,7 +333,8 @@
               "tts-piper-el-gr-rapunzelina-low"
             ]
           }
-        }
+        },
+        "sampleText": "Το ουράνιο τόξο είναι ένα μετεωρολογικό φαινόμενο που προκαλείται από την ανάκλαση, τη διάθλαση και τη διασπορά του φωτός στις σταγόνες νερού, με αποτέλεσμα να εμφανίζεται ένα φάσμα φωτός στον ουρανό."
       }
     },
     "en": {
@@ -465,7 +475,8 @@
               "tts-piper-en-us-joe-medium"
             ]
           }
-        }
+        },
+        "sampleText": "A rainbow is a meteorological phenomenon that is caused by reflection, refraction and dispersion of light in water droplets resulting in a spectrum of light appearing in the sky."
       }
     },
     "es": {
@@ -509,7 +520,8 @@
               "tts-piper-es-mx-claude-high"
             ]
           }
-        }
+        },
+        "sampleText": "El arcoíris es un fenómeno meteorológico causado por la reflexión, la refracción y la dispersión de la luz en las gotas de agua, lo que da lugar a un espectro de luz que aparece en el cielo."
       }
     },
     "et": {
@@ -538,7 +550,8 @@
               "tts-coqui_vits-et-ee-cv-coqui-vits"
             ]
           }
-        }
+        },
+        "sampleText": "Vikerkaar on meteoroloogiline nähtus, mis tekib valguse peegeldumise, murdumise ja hajumise tõttu veepiiskades, mille tulemusena ilmub taevasse valgusspekter."
       }
     },
     "fa": {
@@ -570,7 +583,8 @@
               "tts-piper-fa-ir-ganji-adabi-medium"
             ]
           }
-        }
+        },
+        "sampleText": "رنگین‌کمان یک پدیدهٔ هواشناسی است که بر اثر بازتاب، شکست و پراکندگی نور در قطره‌های آب ایجاد می‌شود و در نتیجه طیفی از نور در آسمان دیده می‌شود."
       }
     },
     "fi": {
@@ -600,7 +614,8 @@
               "tts-piper-fi-fi-harri-low"
             ]
           }
-        }
+        },
+        "sampleText": "Sateenkaari on meteorologinen ilmiö, joka syntyy valon heijastumisesta, taittumisesta ja hajoamisesta vesipisaroissa, minkä seurauksena taivaalle ilmestyy valon spektri."
       }
     },
     "fr": {
@@ -632,7 +647,8 @@
               "tts-piper-fr-fr-mls-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Un arc-en-ciel est un phénomène météorologique causé par la réflexion, la réfraction et la dispersion de la lumière dans les gouttelettes d'eau, ce qui fait apparaître un spectre lumineux dans le ciel."
       }
     },
     "gu": {
@@ -661,7 +677,8 @@
               "tts-mms-gu-in-standard-mms"
             ]
           }
-        }
+        },
+        "sampleText": "ઇન્દ્રધનુષ એક હવામાન સંબંધિત ઘટના છે, જે પાણીના ટીપાંમાં પ્રકાશના પ્રતિબિંબ, અપવર્તન અને વિખેરાણથી બને છે, જેના પરિણામે આકાશમાં પ્રકાશનું વર્ણપટ દેખાય છે."
       }
     },
     "he": {
@@ -690,7 +707,8 @@
               "tts-mms-he-il-standard-mms"
             ]
           }
-        }
+        },
+        "sampleText": "קשת בענן היא תופעה מטאורולוגית שנגרמת מהחזרה, שבירה ופיזור של אור בטיפות מים, וכתוצאה מכך מופיע בשמיים ספקטרום של אור."
       }
     },
     "hi": {
@@ -721,7 +739,8 @@
               "tts-piper-hi-in-priyamvada-medium"
             ]
           }
-        }
+        },
+        "sampleText": "इंद्रधनुष एक मौसम संबंधी घटना है, जो पानी की बूंदों में प्रकाश के परावर्तन, अपवर्तन और प्रकीर्णन से बनती है, जिसके परिणामस्वरूप आकाश में प्रकाश का एक वर्णक्रम दिखाई देता है।"
       }
     },
     "hr": {
@@ -750,7 +769,8 @@
               "tts-coqui_vits-hr-hr-cv-coqui-vits"
             ]
           }
-        }
+        },
+        "sampleText": "Duga je meteorološka pojava uzrokovana refleksijom, lomom i raspršenjem svjetlosti u kapljicama vode, zbog čega se na nebu pojavljuje spektar svjetlosti."
       }
     },
     "hu": {
@@ -781,7 +801,8 @@
               "tts-piper-hu-hu-imre-medium"
             ]
           }
-        }
+        },
+        "sampleText": "A szivárvány egy meteorológiai jelenség, amelyet a fény visszaverődése, törése és szóródása okoz a vízcseppekben, aminek eredményeként fényspektrum jelenik meg az égen."
       }
     },
     "id": {
@@ -810,7 +831,8 @@
               "tts-piper-id-id-news-tts-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Pelangi adalah fenomena meteorologis yang disebabkan oleh pemantulan, pembiasan, dan dispersi cahaya di dalam tetesan air, sehingga spektrum cahaya tampak di langit."
       }
     },
     "is": {
@@ -842,7 +864,8 @@
               "tts-piper-is-is-ugla-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Regnbogi er veðurfræðilegt fyrirbæri sem verður til við endurkast, ljósbrot og dreifingu ljóss í vatnsdropum, sem leiðir til þess að litróf birtist á himninum."
       }
     },
     "it": {
@@ -872,7 +895,8 @@
               "tts-piper-it-it-riccardo-x-low"
             ]
           }
-        }
+        },
+        "sampleText": "L'arcobaleno è un fenomeno meteorologico causato dalla riflessione, dalla rifrazione e dalla dispersione della luce nelle gocce d'acqua, con il risultato che nel cielo appare uno spettro di luce."
       }
     },
     "ja": {
@@ -904,7 +928,8 @@
               "tts-kokoro-ja-jp-jf-alpha-kokoro-v1.0"
             ]
           }
-        }
+        },
+        "sampleText": "虹は、水滴の中で光が反射、屈折、分散することによって生じ、空に光のスペクトルが現れる気象現象です。"
       }
     },
     "kn": {
@@ -933,7 +958,8 @@
               "tts-mms-kn-in-standard-mms"
             ]
           }
-        }
+        },
+        "sampleText": "ಇಂದ್ರಧನುಷ್ ಒಂದು ಹವಾಮಾನ ಸಂಬಂಧಿತ ಪ್ರಕೃತಿ ಘಟನೆ; ಇದು ನೀರಿನ ಹನಿಗಳಲ್ಲಿನ ಬೆಳಕಿನ ಪ್ರತಿಫಲನ, ಅಪವर्तन ಮತ್ತು ಚದುರಿಕೆಯಿಂದ ಉಂಟಾಗಿ ಆಕಾಶದಲ್ಲಿ ಬೆಳಕಿನ ವರ್ಣಪಟ ಕಾಣಿಸುತ್ತದೆ。"
       }
     },
     "ko": {
@@ -963,7 +989,8 @@
               "tts-kokoro-ko-kr-jf-alpha-kokoro-v1.0"
             ]
           }
-        }
+        },
+        "sampleText": "무지개는 물방울 속에서 빛이 반사되고 굴절되며 분산되어 하늘에 빛의 스펙트럼이 나타나는 기상 현상입니다."
       }
     },
     "lt": {
@@ -992,7 +1019,8 @@
               "tts-coqui_vits-lt-lt-cv-coqui-vits"
             ]
           }
-        }
+        },
+        "sampleText": "Vaivorykštė yra meteorologinis reiškinys, kurį sukelia šviesos atspindys, lūžis ir sklaida vandens lašeliuose, todėl danguje pasirodo šviesos spektras."
       }
     },
     "lv": {
@@ -1021,7 +1049,8 @@
               "tts-piper-lv-lv-aivars-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Varavīksne ir meteoroloģiska parādība, ko izraisa gaismas atstarošanās, laušana un izkliede ūdens pilienos, kā rezultātā debesīs parādās gaismas spektrs."
       }
     },
     "ml": {
@@ -1051,7 +1080,8 @@
               "tts-piper-ml-in-meera-medium"
             ]
           }
-        }
+        },
+        "sampleText": "മഴവില്ല് ഒരു കാലാവസ്ഥാ പ്രതിഭാസമാണ്; ജലത്തുള്ളികളിലെ പ്രകാശത്തിന്റെ പ്രതിഫലനം, പ്രതിസരണം, ചിതറൽ എന്നിവ മൂലം ആകാശത്തിൽ പ്രകാശത്തിന്റെ വർണ്ണപടലം പ്രത്യക്ഷപ്പെടുന്നു."
       }
     },
     "ms": {
@@ -1080,7 +1110,8 @@
               "tts-mms-ms-my-standard-mms"
             ]
           }
-        }
+        },
+        "sampleText": "Pelangi ialah fenomena meteorologi yang disebabkan oleh pantulan, pembiasan dan penyebaran cahaya dalam titisan air, lalu menghasilkan spektrum cahaya yang kelihatan di langit."
       }
     },
     "nb": {
@@ -1138,7 +1169,8 @@
               "tts-piper-nl-nl-alex-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Een regenboog is een meteorologisch verschijnsel dat wordt veroorzaakt door reflectie, breking en verstrooiing van licht in waterdruppels, waardoor een lichtspectrum aan de hemel verschijnt."
       }
     },
     "nn": {
@@ -1184,7 +1216,8 @@
               "tts-piper-no-no-talesyntese-medium"
             ]
           }
-        }
+        },
+        "sampleText": "En regnbue er et meteorologisk fenomen som skyldes refleksjon, brytning og spredning av lys i vanndråper, noe som fører til at et lysspekter blir synlig på himmelen."
       }
     },
     "pl": {
@@ -1216,7 +1249,8 @@
               "tts-piper-pl-pl-jarvis-wg-glos-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Tęcza to zjawisko meteorologiczne spowodowane odbiciem, załamaniem i rozszczepieniem światła w kroplach wody, w wyniku czego na niebie pojawia się widmo światła."
       }
     },
     "pt": {
@@ -1254,7 +1288,8 @@
               "tts-piper-pt-pt-tugão-medium"
             ]
           }
-        }
+        },
+        "sampleText": "O arco-íris é um fenómeno meteorológico causado pela reflexão, refração e dispersão da luz nas gotas de água, resultando num espectro de luz visível no céu."
       }
     },
     "ro": {
@@ -1283,7 +1318,8 @@
               "tts-piper-ro-ro-mihai-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Curcubeul este un fenomen meteorologic cauzat de reflexia, refracția și dispersia luminii în picăturile de apă, ceea ce face ca un spectru de lumină să apară pe cer."
       }
     },
     "ru": {
@@ -1315,7 +1351,8 @@
               "tts-piper-ru-ru-ruslan-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Радуга — это метеорологическое явление, вызванное отражением, преломлением и рассеянием света в каплях воды, в результате чего в небе появляется спектр света."
       }
     },
     "sk": {
@@ -1344,7 +1381,8 @@
               "tts-piper-sk-sk-lili-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Dúha je meteorologický jav spôsobený odrazom, lomom a rozptylom svetla vo vodných kvapkách, v dôsledku čoho sa na oblohe objaví spektrum svetla."
       }
     },
     "sl": {
@@ -1373,7 +1411,8 @@
               "tts-piper-sl-si-artur-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Mavrica je meteorološki pojav, ki nastane zaradi odboja, loma in razpršitve svetlobe v vodnih kapljicah, zato se na nebu pojavi svetlobni spekter."
       }
     },
     "sq": {
@@ -1402,7 +1441,8 @@
               "tts-piper-sq-al-edon-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Ylberi është një fenomen meteorologjik i shkaktuar nga pasqyrimi, përthyerja dhe shpërndarja e dritës në pikat e ujit, duke bërë që në qiell të shfaqet një spektër drite."
       }
     },
     "sr": {
@@ -1431,7 +1471,8 @@
               "tts-piper-sr-rs-serbski-institut-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Дуга је метеоролошка појава настала одбијањем, преламањем и расипањем светлости у капљицама воде, због чега се на небу појављује спектар светлости."
       }
     },
     "sv": {
@@ -1462,7 +1503,8 @@
               "tts-piper-sv-se-lisa-medium"
             ]
           }
-        }
+        },
+        "sampleText": "En regnbåge är ett meteorologiskt fenomen som orsakas av ljusets reflektion, brytning och spridning i vattendroppar, vilket gör att ett spektrum av ljus syns på himlen."
       }
     },
     "ta": {
@@ -1491,7 +1533,8 @@
               "tts-mms-ta-in-standard-mms"
             ]
           }
-        }
+        },
+        "sampleText": "வானவில் என்பது நீர்த்துளிகளில் ஒளியின் பிரதிபலிப்பு, ஒளிவிலக்கம் மற்றும் சிதறல் காரணமாக உருவாகும் ஒரு வானிலை நிகழ்வு; இதன் விளைவாக வானில் ஒளியின் நிறவரிசை தோன்றுகிறது."
       }
     },
     "te": {
@@ -1522,7 +1565,8 @@
               "tts-piper-te-in-venkatesh-medium"
             ]
           }
-        }
+        },
+        "sampleText": "ఇంద్రధనుస్సు ఒక వాతావరణ సంబంధిత సంఘటన; ఇది నీటి బిందువులలో కాంతి ప్రతిబింబం, అపవర్తనం మరియు విక్షేపణం వల్ల ఏర్పడి ఆకాశంలో కాంతి వర్ణక్రమం కనిపిస్తుంది."
       }
     },
     "th": {
@@ -1551,7 +1595,8 @@
               "tts-mms-th-th-standard-mms"
             ]
           }
-        }
+        },
+        "sampleText": "รุ้งกินน้ำเป็นปรากฏการณ์ทางอุตุนิยมวิทยาที่เกิดจากการสะท้อน การหักเห และการกระจายตัวของแสงในหยดน้ำ ทำให้เกิดสเปกตรัมของแสงปรากฏบนท้องฟ้า"
       }
     },
     "tr": {
@@ -1580,7 +1625,8 @@
               "tts-piper-tr-tr-dfki-medium"
             ]
           }
-        }
+        },
+        "sampleText": "Gökkuşağı, ışığın su damlacıklarında yansıması, kırılması ve dağılması sonucu oluşan meteorolojik bir olaydır ve bunun sonucunda gökyüzünde bir ışık tayfı görünür."
       }
     },
     "uk": {
@@ -1610,7 +1656,8 @@
               "tts-piper-uk-ua-lada-x-low"
             ]
           }
-        }
+        },
+        "sampleText": "Веселка — це метеорологічне явище, спричинене відбиттям, заломленням і розсіюванням світла у краплях води, внаслідок чого в небі з'являється спектр світла."
       }
     },
     "vi": {
@@ -1641,7 +1688,8 @@
               "tts-piper-vi-vn-vivos-x-low"
             ]
           }
-        }
+        },
+        "sampleText": "Cầu vồng là một hiện tượng khí tượng do sự phản xạ, khúc xạ và tán sắc của ánh sáng trong các giọt nước, tạo ra một quang phổ ánh sáng xuất hiện trên bầu trời."
       }
     },
     "zh": {
@@ -1671,7 +1719,8 @@
               "tts-piper-zh-cn-huayan-x-low"
             ]
           }
-        }
+        },
+        "sampleText": "彩虹是一种气象现象，由光线在水滴中发生反射、折射和色散而形成，因此天空中会出现一道光谱。"
       }
     },
     "zh_hant": {
@@ -1706,7 +1755,8 @@
               "tts-piper-zh-tw-mandarin-traditional-medium"
             ]
           }
-        }
+        },
+        "sampleText": "彩虹是一種氣象現象，由光線在水滴中發生反射、折射與色散所形成，因此天空中會出現一道光譜。"
       }
     }
   },

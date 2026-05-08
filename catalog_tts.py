@@ -6,6 +6,8 @@ from copy import deepcopy
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+from catalog_tts_samples import TTS_SAMPLES
+
 
 PIPER_BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 KOKORO_BASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
@@ -944,6 +946,12 @@ def merge_tts(
                 "voices": voice_ids,
             }
 
+    missing_samples = sorted(set(regions_by_language) - set(TTS_SAMPLES))
+    if missing_samples:
+        raise ValueError(
+            f"TTS_SAMPLES missing entries for languages with TTS voices: {missing_samples}"
+        )
+
     for language_code, regions in regions_by_language.items():
         default_region = DEFAULT_REGION_OVERRIDES.get(language_code)
         if default_region not in regions:
@@ -951,6 +959,7 @@ def merge_tts(
         catalog["languages"][language_code]["tts"] = {
             "defaultRegion": default_region,
             "regions": regions,
+            "sampleText": TTS_SAMPLES[language_code],
         }
 
     return catalog

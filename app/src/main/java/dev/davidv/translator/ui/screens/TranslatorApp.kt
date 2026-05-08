@@ -64,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -322,6 +323,7 @@ fun TranslatorApp(
   viewModel: TranslatorViewModel,
   downloadServiceState: StateFlow<DownloadService?>,
   onClose: () -> Unit = {},
+  openLanguageManager: Boolean = false,
 ) {
   val navController = rememberNavController()
   val context = LocalContext.current
@@ -517,6 +519,14 @@ fun TranslatorApp(
         popUpTo(currentRoute!!) { inclusive = true }
       }
     }
+  }
+
+  var deepLinkConsumed by rememberSaveable { mutableStateOf(false) }
+  LaunchedEffect(openLanguageManager, navigationState) {
+    if (!openLanguageManager || deepLinkConsumed) return@LaunchedEffect
+    if (navigationState != TranslatorViewModel.NavigationState.READY) return@LaunchedEffect
+    deepLinkConsumed = true
+    navController.navigate("language_manager")
   }
 
   val isReadonlyPopup = currentLaunchMode == LaunchMode.ReadonlyModal

@@ -20,3 +20,5 @@ app/aarch64
 app/x86
 app/release
 app/src/main/jniLibs/
+.kotlin/
+signed/
