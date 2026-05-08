@@ -9,7 +9,7 @@ import org.json.JSONObject
 import java.io.File
 
 class FilePathManager(
-  private val context: Context,
+  val context: Context,
   private val settingsFlow: StateFlow<AppSettings>,
 ) {
   private val catalogLock = Any()

@@ -27,6 +27,7 @@ import org.json.JSONObject
 class SettingsManager(
   context: Context,
 ) {
+  private val appContext: Context = context.applicationContext
   private val prefs: SharedPreferences = context.getSharedPreferences("app_settings", Context.MODE_PRIVATE)
 
   private val modifiedSettings = mutableSetOf<String>()
@@ -233,6 +234,7 @@ class SettingsManager(
       if (newSettings.ttsVoiceOverrides != currentSettings.ttsVoiceOverrides) {
         putString("tts_voice_overrides", serializeVoiceOverrides(newSettings.ttsVoiceOverrides))
         modifiedSettings.add("tts_voice_overrides")
+        TranslatorTtsEngine.notifyVoiceDataChanged(appContext)
       }
       if (newSettings.tapToTranslateEnabled != currentSettings.tapToTranslateEnabled) {
         putBoolean("tap_to_translate_enabled", newSettings.tapToTranslateEnabled)

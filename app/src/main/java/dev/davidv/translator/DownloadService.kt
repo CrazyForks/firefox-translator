@@ -35,6 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -108,6 +109,12 @@ class DownloadService : Service() {
 
   private val _ttsDownloadStates = MutableStateFlow<Map<Language, DownloadState>>(emptyMap())
   val ttsDownloadStates: StateFlow<Map<Language, DownloadState>> = _ttsDownloadStates
+
+  private val _activeTtsPackIds = MutableStateFlow<Map<Language, String>>(emptyMap())
+  val activeTtsPackIds: StateFlow<Map<Language, String>> = _activeTtsPackIds
+
+  private val _queuedTtsPackIds = MutableStateFlow<Map<Language, List<String>>>(emptyMap())
+  val queuedTtsPackIds: StateFlow<Map<Language, List<String>>> = _queuedTtsPackIds
 
   private val _adblockDownloadState = MutableStateFlow(DownloadState())
   val adblockDownloadState: StateFlow<DownloadState> = _adblockDownloadState
@@ -449,7 +456,15 @@ class DownloadService : Service() {
     language: Language,
     requestedPackId: String? = null,
   ) {
-    if (_ttsDownloadStates.value[language]?.isDownloading == true) return
+    if (_ttsDownloadStates.value[language]?.isDownloading == true) {
+      val resolvedPackId = requestedPackId ?: getCatalog()?.defaultTtsPackIdForLanguage(language.code) ?: return
+      if (_activeTtsPackIds.value[language] == resolvedPackId) return
+      _queuedTtsPackIds.update { current ->
+        val existing = current[language].orEmpty()
+        if (resolvedPackId in existing) current else current + (language to existing + resolvedPackId)
+      }
+      return
+    }
     updateTtsDownloadState(language) {
       DownloadState(
         isDownloading = true,
@@ -462,6 +477,7 @@ class DownloadService : Service() {
         try {
           val catalog = getCatalog() ?: return@launch
           val ttsPackId = requestedPackId ?: catalog.defaultTtsPackIdForLanguage(language.code) ?: return@launch
+          _activeTtsPackIds.update { it + (language to ttsPackId) }
           val downloadPlan =
             catalog.planDownload(language.code, Feature.TTS, ttsPackId) ?: run {
               Log.w("DownloadService", "Ignoring invalid TTS pack $ttsPackId for ${language.code}")
@@ -497,12 +513,8 @@ class DownloadService : Service() {
           }
 
           if (success) {
-            val refreshedCatalog = filePathManager.reloadCatalog() ?: catalog
-            removeSupersededTtsVoices(
-              catalog = refreshedCatalog,
-              language = language,
-              selectedPackId = ttsPackId,
-            )
+            filePathManager.reloadCatalog()
+            TranslatorTtsEngine.notifyVoiceDataChanged(this@DownloadService)
             Log.i("DownloadService", "TTS download complete: ${language.displayName}")
             _downloadEvents.emit(DownloadEvent.NewTtsAvailable(language))
           } else {
@@ -519,26 +531,28 @@ class DownloadService : Service() {
           _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} TTS download failed"))
         } finally {
           ttsDownloadJobs.remove(language)
+          _activeTtsPackIds.update { it - language }
+          val nextPackId =
+            _queuedTtsPackIds.value[language]?.firstOrNull()?.also {
+              _queuedTtsPackIds.update { current ->
+                val rest = current[language].orEmpty().drop(1)
+                if (rest.isEmpty()) current - language else current + (language to rest)
+              }
+            }
+          if (nextPackId != null) {
+            startTtsDownload(language, nextPackId)
+          }
         }
       }
 
     ttsDownloadJobs[language] = job
   }
 
-  private fun removeSupersededTtsVoices(
-    catalog: LanguageCatalog,
-    language: Language,
-    selectedPackId: String,
-  ) {
-    val deletePlan = catalog.prepareDeleteSupersededTts(language.code, selectedPackId)
-    if (deletePlan.filePaths.isNotEmpty() || deletePlan.directoryPaths.isNotEmpty()) {
-      filePathManager.applyDeletePlan(deletePlan)
-    }
-  }
-
   private fun cancelTtsDownload(language: Language) {
     ttsDownloadJobs[language]?.cancel()
     ttsDownloadJobs.remove(language)
+    _activeTtsPackIds.update { it - language }
+    _queuedTtsPackIds.update { it - language }
 
     updateTtsDownloadState(language) {
       it.copy(isDownloading = false, isCancelled = true, error = null)

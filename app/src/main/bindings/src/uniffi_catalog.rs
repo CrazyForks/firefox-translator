@@ -830,6 +830,10 @@ impl CatalogHandle {
             .prepare_delete_superseded_tts(&language_code, &selected_pack_id)
     }
 
+    fn prepare_delete_tts_pack(&self, pack_id: String) -> translator::DeletePlan {
+        self.session.prepare_delete_tts_pack(&pack_id)
+    }
+
     fn size_bytes(&self, language_code: String, feature: Feature) -> u64 {
         self.session.size_bytes(&language_code, feature)
     }
@@ -864,18 +868,19 @@ impl CatalogHandle {
         &self,
         language_code: String,
         text: String,
+        pack_id: Option<String>,
     ) -> Vec<translator::SpeechChunk> {
         #[cfg(feature = "tts")]
         {
             return self
                 .session
-                .plan_speech_chunks(&language_code, &text)
+                .plan_speech_chunks(&language_code, &text, pack_id.as_deref())
                 .unwrap_or_default();
         }
 
         #[cfg(not(feature = "tts"))]
         {
-            let _ = (language_code, text);
+            let _ = (language_code, text, pack_id);
             Vec::new()
         }
     }
@@ -887,6 +892,7 @@ impl CatalogHandle {
         speech_speed: f32,
         voice_name: Option<String>,
         is_phonemes: bool,
+        pack_id: Option<String>,
     ) -> Result<translator::PcmAudio, CatalogError> {
         #[cfg(feature = "tts")]
         {
@@ -898,16 +904,30 @@ impl CatalogHandle {
                     speech_speed,
                     voice_name.as_deref(),
                     is_phonemes,
+                    pack_id.as_deref(),
                 )
                 .map_err(CatalogError::from);
         }
 
         #[cfg(not(feature = "tts"))]
         {
-            let _ = (language_code, text, speech_speed, voice_name, is_phonemes);
+            let _ = (language_code, text, speech_speed, voice_name, is_phonemes, pack_id);
             Err(CatalogError::Other {
                 reason: "tts feature disabled".to_string(),
             })
+        }
+    }
+
+    fn installed_tts_voices(&self, language_code: String) -> Vec<translator::InstalledTtsPack> {
+        #[cfg(feature = "tts")]
+        {
+            return self.session.installed_tts_voices(&language_code);
+        }
+
+        #[cfg(not(feature = "tts"))]
+        {
+            let _ = language_code;
+            Vec::new()
         }
     }
 }

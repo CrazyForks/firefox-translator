@@ -425,6 +425,8 @@ class LanguageCatalog private constructor(
     selectedPackId: String,
   ): DeletePlan = handle.prepareDeleteSupersededTts(languageCode, selectedPackId)
 
+  fun prepareDeleteTtsPack(packId: String): DeletePlan = handle.prepareDeleteTtsPack(packId)
+
   fun defaultTtsPackIdForLanguage(languageCode: String): String? = handle.defaultTtsPackId(languageCode)
 
   fun sizeBytesForFeature(
@@ -449,11 +451,14 @@ class LanguageCatalog private constructor(
       )
     }
 
+  fun installedTtsVoices(languageCode: String): List<uniffi.translator.InstalledTtsPack> = handle.installedTtsVoices(languageCode)
+
   fun planSpeechChunks(
     languageCode: String,
     text: String,
+    packId: String? = null,
   ): List<SpeechChunkPlan> =
-    handle.planSpeechChunks(languageCode, text).map { chunk ->
+    handle.planSpeechChunks(languageCode, text, packId).map { chunk ->
       SpeechChunkPlan(
         content = chunk.content,
         isPhonemes = chunk.isPhonemes,
@@ -468,8 +473,10 @@ class LanguageCatalog private constructor(
     speechSpeed: Float,
     voiceName: String?,
     isPhonemes: Boolean,
+    packId: String? = null,
   ): PcmAudio {
-    val audio = handle.synthesizeSpeechPcm(languageCode, text, speechSpeed, voiceName, isPhonemes)
+    val audio =
+      handle.synthesizeSpeechPcm(languageCode, text, speechSpeed, voiceName, isPhonemes, packId)
     return PcmAudio(sampleRate = audio.sampleRate, pcmSamples = audio.pcmSamples.toShortArray())
   }
 }

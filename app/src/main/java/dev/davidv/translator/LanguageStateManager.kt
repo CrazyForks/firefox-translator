@@ -175,6 +175,7 @@ class LanguageStateManager(
     filePathManager.applyDeletePlan(catalog.prepareDelete(language.code, Feature.CORE))
     refreshLanguageAvailability()
     scope.launch { _fileEvents.emit(FileEvent.LanguageDeleted(language)) }
+    TranslatorTtsEngine.notifyVoiceDataChanged(filePathManager.context)
     Log.i("LanguageStateManager", "Removed language: ${language.displayName}")
   }
 
@@ -182,7 +183,19 @@ class LanguageStateManager(
     val catalog = catalogState.value ?: filePathManager.loadCatalog() ?: return
     filePathManager.applyDeletePlan(catalog.prepareDelete(language.code, Feature.TTS))
     refreshLanguageAvailability()
+    TranslatorTtsEngine.notifyVoiceDataChanged(filePathManager.context)
     Log.i("LanguageStateManager", "Removed TTS for language: ${language.displayName}")
+  }
+
+  fun deleteTtsPack(
+    language: Language,
+    packId: String,
+  ) {
+    val catalog = catalogState.value ?: filePathManager.loadCatalog() ?: return
+    filePathManager.applyDeletePlan(catalog.prepareDeleteTtsPack(packId))
+    refreshLanguageAvailability()
+    TranslatorTtsEngine.notifyVoiceDataChanged(filePathManager.context)
+    Log.i("LanguageStateManager", "Removed TTS pack $packId for language: ${language.displayName}")
   }
 
   fun deleteSupportByKind(kind: String) {

@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -44,19 +45,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -64,6 +73,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +82,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.davidv.translator.DictionaryInfo
 import dev.davidv.translator.DownloadService
 import dev.davidv.translator.DownloadState
@@ -84,6 +95,12 @@ import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.R
+import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.encodeVoiceOverride
+import dev.davidv.translator.parseVoiceOverride
+import dev.davidv.translator.ui.components.SamplePlaybackState
+import dev.davidv.translator.ui.components.SamplePlayer
+import java.io.File
 import kotlin.math.roundToInt
 
 private const val ROW_EXPAND_ANIMATION_MS = 140
@@ -108,6 +125,409 @@ private data class PendingSharedDictionaryDelete(
 private data class PendingTtsVoicePicker(
   val language: Language,
 )
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VoicePickerDialog(
+  context: Context,
+  language: Language,
+  catalog: LanguageCatalog,
+  languageStateManager: LanguageStateManager,
+  settingsManager: SettingsManager,
+  ttsDownloadStates: Map<Language, DownloadState>,
+  activeTtsPackId: String?,
+  queuedTtsPackIds: List<String>,
+  onDismiss: () -> Unit,
+) {
+  val regions = catalog.ttsVoicePickerRegions(language.code)
+  val installedRegions = catalog.installedTtsVoicePickerRegions(language.code)
+  val installedPackIds =
+    remember(installedRegions) {
+      installedRegions.flatMap { region -> region.voices.map { it.packId } }.toSet()
+    }
+  val showRegions = regions.size > 1
+  val voicesWithRegion =
+    remember(regions, showRegions) {
+      regions.flatMap { region ->
+        region.voices.map { pack -> VoiceWithRegion(pack, region.displayName.takeIf { showRegions }) }
+      }
+    }
+  val downloaded = voicesWithRegion.filter { it.pack.packId in installedPackIds }
+  val available = voicesWithRegion.filterNot { it.pack.packId in installedPackIds }
+
+  val settings by settingsManager.settings.collectAsState()
+  val override = parseVoiceOverride(settings.ttsVoiceOverrides[language.code])
+  val installedDisplayNames = downloaded.map { it.pack.displayName }
+  val effectiveDefaultVoiceName =
+    override?.voiceName?.takeIf { it in installedDisplayNames }
+      ?: installedDisplayNames.minOrNull()
+
+  val initialDefaultVoiceName =
+    remember(language.code) {
+      val initialOverride =
+        parseVoiceOverride(settingsManager.settings.value.ttsVoiceOverrides[language.code])
+      val initialNames =
+        catalog
+          .installedTtsVoicePickerRegions(language.code)
+          .flatMap { region -> region.voices.map { it.displayName } }
+      initialOverride?.voiceName?.takeIf { it in initialNames } ?: initialNames.minOrNull()
+    }
+
+  val orderedDownloaded =
+    downloaded.sortedWith(
+      compareByDescending<VoiceWithRegion> { it.pack.displayName == initialDefaultVoiceName }
+        .thenBy { it.regionName ?: "" }
+        .thenBy { it.pack.displayName },
+    )
+  val orderedAvailable =
+    available.sortedWith(
+      compareBy<VoiceWithRegion> { it.regionName ?: "" }
+        .thenBy { it.pack.displayName },
+    )
+
+  val playerScope = rememberCoroutineScope()
+  val samplePlayer =
+    remember(language.code) {
+      SamplePlayer(
+        cacheRoot = File(context.cacheDir, "tts_samples"),
+        scope = playerScope,
+      )
+    }
+  DisposableEffect(samplePlayer) {
+    onDispose { samplePlayer.release() }
+  }
+
+  val ttsDownloadState = ttsDownloadStates[language]
+
+  val setDefault: (String, String) -> Unit = { packId, voiceName ->
+    settingsManager.updateSettings(
+      settings.copy(
+        ttsVoiceOverrides =
+          settings.ttsVoiceOverrides + (language.code to encodeVoiceOverride(packId, voiceName)),
+      ),
+    )
+  }
+
+  BasicAlertDialog(onDismissRequest = onDismiss) {
+    Surface(
+      shape = RoundedCornerShape(28.dp),
+      color = MaterialTheme.colorScheme.surfaceContainerHigh,
+      tonalElevation = 6.dp,
+    ) {
+      Column(
+        modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp),
+      ) {
+        Row(verticalAlignment = Alignment.Top) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = language.displayName.uppercase(),
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.primary,
+              fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+              text = "Voices",
+              style = MaterialTheme.typography.headlineSmall,
+              fontWeight = FontWeight.SemiBold,
+            )
+          }
+          FilledTonalIconButton(
+            onClick = onDismiss,
+            modifier = Modifier.size(36.dp),
+            colors =
+              IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+              ),
+          ) {
+            Icon(
+              painter = painterResource(id = R.drawable.cancel),
+              contentDescription = "Close",
+              modifier = Modifier.size(18.dp),
+            )
+          }
+        }
+        Spacer(modifier = Modifier.size(16.dp))
+        Column(
+          modifier =
+            Modifier
+              .heightIn(max = 520.dp)
+              .verticalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+          val dimAvailable = orderedDownloaded.isNotEmpty()
+          if (orderedDownloaded.isNotEmpty()) {
+            VoiceSectionHeader("DOWNLOADED")
+            orderedDownloaded.forEach { entry ->
+              VoiceRow(
+                voice = entry,
+                isInstalled = true,
+                isDefault = entry.pack.displayName == effectiveDefaultVoiceName,
+                dimmed = false,
+                player = samplePlayer,
+                onTap = { setDefault(entry.pack.packId, entry.pack.displayName) },
+                downloadStatus = DownloadStatus.Idle,
+                onAction = {
+                  if (entry.pack.displayName == effectiveDefaultVoiceName) {
+                    val nextPack =
+                      downloaded.firstOrNull { it.pack.packId != entry.pack.packId }?.pack
+                    val newOverrides =
+                      if (nextPack != null) {
+                        settings.ttsVoiceOverrides +
+                          (language.code to encodeVoiceOverride(nextPack.packId, nextPack.displayName))
+                      } else {
+                        settings.ttsVoiceOverrides - language.code
+                      }
+                    settingsManager.updateSettings(settings.copy(ttsVoiceOverrides = newOverrides))
+                  }
+                  languageStateManager.deleteTtsPack(language, entry.pack.packId)
+                },
+              )
+            }
+          }
+          if (orderedAvailable.isNotEmpty()) {
+            if (orderedDownloaded.isNotEmpty()) {
+              HorizontalDivider(
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                modifier = Modifier.padding(vertical = 4.dp),
+              )
+            }
+            VoiceSectionHeader("AVAILABLE")
+            orderedAvailable.forEach { entry ->
+              val isPackActive = activeTtsPackId == entry.pack.packId
+              val isPackQueued = entry.pack.packId in queuedTtsPackIds
+              val downloadStatus =
+                when {
+                  isPackActive -> {
+                    val total = ttsDownloadState?.totalSize ?: 1
+                    val done = ttsDownloadState?.downloaded ?: 0
+                    val progress =
+                      if (total > 0) {
+                        (done.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                      } else {
+                        0f
+                      }
+                    DownloadStatus.Active(progress)
+                  }
+                  isPackQueued -> DownloadStatus.Queued
+                  else -> DownloadStatus.Idle
+                }
+              VoiceRow(
+                voice = entry,
+                isInstalled = false,
+                isDefault = false,
+                dimmed = dimAvailable,
+                player = samplePlayer,
+                onTap = null,
+                onAction = {
+                  if (downloadStatus == DownloadStatus.Idle) {
+                    DownloadService.startTtsDownload(context, language, entry.pack.packId)
+                  }
+                },
+                downloadStatus = downloadStatus,
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+private data class VoiceWithRegion(
+  val pack: dev.davidv.translator.TtsVoicePackInfo,
+  val regionName: String?,
+)
+
+@Composable
+private fun VoiceSectionHeader(label: String) {
+  Text(
+    text = label,
+    style = MaterialTheme.typography.labelMedium,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+    fontWeight = FontWeight.SemiBold,
+    letterSpacing = 1.sp,
+    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+  )
+}
+
+private sealed interface DownloadStatus {
+  data object Idle : DownloadStatus
+
+  data class Active(val progress: Float) : DownloadStatus
+
+  data object Queued : DownloadStatus
+}
+
+@Composable
+private fun VoiceRow(
+  voice: VoiceWithRegion,
+  isInstalled: Boolean,
+  isDefault: Boolean,
+  dimmed: Boolean,
+  player: SamplePlayer,
+  onTap: (() -> Unit)?,
+  onAction: () -> Unit,
+  downloadStatus: DownloadStatus,
+) {
+  val pack = voice.pack
+  val baseModifier = Modifier.fillMaxWidth()
+  val rowModifier =
+    if (onTap != null && !isDefault) {
+      baseModifier.clickable(onClick = onTap)
+    } else {
+      baseModifier
+    }
+  val nameColor =
+    if (dimmed) {
+      MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    } else {
+      MaterialTheme.colorScheme.onSurface
+    }
+  val metaColor =
+    if (dimmed) {
+      MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+    } else {
+      MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    }
+  val iconTint =
+    if (dimmed) {
+      MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+    } else {
+      LocalContentColor.current
+    }
+  val nameWeight = if (isInstalled) FontWeight.Bold else FontWeight.Normal
+  Row(
+    modifier = rowModifier.padding(vertical = 4.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Column(
+      modifier = Modifier.weight(1f),
+      verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+      if (isDefault) {
+        Text(
+          text = "DEFAULT",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+          fontWeight = FontWeight.SemiBold,
+          letterSpacing = 1.sp,
+        )
+      }
+      Text(
+        text = formatVoiceName(pack.displayName),
+        style = MaterialTheme.typography.bodyLarge,
+        fontWeight = nameWeight,
+        color = nameColor,
+        maxLines = 1,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+      )
+      val parts =
+        buildList {
+          add(formatQualityLabel(pack.quality).replaceFirstChar { it.uppercase() })
+          add(formatSize(pack.sizeBytes.toLong()))
+          voice.regionName?.let { add(it) }
+        }
+      Text(
+        text = parts.joinToString(" · "),
+        style = MaterialTheme.typography.bodySmall,
+        color = metaColor,
+      )
+    }
+    Row(
+      modifier = Modifier.width(88.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.End,
+    ) {
+      SampleButton(
+        packId = pack.packId,
+        sampleUrl = pack.sampleUrl,
+        player = player,
+        tint = iconTint,
+      )
+      val actionIcon = if (isInstalled) R.drawable.delete else R.drawable.download
+      val actionDescription = if (isInstalled) "Delete voice" else "Download voice"
+      when (downloadStatus) {
+        is DownloadStatus.Active -> {
+          Box(
+            modifier = Modifier.size(40.dp),
+            contentAlignment = Alignment.Center,
+          ) {
+            CircularProgressIndicator(
+              progress = { downloadStatus.progress },
+              modifier = Modifier.size(20.dp),
+              strokeWidth = 2.dp,
+              color = iconTint,
+            )
+          }
+        }
+        DownloadStatus.Queued -> {
+          Box(
+            modifier = Modifier.size(40.dp),
+            contentAlignment = Alignment.Center,
+          ) {
+            CircularProgressIndicator(
+              modifier = Modifier.size(18.dp),
+              strokeWidth = 2.dp,
+              color = iconTint.copy(alpha = 0.4f),
+            )
+          }
+        }
+        DownloadStatus.Idle -> {
+          IconButton(
+            onClick = onAction,
+            modifier = Modifier.size(40.dp),
+          ) {
+            Icon(
+              painter = painterResource(id = actionIcon),
+              contentDescription = actionDescription,
+              modifier = Modifier.size(20.dp),
+              tint = iconTint,
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun SampleButton(
+  packId: String,
+  sampleUrl: String?,
+  player: SamplePlayer,
+  tint: Color = LocalContentColor.current,
+) {
+  val size = 40.dp
+  if (sampleUrl == null) {
+    Spacer(modifier = Modifier.size(size))
+    return
+  }
+  val state = player.state
+  val isLoading = state is SamplePlaybackState.Loading && state.packId == packId
+  val isPlaying = state is SamplePlaybackState.Playing && state.packId == packId
+  IconButton(
+    onClick = { player.toggle(packId, sampleUrl) },
+    modifier = Modifier.size(size),
+  ) {
+    if (isLoading) {
+      CircularProgressIndicator(
+        modifier = Modifier.size(18.dp),
+        strokeWidth = 2.dp,
+        color = tint,
+      )
+    } else {
+      val iconRes = if (isPlaying) R.drawable.stop else R.drawable.volume_up
+      val description = if (isPlaying) "Stop sample" else "Play sample"
+      Icon(
+        painter = painterResource(id = iconRes),
+        contentDescription = description,
+        modifier = Modifier.size(20.dp),
+        tint = tint,
+      )
+    }
+  }
+}
 
 @Composable
 private fun FavoriteButton(
@@ -140,8 +560,10 @@ private data class LanguageFeatureRow(
   val installed: Boolean,
   val downloadState: DownloadState?,
   val onDownload: () -> Unit,
-  val onDelete: () -> Unit,
+  val onInstalledAction: () -> Unit,
   val onCancel: () -> Unit,
+  @androidx.annotation.DrawableRes val installedIconRes: Int = R.drawable.delete,
+  val installedDescription: String = "Delete",
 )
 
 @Immutable
@@ -171,11 +593,14 @@ fun LanguageAssetManagerScreen(
   context: Context,
   languageStateManager: LanguageStateManager,
   languageMetadataManager: LanguageMetadataManager,
+  settingsManager: SettingsManager,
   catalog: LanguageCatalog?,
   languageAvailabilityState: LanguageAvailabilityState,
   downloadStates: Map<Language, DownloadState>,
   dictionaryDownloadStates: Map<Language, DownloadState>,
   ttsDownloadStates: Map<Language, DownloadState>,
+  activeTtsPackIds: Map<Language, String> = emptyMap(),
+  queuedTtsPackIds: Map<Language, List<String>> = emptyMap(),
 ) {
   val languageMetadata by languageMetadataManager.metadata.collectAsState()
   val expandedLanguages = remember { mutableStateMapOf<String, Boolean>() }
@@ -439,79 +864,16 @@ fun LanguageAssetManagerScreen(
 
   pendingTtsVoicePicker?.let { pendingPicker ->
     val pickerCatalog = catalog ?: return@let
-    val regions = pickerCatalog.ttsVoicePickerRegions(pendingPicker.language.code)
-    val showRegionHeaders = regions.size > 1
-    val scrollState = rememberScrollState()
-    AlertDialog(
-      onDismissRequest = { pendingTtsVoicePicker = null },
-      title = { Text("Pick a voice") },
-      text = {
-        Column(
-          modifier = Modifier.verticalScroll(scrollState),
-          verticalArrangement = Arrangement.spacedBy(if (showRegionHeaders) 16.dp else 8.dp),
-        ) {
-          regions.forEach { region ->
-            Column(
-              verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-              if (showRegionHeaders) {
-                Text(
-                  text = region.displayName,
-                  style = MaterialTheme.typography.labelLarge,
-                  fontWeight = FontWeight.SemiBold,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
-
-              Column(
-                modifier = Modifier.padding(start = if (showRegionHeaders) 12.dp else 0.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-              ) {
-                region.voices.forEach { pack ->
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                  ) {
-                    Column(
-                      modifier = Modifier.weight(1f),
-                      verticalArrangement = Arrangement.spacedBy(1.dp),
-                    ) {
-                      Text(
-                        text = formatVoiceName(pack.displayName),
-                        style = MaterialTheme.typography.bodyMedium,
-                      )
-                      Text(
-                        text = "${formatSize(pack.sizeBytes.toLong())}, ${formatQualityLabel(pack.quality)} quality",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                      )
-                    }
-                    IconButton(
-                      onClick = {
-                        DownloadService.startTtsDownload(context, pendingPicker.language, pack.packId)
-                        pendingTtsVoicePicker = null
-                      },
-                      modifier = Modifier.size(32.dp),
-                    ) {
-                      Icon(
-                        painter = painterResource(id = R.drawable.add),
-                        contentDescription = "Download voice",
-                        modifier = Modifier.size(18.dp),
-                      )
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      confirmButton = {},
-      dismissButton = {
-        TextButton(onClick = { pendingTtsVoicePicker = null }) {
-          Text("Cancel")
-        }
-      },
+    VoicePickerDialog(
+      context = context,
+      language = pendingPicker.language,
+      catalog = pickerCatalog,
+      languageStateManager = languageStateManager,
+      settingsManager = settingsManager,
+      ttsDownloadStates = ttsDownloadStates,
+      activeTtsPackId = activeTtsPackIds[pendingPicker.language],
+      queuedTtsPackIds = queuedTtsPackIds[pendingPicker.language].orEmpty(),
+      onDismiss = { pendingTtsVoicePicker = null },
     )
   }
 }
@@ -701,7 +1063,7 @@ private fun buildFeatureRows(
         installed = row.translationInstalled,
         downloadState = translationDownloadState,
         onDownload = onDownloadTranslation,
-        onDelete = onDeleteTranslation,
+        onInstalledAction = onDeleteTranslation,
         onCancel = onCancelTranslation,
       )
   }
@@ -718,7 +1080,7 @@ private fun buildFeatureRows(
         installed = row.dictionaryInstalled,
         downloadState = dictionaryDownloadState,
         onDownload = onDownloadDictionary,
-        onDelete = onDeleteDictionary,
+        onInstalledAction = onDeleteDictionary,
         onCancel = onCancelDictionary,
       )
   }
@@ -731,8 +1093,10 @@ private fun buildFeatureRows(
         installed = row.ttsInstalled,
         downloadState = ttsDownloadState,
         onDownload = onDownloadTts,
-        onDelete = onDeleteTts,
+        onInstalledAction = onDownloadTts,
         onCancel = onCancelTts,
+        installedIconRes = R.drawable.settings,
+        installedDescription = "Manage voices",
       )
   }
 
@@ -769,8 +1133,10 @@ private fun FeatureRow(featureRow: LanguageFeatureRow) {
       downloadState = featureRow.downloadState,
       isInstalled = featureRow.installed,
       onDownload = featureRow.onDownload,
-      onDelete = featureRow.onDelete,
+      onInstalledAction = featureRow.onInstalledAction,
       onCancel = featureRow.onCancel,
+      installedIconRes = featureRow.installedIconRes,
+      installedDescription = featureRow.installedDescription,
     )
   }
 }
@@ -878,8 +1244,10 @@ private fun FeatureActionButton(
   downloadState: DownloadState?,
   isInstalled: Boolean,
   onDownload: () -> Unit,
-  onDelete: () -> Unit,
+  onInstalledAction: () -> Unit,
   onCancel: () -> Unit,
+  @androidx.annotation.DrawableRes installedIconRes: Int,
+  installedDescription: String,
 ) {
   if (downloadState?.isDownloading == true) {
     ProgressIconButton(
@@ -891,7 +1259,7 @@ private fun FeatureActionButton(
   }
 
   IconButton(
-    onClick = if (isInstalled) onDelete else onDownload,
+    onClick = if (isInstalled) onInstalledAction else onDownload,
     modifier = Modifier.size(32.dp),
   ) {
     Icon(
@@ -899,14 +1267,14 @@ private fun FeatureActionButton(
         painterResource(
           id =
             when {
-              isInstalled -> R.drawable.delete
+              isInstalled -> installedIconRes
               downloadState?.isCancelled == true || downloadState?.error != null -> R.drawable.refresh
               else -> R.drawable.add
             },
         ),
       contentDescription =
         when {
-          isInstalled -> "Delete Feature"
+          isInstalled -> installedDescription
           downloadState?.isCancelled == true || downloadState?.error != null -> "Retry Download"
           else -> "Download Feature"
         },

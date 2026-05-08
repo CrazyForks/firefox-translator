@@ -86,7 +86,8 @@ import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.PcmAudioPlayer
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
-import dev.davidv.translator.TtsVoiceOption
+import dev.davidv.translator.encodeVoiceOverride
+import dev.davidv.translator.parseVoiceOverride
 import dev.davidv.translator.ui.DocumentTranslationUiState
 import dev.davidv.translator.ui.TranslatorViewModel
 import dev.davidv.translator.ui.UiEvent
@@ -100,7 +101,13 @@ import java.io.FileOutputStream
 import java.io.IOException
 import kotlin.math.roundToInt
 
-private fun defaultVoiceNameForLanguage(voices: List<TtsVoiceOption>): String? = voices.firstOrNull()?.name
+private fun defaultVoiceNameForLanguage(packs: List<uniffi.translator.InstalledTtsPack>): String? =
+  packs.firstOrNull()?.voices?.firstOrNull()?.name
+
+private fun packsContainVoice(
+  packs: List<uniffi.translator.InstalledTtsPack>,
+  voiceName: String,
+): Boolean = packs.any { pack -> pack.voices.any { it.name == voiceName } }
 
 private enum class SpeechTarget { INPUT, OUTPUT }
 
@@ -645,6 +652,7 @@ fun TranslatorApp(
             val currentDownloadService = downloadService
             if (currentDownloadService != null) {
               NoLanguagesScreen(
+                settingsManager = viewModel.settingsManager,
                 onDone = {
                   if (languageState.hasLanguages) {
                     MainScope().launch {
@@ -671,14 +679,16 @@ fun TranslatorApp(
             if (currentFrom != null && currentTo != null) {
               val availableSourceTtsVoices = ttsVoicesByLanguage[currentFrom.code].orEmpty()
               val selectedSourceTtsVoiceName =
-                settings.ttsVoiceOverrides[currentFrom.code]
-                  ?.takeIf { voiceName -> availableSourceTtsVoices.any { it.name == voiceName } }
+                parseVoiceOverride(settings.ttsVoiceOverrides[currentFrom.code])
+                  ?.voiceName
+                  ?.takeIf { voiceName -> packsContainVoice(availableSourceTtsVoices, voiceName) }
                   ?: defaultVoiceNameForLanguage(availableSourceTtsVoices)
               val sourceTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, currentFrom, selectedSourceTtsVoiceName)
               val availableTtsVoices = ttsVoicesByLanguage[currentTo.code].orEmpty()
               val selectedTtsVoiceName =
-                settings.ttsVoiceOverrides[currentTo.code]
-                  ?.takeIf { voiceName -> availableTtsVoices.any { it.name == voiceName } }
+                parseVoiceOverride(settings.ttsVoiceOverrides[currentTo.code])
+                  ?.voiceName
+                  ?.takeIf { voiceName -> packsContainVoice(availableTtsVoices, voiceName) }
                   ?: defaultVoiceNameForLanguage(availableTtsVoices)
               val targetTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, currentTo, selectedTtsVoiceName)
               MainScreen(
@@ -749,17 +759,21 @@ fun TranslatorApp(
                     },
                   )
                 },
-                onSourceTtsVoiceSelected = { voiceName ->
+                onSourceTtsVoiceSelected = { packId, voiceName ->
                   viewModel.settingsManager.updateSettings(
                     settings.copy(
-                      ttsVoiceOverrides = settings.ttsVoiceOverrides + (currentFrom.code to voiceName),
+                      ttsVoiceOverrides =
+                        settings.ttsVoiceOverrides +
+                          (currentFrom.code to encodeVoiceOverride(packId, voiceName)),
                     ),
                   )
                 },
-                onTtsVoiceSelected = { voiceName ->
+                onTtsVoiceSelected = { packId, voiceName ->
                   viewModel.settingsManager.updateSettings(
                     settings.copy(
-                      ttsVoiceOverrides = settings.ttsVoiceOverrides + (currentTo.code to voiceName),
+                      ttsVoiceOverrides =
+                        settings.ttsVoiceOverrides +
+                          (currentTo.code to encodeVoiceOverride(packId, voiceName)),
                     ),
                   )
                 },
@@ -783,6 +797,8 @@ fun TranslatorApp(
             if (curDownloadService != null && catalog != null) {
               val dictionaryDownloadStates by curDownloadService.dictionaryDownloadStates.collectAsState()
               val ttsDownloadStates by curDownloadService.ttsDownloadStates.collectAsState()
+              val activeTtsPackIds by curDownloadService.activeTtsPackIds.collectAsState()
+              val queuedTtsPackIds by curDownloadService.queuedTtsPackIds.collectAsState()
               Scaffold(
                 modifier =
                   Modifier
@@ -795,11 +811,14 @@ fun TranslatorApp(
                     context = context,
                     languageStateManager = viewModel.languageStateManager,
                     languageMetadataManager = viewModel.languageMetadataManager,
+                    settingsManager = viewModel.settingsManager,
                     catalog = catalog,
                     languageAvailabilityState = languageState,
                     downloadStates = downloadStates,
                     dictionaryDownloadStates = dictionaryDownloadStates,
                     ttsDownloadStates = ttsDownloadStates,
+                    activeTtsPackIds = activeTtsPackIds,
+                    queuedTtsPackIds = queuedTtsPackIds,
                   )
                 }
               }

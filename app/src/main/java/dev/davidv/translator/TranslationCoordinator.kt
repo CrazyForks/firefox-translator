@@ -244,6 +244,8 @@ class TranslationCoordinator(
 
   suspend fun availableTtsVoices(language: Language): List<TtsVoiceOption> = speechService.availableTtsVoices(language)
 
+  suspend fun installedTtsVoices(language: Language): List<uniffi.translator.InstalledTtsPack> = speechService.installedTtsVoices(language)
+
   private fun bitmapFromRgba(
     bytes: ByteArray,
     width: Int,

@@ -43,7 +43,6 @@ import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationResult
 import dev.davidv.translator.TranslatorMessage
-import dev.davidv.translator.TtsVoiceOption
 import dev.davidv.translator.WordWithTaggedEntries
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -121,8 +120,8 @@ class TranslatorViewModel(
   private val _dictionaryLookupLanguage = MutableStateFlow<Language?>(null)
   val dictionaryLookupLanguage: StateFlow<Language?> = _dictionaryLookupLanguage.asStateFlow()
 
-  private val _ttsVoices = MutableStateFlow<Map<String, List<TtsVoiceOption>>>(emptyMap())
-  val ttsVoices: StateFlow<Map<String, List<TtsVoiceOption>>> = _ttsVoices.asStateFlow()
+  private val _ttsVoices = MutableStateFlow<Map<String, List<uniffi.translator.InstalledTtsPack>>>(emptyMap())
+  val ttsVoices: StateFlow<Map<String, List<uniffi.translator.InstalledTtsPack>>> = _ttsVoices.asStateFlow()
 
   private val _documentTranslation = MutableStateFlow<DocumentTranslationUiState?>(null)
   val documentTranslation: StateFlow<DocumentTranslationUiState?> = _documentTranslation.asStateFlow()
@@ -479,7 +478,7 @@ class TranslatorViewModel(
 
   fun refreshTtsVoices(language: Language) {
     viewModelScope.launch {
-      _ttsVoices.value = _ttsVoices.value + (language.code to translationCoordinator.availableTtsVoices(language))
+      _ttsVoices.value = _ttsVoices.value + (language.code to translationCoordinator.installedTtsVoices(language))
     }
   }
 

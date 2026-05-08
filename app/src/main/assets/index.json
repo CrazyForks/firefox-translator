@@ -6980,7 +6980,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ar"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ar/kareem_medium.opus"
     },
     "tts-piper-ar-jo-kareem-low": {
       "feature": "tts",
@@ -7008,7 +7009,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ar"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ar/kareem_low.opus"
     },
     "tts-mms-az-az-north-latin-mms": {
       "feature": "tts",
@@ -7034,7 +7036,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/az/az_AZ/north_latin/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/az/north_latin_medium.opus"
     },
     "tts-piper-bg-bg-dimitar-medium": {
       "feature": "tts",
@@ -7062,7 +7065,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-bg"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/bg/dimitar_medium.opus"
     },
     "tts-mms-bn-in-standard-mms": {
       "feature": "tts",
@@ -7088,7 +7092,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/bn/bn_IN/standard/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/bn/standard_medium.opus"
     },
     "tts-coqui_vits-bs-ba-cv-coqui-vits": {
       "feature": "tts",
@@ -7132,7 +7137,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/bs/bs_BA/cv/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/bs/cv_medium.opus"
     },
     "tts-piper-ca-es-upc-ona-medium": {
       "feature": "tts",
@@ -7160,7 +7166,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ca"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ca/upc_ona_medium.opus"
     },
     "tts-piper-ca-es-upc-ona-x-low": {
       "feature": "tts",
@@ -7190,7 +7197,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ca"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ca/upc_ona_x_low.opus"
     },
     "tts-piper-ca-es-upc-pau-x-low": {
       "feature": "tts",
@@ -7220,7 +7228,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ca"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ca/upc_pau_x_low.opus"
     },
     "tts-piper-cs-cz-jirka-medium": {
       "feature": "tts",
@@ -7248,7 +7257,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-cs"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/cs/jirka_medium.opus"
     },
     "tts-piper-cs-cz-jirka-low": {
       "feature": "tts",
@@ -7276,7 +7286,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-cs"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/cs/jirka_low.opus"
     },
     "tts-piper-da-dk-talesyntese-medium": {
       "feature": "tts",
@@ -7306,7 +7317,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-da"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/da/talesyntese_medium.opus"
     },
     "tts-piper-de-de-thorsten-medium": {
       "feature": "tts",
@@ -7334,7 +7346,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-de"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/thorsten_medium.opus"
     },
     "tts-piper-de-de-thorsten-emotional-medium": {
       "feature": "tts",
@@ -7363,7 +7376,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-de"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/thorsten_emotional_medium.opus"
     },
     "tts-piper-de-de-karlsson-low": {
       "feature": "tts",
@@ -7393,7 +7407,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-de"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/karlsson_low.opus"
     },
     "tts-piper-de-de-kerstin-low": {
       "feature": "tts",
@@ -7423,7 +7438,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-de"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/kerstin_low.opus"
     },
     "tts-piper-el-gr-rapunzelina-medium": {
       "feature": "tts",
@@ -7451,7 +7467,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-el"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/el/rapunzelina_medium.opus"
     },
     "tts-piper-el-gr-rapunzelina-low": {
       "feature": "tts",
@@ -7479,7 +7496,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-el"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/el/rapunzelina_low.opus"
     },
     "tts-piper-en-gb-alan-medium": {
       "feature": "tts",
@@ -7507,7 +7525,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/alan_medium.opus"
     },
     "tts-piper-en-gb-alba-medium": {
       "feature": "tts",
@@ -7535,7 +7554,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/alba_medium.opus"
     },
     "tts-piper-en-gb-jenny-dioco-medium": {
       "feature": "tts",
@@ -7563,7 +7583,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/jenny_dioco_medium.opus"
     },
     "tts-piper-en-gb-northern-english-male-medium": {
       "feature": "tts",
@@ -7591,7 +7612,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/northern_english_male_medium.opus"
     },
     "tts-piper-en-us-amy-medium": {
       "feature": "tts",
@@ -7619,7 +7641,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/amy_medium.opus"
     },
     "tts-piper-en-us-hfc-female-medium": {
       "feature": "tts",
@@ -7647,7 +7670,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/hfc_female_medium.opus"
     },
     "tts-piper-en-us-hfc-male-medium": {
       "feature": "tts",
@@ -7675,7 +7699,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/hfc_male_medium.opus"
     },
     "tts-piper-en-us-joe-medium": {
       "feature": "tts",
@@ -7703,7 +7728,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-en"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/en/joe_medium.opus"
     },
     "tts-piper-es-ar-daniela-high": {
       "feature": "tts",
@@ -7731,7 +7757,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-es"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/es/daniela_high.opus"
     },
     "tts-piper-es-es-davefx-medium": {
       "feature": "tts",
@@ -7759,7 +7786,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-es"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/es/davefx_medium.opus"
     },
     "tts-piper-es-es-sharvard-medium": {
       "feature": "tts",
@@ -7788,7 +7816,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-es"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/es/sharvard_medium.opus"
     },
     "tts-piper-es-es-carlfm-x-low": {
       "feature": "tts",
@@ -7818,7 +7847,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-es"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/es/carlfm_x_low.opus"
     },
     "tts-piper-es-mx-ald-medium": {
       "feature": "tts",
@@ -7846,7 +7876,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-es"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/es/ald_medium.opus"
     },
     "tts-piper-es-mx-claude-high": {
       "feature": "tts",
@@ -7874,7 +7905,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-es"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/es/claude_high.opus"
     },
     "tts-coqui_vits-et-ee-cv-coqui-vits": {
       "feature": "tts",
@@ -7918,7 +7950,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/et/et_EE/cv/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/et/cv_medium.opus"
     },
     "tts-piper-fa-ir-gyro-medium": {
       "feature": "tts",
@@ -7946,7 +7979,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fa"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fa/gyro_medium.opus"
     },
     "tts-piper-fa-ir-reza-ibrahim-medium": {
       "feature": "tts",
@@ -7974,7 +8008,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fa"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fa/reza_ibrahim_medium.opus"
     },
     "tts-piper-fa-ir-ganji-medium": {
       "feature": "tts",
@@ -8002,7 +8037,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fa"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fa/ganji_medium.opus"
     },
     "tts-piper-fa-ir-ganji-adabi-medium": {
       "feature": "tts",
@@ -8030,7 +8066,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fa"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fa/ganji_adabi_medium.opus"
     },
     "tts-piper-fi-fi-harri-medium": {
       "feature": "tts",
@@ -8058,7 +8095,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fi/harri_medium.opus"
     },
     "tts-piper-fi-fi-harri-low": {
       "feature": "tts",
@@ -8088,7 +8126,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fi/harri_low.opus"
     },
     "tts-piper-fr-fr-siwis-medium": {
       "feature": "tts",
@@ -8118,7 +8157,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fr"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fr/siwis_medium.opus"
     },
     "tts-piper-fr-fr-tom-medium": {
       "feature": "tts",
@@ -8146,7 +8186,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fr"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fr/tom_medium.opus"
     },
     "tts-piper-fr-fr-upmc-medium": {
       "feature": "tts",
@@ -8175,7 +8216,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fr"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fr/upmc_medium.opus"
     },
     "tts-piper-fr-fr-mls-medium": {
       "feature": "tts",
@@ -8204,7 +8246,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-fr"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fr/mls_medium.opus"
     },
     "tts-mms-gu-in-standard-mms": {
       "feature": "tts",
@@ -8230,7 +8273,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/gu/gu_IN/standard/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/gu/standard_medium.opus"
     },
     "tts-mms-he-il-standard-mms": {
       "feature": "tts",
@@ -8256,7 +8300,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/he/he_IL/standard/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/he/standard_medium.opus"
     },
     "tts-piper-hi-in-rohan-medium": {
       "feature": "tts",
@@ -8284,7 +8329,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-hi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/hi/rohan_medium.opus"
     },
     "tts-piper-hi-in-pratham-medium": {
       "feature": "tts",
@@ -8312,7 +8358,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-hi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/hi/pratham_medium.opus"
     },
     "tts-piper-hi-in-priyamvada-medium": {
       "feature": "tts",
@@ -8340,7 +8387,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-hi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/hi/priyamvada_medium.opus"
     },
     "tts-coqui_vits-hr-hr-cv-coqui-vits": {
       "feature": "tts",
@@ -8384,7 +8432,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/hr/hr_HR/cv/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/hr/cv_medium.opus"
     },
     "tts-piper-hu-hu-anna-medium": {
       "feature": "tts",
@@ -8412,7 +8461,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-hu"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/hu/anna_medium.opus"
     },
     "tts-piper-hu-hu-berta-medium": {
       "feature": "tts",
@@ -8440,7 +8490,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-hu"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/hu/berta_medium.opus"
     },
     "tts-piper-hu-hu-imre-medium": {
       "feature": "tts",
@@ -8468,7 +8519,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-hu"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/hu/imre_medium.opus"
     },
     "tts-piper-id-id-news-tts-medium": {
       "feature": "tts",
@@ -8496,7 +8548,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-id"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/id/news_tts_medium.opus"
     },
     "tts-piper-is-is-bui-medium": {
       "feature": "tts",
@@ -8526,7 +8579,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-is"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/is/bui_medium.opus"
     },
     "tts-piper-is-is-salka-medium": {
       "feature": "tts",
@@ -8556,7 +8610,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-is"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/is/salka_medium.opus"
     },
     "tts-piper-is-is-steinn-medium": {
       "feature": "tts",
@@ -8586,7 +8641,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-is"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/is/steinn_medium.opus"
     },
     "tts-piper-is-is-ugla-medium": {
       "feature": "tts",
@@ -8616,7 +8672,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-is"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/is/ugla_medium.opus"
     },
     "tts-piper-it-it-paola-medium": {
       "feature": "tts",
@@ -8644,7 +8701,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-it"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/it/paola_medium.opus"
     },
     "tts-piper-it-it-riccardo-x-low": {
       "feature": "tts",
@@ -8674,7 +8732,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-it"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/it/riccardo_x_low.opus"
     },
     "tts-kokoro-ja-jp-jf-alpha-kokoro-v1.0": {
       "feature": "tts",
@@ -8690,7 +8749,8 @@
       "dependsOn": [
         "tts-espeak-dict-ja",
         "tts-kokoro-v1.0-core"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ja/jf_alpha_high.opus"
     },
     "tts-mms-kn-in-standard-mms": {
       "feature": "tts",
@@ -8716,7 +8776,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/kn/kn_IN/standard/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/kn/standard_medium.opus"
     },
     "tts-mimic3-ko-ko-kss-low": {
       "feature": "tts",
@@ -8750,7 +8811,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ko"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ko/kss_low.opus"
     },
     "tts-kokoro-ko-kr-jf-alpha-kokoro-v1.0": {
       "feature": "tts",
@@ -8766,7 +8828,8 @@
       "dependsOn": [
         "tts-espeak-dict-ko",
         "tts-kokoro-v1.0-core"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ko/jf_alpha_high.opus"
     },
     "tts-coqui_vits-lt-lt-cv-coqui-vits": {
       "feature": "tts",
@@ -8810,7 +8873,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/lt/lt_LT/cv/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/lt/cv_medium.opus"
     },
     "tts-piper-lv-lv-aivars-medium": {
       "feature": "tts",
@@ -8838,7 +8902,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-lv"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/lv/aivars_medium.opus"
     },
     "tts-piper-ml-in-arjun-medium": {
       "feature": "tts",
@@ -8866,7 +8931,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ml"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ml/arjun_medium.opus"
     },
     "tts-piper-ml-in-meera-medium": {
       "feature": "tts",
@@ -8894,7 +8960,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ml"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ml/meera_medium.opus"
     },
     "tts-mms-ms-my-standard-mms": {
       "feature": "tts",
@@ -8920,7 +8987,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/ms/ms_MY/standard/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ms/standard_medium.opus"
     },
     "tts-piper-nl-be-rdh-medium": {
       "feature": "tts",
@@ -8950,7 +9018,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-nl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/nl/rdh_medium.opus"
     },
     "tts-piper-nl-be-nathalie-medium": {
       "feature": "tts",
@@ -8978,7 +9047,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-nl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/nl/nathalie_medium.opus"
     },
     "tts-piper-nl-be-nathalie-x-low": {
       "feature": "tts",
@@ -9008,7 +9078,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-nl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/nl/nathalie_x_low.opus"
     },
     "tts-piper-nl-be-rdh-x-low": {
       "feature": "tts",
@@ -9038,7 +9109,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-nl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/nl/rdh_x_low.opus"
     },
     "tts-piper-nl-nl-ronnie-medium": {
       "feature": "tts",
@@ -9066,7 +9138,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-nl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/nl/ronnie_medium.opus"
     },
     "tts-piper-nl-nl-pim-medium": {
       "feature": "tts",
@@ -9094,7 +9167,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-nl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/nl/pim_medium.opus"
     },
     "tts-piper-nl-nl-alex-medium": {
       "feature": "tts",
@@ -9122,7 +9196,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-nl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/nl/alex_medium.opus"
     },
     "tts-piper-no-no-talesyntese-medium": {
       "feature": "tts",
@@ -9152,7 +9227,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-no"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/no/talesyntese_medium.opus"
     },
     "tts-piper-pl-pl-darkman-medium": {
       "feature": "tts",
@@ -9180,7 +9256,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pl/darkman_medium.opus"
     },
     "tts-piper-pl-pl-gosia-medium": {
       "feature": "tts",
@@ -9208,7 +9285,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pl/gosia_medium.opus"
     },
     "tts-piper-pl-pl-mc-speech-medium": {
       "feature": "tts",
@@ -9236,7 +9314,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pl/mc_speech_medium.opus"
     },
     "tts-piper-pl-pl-jarvis-wg-glos-medium": {
       "feature": "tts",
@@ -9264,7 +9343,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pl/jarvis_wg_glos_medium.opus"
     },
     "tts-piper-pt-br-cadu-medium": {
       "feature": "tts",
@@ -9292,7 +9372,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pt"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pt/cadu_medium.opus"
     },
     "tts-piper-pt-br-jeff-medium": {
       "feature": "tts",
@@ -9320,7 +9401,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pt"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pt/jeff_medium.opus"
     },
     "tts-piper-pt-br-faber-medium": {
       "feature": "tts",
@@ -9348,7 +9430,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pt"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pt/faber_medium.opus"
     },
     "tts-piper-pt-br-edresson-low": {
       "feature": "tts",
@@ -9378,7 +9461,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pt"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pt/edresson_low.opus"
     },
     "tts-piper-pt-pt-tugão-medium": {
       "feature": "tts",
@@ -9406,7 +9490,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-pt"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/pt/tugão_medium.opus"
     },
     "tts-piper-ro-ro-mihai-medium": {
       "feature": "tts",
@@ -9434,7 +9519,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ro"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ro/mihai_medium.opus"
     },
     "tts-piper-ru-ru-denis-medium": {
       "feature": "tts",
@@ -9462,7 +9548,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ru"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ru/denis_medium.opus"
     },
     "tts-piper-ru-ru-dmitri-medium": {
       "feature": "tts",
@@ -9490,7 +9577,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ru"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ru/dmitri_medium.opus"
     },
     "tts-piper-ru-ru-irina-medium": {
       "feature": "tts",
@@ -9520,7 +9608,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ru"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ru/irina_medium.opus"
     },
     "tts-piper-ru-ru-ruslan-medium": {
       "feature": "tts",
@@ -9548,7 +9637,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-ru"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ru/ruslan_medium.opus"
     },
     "tts-piper-sk-sk-lili-medium": {
       "feature": "tts",
@@ -9576,7 +9666,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sk"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sk/lili_medium.opus"
     },
     "tts-piper-sl-si-artur-medium": {
       "feature": "tts",
@@ -9604,7 +9695,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sl"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sl/artur_medium.opus"
     },
     "tts-piper-sq-al-edon-medium": {
       "feature": "tts",
@@ -9632,7 +9724,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sq"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sq/edon_medium.opus"
     },
     "tts-piper-sr-rs-serbski-institut-medium": {
       "feature": "tts",
@@ -9661,7 +9754,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sr"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sr/serbski_institut_medium.opus"
     },
     "tts-piper-sv-se-nst-medium": {
       "feature": "tts",
@@ -9689,7 +9783,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sv"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sv/nst_medium.opus"
     },
     "tts-piper-sv-se-alma-medium": {
       "feature": "tts",
@@ -9717,7 +9812,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sv"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sv/alma_medium.opus"
     },
     "tts-piper-sv-se-lisa-medium": {
       "feature": "tts",
@@ -9745,7 +9841,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sv"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sv/lisa_medium.opus"
     },
     "tts-mms-ta-in-standard-mms": {
       "feature": "tts",
@@ -9771,7 +9868,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/ta/ta_IN/standard/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ta/standard_medium.opus"
     },
     "tts-piper-te-in-maya-medium": {
       "feature": "tts",
@@ -9799,7 +9897,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-te"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/te/maya_medium.opus"
     },
     "tts-piper-te-in-padmavathi-medium": {
       "feature": "tts",
@@ -9827,7 +9926,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-te"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/te/padmavathi_medium.opus"
     },
     "tts-piper-te-in-venkatesh-medium": {
       "feature": "tts",
@@ -9855,7 +9955,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-te"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/te/venkatesh_medium.opus"
     },
     "tts-mms-th-th-standard-mms": {
       "feature": "tts",
@@ -9881,7 +9982,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/th/th_TH/standard/medium/tokens.txt"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/th/standard_medium.opus"
     },
     "tts-piper-tr-tr-dfki-medium": {
       "feature": "tts",
@@ -9909,7 +10011,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-tr"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/tr/dfki_medium.opus"
     },
     "tts-piper-uk-ua-ukrainian-tts-medium": {
       "feature": "tts",
@@ -9938,7 +10041,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-uk"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/uk/ukrainian_tts_medium.opus"
     },
     "tts-piper-uk-ua-lada-x-low": {
       "feature": "tts",
@@ -9968,7 +10072,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-uk"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/uk/lada_x_low.opus"
     },
     "tts-piper-vi-vn-vais1000-medium": {
       "feature": "tts",
@@ -9996,7 +10101,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-vi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/vi/vais1000_medium.opus"
     },
     "tts-piper-vi-vn-25hours-single-low": {
       "feature": "tts",
@@ -10026,7 +10132,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-vi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/vi/25hours_single_low.opus"
     },
     "tts-piper-vi-vn-vivos-x-low": {
       "feature": "tts",
@@ -10057,7 +10164,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-vi"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/vi/vivos_x_low.opus"
     },
     "tts-piper-zh-cn-huayan-medium": {
       "feature": "tts",
@@ -10085,7 +10193,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-cmn"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/zh/huayan_medium.opus"
     },
     "tts-piper-zh-cn-huayan-x-low": {
       "feature": "tts",
@@ -10115,7 +10224,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-cmn"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/zh/huayan_x_low.opus"
     },
     "tts-sherpa_vits-zh-hk-cantonese-medium": {
       "feature": "tts",
@@ -10159,7 +10269,8 @@
           "url": "https://offline-translator.davidv.dev/tts/1/zh_hant/zh_HK/cantonese/medium/rule.fst"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/zh_hant/Cantonese_medium.opus"
     },
     "tts-piper-zh-tw-mandarin-traditional-medium": {
       "feature": "tts",

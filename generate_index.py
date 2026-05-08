@@ -129,6 +129,16 @@ def build_internal_catalog(args: argparse.Namespace) -> dict:
     )
 
 
+def tts_sample_mirror_path(pack: dict) -> str | None:
+    voice = pack.get("voice")
+    language = pack.get("language")
+    quality = pack.get("quality")
+    if not voice or not language:
+        return None
+    stem = f"{voice}_{quality}" if quality else voice
+    return f"samples_ogg/{language}/{stem}.opus"
+
+
 def build_public_catalog(source_catalog: dict, bucket_dir: Path, base_url: str, allow_missing: bool) -> dict:
     published = deepcopy(source_catalog)
     published.pop("translationModelsBaseUrl", None)
@@ -152,6 +162,12 @@ def build_public_catalog(source_catalog: dict, bucket_dir: Path, base_url: str, 
                     missing_paths.append(str(local_path))
                 file_info["url"] = catalog_mirror.mirror_url(base_url, mirror_path)
             file_info.pop("mirrorPath", None)
+
+        if pack.get("feature") == "tts":
+            sample_mirror_path = tts_sample_mirror_path(pack)
+            if sample_mirror_path is not None:
+                if catalog_mirror.bucket_path(bucket_dir, sample_mirror_path).exists():
+                    pack["sampleUrl"] = catalog_mirror.mirror_url(base_url, sample_mirror_path)
 
     if missing_paths:
         sample = "\n".join(missing_paths[:20])

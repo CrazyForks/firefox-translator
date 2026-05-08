@@ -88,7 +88,6 @@ import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SUPPORTED_DOCUMENT_URL_TOAST
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
-import dev.davidv.translator.TtsVoiceOption
 import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.browser.BrowserActivity
 import dev.davidv.translator.isSupportedDocumentUrl
@@ -143,16 +142,16 @@ fun MainScreen(
   languageMetadata: Map<Language, LanguageMetadata>,
   downloadStates: Map<Language, DownloadState> = emptyMap(),
   settings: AppSettings,
-  availableSourceTtsVoices: List<TtsVoiceOption> = emptyList(),
+  availableSourceTtsVoices: List<uniffi.translator.InstalledTtsPack> = emptyList(),
   selectedSourceTtsVoiceName: String? = null,
   sourceTtsPlaybackSpeed: Float = 1.0f,
-  availableTtsVoices: List<TtsVoiceOption> = emptyList(),
+  availableTtsVoices: List<uniffi.translator.InstalledTtsPack> = emptyList(),
   selectedTtsVoiceName: String? = null,
   targetTtsPlaybackSpeed: Float = 1.0f,
   onTtsPlaybackSpeedChange: (Float) -> Unit = {},
   onSourceTtsPlaybackSpeedChange: (Float) -> Unit = {},
-  onSourceTtsVoiceSelected: (String) -> Unit = {},
-  onTtsVoiceSelected: (String) -> Unit = {},
+  onSourceTtsVoiceSelected: (String, String) -> Unit = { _, _ -> },
+  onTtsVoiceSelected: (String, String) -> Unit = { _, _ -> },
   onSpeakInput: (String, Language) -> Unit = { _, _ -> },
   onSpeakOutput: (String, Language) -> Unit = { _, _ -> },
   launchMode: LaunchMode,

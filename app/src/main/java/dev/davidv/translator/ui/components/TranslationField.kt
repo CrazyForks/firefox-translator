@@ -65,7 +65,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatedText
-import dev.davidv.translator.TtsVoiceOption
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -79,10 +78,10 @@ fun TranslationField(
   isAudioLoading: Boolean = false,
   speechPlaybackSpeed: Float = 1.0f,
   selectedVoiceName: String? = null,
-  availableVoices: List<TtsVoiceOption> = emptyList(),
+  availableVoices: List<uniffi.translator.InstalledTtsPack> = emptyList(),
   onSpeak: () -> Unit = {},
   onSpeechPlaybackSpeedChange: (Float) -> Unit = {},
-  onVoiceSelected: (String) -> Unit = {},
+  onVoiceSelected: (String, String) -> Unit = { _, _ -> },
 ) {
   val context = LocalContext.current
 
@@ -209,10 +208,10 @@ fun SpeechPlaybackButton(
   isAudioLoading: Boolean,
   speechPlaybackSpeed: Float,
   selectedVoiceName: String?,
-  availableVoices: List<TtsVoiceOption>,
+  availableVoices: List<uniffi.translator.InstalledTtsPack>,
   onSpeak: () -> Unit,
   onSpeechPlaybackSpeedChange: (Float) -> Unit,
-  onVoiceSelected: (String) -> Unit,
+  onVoiceSelected: (String, String) -> Unit,
   contentDescription: String,
   modifier: Modifier = Modifier,
 ) {
@@ -295,42 +294,84 @@ fun SpeechPlaybackButton(
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
           } else {
-            availableVoices.forEach { voice ->
-              val isSelected = voice.name == selectedVoiceName
-              Text(
-                text = voice.displayName,
-                modifier =
-                  Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                      if (isSelected) {
-                        MaterialTheme.colorScheme.secondaryContainer
-                      } else {
-                        MaterialTheme.colorScheme.surface
-                      },
-                    ).combinedClickable(
-                      onClick = {
-                        onVoiceSelected(voice.name)
-                        showSpeechOptions = false
-                      },
-                      onLongClick = {},
-                    ).padding(horizontal = 10.dp, vertical = 8.dp),
-                color =
-                  if (isSelected) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                  } else {
-                    MaterialTheme.colorScheme.onSurface
+            availableVoices.forEach { pack ->
+              val isMulti = pack.voices.size > 1
+              if (isMulti) {
+                Text(
+                  text = pack.displayName.uppercase(),
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                )
+                pack.voices.forEach { speaker ->
+                  VoiceRowEntry(
+                    label = speaker.name,
+                    isSelected = speaker.name == selectedVoiceName,
+                    indented = true,
+                    onClick = {
+                      onVoiceSelected(pack.packId, speaker.name)
+                      showSpeechOptions = false
+                    },
+                  )
+                }
+              } else {
+                val speaker = pack.voices.first()
+                VoiceRowEntry(
+                  label = pack.displayName,
+                  isSelected = speaker.name == selectedVoiceName,
+                  indented = false,
+                  onClick = {
+                    onVoiceSelected(pack.packId, speaker.name)
+                    showSpeechOptions = false
                   },
-                style = MaterialTheme.typography.bodyMedium,
-              )
-              Spacer(modifier = Modifier.size(4.dp))
+                )
+              }
             }
           }
         }
       }
     }
   }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VoiceRowEntry(
+  label: String,
+  isSelected: Boolean,
+  indented: Boolean,
+  onClick: () -> Unit,
+) {
+  Text(
+    text = label,
+    modifier =
+      Modifier
+        .fillMaxWidth()
+        .clip(RoundedCornerShape(8.dp))
+        .background(
+          if (isSelected) {
+            MaterialTheme.colorScheme.secondaryContainer
+          } else {
+            MaterialTheme.colorScheme.surface
+          },
+        ).combinedClickable(
+          onClick = onClick,
+          onLongClick = {},
+        ).padding(
+          start = if (indented) 20.dp else 10.dp,
+          end = 10.dp,
+          top = 8.dp,
+          bottom = 8.dp,
+        ),
+    color =
+      if (isSelected) {
+        MaterialTheme.colorScheme.onSecondaryContainer
+      } else {
+        MaterialTheme.colorScheme.onSurface
+      },
+    style = MaterialTheme.typography.bodyMedium,
+  )
+  Spacer(modifier = Modifier.size(4.dp))
 }
 
 @Preview(

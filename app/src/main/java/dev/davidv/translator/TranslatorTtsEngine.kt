@@ -37,8 +37,14 @@ class TranslatorTtsService : TextToSpeechService() {
   @Volatile
   private var currentVoice: TranslatorTtsVoice? = null
 
-  override fun onGetVoices(): List<Voice> =
-    TranslatorTtsEngine.bootstrapVoices(this).map { ttsVoice ->
+  override fun onGetVoices(): List<Voice> {
+    val ttsVoices = TranslatorTtsEngine.systemTtsVoices(this)
+    Log.i(
+      "TranslatorTtsService",
+      "onGetVoices: returning ${ttsVoices.size} voices: " +
+        ttsVoices.joinToString { "${it.androidName}@${it.locale}" },
+    )
+    return ttsVoices.map { ttsVoice ->
       Voice(
         ttsVoice.androidName,
         ttsVoice.locale,
@@ -48,6 +54,7 @@ class TranslatorTtsService : TextToSpeechService() {
         setOf(TextToSpeech.Engine.KEY_FEATURE_EMBEDDED_SYNTHESIS),
       )
     }
+  }
 
   override fun onIsValidVoiceName(voiceName: String): Int =
     if (TranslatorTtsEngine.isBootstrapVoiceName(voiceName) || TranslatorTtsEngine.isCatalogVoiceName(voiceName)) {
@@ -338,6 +345,13 @@ object TranslatorTtsEngine {
     cachedInstalledLocales = null
   }
 
+  fun notifyVoiceDataChanged(context: Context) {
+    cachedInstalledLocales = null
+    context.applicationContext.sendBroadcast(
+      android.content.Intent(TextToSpeech.Engine.ACTION_TTS_DATA_INSTALLED),
+    )
+  }
+
   fun bootstrapVoices(context: Context): List<TranslatorTtsVoice> {
     val seenLanguages = mutableSetOf<String>()
     return installedTtsLocales(context).mapNotNull { locale ->
@@ -352,6 +366,35 @@ object TranslatorTtsEngine {
         quality = Voice.QUALITY_NORMAL,
       )
     }
+  }
+
+  fun systemTtsVoices(context: Context): List<TranslatorTtsVoice> {
+    val app = context.applicationContext as? TranslatorApplication ?: return emptyList()
+    val catalog = app.filePathManager.loadCatalog() ?: return emptyList()
+    val overrides = app.settingsManager.settings.value.ttsVoiceOverrides
+    val voices = mutableListOf<TranslatorTtsVoice>()
+    for (row in catalog.languageRows) {
+      if (!row.availability.ttsFiles) continue
+      val lang = row.language.code
+      val installedRegions = catalog.installedTtsVoicePickerRegions(lang)
+      val flat = installedRegions.flatMap { region -> region.voices.map { it to region.code } }
+      if (flat.isEmpty()) continue
+      val parsed = parseVoiceOverride(overrides[lang])
+      val overrideName = parsed?.voiceName
+      val (chosenPack, chosenRegion) =
+        flat.firstOrNull { (pack, _) -> pack.displayName == overrideName }
+          ?: flat.minByOrNull { (pack, _) -> pack.displayName }
+          ?: continue
+      voices +=
+        TranslatorTtsVoice(
+          androidName = androidVoiceName(lang, chosenPack.displayName),
+          languageCode = lang,
+          catalogVoiceName = chosenPack.displayName,
+          locale = localeFor(lang, chosenRegion),
+          quality = qualityFor(chosenPack.displayName),
+        )
+    }
+    return voices
   }
 
   fun loadVoices(catalog: LanguageCatalog?): List<TranslatorTtsVoice> {

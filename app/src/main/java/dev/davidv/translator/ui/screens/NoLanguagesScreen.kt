@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoLanguagesScreen(
+  settingsManager: dev.davidv.translator.SettingsManager,
   onDone: () -> Unit,
   onSettings: () -> Unit,
   languageStateManager: LanguageStateManager,
@@ -111,16 +112,21 @@ fun NoLanguagesScreen(
       val catalog by languageStateManager.catalog.collectAsState()
       val dictionaryDownloadStates by downloadService.dictionaryDownloadStates.collectAsState()
       val ttsDownloadStates by downloadService.ttsDownloadStates.collectAsState()
+      val activeTtsPackIds by downloadService.activeTtsPackIds.collectAsState()
+      val queuedTtsPackIds by downloadService.queuedTtsPackIds.collectAsState()
 
       LanguageAssetManagerScreen(
         context = context,
         languageStateManager = languageStateManager,
         languageMetadataManager = languageMetadataManager,
+        settingsManager = settingsManager,
         catalog = catalog,
         languageAvailabilityState = state,
         downloadStates = downloadStates,
         dictionaryDownloadStates = dictionaryDownloadStates,
         ttsDownloadStates = ttsDownloadStates,
+        activeTtsPackIds = activeTtsPackIds,
+        queuedTtsPackIds = queuedTtsPackIds,
       )
     }
   }
@@ -138,6 +144,7 @@ fun NoLanguagesScreenPreview() {
   val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow<List<Language>>(emptyList())
   TranslatorTheme {
     NoLanguagesScreen(
+      settingsManager = dev.davidv.translator.SettingsManager(context),
       onDone = {},
       onSettings = {},
       downloadService = downloadService,
