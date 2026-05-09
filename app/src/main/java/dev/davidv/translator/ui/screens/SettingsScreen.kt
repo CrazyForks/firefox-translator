@@ -234,6 +234,7 @@ fun SettingsScreen(
               text = "Language Packs",
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.weight(1f).padding(end = 8.dp),
             )
 
             TextButton(
@@ -779,6 +780,7 @@ fun SettingsScreen(
                 text = "Use external storage",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
               )
 
               Switch(
@@ -816,6 +818,7 @@ fun SettingsScreen(
                 text = "Show OCR detection",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
               )
 
               Switch(
@@ -836,6 +839,7 @@ fun SettingsScreen(
                 text = "Disable automatic language detection",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
               )
 
               Switch(
@@ -856,6 +860,7 @@ fun SettingsScreen(
                 text = "Show transliteration for output",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
               )
 
               Switch(
@@ -876,6 +881,7 @@ fun SettingsScreen(
                 text = "Show transliteration for input",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
               )
 
               Switch(
@@ -896,6 +902,7 @@ fun SettingsScreen(
                 text = "Add spaces for Japanese transliteration",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
               )
 
               Switch(
