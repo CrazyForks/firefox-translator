@@ -48,6 +48,10 @@ class TranslatorAccessibilityService : AccessibilityService() {
   private var ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT
   private var lastOcrBitmap: Bitmap? = null
   private var lastOcrRegion: Rect? = null
+  var lastOriginalText: String = ""
+    private set
+  var lastTranslatedText: String = ""
+    private set
   private lateinit var overlayTextTranslationHelper: OverlayTextTranslationHelper
   lateinit var langStateManager: LanguageStateManager
     private set
@@ -156,7 +160,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     ui.showBorderWave()
     android.os.Handler(android.os.Looper.getMainLooper()).post {
       if (active) {
-        handleTranslateVisible()
+        handleFullScreenOcr()
       }
     }
   }
@@ -230,7 +234,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     if (bitmap != null && region != null) {
       serviceScope.launch { translateRegionBitmap(bitmap, region) }
     } else {
-      handleTranslateVisible()
+      handleFullScreenOcr()
     }
   }
 
@@ -269,11 +273,28 @@ class TranslatorAccessibilityService : AccessibilityService() {
     withOptionalScreenshot { screenshot -> translateAndShowBlocks(fragments, screenshot) }
   }
 
-  fun handleRegionCapture(region: Rect) {
+  fun handleFullScreenOcr() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      handleTranslateVisible()
+      return
+    }
+    lastOcrBitmap = null
+    lastOcrRegion = null
+    ui.removeTranslationOverlays()
+    val dm = resources.displayMetrics
+    val region = Rect(0, 0, dm.widthPixels, dm.heightPixels)
+    handleRegionCapture(region, isFullScreen = true)
+  }
+
+  fun handleRegionCapture(
+    region: Rect,
+    isFullScreen: Boolean = false,
+  ) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
     ui.setOcrButtonActive(false)
+    ui.removeTranslationOverlays()
 
-    val sourceLang = forcedSourceLanguage
+    val sourceLang = ocrSourceLanguage()
     if (sourceLang == null) {
       ui.setOcrButtonVisible(true)
       ui.showOverlayMessage("Set source language first")
@@ -311,8 +332,10 @@ class TranslatorAccessibilityService : AccessibilityService() {
             val colors = input.sampleColorsFromScreenshot(fullBitmap, region)
             fullBitmap.recycle()
 
-            lastOcrBitmap = croppedBitmap
-            lastOcrRegion = region
+            if (!isFullScreen) {
+              lastOcrBitmap = croppedBitmap
+              lastOcrRegion = region
+            }
 
             ui.showLoadingOverlay(region, colors)
 
@@ -336,7 +359,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     bitmap: Bitmap,
     region: Rect,
   ) {
-    val sourceLang = forcedSourceLanguage ?: return
+    val sourceLang = ocrSourceLanguage() ?: return
     val targetLang = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
 
     val result =
@@ -351,6 +374,8 @@ class TranslatorAccessibilityService : AccessibilityService() {
       }
 
     if (result != null) {
+      lastOriginalText = result.extractedText
+      lastTranslatedText = result.translatedText
       ui.removeTranslationOverlays()
       ui.setOcrButtonVisible(true)
       ui.showBitmapOverlay(result.correctedBitmap, region)
@@ -359,6 +384,11 @@ class TranslatorAccessibilityService : AccessibilityService() {
       ui.setOcrButtonVisible(true)
     }
   }
+
+  private fun ocrSourceLanguage(): Language? =
+    forcedSourceLanguage ?: settingsManager.settings.value.defaultSourceLanguageCode?.let {
+      langStateManager.languageByCode(it)
+    }
 
   private fun currentReadingOrderFor(language: Language?): ReadingOrder =
     if (language?.code == "ja") {
@@ -440,6 +470,8 @@ class TranslatorAccessibilityService : AccessibilityService() {
           )
       ) {
         is StructuredFragmentTranslationOutput.Success -> {
+          lastOriginalText = fragments.joinToString("\n") { it.text }
+          lastTranslatedText = result.blocks.joinToString("\n") { it.text }
           ui.removeTranslationOverlays()
           ui.setOcrButtonVisible(true)
           ui.setOcrButtonActive(false)

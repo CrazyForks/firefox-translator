@@ -51,6 +51,8 @@ class OverlayUI(
   private var readingOrderIconView: ImageView? = null
   private var ocrButtonView: View? = null
   private var ocrIconView: ImageView? = null
+  private var wandButtonView: View? = null
+  private var wandIconView: ImageView? = null
   private val translationOverlays = mutableListOf<View>()
   private var borderView: BorderWaveView? = null
 
@@ -218,6 +220,9 @@ class OverlayUI(
         onReadingOrderClick = { service.toggleJapaneseOcrMode() },
         showOcrButton = true,
         onOcrClick = { service.startManualOcrSelection() },
+        onOcrLongClick = { service.handleFullScreenOcr() },
+        showWandButton = true,
+        onWandClick = { service.handleTranslateVisible() },
         onMenuClick = { service.showDotsMenu() },
         isAutoSource = isAutoSource,
       )
@@ -228,6 +233,8 @@ class OverlayUI(
     readingOrderIconView = toolbarViews.readingOrderIcon
     ocrButtonView = toolbarViews.ocrButton
     ocrIconView = toolbarViews.ocrIcon
+    wandButtonView = toolbarViews.wandButton
+    wandIconView = toolbarViews.wandIcon
 
     val params =
       WindowManager.LayoutParams(
@@ -255,6 +262,8 @@ class OverlayUI(
       readingOrderIconView = null
       ocrButtonView = null
       ocrIconView = null
+      wandButtonView = null
+      wandIconView = null
     }
   }
 
@@ -289,6 +298,12 @@ class OverlayUI(
   fun showDotsMenu() {
     menuManager.showDotsMenu(
       listOf(
+        "Copy original text" to {
+          copyToClipboard("Original text", service.lastOriginalText)
+        },
+        "Copy translated text" to {
+          copyToClipboard("Translated text", service.lastTranslatedText)
+        },
         "Open App" to {
           service.deactivate()
           val intent = Intent(service, MainActivity::class.java)
@@ -301,6 +316,19 @@ class OverlayUI(
         },
       ),
     )
+  }
+
+  private fun copyToClipboard(
+    label: String,
+    text: String,
+  ) {
+    if (text.isBlank()) {
+      showOverlayMessage("Nothing to copy yet")
+      return
+    }
+    val clipboard = service.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
+    showOverlayMessage("Copied $label")
   }
 
   fun showLanguagePicker(

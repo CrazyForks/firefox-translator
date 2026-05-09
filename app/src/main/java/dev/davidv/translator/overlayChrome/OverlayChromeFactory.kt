@@ -24,6 +24,8 @@ data class LanguageToolbarViews(
   val readingOrderIcon: ImageView? = null,
   val ocrButton: View? = null,
   val ocrIcon: ImageView? = null,
+  val wandButton: View? = null,
+  val wandIcon: ImageView? = null,
 )
 
 object OverlayChromeFactory {
@@ -54,6 +56,9 @@ object OverlayChromeFactory {
     onReadingOrderClick: (() -> Unit)? = null,
     showOcrButton: Boolean = false,
     onOcrClick: (() -> Unit)? = null,
+    onOcrLongClick: (() -> Unit)? = null,
+    showWandButton: Boolean = false,
+    onWandClick: (() -> Unit)? = null,
     onMenuClick: () -> Unit,
     isAutoSource: Boolean = false,
   ): LanguageToolbarViews {
@@ -151,6 +156,28 @@ object OverlayChromeFactory {
         gravity = Gravity.CENTER_VERTICAL
       }
 
+    var wandIcon: ImageView? = null
+    val wandPill =
+      onWandClick?.let {
+        val wandBtn =
+          ImageView(context).apply {
+            setImageResource(R.drawable.auto_awesome)
+            setColorFilter(Color.WHITE)
+            setPadding(iconPad, iconPad, iconPad, iconPad)
+            setOnClickListener { onWandClick() }
+          }
+        wandIcon = wandBtn
+        makePill(context, dpToPx, wandBtn).also { pill ->
+          pill.visibility = if (showWandButton) View.VISIBLE else View.GONE
+          rightActions.addView(
+            pill,
+            LinearLayout.LayoutParams(btnSize, btnSize).apply {
+              marginEnd = dpToPx(6)
+            },
+          )
+        }
+      }
+
     var ocrIcon: ImageView? = null
     val ocrPill =
       onOcrClick?.let {
@@ -160,6 +187,12 @@ object OverlayChromeFactory {
             setColorFilter(Color.WHITE)
             setPadding(iconPad, iconPad, iconPad, iconPad)
             setOnClickListener { onOcrClick() }
+            if (onOcrLongClick != null) {
+              setOnLongClickListener {
+                onOcrLongClick()
+                true
+              }
+            }
           }
         ocrIcon = ocrBtn
         makePill(context, dpToPx, ocrBtn).also { pill ->
@@ -186,7 +219,17 @@ object OverlayChromeFactory {
       },
     )
 
-    return LanguageToolbarViews(toolbar, sourceLabel, targetLabel, readingOrderPill, readingOrderIcon, ocrPill, ocrIcon)
+    return LanguageToolbarViews(
+      root = toolbar,
+      sourceLabel = sourceLabel,
+      targetLabel = targetLabel,
+      readingOrderButton = readingOrderPill,
+      readingOrderIcon = readingOrderIcon,
+      ocrButton = ocrPill,
+      ocrIcon = ocrIcon,
+      wandButton = wandPill,
+      wandIcon = wandIcon,
+    )
   }
 
   fun updateReadingOrderButtonState(
@@ -213,6 +256,16 @@ object OverlayChromeFactory {
     if (ocrButton != null && !active) {
       ocrButton.alpha = 1f
     }
+  }
+
+  fun setWandButtonEnabled(
+    wandButton: View?,
+    wandIcon: ImageView?,
+    enabled: Boolean,
+  ) {
+    wandButton?.isEnabled = enabled
+    wandButton?.alpha = if (enabled) 1f else 0.35f
+    wandIcon?.isEnabled = enabled
   }
 
   fun createLanguagePicker(
