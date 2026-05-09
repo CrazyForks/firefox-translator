@@ -53,6 +53,22 @@
     });
   }
 
+  const rawPending = new Map();
+  let nextRawId = 1;
+
+  function sendRaw(method, payload) {
+    return new Promise((resolve, reject) => {
+      const id = nextRawId++;
+      rawPending.set(id, { resolve, reject });
+      try {
+        bridge[method](id, payload, bridgeToken, nonce);
+      } catch (e) {
+        rawPending.delete(id);
+        reject(e);
+      }
+    });
+  }
+
   const BLOCK_TAGS = new Set([
     'P', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
     'TD', 'TH', 'FIGCAPTION', 'DT', 'DD', 'BLOCKQUOTE',
@@ -306,6 +322,12 @@
       entry.reject(err);
     }
     pending.clear();
+    for (const entry of rawPending.values()) {
+      const err = new Error('translation reset');
+      err.name = 'TranslatorReset';
+      entry.reject(err);
+    }
+    rawPending.clear();
     pauseObserver();
     try {
       queued.clear();
@@ -591,9 +613,71 @@
     }
   }
 
+  let lastTouchedImg = null;
+
+  function trackTouchedImg(target) {
+    if (!target || !target.closest) return;
+    const img = target.closest('img');
+    if (img) lastTouchedImg = img;
+  }
+
+  document.addEventListener('touchstart', (e) => trackTouchedImg(e.target), { capture: true, passive: true });
+  document.addEventListener('mousedown', (e) => trackTouchedImg(e.target), { capture: true, passive: true });
+
+  async function translateTouchedImage() {
+    const img = lastTouchedImg;
+    console.log('[translator] translateTouchedImage img=', img && img.src);
+    if (!img || !img.isConnected) {
+      console.warn('[translator] no touched image');
+      return false;
+    }
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) {
+      console.warn('[translator] image has no natural dimensions');
+      return false;
+    }
+    let dataUri;
+    try {
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0);
+      dataUri = c.toDataURL('image/jpeg', 0.92);
+    } catch (e) {
+      console.warn('[translator] image canvas tainted, cannot translate cross-origin image', e);
+      return false;
+    }
+    console.log('[translator] sending image dataUri len=', dataUri.length);
+    let translated;
+    try {
+      translated = await sendRaw('translateImage', dataUri);
+    } catch (e) {
+      if (isResetError(e)) return false;
+      console.warn('[translator] image translate failed', e);
+      return false;
+    }
+    console.log('[translator] image translate result len=', translated && translated.length);
+    if (!translated || !img.isConnected) return false;
+    pauseObserver();
+    try {
+      if (img.hasAttribute('srcset')) img.removeAttribute('srcset');
+      const picture = img.parentElement && img.parentElement.tagName === 'PICTURE' ? img.parentElement : null;
+      if (picture) {
+        for (const s of picture.querySelectorAll('source')) s.remove();
+      }
+      img.src = translated;
+      img.setAttribute('data-img-xlated', '1');
+    } finally {
+      resumeObserver();
+    }
+    return true;
+  }
+
   window.__translator = {
     reset: resetTranslations,
     cloneDocumentWithSource,
+    translateTouchedImage,
     resolve(id, results, callerNonce) {
       if (callerNonce !== nonce) return;
       const entry = pending.get(id);
@@ -602,6 +686,13 @@
       const parsed =
         typeof results === 'string' ? (decodeWire(results) || []) : results;
       entry.resolve(parsed);
+    },
+    resolveRaw(id, result, callerNonce) {
+      if (callerNonce !== nonce) return;
+      const entry = rawPending.get(id);
+      if (!entry) return;
+      rawPending.delete(id);
+      entry.resolve(result);
     },
   };
 

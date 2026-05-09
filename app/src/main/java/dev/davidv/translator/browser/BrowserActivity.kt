@@ -23,8 +23,11 @@ import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
 import android.view.ContextThemeWrapper
+import android.view.MotionEvent
 import android.view.ViewGroup
+import android.webkit.ConsoleMessage
 import android.webkit.CookieManager
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebStorage
@@ -38,6 +41,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +50,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,12 +66,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Popup
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.davidv.translator.Language
 import dev.davidv.translator.R
+import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
 import dev.davidv.translator.TranslatorApplication
 import dev.davidv.translator.adblock.AdblockManager
@@ -135,6 +143,7 @@ class BrowserActivity : ComponentActivity() {
             readerModeScript = readerModeScript,
             adblockCosmeticScript = adblockCosmeticScript,
             translationService = app.translationService,
+            translationCoordinator = app.translationCoordinator,
             adblockManager = app.adblockManager,
             onFinish = { finish() },
           )
@@ -174,6 +183,7 @@ private fun BrowserScreen(
   readerModeScript: String,
   adblockCosmeticScript: String,
   translationService: TranslationService,
+  translationCoordinator: TranslationCoordinator,
   adblockManager: AdblockManager,
   onFinish: () -> Unit,
 ) {
@@ -223,6 +233,7 @@ private fun BrowserScreen(
       contentScript = contentScript,
       adblockCosmeticScript = adblockCosmeticScript,
       translationService = translationService,
+      translationCoordinator = translationCoordinator,
       adblockManager = adblockManager,
       clearDataOnClose = settings.clearWebTranslatorDataOnClose,
       darkTheme = darkTheme,
@@ -308,6 +319,7 @@ private fun BrowserWebView(
   contentScript: String,
   adblockCosmeticScript: String,
   translationService: TranslationService,
+  translationCoordinator: TranslationCoordinator,
   adblockManager: AdblockManager,
   clearDataOnClose: Boolean,
   darkTheme: Boolean,
@@ -325,6 +337,8 @@ private fun BrowserWebView(
   val translatorBridgeName = remember { "__translatorBridge_${bridgeToken.filter { it != '-' }}" }
   val adblockBridgeName = remember { "__adblockBridge_${bridgeToken.filter { it != '-' }}" }
   val clearDataOnCloseState = rememberUpdatedState(clearDataOnClose)
+  val touchCoords = remember { intArrayOf(0, 0) }
+  var imageMenuOffset by remember { mutableStateOf<IntOffset?>(null) }
 
   DisposableEffect(Unit) {
     onDispose {
@@ -351,138 +365,201 @@ private fun BrowserWebView(
     )
   }
 
-  key(darkTheme) {
-    AndroidView(
-      modifier = Modifier.fillMaxSize(),
-      factory = { ctx ->
-        val webViewContext =
-          ContextThemeWrapper(
-            ctx,
-            if (darkTheme) {
-              R.style.Theme_Translator_WebView_Dark
+  Box(modifier = Modifier.fillMaxSize()) {
+    key(darkTheme) {
+      AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+          val webViewContext =
+            ContextThemeWrapper(
+              ctx,
+              if (darkTheme) {
+                R.style.Theme_Translator_WebView_Dark
+              } else {
+                R.style.Theme_Translator_WebView_Light
+              },
+            )
+          val webView =
+            WebView(webViewContext).apply {
+              layoutParams =
+                ViewGroup.LayoutParams(
+                  ViewGroup.LayoutParams.MATCH_PARENT,
+                  ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+              settings.javaScriptEnabled = true
+              settings.domStorageEnabled = true
+            }
+
+          webView.webChromeClient =
+            object : WebChromeClient() {
+              override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                Log.i(
+                  "BrowserConsole",
+                  "[${message.messageLevel()}] ${message.message()} (${message.sourceId()}:${message.lineNumber()})",
+                )
+                return true
+              }
+            }
+
+          webView.setOnScrollChangeListener { _, _, y, _, oldY ->
+            onScrollDelta(y, y - oldY)
+          }
+
+          webView.setOnTouchListener { _, event ->
+            if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+              touchCoords[0] = event.x.toInt()
+              touchCoords[1] = event.y.toInt()
+            }
+            false
+          }
+
+          webView.setOnLongClickListener {
+            val r = webView.hitTestResult
+            val isImage =
+              r.type == WebView.HitTestResult.IMAGE_TYPE ||
+                r.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE
+            if (isImage) {
+              imageMenuOffset = IntOffset(touchCoords[0], touchCoords[1])
+              true
             } else {
-              R.style.Theme_Translator_WebView_Light
-            },
-          )
-        val webView =
-          WebView(webViewContext).apply {
-            layoutParams =
-              ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT,
-              )
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
+              false
+            }
           }
 
-        webView.setOnScrollChangeListener { _, _, y, _, oldY ->
-          onScrollDelta(y, y - oldY)
-        }
+          val bridge =
+            TranslatorJsBridge(
+              scope = scope,
+              webView = webView,
+              translationService = translationService,
+              translationCoordinator = translationCoordinator,
+              bridgeToken = bridgeToken,
+              sourceLanguage = sourceLang,
+              targetLanguage = targetLang,
+            )
+          bridgeRef[0] = bridge
+          webViewRef[0] = webView
+          webView.addJavascriptInterface(bridge, translatorBridgeName)
+          webView.addJavascriptInterface(AdblockJsBridge(adblockManager, bridgeToken), adblockBridgeName)
 
-        val bridge =
-          TranslatorJsBridge(
-            scope = scope,
-            webView = webView,
-            translationService = translationService,
-            bridgeToken = bridgeToken,
-            sourceLanguage = sourceLang,
-            targetLanguage = targetLang,
-          )
-        bridgeRef[0] = bridge
-        webViewRef[0] = webView
-        webView.addJavascriptInterface(bridge, translatorBridgeName)
-        webView.addJavascriptInterface(AdblockJsBridge(adblockManager, bridgeToken), adblockBridgeName)
-
-        webView.webViewClient =
-          object : WebViewClient() {
-            override fun onPageStarted(
-              view: WebView?,
-              url: String?,
-              favicon: Bitmap?,
-            ) {
-              Log.i("AdblockManager", "onPageStarted view=$view url=$url")
-              readerController.onPageStarted()
-              currentPageUrlRef.set(url)
-              val pageSerial = currentPageSerialRef.incrementAndGet()
-              // Inject the translator content script as early as possible.
-              // The script self-defers its DOM scan until DOMContentLoaded
-              view?.evaluateJavascript(
-                buildTranslatorContentJs(contentScript, translatorBridgeName, bridgeToken),
-                null,
-              )
-              if (view != null && url != null) {
-                applyCosmeticFiltersAsync(
-                  scope,
-                  view,
-                  adblockManager,
-                  url,
-                  pageSerial,
-                  currentPageSerialRef,
-                  adblockBridgeName,
-                  bridgeToken,
-                  adblockCosmeticScript,
+          webView.webViewClient =
+            object : WebViewClient() {
+              override fun onPageStarted(
+                view: WebView?,
+                url: String?,
+                favicon: Bitmap?,
+              ) {
+                Log.i("AdblockManager", "onPageStarted view=$view url=$url")
+                readerController.onPageStarted()
+                currentPageUrlRef.set(url)
+                val pageSerial = currentPageSerialRef.incrementAndGet()
+                // Inject the translator content script as early as possible.
+                // The script self-defers its DOM scan until DOMContentLoaded
+                view?.evaluateJavascript(
+                  buildTranslatorContentJs(contentScript, translatorBridgeName, bridgeToken),
+                  null,
                 )
+                if (view != null && url != null) {
+                  applyCosmeticFiltersAsync(
+                    scope,
+                    view,
+                    adblockManager,
+                    url,
+                    pageSerial,
+                    currentPageSerialRef,
+                    adblockBridgeName,
+                    bridgeToken,
+                    adblockCosmeticScript,
+                  )
+                }
+              }
+
+              override fun onPageFinished(
+                view: WebView?,
+                url: String?,
+              ) {
+                val pageSerial = currentPageSerialRef.get()
+                if (view != null && url != null) {
+                  applyCosmeticFiltersAsync(
+                    scope,
+                    view,
+                    adblockManager,
+                    url,
+                    pageSerial,
+                    currentPageSerialRef,
+                    adblockBridgeName,
+                    bridgeToken,
+                    adblockCosmeticScript,
+                  )
+                }
+                if (view != null) readerController.probeOnPageFinished(view)
+              }
+
+              override fun shouldInterceptRequest(
+                view: WebView?,
+                request: WebResourceRequest?,
+              ): WebResourceResponse? {
+                if (request == null) return null
+                val topUrl = currentPageUrlRef.get() ?: return null
+                val sourceUrl =
+                  if (request.isForMainFrame) topUrl else refererOf(request) ?: topUrl
+                val verdict =
+                  adblockManager.checkRequest(
+                    url = request.url.toString(),
+                    sourceUrl = sourceUrl,
+                    requestType = mapRequestType(request),
+                  ) ?: return null
+                if (!verdict.matched || verdict.exception) return null
+                return WebResourceResponse("text/plain", "utf-8", ByteArray(0).inputStream())
               }
             }
 
-            override fun onPageFinished(
-              view: WebView?,
-              url: String?,
-            ) {
-              val pageSerial = currentPageSerialRef.get()
-              if (view != null && url != null) {
-                applyCosmeticFiltersAsync(
-                  scope,
-                  view,
-                  adblockManager,
-                  url,
-                  pageSerial,
-                  currentPageSerialRef,
-                  adblockBridgeName,
-                  bridgeToken,
-                  adblockCosmeticScript,
-                )
-              }
-              if (view != null) readerController.probeOnPageFinished(view)
-            }
-
-            override fun shouldInterceptRequest(
-              view: WebView?,
-              request: WebResourceRequest?,
-            ): WebResourceResponse? {
-              if (request == null) return null
-              val topUrl = currentPageUrlRef.get() ?: return null
-              val sourceUrl =
-                if (request.isForMainFrame) topUrl else refererOf(request) ?: topUrl
-              val verdict =
-                adblockManager.checkRequest(
-                  url = request.url.toString(),
-                  sourceUrl = sourceUrl,
-                  requestType = mapRequestType(request),
-                ) ?: return null
-              if (!verdict.matched || verdict.exception) return null
-              return WebResourceResponse("text/plain", "utf-8", ByteArray(0).inputStream())
+          onWebViewReady(webView)
+          webView.loadUrl(url)
+          webView
+        },
+        update = { webView ->
+          val b = bridgeRef[0] ?: return@AndroidView
+          val langsChanged = b.sourceLanguage != sourceLang || b.targetLanguage != targetLang
+          b.sourceLanguage = sourceLang
+          b.targetLanguage = targetLang
+          if (langsChanged) {
+            webView.evaluateJavascript(
+              "window.__translator && window.__translator.reset && window.__translator.reset();",
+            ) { result ->
+              if (result != "true") webView.reload()
             }
           }
+        },
+      )
+    }
 
-        onWebViewReady(webView)
-        webView.loadUrl(url)
-        webView
-      },
-      update = { webView ->
-        val b = bridgeRef[0] ?: return@AndroidView
-        val langsChanged = b.sourceLanguage != sourceLang || b.targetLanguage != targetLang
-        b.sourceLanguage = sourceLang
-        b.targetLanguage = targetLang
-        if (langsChanged) {
-          webView.evaluateJavascript(
-            "window.__translator && window.__translator.reset && window.__translator.reset();",
-          ) { result ->
-            if (result != "true") webView.reload()
-          }
+    imageMenuOffset?.let { offset ->
+      Popup(
+        offset = offset,
+        onDismissRequest = { imageMenuOffset = null },
+      ) {
+        Surface(
+          color = MaterialTheme.colorScheme.surface,
+          shape = RoundedCornerShape(8.dp),
+          tonalElevation = 4.dp,
+          shadowElevation = 8.dp,
+        ) {
+          Text(
+            text = "Translate image",
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier =
+              Modifier
+                .clickable {
+                  webViewRef[0]?.evaluateJavascript(
+                    "window.__translator && window.__translator.translateTouchedImage && window.__translator.translateTouchedImage();",
+                    null,
+                  )
+                  imageMenuOffset = null
+                }.padding(horizontal = 16.dp, vertical = 12.dp),
+          )
         }
-      },
-    )
+      }
+    }
   }
 }
 
