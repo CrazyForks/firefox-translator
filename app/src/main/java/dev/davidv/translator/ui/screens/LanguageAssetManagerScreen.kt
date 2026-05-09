@@ -19,7 +19,6 @@ package dev.davidv.translator.ui.screens
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -33,7 +32,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -59,7 +57,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -674,158 +671,149 @@ fun LanguageAssetManagerScreen(
         }.toMap()
     }
 
-  Scaffold(
+  PullToRefreshBox(
+    isRefreshing = isRefreshing,
+    onRefresh = {
+      isRefreshing = true
+      DownloadService.fetchCatalog(context)
+    },
     modifier =
       Modifier
         .fillMaxSize()
         .imePadding(),
-    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-  ) { scaffoldPaddingValues ->
-    PullToRefreshBox(
-      isRefreshing = isRefreshing,
-      onRefresh = {
-        isRefreshing = true
-        DownloadService.fetchCatalog(context)
-      },
+  ) {
+    Column(
       modifier =
         Modifier
           .fillMaxSize()
-          .padding(scaffoldPaddingValues),
+          .padding(horizontal = 12.dp),
     ) {
-      Column(
+      OutlinedTextField(
+        value = filterQuery,
+        onValueChange = { filterQuery = it },
         modifier =
           Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp),
+            .fillMaxWidth()
+            .padding(top = 2.dp, bottom = 6.dp),
+        singleLine = true,
+        label = { Text("Filter languages") },
+      )
+
+      LazyColumn(
+        modifier = Modifier.fillMaxSize(),
       ) {
-        OutlinedTextField(
-          value = filterQuery,
-          onValueChange = { filterQuery = it },
-          modifier =
-            Modifier
-              .fillMaxWidth()
-              .padding(top = 2.dp, bottom = 6.dp),
-          singleLine = true,
-          label = { Text("Filter languages") },
-        )
-
-        LazyColumn(
-          modifier = Modifier.fillMaxSize(),
-        ) {
-          itemsIndexed(rows, key = { _, row -> row.language.code }) { index, row ->
-            val expanded = expandedLanguages[row.language.code] == true
-            val sharedDictionaryUsers = sharedDictionaryUsersByLanguageCode[row.language.code].orEmpty()
-            LanguageAssetCard(
-              row = row,
-              zebra = index % 2 == 1,
-              expanded = expanded,
-              isFavorite = languageMetadata[row.language]?.favorite ?: false,
-              translationDownloadState = downloadStates[row.language],
-              dictionaryDownloadState = dictionaryDownloadStates[row.language],
-              ttsDownloadState = ttsDownloadStates[row.language],
-              onToggleExpanded = {
-                expandedLanguages[row.language.code] = !expanded
-              },
-              onFavorite = { event ->
-                when (event) {
-                  is FavoriteEvent.Star -> {
-                    val current = languageMetadata[event.language] ?: LanguageMetadata()
-                    languageMetadataManager.updateLanguage(event.language, current.copy(favorite = true))
-                  }
-
-                  is FavoriteEvent.Unstar -> {
-                    val current = languageMetadata[event.language] ?: LanguageMetadata()
-                    languageMetadataManager.updateLanguage(event.language, current.copy(favorite = false))
-                  }
+        itemsIndexed(rows, key = { _, row -> row.language.code }) { index, row ->
+          val expanded = expandedLanguages[row.language.code] == true
+          val sharedDictionaryUsers = sharedDictionaryUsersByLanguageCode[row.language.code].orEmpty()
+          LanguageAssetCard(
+            row = row,
+            zebra = index % 2 == 1,
+            expanded = expanded,
+            isFavorite = languageMetadata[row.language]?.favorite ?: false,
+            translationDownloadState = downloadStates[row.language],
+            dictionaryDownloadState = dictionaryDownloadStates[row.language],
+            ttsDownloadState = ttsDownloadStates[row.language],
+            onToggleExpanded = {
+              expandedLanguages[row.language.code] = !expanded
+            },
+            onFavorite = { event ->
+              when (event) {
+                is FavoriteEvent.Star -> {
+                  val current = languageMetadata[event.language] ?: LanguageMetadata()
+                  languageMetadataManager.updateLanguage(event.language, current.copy(favorite = true))
                 }
-              },
-              onDownloadTranslation = {
+
+                is FavoriteEvent.Unstar -> {
+                  val current = languageMetadata[event.language] ?: LanguageMetadata()
+                  languageMetadataManager.updateLanguage(event.language, current.copy(favorite = false))
+                }
+              }
+            },
+            onDownloadTranslation = {
+              DownloadService.startDownload(context, row.language)
+            },
+            onDeleteTranslation = {
+              languageStateManager.deleteLanguage(row.language)
+            },
+            onCancelTranslation = {
+              DownloadService.cancelDownload(context, row.language)
+            },
+            onDownloadDictionary = {
+              DownloadService.startDictDownload(context, row.language, row.dictionaryInfo)
+            },
+            onDeleteDictionary = {
+              if (sharedDictionaryUsers.isNotEmpty()) {
+                pendingSharedDictionaryDelete =
+                  PendingSharedDictionaryDelete(
+                    language = row.language,
+                    sharedWith = sharedDictionaryUsers,
+                    deleteLanguage = false,
+                    deleteTts = false,
+                  )
+              } else {
+                languageStateManager.deleteDict(row.language)
+              }
+            },
+            onCancelDictionary = {
+              DownloadService.cancelDictDownload(context, row.language)
+            },
+            onDownloadTts = {
+              pendingTtsVoicePicker = PendingTtsVoicePicker(row.language)
+            },
+            onDeleteTts = {
+              languageStateManager.deleteTts(row.language)
+            },
+            onCancelTts = {
+              DownloadService.cancelTtsDownload(context, row.language)
+            },
+            onDownloadAll = {
+              if (row.translationVisible && !row.translationInstalled) {
                 DownloadService.startDownload(context, row.language)
-              },
-              onDeleteTranslation = {
-                languageStateManager.deleteLanguage(row.language)
-              },
-              onCancelTranslation = {
-                DownloadService.cancelDownload(context, row.language)
-              },
-              onDownloadDictionary = {
+              }
+              if (row.dictionaryVisible && !row.dictionaryInstalled) {
                 DownloadService.startDictDownload(context, row.language, row.dictionaryInfo)
-              },
-              onDeleteDictionary = {
-                if (sharedDictionaryUsers.isNotEmpty()) {
-                  pendingSharedDictionaryDelete =
-                    PendingSharedDictionaryDelete(
-                      language = row.language,
-                      sharedWith = sharedDictionaryUsers,
-                      deleteLanguage = false,
-                      deleteTts = false,
-                    )
-                } else {
+              }
+              if (row.ttsVisible && !row.ttsInstalled) {
+                DownloadService.startTtsDownload(context, row.language)
+              }
+            },
+            onDeleteAll = {
+              if (row.dictionaryInstalled && sharedDictionaryUsers.isNotEmpty()) {
+                pendingSharedDictionaryDelete =
+                  PendingSharedDictionaryDelete(
+                    language = row.language,
+                    sharedWith = sharedDictionaryUsers,
+                    deleteLanguage = row.translationInstalled,
+                    deleteTts = row.ttsInstalled,
+                  )
+              } else {
+                if (row.translationInstalled) {
+                  languageStateManager.deleteLanguage(row.language)
+                }
+                if (row.ttsInstalled) {
+                  languageStateManager.deleteTts(row.language)
+                }
+                if (row.dictionaryInstalled) {
                   languageStateManager.deleteDict(row.language)
                 }
-              },
-              onCancelDictionary = {
+              }
+            },
+            onCancelAll = {
+              if (downloadStates[row.language]?.isDownloading == true) {
+                DownloadService.cancelDownload(context, row.language)
+              }
+              if (dictionaryDownloadStates[row.language]?.isDownloading == true) {
                 DownloadService.cancelDictDownload(context, row.language)
-              },
-              onDownloadTts = {
-                pendingTtsVoicePicker = PendingTtsVoicePicker(row.language)
-              },
-              onDeleteTts = {
-                languageStateManager.deleteTts(row.language)
-              },
-              onCancelTts = {
+              }
+              if (ttsDownloadStates[row.language]?.isDownloading == true) {
                 DownloadService.cancelTtsDownload(context, row.language)
-              },
-              onDownloadAll = {
-                if (row.translationVisible && !row.translationInstalled) {
-                  DownloadService.startDownload(context, row.language)
-                }
-                if (row.dictionaryVisible && !row.dictionaryInstalled) {
-                  DownloadService.startDictDownload(context, row.language, row.dictionaryInfo)
-                }
-                if (row.ttsVisible && !row.ttsInstalled) {
-                  DownloadService.startTtsDownload(context, row.language)
-                }
-              },
-              onDeleteAll = {
-                if (row.dictionaryInstalled && sharedDictionaryUsers.isNotEmpty()) {
-                  pendingSharedDictionaryDelete =
-                    PendingSharedDictionaryDelete(
-                      language = row.language,
-                      sharedWith = sharedDictionaryUsers,
-                      deleteLanguage = row.translationInstalled,
-                      deleteTts = row.ttsInstalled,
-                    )
-                } else {
-                  if (row.translationInstalled) {
-                    languageStateManager.deleteLanguage(row.language)
-                  }
-                  if (row.ttsInstalled) {
-                    languageStateManager.deleteTts(row.language)
-                  }
-                  if (row.dictionaryInstalled) {
-                    languageStateManager.deleteDict(row.language)
-                  }
-                }
-              },
-              onCancelAll = {
-                if (downloadStates[row.language]?.isDownloading == true) {
-                  DownloadService.cancelDownload(context, row.language)
-                }
-                if (dictionaryDownloadStates[row.language]?.isDownloading == true) {
-                  DownloadService.cancelDictDownload(context, row.language)
-                }
-                if (ttsDownloadStates[row.language]?.isDownloading == true) {
-                  DownloadService.cancelTtsDownload(context, row.language)
-                }
-              },
-            )
-          }
+              }
+            },
+          )
         }
       }
     }
   }
-
   pendingSharedDictionaryDelete?.let { pendingDelete ->
     val sharedNames = pendingDelete.sharedWith.joinToString(", ") { it.displayName }
     AlertDialog(
@@ -902,22 +890,6 @@ private fun LanguageAssetCard(
   onDeleteAll: () -> Unit,
   onCancelAll: () -> Unit,
 ) {
-  val featureRows =
-    buildFeatureRows(
-      row = row,
-      translationDownloadState = translationDownloadState,
-      dictionaryDownloadState = dictionaryDownloadState,
-      ttsDownloadState = ttsDownloadState,
-      onDownloadTranslation = onDownloadTranslation,
-      onDeleteTranslation = onDeleteTranslation,
-      onCancelTranslation = onCancelTranslation,
-      onDownloadDictionary = onDownloadDictionary,
-      onDeleteDictionary = onDeleteDictionary,
-      onCancelDictionary = onCancelDictionary,
-      onDownloadTts = onDownloadTts,
-      onDeleteTts = onDeleteTts,
-      onCancelTts = onCancelTts,
-    )
   val totalVisibleSize =
     (if (row.translationVisible) row.translationSizeBytes else 0L) +
       (if (row.dictionaryVisible) row.dictionaryInfo?.size ?: 0L else 0L) +
@@ -946,7 +918,6 @@ private fun LanguageAssetCard(
             Color.Transparent
           },
         )
-        .animateContentSize(animationSpec = tween(durationMillis = ROW_EXPAND_ANIMATION_MS))
         .padding(vertical = 1.dp),
   ) {
     Row(
@@ -1030,6 +1001,22 @@ private fun LanguageAssetCard(
             .fillMaxWidth()
             .padding(start = 28.dp, end = 0.dp, bottom = 1.dp),
       ) {
+        val featureRows =
+          buildFeatureRows(
+            row = row,
+            translationDownloadState = translationDownloadState,
+            dictionaryDownloadState = dictionaryDownloadState,
+            ttsDownloadState = ttsDownloadState,
+            onDownloadTranslation = onDownloadTranslation,
+            onDeleteTranslation = onDeleteTranslation,
+            onCancelTranslation = onCancelTranslation,
+            onDownloadDictionary = onDownloadDictionary,
+            onDeleteDictionary = onDeleteDictionary,
+            onCancelDictionary = onCancelDictionary,
+            onDownloadTts = onDownloadTts,
+            onDeleteTts = onDeleteTts,
+            onCancelTts = onCancelTts,
+          )
         featureRows.forEach { featureRow ->
           FeatureRow(featureRow)
         }
