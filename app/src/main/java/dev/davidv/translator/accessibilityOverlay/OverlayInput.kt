@@ -1,6 +1,5 @@
 package dev.davidv.translator.accessibilityOverlay
 
-import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -10,12 +9,10 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityNodeInfo
-import dev.davidv.translator.OverlayColors
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.StyledFragment
 import dev.davidv.translator.areEquivalentFragmentTexts
 import dev.davidv.translator.bounds
-import dev.davidv.translator.getOverlayColors
 import dev.davidv.translator.makeStyledFragment
 import dev.davidv.translator.Rect as TranslatorRect
 
@@ -424,15 +421,6 @@ class OverlayInput(
         clusterGroup = if (fragment.recyclerViewItemId >= 0) fragment.recyclerViewItemId + 1 else 0,
       )
     }
-  }
-
-  fun sampleColorsFromScreenshot(
-    bitmap: Bitmap,
-    bounds: Rect,
-  ): OverlayColors {
-    val bgMode = settingsManager.settings.value.backgroundMode
-    val translatorBounds = TranslatorRect(bounds.left, bounds.top, bounds.right, bounds.bottom)
-    return getOverlayColors(bitmap, translatorBounds, bgMode)
   }
 
   private var nextRecyclerViewItemId = 0

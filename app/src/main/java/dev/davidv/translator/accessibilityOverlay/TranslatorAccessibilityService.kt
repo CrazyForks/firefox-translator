@@ -121,6 +121,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
 
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
     if (event == null || !ui.hasTranslationOverlays()) return
+    if (event.packageName == packageName) return
     when (event.eventType) {
       AccessibilityEvent.TYPE_VIEW_SCROLLED,
       AccessibilityEvent.TYPE_VIEW_CLICKED,
@@ -156,8 +157,10 @@ class TranslatorAccessibilityService : AccessibilityService() {
     ui.removeFloatingButton()
     ui.removeTranslationOverlays()
     input.showInteractionOverlay()
-    ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
     ui.showBorderWave()
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
+    }
     android.os.Handler(android.os.Looper.getMainLooper()).post {
       if (active) {
         handleFullScreenOcr()
@@ -282,7 +285,13 @@ class TranslatorAccessibilityService : AccessibilityService() {
     lastOcrRegion = null
     ui.removeTranslationOverlays()
     val dm = resources.displayMetrics
-    val region = Rect(0, 0, dm.widthPixels, dm.heightPixels)
+    val region =
+      Rect(
+        0,
+        ui.getStatusBarHeight() + ui.dpToPx(48),
+        dm.widthPixels,
+        dm.heightPixels - ui.getNavBarHeight(),
+      )
     handleRegionCapture(region, isFullScreen = true)
   }
 
@@ -301,58 +310,66 @@ class TranslatorAccessibilityService : AccessibilityService() {
       return
     }
 
+    val needsRenderFlush = ui.hasToolbar()
     input.removeTouchInterceptOverlay()
     ui.removeToolbar()
+    ui.dismissMenu()
 
-    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-      takeScreenshot(
-        Display.DEFAULT_DISPLAY,
-        mainExecutor,
-        object : TakeScreenshotCallback {
-          override fun onSuccess(screenshot: ScreenshotResult) {
-            input.showInteractionOverlay()
-            ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
+    val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    val captureRunnable =
+      Runnable {
+        takeScreenshot(
+          Display.DEFAULT_DISPLAY,
+          mainExecutor,
+          object : TakeScreenshotCallback {
+            override fun onSuccess(screenshot: ScreenshotResult) {
+              input.showInteractionOverlay()
+              ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
 
-            val hwBitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
-            screenshot.hardwareBuffer.close()
-            if (hwBitmap == null) return
-            val fullBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
-            hwBitmap.recycle()
+              val hwBitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+              screenshot.hardwareBuffer.close()
+              if (hwBitmap == null) return
+              val fullBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
+              hwBitmap.recycle()
 
-            val cropLeft = region.left.coerceIn(0, fullBitmap.width - 1)
-            val cropTop = region.top.coerceIn(0, fullBitmap.height - 1)
-            val cropWidth = region.width().coerceAtMost(fullBitmap.width - cropLeft)
-            val cropHeight = region.height().coerceAtMost(fullBitmap.height - cropTop)
-            if (cropWidth <= 0 || cropHeight <= 0) {
+              val cropLeft = region.left.coerceIn(0, fullBitmap.width - 1)
+              val cropTop = region.top.coerceIn(0, fullBitmap.height - 1)
+              val cropWidth = region.width().coerceAtMost(fullBitmap.width - cropLeft)
+              val cropHeight = region.height().coerceAtMost(fullBitmap.height - cropTop)
+              if (cropWidth <= 0 || cropHeight <= 0) {
+                fullBitmap.recycle()
+                return
+              }
+
+              val croppedBitmap = Bitmap.createBitmap(fullBitmap, cropLeft, cropTop, cropWidth, cropHeight)
               fullBitmap.recycle()
-              return
+
+              if (!isFullScreen) {
+                lastOcrBitmap = croppedBitmap
+                lastOcrRegion = region
+              }
+
+              ui.showCenteredLoading()
+
+              serviceScope.launch {
+                translateRegionBitmap(croppedBitmap, region)
+              }
             }
 
-            val croppedBitmap = Bitmap.createBitmap(fullBitmap, cropLeft, cropTop, cropWidth, cropHeight)
-            val colors = input.sampleColorsFromScreenshot(fullBitmap, region)
-            fullBitmap.recycle()
-
-            if (!isFullScreen) {
-              lastOcrBitmap = croppedBitmap
-              lastOcrRegion = region
+            override fun onFailure(errorCode: Int) {
+              Log.w(tag, "Screenshot failed: $errorCode")
+              input.showInteractionOverlay()
+              ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
+              ui.setOcrButtonVisible(true)
             }
-
-            ui.showLoadingOverlay(region, colors)
-
-            serviceScope.launch {
-              translateRegionBitmap(croppedBitmap, region)
-            }
-          }
-
-          override fun onFailure(errorCode: Int) {
-            Log.w(tag, "Screenshot failed: $errorCode")
-            input.showInteractionOverlay()
-            ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
-            ui.setOcrButtonVisible(true)
-          }
-        },
-      )
-    }, 100)
+          },
+        )
+      }
+    if (needsRenderFlush) {
+      handler.postDelayed(captureRunnable, 100)
+    } else {
+      handler.post(captureRunnable)
+    }
   }
 
   private suspend fun translateRegionBitmap(

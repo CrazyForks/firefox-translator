@@ -70,6 +70,7 @@ class OverlayUI(
               WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
               PixelFormat.TRANSLUCENT,
             )
+          params.windowAnimations = 0
           windowManager.addView(view, params)
         }
 
@@ -85,6 +86,7 @@ class OverlayUI(
           params.gravity = Gravity.TOP or Gravity.END
           params.x = dpToPx(8)
           params.y = dpToPx(48)
+          params.windowAnimations = 0
           windowManager.addView(view, params)
         }
 
@@ -98,6 +100,7 @@ class OverlayUI(
               PixelFormat.TRANSLUCENT,
             )
           params.gravity = Gravity.CENTER
+          params.windowAnimations = 0
           windowManager.addView(view, params)
         }
 
@@ -247,6 +250,7 @@ class OverlayUI(
     params.gravity = Gravity.TOP or Gravity.START
     params.x = 0
     params.y = getStatusBarHeight()
+    params.windowAnimations = 0
 
     windowManager.addView(toolbar, params)
     toolbarView = toolbar
@@ -343,39 +347,6 @@ class OverlayUI(
 
   fun dismissMenu() {
     menuManager.dismiss()
-  }
-
-  fun showLoadingOverlay(
-    bounds: Rect,
-    colors: OverlayColors?,
-  ) {
-    val bgColor = colors?.background ?: Color.parseColor("#E0FFFFFF")
-
-    val container = FrameLayout(service)
-    val overlayBg = GradientDrawable()
-    overlayBg.setColor(bgColor)
-    overlayBg.cornerRadius = dpToPx(8).toFloat()
-    container.background = overlayBg
-
-    val progress = ProgressBar(service)
-    val lp = FrameLayout.LayoutParams(dpToPx(24), dpToPx(24))
-    lp.gravity = Gravity.CENTER
-    container.addView(progress, lp)
-
-    val params =
-      WindowManager.LayoutParams(
-        maxOf(bounds.width(), dpToPx(48)),
-        maxOf(bounds.height(), dpToPx(32)),
-        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-        PixelFormat.TRANSLUCENT,
-      )
-    params.gravity = Gravity.TOP or Gravity.START
-    params.x = bounds.left
-    params.y = bounds.top
-
-    windowManager.addView(container, params)
-    translationOverlays.add(container)
   }
 
   fun showTranslationOverlay(
@@ -682,6 +653,8 @@ class OverlayUI(
   }
 
   fun hasTranslationOverlays(): Boolean = translationOverlays.isNotEmpty()
+
+  fun hasToolbar(): Boolean = toolbarView != null
 
   fun removeTranslationOverlays() {
     for (view in translationOverlays) {
