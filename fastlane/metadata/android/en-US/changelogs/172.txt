@@ -1,0 +1,6 @@
+- Improve handling of screen translation (OCR by default)
+- Fix text wrapping in settings page when using large fonts
+- Web translator: offer to translate images
+- Add demo for voices
+- Allow multiple voices to be downloaded for the same language
+- Expose app as system TTS
