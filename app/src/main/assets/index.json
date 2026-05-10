@@ -1,10 +1,10 @@
 {
   "formatVersion": 2,
-  "generatedAt": 1778226023,
+  "generatedAt": 1778412647,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778226023,
+    "languageIndexUpdatedAt": 1778412647,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1185,7 +1185,7 @@
           "translate-nn-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-nn"
+          "tesseract": "ocr-tesseract-nb"
         },
         "dictionary": "dict-nn"
       }
@@ -1203,7 +1203,7 @@
           "translate-no-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-no"
+          "tesseract": "ocr-tesseract-nb"
         },
         "dictionary": "dict-no"
       },
@@ -3356,38 +3356,6 @@
           "sizeBytes": 6050296,
           "installPath": "tesseract/tessdata/nld.traineddata",
           "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/nld.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-nn": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "nn",
-      "files": [
-        {
-          "name": "nor.traineddata",
-          "sizeBytes": 3610079,
-          "installPath": "tesseract/tessdata/nor.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/nor.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-no": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "no",
-      "files": [
-        {
-          "name": "nor.traineddata",
-          "sizeBytes": 3610079,
-          "installPath": "tesseract/tessdata/nor.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/nor.traineddata"
         }
       ],
       "dependsOn": [

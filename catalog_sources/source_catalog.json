@@ -1,13 +1,13 @@
 {
   "formatVersion": 2,
-  "generatedAt": 1778226023,
+  "generatedAt": 1778412647,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "tesseractModelsBaseUrl": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778226023,
+    "languageIndexUpdatedAt": 1778412647,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1188,7 +1188,7 @@
           "translate-nn-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-nn"
+          "tesseract": "ocr-tesseract-nb"
         },
         "dictionary": "dict-nn"
       }
@@ -1206,7 +1206,7 @@
           "translate-no-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-no"
+          "tesseract": "ocr-tesseract-nb"
         },
         "dictionary": "dict-no"
       },
@@ -3527,42 +3527,6 @@
           "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main/nld.traineddata",
           "sourcePath": "nld.traineddata",
           "mirrorPath": "ocr/1/tesseract/tessdata/nld.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-nn": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "nn",
-      "files": [
-        {
-          "name": "nor.traineddata",
-          "sizeBytes": 0,
-          "installPath": "tesseract/tessdata/nor.traineddata",
-          "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main/nor.traineddata",
-          "sourcePath": "nor.traineddata",
-          "mirrorPath": "ocr/1/tesseract/tessdata/nor.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-no": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "no",
-      "files": [
-        {
-          "name": "nor.traineddata",
-          "sizeBytes": 0,
-          "installPath": "tesseract/tessdata/nor.traineddata",
-          "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main/nor.traineddata",
-          "sourcePath": "nor.traineddata",
-          "mirrorPath": "ocr/1/tesseract/tessdata/nor.traineddata"
         }
       ],
       "dependsOn": [
