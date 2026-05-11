@@ -20,6 +20,7 @@ package dev.davidv.translator.ui.screens
 import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -149,6 +150,7 @@ fun SettingsScreen(
   onSettingsChange: (AppSettings) -> Unit,
   onManageLanguages: () -> Unit,
   onDeleteAdblockSupport: () -> Unit,
+  onHowToUse: () -> Unit,
 ) {
   val context = LocalContext.current
   var showPermissionDialog by remember { mutableStateOf(false) }
@@ -941,6 +943,20 @@ fun SettingsScreen(
           }
         }
       }
+
+      AboutCard(
+        onHowToUse = onHowToUse,
+        onGetHelp = {
+          context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/DavidVentura/offline-translator/issues")),
+          )
+        },
+        onSupport = {
+          context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://liberapay.com/DavidV/")),
+          )
+        },
+      )
     }
   }
 
@@ -978,6 +994,79 @@ fun SettingsScreen(
           Text("Cancel")
         }
       },
+    )
+  }
+}
+
+@Composable
+private fun AboutCard(
+  onHowToUse: () -> Unit,
+  onGetHelp: () -> Unit,
+  onSupport: () -> Unit,
+) {
+  val context = LocalContext.current
+  val versionName =
+    remember {
+      runCatching {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+      }.getOrNull() ?: "unknown"
+    }
+
+  Card(
+    modifier = Modifier.fillMaxWidth(),
+    colors =
+      CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+      ),
+  ) {
+    Column(modifier = Modifier.padding(vertical = 16.dp)) {
+      Text(
+        text = "About",
+        style = MaterialTheme.typography.headlineSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+      )
+
+      AboutNavRow(label = "How to use", iconRes = R.drawable.question, onClick = onHowToUse)
+      AboutNavRow(label = "Get help / report issue", iconRes = R.drawable.info, onClick = onGetHelp)
+      AboutNavRow(label = "Support development", iconRes = R.drawable.heart, onClick = onSupport)
+
+      Text(
+        text = "Version $versionName",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+      )
+    }
+  }
+}
+
+@Composable
+private fun AboutNavRow(
+  label: String,
+  iconRes: Int,
+  onClick: () -> Unit,
+) {
+  Row(
+    modifier =
+      Modifier
+        .fillMaxWidth()
+        .clickable(onClick = onClick)
+        .padding(horizontal = 16.dp, vertical = 12.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Icon(
+      painter = painterResource(id = iconRes),
+      contentDescription = null,
+      tint = MaterialTheme.colorScheme.onSurface,
+      modifier = Modifier.size(24.dp),
+    )
+    Text(
+      text = label,
+      style = MaterialTheme.typography.bodyMedium,
+      color = MaterialTheme.colorScheme.onSurface,
+      modifier = Modifier.padding(start = 16.dp),
     )
   }
 }
@@ -1177,6 +1266,7 @@ fun SettingsScreenPreview() {
       onSettingsChange = {},
       onManageLanguages = {},
       onDeleteAdblockSupport = {},
+      onHowToUse = {},
     )
   }
 }
@@ -1205,6 +1295,7 @@ fun SettingsScreenDarkPreview() {
       onSettingsChange = {},
       onManageLanguages = {},
       onDeleteAdblockSupport = {},
+      onHowToUse = {},
     )
   }
 }

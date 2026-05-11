@@ -861,7 +861,13 @@ fun TranslatorApp(
                 viewModel.languageStateManager.deleteSupportByKind("adblock")
                 app.adblockManager.reload()
               },
+              onHowToUse = {
+                navController.navigate("how_to_use")
+              },
             )
+          }
+          composable("how_to_use") {
+            HowToUseScreen(onBack = { navController.popBackStack() })
           }
         }
       }

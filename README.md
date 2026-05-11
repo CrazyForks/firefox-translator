@@ -93,3 +93,10 @@ SHA-256 hash of signing certificate: `2B:38:06:E7:45:D8:09:01:8A:51:BE:58:D0:63:
 <img src="https://nlnet.nl/logo/banner.svg" width="200px">
 
 This project was funded through the [NGI Mobifree Fund](https://nlnet.nl/mobifree), a fund established by [NLnet](https://nlnet.nl).
+
+---
+
+If you want, you can help pay for the CDN costs:
+
+<a href="https://liberapay.com/DavidV/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a><
+
