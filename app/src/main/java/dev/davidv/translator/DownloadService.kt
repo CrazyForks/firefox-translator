@@ -372,7 +372,21 @@ class DownloadService : Service() {
       actionLabel = "download",
       failureLabel = "download",
       planProvider = { catalog ->
-        catalog.planDownload(language.code, Feature.CORE) ?: DownloadPlan(0UL, emptyList())
+        val corePlan = catalog.planDownload(language.code, Feature.CORE) ?: DownloadPlan(0UL, emptyList())
+        val docDetectPlan =
+          if (catalog.supportInstalledByKind(DOC_DETECT_KIND)) {
+            null
+          } else {
+            catalog.planSupportDownloadByKind(DOC_DETECT_KIND)
+          }
+        if (docDetectPlan == null) {
+          corePlan
+        } else {
+          DownloadPlan(
+            corePlan.totalSize + docDetectPlan.totalSize,
+            corePlan.tasks + docDetectPlan.tasks,
+          )
+        }
       },
     )
   }
@@ -1049,3 +1063,4 @@ data class DownloadState(
 )
 
 private const val ADBLOCK_KIND = "adblock"
+private const val DOC_DETECT_KIND = "doc_detect"

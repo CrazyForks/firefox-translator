@@ -60,7 +60,7 @@ class FilePathManager(
 
   fun getDictionaryFile(language: Language): File = File(getDictionariesDir(), "${language.dictionaryCode}.dict")
 
-  fun getCatalogFile(): File = File(baseDir, "index.json")
+  fun getCatalogFile(): File = File(baseDir, "index_v3.json")
 
   fun getMucabFile(): File = File(getDataDir(), "mucab.bin")
 
@@ -137,7 +137,7 @@ class FilePathManager(
   private fun openCatalog(baseDirPath: String): LanguageCatalog? {
     val bundledJson =
       try {
-        context.assets.open("index.json").bufferedReader().readText()
+        context.assets.open("index_v3.json").bufferedReader().readText()
       } catch (e: Exception) {
         Log.e("FilePathManager", "Error reading bundled catalog index", e)
         null

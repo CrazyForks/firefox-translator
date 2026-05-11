@@ -1,10 +1,10 @@
 {
-  "formatVersion": 2,
-  "generatedAt": 1778412647,
+  "formatVersion": 3,
+  "generatedAt": 1778532135,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778412647,
+    "languageIndexUpdatedAt": 1778532135,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -27,7 +27,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ar"
         },
-        "dictionary": "dict-ar"
+        "dictionary": "dict-ar",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "JO",
@@ -58,7 +59,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-az"
         },
-        "dictionary": "dict-az"
+        "dictionary": "dict-az",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "AZ",
@@ -87,7 +89,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-be"
         },
-        "dictionary": "dict-be"
+        "dictionary": "dict-be",
+        "preferredOcrEngine": "tesseract"
       }
     },
     "bg": {
@@ -105,7 +108,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-bg"
         },
-        "dictionary": "dict-bg"
+        "dictionary": "dict-bg",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "BG",
@@ -135,7 +139,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-bn"
         },
-        "dictionary": "dict-bn"
+        "dictionary": "dict-bn",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IN",
@@ -165,7 +170,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-bs"
         },
-        "dictionary": "dict-hr"
+        "dictionary": "dict-hr",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "BA",
@@ -195,7 +201,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ca"
         },
-        "dictionary": "dict-ca"
+        "dictionary": "dict-ca",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "ES",
@@ -227,7 +234,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-cs"
         },
-        "dictionary": "dict-cs"
+        "dictionary": "dict-cs",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "CZ",
@@ -258,7 +266,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-da"
         },
-        "dictionary": "dict-da"
+        "dictionary": "dict-da",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "DK",
@@ -288,7 +297,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-de"
         },
-        "dictionary": "dict-de"
+        "dictionary": "dict-de",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "DE",
@@ -321,7 +331,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-el"
         },
-        "dictionary": "dict-el"
+        "dictionary": "dict-el",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "GR",
@@ -452,7 +463,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-en"
         },
-        "dictionary": "dict-en"
+        "dictionary": "dict-en",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "US",
@@ -494,7 +506,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-es"
         },
-        "dictionary": "dict-es"
+        "dictionary": "dict-es",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "ES",
@@ -539,7 +552,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-et"
         },
-        "dictionary": "dict-et"
+        "dictionary": "dict-et",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "EE",
@@ -569,7 +583,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-fa"
         },
-        "dictionary": "dict-fa"
+        "dictionary": "dict-fa",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IR",
@@ -602,7 +617,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-fi"
         },
-        "dictionary": "dict-fi"
+        "dictionary": "dict-fi",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "FI",
@@ -633,7 +649,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-fr"
         },
-        "dictionary": "dict-fr"
+        "dictionary": "dict-fr",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "FR",
@@ -666,7 +683,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-gu"
         },
-        "dictionary": "dict-gu"
+        "dictionary": "dict-gu",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IN",
@@ -696,7 +714,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-he"
         },
-        "dictionary": "dict-he"
+        "dictionary": "dict-he",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IL",
@@ -726,7 +745,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-hi"
         },
-        "dictionary": "dict-hi"
+        "dictionary": "dict-hi",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IN",
@@ -758,7 +778,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-hr"
         },
-        "dictionary": "dict-hr"
+        "dictionary": "dict-hr",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "HR",
@@ -788,7 +809,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-hu"
         },
-        "dictionary": "dict-hu"
+        "dictionary": "dict-hu",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "HU",
@@ -820,7 +842,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-id"
         },
-        "dictionary": "dict-id"
+        "dictionary": "dict-id",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "ID",
@@ -850,7 +873,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-is"
         },
-        "dictionary": "dict-is"
+        "dictionary": "dict-is",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IS",
@@ -883,7 +907,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-it"
         },
-        "dictionary": "dict-it"
+        "dictionary": "dict-it",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IT",
@@ -917,7 +942,8 @@
         "support": [
           "support-ja-mucab"
         ],
-        "dictionary": "dict-ja"
+        "dictionary": "dict-ja",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "JP",
@@ -947,7 +973,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-kn"
         },
-        "dictionary": "dict-kn"
+        "dictionary": "dict-kn",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IN",
@@ -977,7 +1004,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ko"
         },
-        "dictionary": "dict-ko"
+        "dictionary": "dict-ko",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "KR",
@@ -1008,7 +1036,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-lt"
         },
-        "dictionary": "dict-lt"
+        "dictionary": "dict-lt",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "LT",
@@ -1038,7 +1067,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-lv"
         },
-        "dictionary": "dict-lv"
+        "dictionary": "dict-lv",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "LV",
@@ -1068,7 +1098,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ml"
         },
-        "dictionary": "dict-ml"
+        "dictionary": "dict-ml",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1099,7 +1130,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ms"
         },
-        "dictionary": "dict-ms"
+        "dictionary": "dict-ms",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "MY",
@@ -1129,7 +1161,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-nb"
         },
-        "dictionary": "dict-nb"
+        "dictionary": "dict-nb",
+        "preferredOcrEngine": "tesseract"
       }
     },
     "nl": {
@@ -1147,7 +1180,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-nl"
         },
-        "dictionary": "dict-nl"
+        "dictionary": "dict-nl",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "NL",
@@ -1187,7 +1221,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-nb"
         },
-        "dictionary": "dict-nn"
+        "dictionary": "dict-nn",
+        "preferredOcrEngine": "tesseract"
       }
     },
     "no": {
@@ -1205,7 +1240,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-nb"
         },
-        "dictionary": "dict-no"
+        "dictionary": "dict-no",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "NO",
@@ -1235,7 +1271,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-pl"
         },
-        "dictionary": "dict-pl"
+        "dictionary": "dict-pl",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "PL",
@@ -1268,7 +1305,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-pt"
         },
-        "dictionary": "dict-pt"
+        "dictionary": "dict-pt",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "BR",
@@ -1307,7 +1345,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ro"
         },
-        "dictionary": "dict-ro"
+        "dictionary": "dict-ro",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "RO",
@@ -1337,7 +1376,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ru"
         },
-        "dictionary": "dict-ru"
+        "dictionary": "dict-ru",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "RU",
@@ -1370,7 +1410,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-sk"
         },
-        "dictionary": "dict-sk"
+        "dictionary": "dict-sk",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "SK",
@@ -1400,7 +1441,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-sl"
         },
-        "dictionary": "dict-sl"
+        "dictionary": "dict-sl",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "SI",
@@ -1430,7 +1472,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-sq"
         },
-        "dictionary": "dict-sq"
+        "dictionary": "dict-sq",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "AL",
@@ -1460,7 +1503,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-sr"
         },
-        "dictionary": "dict-hr"
+        "dictionary": "dict-hr",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "RS",
@@ -1490,7 +1534,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-sv"
         },
-        "dictionary": "dict-sv"
+        "dictionary": "dict-sv",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "SE",
@@ -1522,7 +1567,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-ta"
         },
-        "dictionary": "dict-ta"
+        "dictionary": "dict-ta",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1552,7 +1598,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-te"
         },
-        "dictionary": "dict-te"
+        "dictionary": "dict-te",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1584,7 +1631,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-th"
         },
-        "dictionary": "dict-th"
+        "dictionary": "dict-th",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "TH",
@@ -1614,7 +1662,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-tr"
         },
-        "dictionary": "dict-tr"
+        "dictionary": "dict-tr",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "TR",
@@ -1644,7 +1693,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-uk"
         },
-        "dictionary": "dict-uk"
+        "dictionary": "dict-uk",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "UA",
@@ -1675,7 +1725,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-vi"
         },
-        "dictionary": "dict-vi"
+        "dictionary": "dict-vi",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "VN",
@@ -1707,7 +1758,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-zh"
         },
-        "dictionary": "dict-zh"
+        "dictionary": "dict-zh",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "CN",
@@ -1738,7 +1790,8 @@
         "ocr": {
           "tesseract": "ocr-tesseract-zh_hant"
         },
-        "dictionary": "dict-zh"
+        "dictionary": "dict-zh",
+        "preferredOcrEngine": "tesseract"
       },
       "tts": {
         "defaultRegion": "TW",
@@ -10267,6 +10320,19 @@
       "dependsOn": [
         "tts-espeak-dict-cmn"
       ]
+    },
+    "support-doc_detect-v1": {
+      "feature": "support",
+      "kind": "doc_detect",
+      "files": [
+        {
+          "name": "docaligner_lcnet050.onnx",
+          "sizeBytes": 4911217,
+          "installPath": "ocr/docrec/docaligner_lcnet050.onnx",
+          "url": "https://offline-translator.davidv.dev/support/1/docaligner_lcnet050.onnx"
+        }
+      ],
+      "dependsOn": []
     },
     "support-adblock-lists-v1": {
       "feature": "support",

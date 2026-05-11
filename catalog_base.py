@@ -249,7 +249,7 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
     validate_manifest(languages_v2, packs)
 
     return {
-        "formatVersion": 2,
+        "formatVersion": 3,
         "generatedAt": int(time.time()),
         "translationModelsBaseUrl": translation_base_url,
         "tesseractModelsBaseUrl": tesseract_base_url,
@@ -273,6 +273,13 @@ def normalize_language_assets(languages_v2: dict) -> None:
             assets["translate"] = sorted(set(assets["translate"]))
         if "support" in assets:
             assets["support"] = sorted(set(assets["support"]))
+        ocr_assets = assets.get("ocr")
+        if isinstance(ocr_assets, dict) and ocr_assets:
+            assets["preferredOcrEngine"] = (
+                "tesseract" if "tesseract" in ocr_assets else sorted(ocr_assets.keys())[0]
+            )
+        else:
+            assets["preferredOcrEngine"] = ""
 
 
 def validate_manifest(languages: dict, packs: dict) -> None:

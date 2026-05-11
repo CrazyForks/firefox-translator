@@ -18,7 +18,7 @@
 package dev.davidv.translator
 
 object Constants {
-  const val DEFAULT_CATALOG_INDEX_URL = "https://offline-translator.davidv.dev/index.json"
+  const val DEFAULT_CATALOG_INDEX_URL = "https://offline-translator.davidv.dev/index_v3.json"
 }
 
 data class AppSettings(

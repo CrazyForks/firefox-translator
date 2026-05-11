@@ -2,6 +2,7 @@ import sys
 import time
 
 import catalog_base
+import catalog_doc_detect
 import catalog_mirror
 import catalog_tts
 
@@ -426,6 +427,7 @@ def build_source_catalog(
         espeak_core_zip_size=espeak_core_zip_size,
     )
     add_adblock_packs(catalog)
+    catalog_doc_detect.add_doc_detect_pack(catalog)
     catalog_mirror.apply_mirror_paths(catalog)
     catalog.setdefault("sources", {})
     catalog["sources"].update(

@@ -31,8 +31,8 @@ markup5ever = "0.38"
 
 [dependencies.translator]
 default-features = false
-git = "https://github.com/DavidVentura/translator-rs.git"
-# path = "/home/david/git/translator-rs"
+# git = "https://github.com/DavidVentura/translator-rs.git"
+path = "/home/david/git/translator-rs"
 features = ["uniffi", "html"]
 
 [target.'cfg(target_os = "android")'.dependencies]
