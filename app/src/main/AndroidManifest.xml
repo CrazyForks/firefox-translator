@@ -118,6 +118,11 @@
         android:screenOrientation="portrait"
         android:theme="@style/Theme.Translator.CropImage" />
 
+      <activity
+        android:name=".ui.components.DocAlignActivity"
+        android:screenOrientation="portrait"
+        android:theme="@style/Theme.Translator.CropImage" />
+
         <activity
             android:name=".TranslatorTtsDataActivity"
             android:exported="true"

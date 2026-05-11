@@ -930,4 +930,51 @@ impl CatalogHandle {
             Vec::new()
         }
     }
+
+    fn detect_document_quad(
+        &self,
+        rgba_bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+    ) -> Result<Option<translator::doc_align::DocumentDetection>, CatalogError> {
+        #[cfg(feature = "doc-align")]
+        {
+            return self
+                .session
+                .detect_document_quad(&rgba_bytes, width, height)
+                .map_err(CatalogError::from);
+        }
+        #[cfg(not(feature = "doc-align"))]
+        {
+            let _ = (rgba_bytes, width, height);
+            Err(CatalogError::Other {
+                reason: "doc-align feature disabled".to_string(),
+            })
+        }
+    }
+
+    fn warp_document_rgba(
+        &self,
+        rgba_bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+        quad: translator::doc_align::DocumentQuad,
+        out_width: Option<u32>,
+        out_height: Option<u32>,
+    ) -> Result<translator::doc_align::WarpedImageRgba, CatalogError> {
+        #[cfg(feature = "doc-align")]
+        {
+            return self
+                .session
+                .warp_document_rgba(&rgba_bytes, width, height, &quad, out_width, out_height)
+                .map_err(CatalogError::from);
+        }
+        #[cfg(not(feature = "doc-align"))]
+        {
+            let _ = (rgba_bytes, width, height, quad, out_width, out_height);
+            Err(CatalogError::Other {
+                reason: "doc-align feature disabled".to_string(),
+            })
+        }
+    }
 }

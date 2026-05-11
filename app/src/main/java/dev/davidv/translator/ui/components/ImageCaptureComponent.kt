@@ -182,6 +182,14 @@ private fun isImageUri(
 
 private fun isRemoteUri(uri: Uri): Boolean = uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals("https", ignoreCase = true)
 
+private fun shouldStartInDocAlign(
+  context: Context,
+  uri: Uri,
+): Boolean {
+  val mime = context.contentResolver.getType(uri)?.lowercase() ?: return false
+  return mime == "image/jpeg" || mime == "image/jpg" || mime == "image/heic" || mime == "image/heif"
+}
+
 @Composable
 fun ImageCaptureHandler(
   onMessage: (TranslatorMessage) -> Unit,
@@ -199,24 +207,84 @@ fun ImageCaptureHandler(
   val activeWidgetColor = colorScheme.primary.toArgb()
   val rootBackgroundColor = colorScheme.background.toArgb()
 
+  val activeSourceUri = remember { mutableStateOf<Uri?>(null) }
+  val cropLauncherState = remember { mutableStateOf<((Intent) -> Unit)?>(null) }
+
+  fun buildRectIntent(
+    sourceUri: Uri,
+    destUri: Uri,
+  ): Intent {
+    val options =
+      UCrop.Options().apply {
+        setCompressionFormat(Bitmap.CompressFormat.JPEG)
+        setCompressionQuality(95)
+        setFreeStyleCropEnabled(true)
+        setHideBottomControls(false)
+        setToolbarColor(toolbarColor)
+        setToolbarWidgetColor(toolbarWidgetColor)
+        setActiveControlsWidgetColor(activeWidgetColor)
+        setRootViewBackgroundColor(rootBackgroundColor)
+      }
+    return UCrop
+      .of(sourceUri, destUri)
+      .withOptions(options)
+      .getIntent(context)
+      .setClass(context, AppCropActivity::class.java)
+  }
+
+  fun buildDocAlignIntent(
+    sourceUri: Uri,
+    destUri: Uri,
+  ): Intent =
+    Intent(context, DocAlignActivity::class.java).apply {
+      putExtra(DocAlignActivity.EXTRA_INPUT_URI, sourceUri)
+      putExtra(DocAlignActivity.EXTRA_OUTPUT_URI, destUri)
+    }
+
   val cropImage =
     rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
       val activeImport = pendingImport.value
       val resultIntent = result.data
-      val croppedUri = resultIntent?.let { UCrop.getOutput(it) }
-      val error = resultIntent?.let { UCrop.getError(it) }
-      if (result.resultCode == android.app.Activity.RESULT_OK && croppedUri != null) {
-        activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
-        pendingImport.value = null
-        Log.d("ImageCrop", "Image cropped: $croppedUri")
-        onMessage(TranslatorMessage.SetImageUri(croppedUri, deleteAfterLoad = true))
-      } else {
-        activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
-        activeImport?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
-        pendingImport.value = null
-        Log.d("ImageCrop", "Crop cancelled or failed: ${error?.message}")
+      val sourceUri = activeSourceUri.value
+      val ucropOutput = resultIntent?.let { UCrop.getOutput(it) }
+      val ucropError = resultIntent?.let { UCrop.getError(it) }
+      val docAlignOutput = resultIntent?.data
+      val launch = cropLauncherState.value
+      when {
+        result.resultCode == android.app.Activity.RESULT_OK && ucropOutput != null -> {
+          activeSourceUri.value = null
+          activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+          pendingImport.value = null
+          Log.d("ImageCrop", "Image cropped (rect): $ucropOutput")
+          onMessage(TranslatorMessage.SetImageUri(ucropOutput, deleteAfterLoad = true))
+        }
+        result.resultCode == android.app.Activity.RESULT_OK && docAlignOutput != null -> {
+          activeSourceUri.value = null
+          activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+          pendingImport.value = null
+          Log.d("ImageCrop", "Image cropped (doc-align): $docAlignOutput")
+          onMessage(TranslatorMessage.SetImageUri(docAlignOutput, deleteAfterLoad = true))
+        }
+        result.resultCode == AppCropActivity.RESULT_SWITCH_TO_DOC_ALIGN &&
+          activeImport != null && sourceUri != null && launch != null -> {
+          Log.d("ImageCrop", "Switching to doc-align mode")
+          launch(buildDocAlignIntent(sourceUri, activeImport.cropOutputUri))
+        }
+        result.resultCode == DocAlignActivity.RESULT_SWITCH_TO_RECT &&
+          activeImport != null && sourceUri != null && launch != null -> {
+          Log.d("ImageCrop", "Switching to rectangular crop")
+          launch(buildRectIntent(sourceUri, activeImport.cropOutputUri))
+        }
+        else -> {
+          activeSourceUri.value = null
+          activeImport?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
+          activeImport?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
+          pendingImport.value = null
+          Log.d("ImageCrop", "Crop cancelled or failed: ${ucropError?.message}")
+        }
       }
     }
+  cropLauncherState.value = { intent -> cropImage.launch(intent) }
 
   fun launchCrop(
     sourceUri: Uri,
@@ -230,23 +298,13 @@ fun ImageCaptureHandler(
       return
     }
 
-    val options =
-      UCrop.Options().apply {
-        setCompressionFormat(Bitmap.CompressFormat.JPEG)
-        setCompressionQuality(95)
-        setFreeStyleCropEnabled(true)
-        setHideBottomControls(false)
-        setToolbarColor(toolbarColor)
-        setToolbarWidgetColor(toolbarWidgetColor)
-        setActiveControlsWidgetColor(activeWidgetColor)
-        setRootViewBackgroundColor(rootBackgroundColor)
-      }
+    activeSourceUri.value = sourceUri
     val intent =
-      UCrop
-        .of(sourceUri, destUri)
-        .withOptions(options)
-        .getIntent(context)
-        .setClass(context, AppCropActivity::class.java)
+      if (shouldStartInDocAlign(context, sourceUri)) {
+        buildDocAlignIntent(sourceUri, destUri)
+      } else {
+        buildRectIntent(sourceUri, destUri)
+      }
     cropImage.launch(intent)
   }
 

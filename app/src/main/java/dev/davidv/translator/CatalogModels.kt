@@ -379,6 +379,26 @@ class LanguageCatalog private constructor(
   ): ByteArray = uniffi.bindings.renderTranslatedOverlay(plan, targetLanguage.code, minFontSizePx)
 
   @Throws(CatalogException::class)
+  fun detectDocumentQuad(bitmap: Bitmap): uniffi.translator.DocumentDetection? =
+    handle.detectDocumentQuad(rgbaBytes(bitmap), bitmap.width.toUInt(), bitmap.height.toUInt())
+
+  @Throws(CatalogException::class)
+  fun warpDocumentRgba(
+    bitmap: Bitmap,
+    quad: uniffi.translator.DocumentQuad,
+    outWidth: Int? = null,
+    outHeight: Int? = null,
+  ): uniffi.translator.WarpedImageRgba =
+    handle.warpDocumentRgba(
+      rgbaBytes(bitmap),
+      bitmap.width.toUInt(),
+      bitmap.height.toUInt(),
+      quad,
+      outWidth?.toUInt(),
+      outHeight?.toUInt(),
+    )
+
+  @Throws(CatalogException::class)
   fun translateDocumentPath(
     inputPath: String,
     outputPath: String,

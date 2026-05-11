@@ -20,6 +20,8 @@ package dev.davidv.translator.ui.components
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.app.Activity
+import android.content.Intent
 import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Build
@@ -29,6 +31,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
+import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
@@ -124,6 +127,49 @@ class AppCropActivity : UCropActivity() {
         },
       )
     }
+
+    installModeSwitchButton()
+  }
+
+  private fun installModeSwitchButton() {
+    val photobox = findViewById<ViewGroup>(R.id.ucrop_photobox) as? RelativeLayout ?: return
+    val sizePx =
+      TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP,
+        40f,
+        resources.displayMetrics,
+      ).toInt()
+    val marginPx =
+      TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP,
+        8f,
+        resources.displayMetrics,
+      ).toInt()
+
+    val button =
+      ImageButton(this).apply {
+        setImageResource(dev.davidv.translator.R.drawable.auto_awesome)
+        setColorFilter(android.graphics.Color.WHITE)
+        val outValue = TypedValue()
+        context.theme.resolveAttribute(
+          android.R.attr.selectableItemBackgroundBorderless,
+          outValue,
+          true,
+        )
+        setBackgroundResource(outValue.resourceId)
+        contentDescription = "Detect document corners"
+        setOnClickListener {
+          setResult(RESULT_SWITCH_TO_DOC_ALIGN, Intent())
+          finish()
+        }
+        layoutParams =
+          RelativeLayout.LayoutParams(sizePx, sizePx).apply {
+            addRule(RelativeLayout.ALIGN_PARENT_TOP)
+            addRule(RelativeLayout.ALIGN_PARENT_END)
+            setMargins(marginPx, marginPx, marginPx, marginPx)
+          }
+      }
+    photobox.addView(button)
   }
 
   private fun zoomCropToViewport(
@@ -258,6 +304,8 @@ class AppCropActivity : UCropActivity() {
   companion object {
     private const val GRID_COUNT = 2
     private const val MOVE_EPS_PX = 12f
+
+    const val RESULT_SWITCH_TO_DOC_ALIGN = Activity.RESULT_FIRST_USER + 2
 
     private val updateGridPointsMethod by lazy {
       OverlayView::class.java.getDeclaredMethod("updateGridPoints").apply { isAccessible = true }
