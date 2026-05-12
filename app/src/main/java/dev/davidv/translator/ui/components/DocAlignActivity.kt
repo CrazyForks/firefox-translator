@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,6 +71,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.exifinterface.media.ExifInterface
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorApplication
@@ -184,6 +187,25 @@ private fun DocAlignScreen(
   var detecting by remember(inputUri) { mutableStateOf(true) }
   var redetecting by remember(inputUri) { mutableStateOf(false) }
   var errorMessage by remember(inputUri) { mutableStateOf<String?>(null) }
+  var helpVisible by remember { mutableStateOf(false) }
+
+  fun rotate90Clockwise() {
+    val src = bitmap ?: return
+    val matrix = Matrix().apply { postRotate(90f) }
+    val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+    val oldH = src.height.toFloat()
+    val transformed = corners.map { Offset(oldH - it.y, it.x) }
+    val reordered =
+      if (transformed.size == 4) {
+        listOf(transformed[3], transformed[0], transformed[1], transformed[2])
+      } else {
+        transformed
+      }
+    bitmap = rotated
+    imageBmp = rotated.asImageBitmap()
+    imageSize = IntSize(rotated.width, rotated.height)
+    corners = reordered
+  }
 
   val detectFn: suspend (Bitmap) -> DocumentDetection? =
     remember(catalog) {
@@ -282,15 +304,60 @@ private fun DocAlignScreen(
       }
     }
 
-    IconButton(
-      onClick = onSwitchToRect,
+    Box(modifier = Modifier.align(Alignment.TopStart).statusBarsPadding().padding(8.dp)) {
+      IconButton(onClick = { helpVisible = true }) {
+        Icon(
+          painter = painterResource(id = R.drawable.help_outline),
+          contentDescription = "Help",
+          tint = Color.White,
+        )
+      }
+      if (helpVisible) {
+        Popup(
+          alignment = Alignment.TopStart,
+          offset = IntOffset(0, with(LocalDensity.current) { 48.dp.toPx().toInt() }),
+          onDismissRequest = { helpVisible = false },
+          properties = PopupProperties(focusable = true),
+        ) {
+          Box(
+            modifier =
+              Modifier
+                .background(Color(0xCC222222))
+                .padding(16.dp),
+          ) {
+            Text(
+              text =
+                "A precise perimeter around the document improves recognition quality. " +
+                  "It is important that the lines are parallel to the text.\n\n" +
+                  "Zooming or panning usually makes the algorithm automatically pick up the document, " +
+                  "but you can still manually adjust if it's not found.",
+              color = Color.White,
+              style = MaterialTheme.typography.bodyMedium,
+              modifier = Modifier.widthIn(max = 300.dp),
+            )
+          }
+        }
+      }
+    }
+
+    Row(
       modifier = Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(8.dp),
+      verticalAlignment = Alignment.CenterVertically,
     ) {
-      Icon(
-        painter = painterResource(id = R.drawable.activity_zone),
-        contentDescription = "Switch to rectangular crop",
-        tint = Color.White,
-      )
+      IconButton(onClick = { rotate90Clockwise() }) {
+        Icon(
+          painter = painterResource(id = R.drawable.rotate_right),
+          contentDescription = "Rotate 90 degrees",
+          tint = Color.White,
+        )
+      }
+      IconButton(onClick = onSwitchToRect) {
+        Icon(
+          painter = painterResource(id = R.drawable.activity_zone),
+          contentDescription = "Switch to rectangular crop",
+          tint = Color.White,
+        )
+      }
     }
 
     if (detecting || redetecting) {

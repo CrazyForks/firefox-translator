@@ -961,17 +961,18 @@ impl CatalogHandle {
         quad: translator::doc_align::DocumentQuad,
         out_width: Option<u32>,
         out_height: Option<u32>,
+        postprocess: bool,
     ) -> Result<translator::doc_align::WarpedImageRgba, CatalogError> {
         #[cfg(feature = "doc-align")]
         {
             return self
                 .session
-                .warp_document_rgba(&rgba_bytes, width, height, &quad, out_width, out_height)
+                .warp_document_rgba(&rgba_bytes, width, height, &quad, out_width, out_height, postprocess)
                 .map_err(CatalogError::from);
         }
         #[cfg(not(feature = "doc-align"))]
         {
-            let _ = (rgba_bytes, width, height, quad, out_width, out_height);
+            let _ = (rgba_bytes, width, height, quad, out_width, out_height, postprocess);
             Err(CatalogError::Other {
                 reason: "doc-align feature disabled".to_string(),
             })

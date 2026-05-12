@@ -388,6 +388,7 @@ class LanguageCatalog private constructor(
     quad: uniffi.translator.DocumentQuad,
     outWidth: Int? = null,
     outHeight: Int? = null,
+    postprocess: Boolean = true,
   ): uniffi.translator.WarpedImageRgba =
     handle.warpDocumentRgba(
       rgbaBytes(bitmap),
@@ -396,6 +397,7 @@ class LanguageCatalog private constructor(
       quad,
       outWidth?.toUInt(),
       outHeight?.toUInt(),
+      postprocess,
     )
 
   @Throws(CatalogException::class)
