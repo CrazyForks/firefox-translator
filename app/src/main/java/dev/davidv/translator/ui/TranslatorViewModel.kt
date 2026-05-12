@@ -36,6 +36,8 @@ import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.PcmAudio
 import dev.davidv.translator.PdfPhaseProgress
+import dev.davidv.translator.PreferredOcrEngine
+import dev.davidv.translator.PreparedImageOverlay
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.SpeechSynthesisResult
@@ -92,6 +94,17 @@ class TranslatorViewModel(
   val displayImage: StateFlow<Bitmap?> = _displayImage.asStateFlow()
 
   private val originalImage = MutableStateFlow<Bitmap?>(null)
+
+  private data class OcrCacheEntry(
+    val plan: PreparedImageOverlay,
+    val imageRef: Bitmap,
+    val sourceCode: String,
+    val sourceScript: String,
+    val readingOrder: ReadingOrder,
+    val engine: PreferredOcrEngine,
+  )
+
+  private var ocrCache: OcrCacheEntry? = null
 
   private val _ocrReadingOrder = MutableStateFlow(ReadingOrder.LEFT_TO_RIGHT)
   val ocrReadingOrder: StateFlow<ReadingOrder> = _ocrReadingOrder.asStateFlow()
@@ -296,6 +309,7 @@ class TranslatorViewModel(
         if (_inputType.value != InputType.TEXT) {
           _displayImage.value = null
           originalImage.value = null
+          ocrCache = null
           _inputType.value = InputType.TEXT
         }
         _input.value = message.text
@@ -339,6 +353,7 @@ class TranslatorViewModel(
       is TranslatorMessage.SetImageUri -> {
         viewModelScope.launch {
           val bm = translationCoordinator.correctBitmap(message.uri, message.deleteAfterLoad)
+          ocrCache = null
           originalImage.value = bm
           _displayImage.value = bm
           _inputType.value = InputType.IMAGE
@@ -347,20 +362,7 @@ class TranslatorViewModel(
           val fromLang = _from.value
           val toLang = _to.value
           if (fromLang != null && toLang != null) {
-            val result =
-              translationCoordinator.translateImageWithOverlay(
-                fromLang,
-                toLang,
-                bm,
-                onMessage = { imageTextDetected ->
-                  _input.value = imageTextDetected.extractedText
-                },
-                readingOrder = currentReadingOrderFor(fromLang),
-              )
-            result?.let {
-              _displayImage.value = it.correctedBitmap
-              _output.value = TranslatedText(it.translatedText, null)
-            }
+            runImageTranslation(bm, fromLang, toLang)
           }
         }
       }
@@ -391,6 +393,7 @@ class TranslatorViewModel(
         _input.value = ""
         _inputType.value = InputType.TEXT
         originalImage.value = null
+        ocrCache = null
         _currentDetectedLanguage.value = null
       }
 
@@ -549,6 +552,59 @@ class TranslatorViewModel(
     }
   }
 
+  private suspend fun runImageTranslation(
+    bitmap: Bitmap,
+    fromLang: Language,
+    toLang: Language,
+  ) {
+    val readingOrder = currentReadingOrderFor(fromLang)
+    val engine = settingsManager.settings.value.preferredOcrEngine
+    val cached =
+      ocrCache?.takeIf { entry ->
+        entry.imageRef === bitmap &&
+          entry.readingOrder == readingOrder &&
+          entry.engine == engine &&
+          when (engine) {
+            PreferredOcrEngine.PADDLE -> entry.sourceScript == fromLang.script
+            PreferredOcrEngine.TESSERACT -> entry.sourceCode == fromLang.code
+          }
+      }
+    val onMessage: (TranslatorMessage.ImageTextDetected) -> Unit = { msg ->
+      _input.value = msg.extractedText
+    }
+    val result =
+      if (cached != null) {
+        Log.d("OCR", "reusing OCR result for source=${fromLang.code} (script=${fromLang.script})")
+        translationCoordinator.retranslateImageWithOverlay(
+          cached.plan,
+          fromLang,
+          toLang,
+          onMessage = onMessage,
+        )
+      } else {
+        translationCoordinator.translateImageWithOverlay(
+          fromLang,
+          toLang,
+          bitmap,
+          onMessage = onMessage,
+          readingOrder = readingOrder,
+        )
+      }
+    result?.let {
+      _displayImage.value = it.correctedBitmap
+      _output.value = TranslatedText(it.translatedText, null)
+      ocrCache =
+        OcrCacheEntry(
+          plan = it.metadata,
+          imageRef = bitmap,
+          sourceCode = fromLang.code,
+          sourceScript = fromLang.script,
+          readingOrder = readingOrder,
+          engine = engine,
+        )
+    }
+  }
+
   private suspend fun translateWithLanguages(
     fromLang: Language,
     toLang: Language,
@@ -567,20 +623,7 @@ class TranslatorViewModel(
 
       InputType.IMAGE -> {
         originalImage.value?.let { bm ->
-          val result =
-            translationCoordinator.translateImageWithOverlay(
-              fromLang,
-              toLang,
-              bm,
-              onMessage = { imageTextDetected ->
-                _input.value = imageTextDetected.extractedText
-              },
-              readingOrder = currentReadingOrderFor(fromLang),
-            )
-          result?.let {
-            _displayImage.value = it.correctedBitmap
-            _output.value = TranslatedText(it.translatedText, null)
-          }
+          runImageTranslation(bm, fromLang, toLang)
         }
       }
 
@@ -616,6 +659,7 @@ class TranslatorViewModel(
     }
     _displayImage.value = null
     originalImage.value = null
+    ocrCache = null
     _output.value = null
     _input.value = ""
     _inputTransliterated.value = null

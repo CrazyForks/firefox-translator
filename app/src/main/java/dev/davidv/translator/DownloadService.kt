@@ -154,6 +154,20 @@ class DownloadService : Service() {
       context.startService(intent)
     }
 
+    fun startOcrEngineDownload(
+      context: Context,
+      language: Language,
+      engine: String,
+    ) {
+      val intent =
+        Intent(context, DownloadService::class.java).apply {
+          action = "START_OCR_ENGINE_DOWNLOAD"
+          putExtra("language_code", language.code)
+          putExtra("engine", engine)
+        }
+      context.startService(intent)
+    }
+
     fun startDictDownload(
       context: Context,
       language: Language,
@@ -250,6 +264,14 @@ class DownloadService : Service() {
         val catalog = getCatalog() ?: return START_NOT_STICKY
         val language = catalog.languageByCode(languageCode) ?: return START_NOT_STICKY
         cancelLanguageDownload(language)
+      }
+
+      "START_OCR_ENGINE_DOWNLOAD" -> {
+        val languageCode = intent.getStringExtra("language_code") ?: return START_NOT_STICKY
+        val engine = intent.getStringExtra("engine") ?: return START_NOT_STICKY
+        val catalog = getCatalog() ?: return START_NOT_STICKY
+        val language = catalog.languageByCode(languageCode) ?: return START_NOT_STICKY
+        startOcrEngineDownload(language, engine)
       }
 
       "START_DICT_DOWNLOAD" -> {
@@ -387,6 +409,20 @@ class DownloadService : Service() {
             corePlan.tasks + docDetectPlan.tasks,
           )
         }
+      },
+    )
+  }
+
+  private fun startOcrEngineDownload(
+    language: Language,
+    engine: String,
+  ) {
+    startPrimaryDownload(
+      language = language,
+      actionLabel = "OCR engine download",
+      failureLabel = "OCR download",
+      planProvider = { catalog ->
+        catalog.planOcrEngineDownload(language.code, engine) ?: DownloadPlan(0UL, emptyList())
       },
     )
   }

@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import androidx.exifinterface.media.ExifInterface
+import androidx.lifecycle.lifecycleScope
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorApplication
 import kotlinx.coroutines.Dispatchers
@@ -113,13 +114,15 @@ class DocAlignActivity : ComponentActivity() {
         onCancel = { finishWithCancel() },
         onSwitchToRect = { finishWithSwitch() },
         onConfirm = { bitmap, quad ->
-          val ok = warpAndWrite(bitmap, quad, outputUri)
-          if (ok) {
-            setResult(Activity.RESULT_OK, Intent().setData(outputUri))
-          } else {
-            setResult(Activity.RESULT_CANCELED)
+          lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) { warpAndWrite(bitmap, quad, outputUri) }
+            if (ok) {
+              setResult(Activity.RESULT_OK, Intent().setData(outputUri))
+            } else {
+              setResult(Activity.RESULT_CANCELED)
+            }
+            finish()
           }
-          finish()
         },
       )
     }
@@ -136,7 +139,7 @@ class DocAlignActivity : ComponentActivity() {
       return false
     }
     return try {
-      val warped = catalog.warpDocumentRgba(bitmap, quad)
+      val warped = catalog.warpDocumentRgba(bitmap, quad, postprocess = false)
       val out = Bitmap.createBitmap(warped.width.toInt(), warped.height.toInt(), Bitmap.Config.ARGB_8888)
       out.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(warped.rgba))
       contentResolver.openOutputStream(outputUri)?.use { stream ->

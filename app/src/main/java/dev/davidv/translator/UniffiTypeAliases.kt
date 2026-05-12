@@ -3,6 +3,8 @@ package dev.davidv.translator
 typealias ReadingOrder = uniffi.translator.ReadingOrder
 typealias NothingReason = uniffi.translator.NothingReason
 typealias BackgroundMode = uniffi.translator.BackgroundMode
+typealias PreferredOcrEngine = uniffi.translator.PreferredOcrEngine
+typealias PreparedImageOverlay = uniffi.translator.PreparedImageOverlay
 typealias TokenAlignment = uniffi.translator.TokenAlignment
 typealias TranslationWithAlignment = uniffi.translator.TranslationWithAlignment
 typealias Feature = uniffi.translator.Feature
@@ -18,4 +20,11 @@ val BackgroundMode.displayName: String
       BackgroundMode.WHITE_ON_BLACK -> "White on Black"
       BackgroundMode.BLACK_ON_WHITE -> "Black on White"
       BackgroundMode.AUTO_DETECT -> "Auto-detect Colors"
+    }
+
+val PreferredOcrEngine.displayName: String
+  get() =
+    when (this) {
+      PreferredOcrEngine.PADDLE -> "PaddleOCR"
+      PreferredOcrEngine.TESSERACT -> "Tesseract"
     }

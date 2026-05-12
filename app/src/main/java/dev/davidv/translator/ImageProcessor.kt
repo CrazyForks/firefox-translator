@@ -25,7 +25,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.exifinterface.media.ExifInterface
 import java.io.File
-import kotlin.math.max
 
 class ImageProcessor(
   private val context: Context,
@@ -49,25 +48,6 @@ class ImageProcessor(
       Log.w("ImageProcessor", "Failed to delete temporary image URI: $uri", e)
       false
     }
-
-  fun downscaleImage(
-    bitmap: Bitmap,
-    maxSize: Int,
-  ): Bitmap {
-    val width = bitmap.width
-    val height = bitmap.height
-    val longestSide = max(width, height)
-
-    if (longestSide <= maxSize) {
-      return bitmap
-    }
-
-    val scale = maxSize.toFloat() / longestSide.toFloat()
-    val newWidth = (width * scale).toInt()
-    val newHeight = (height * scale).toInt()
-    Log.i("ImageProcessor", "Resized to $newWidth x $newHeight")
-    return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
-  }
 
   fun correctImageOrientation(
     uri: Uri,

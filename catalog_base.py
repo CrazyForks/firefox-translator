@@ -312,7 +312,11 @@ def validate_manifest(languages: dict, packs: dict) -> None:
             if pack["from"] not in language_codes or pack["to"] not in language_codes:
                 raise ValueError(f"{pack_id}: unknown translation endpoints")
         if "language" in pack and pack["language"] not in language_codes:
-            raise ValueError(f"{pack_id}: unknown language {pack['language']}")
+            # PPOCR OCR packs use the `language` slot to carry a script slug
+            # (or "_detector"), not a real language code — by design, one rec
+            # model covers many languages of the same script.
+            if not (pack.get("feature") == "ocr" and pack.get("engine") == "ppocr"):
+                raise ValueError(f"{pack_id}: unknown language {pack['language']}")
         if "languages" in pack:
             unknown = sorted(set(pack["languages"]) - language_codes)
             if unknown:

@@ -7,6 +7,8 @@ Supports automatic language detection and transliteration for non-latin scripts.
 [<img src="https://f-droid.org/badge/get-it-on.png" alt="Get it on F-Droid"
     height="80">](https://f-droid.org/packages/dev.davidv.translator)
 
+This project is hosted on [GitHub](https://github.com/DavidVentura/offline-translator) and mirrored to [Codeberg](https://codeberg.org/davidv/offline-translator).
+
 
 ## How It Works
 

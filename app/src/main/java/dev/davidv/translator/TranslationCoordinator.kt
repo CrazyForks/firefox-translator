@@ -166,14 +166,7 @@ class TranslationCoordinator(
           originalBitmap.recycle()
         }
 
-        val maxImageSize = settingsManager.settings.value.maxImageSize
-        val finalBitmap = imageProcessor.downscaleImage(correctedBitmap, maxImageSize)
-
-        if (finalBitmap !== correctedBitmap && !correctedBitmap.isRecycled) {
-          correctedBitmap.recycle()
-        }
-
-        finalBitmap
+        correctedBitmap
       } finally {
         if (deleteAfterLoad) {
           imageProcessor.deleteTemporaryImageUri(uri)
@@ -190,14 +183,26 @@ class TranslationCoordinator(
   ): ProcessedImageResult? =
     withContext(Dispatchers.IO) {
       _isTranslating.value = true
+      val totalStart = System.currentTimeMillis()
       try {
         _isOcrInProgress.value = true
         val catalog = imageProcessor.loadCatalog() ?: return@withContext null
         val minConfidence = settingsManager.settings.value.minConfidence
         val backgroundMode = settingsManager.settings.value.backgroundMode
+        val preferredOcrEngine = settingsManager.settings.value.preferredOcrEngine
+        val maxImageSize = settingsManager.settings.value.maxImageSize
         val plan =
           try {
-            catalog.translateImagePlan(finalBitmap, from, to, minConfidence, readingOrder, backgroundMode)
+            catalog.translateImagePlan(
+              finalBitmap,
+              maxImageSize,
+              from,
+              to,
+              minConfidence,
+              readingOrder,
+              backgroundMode,
+              preferredOcrEngine,
+            )
           } catch (e: uniffi.bindings.CatalogException) {
             Log.d("OCR", "translateImagePlan failed: ${e.message}")
             return@withContext null
@@ -216,6 +221,7 @@ class TranslationCoordinator(
               ?: return@withContext null
           }
         Log.i("TranslationCoordinator", "Overpainting took ${translatePaint}ms")
+        Log.i("TranslationCoordinator", "OCR total: ${System.currentTimeMillis() - totalStart}ms")
 
         ProcessedImageResult(
           correctedBitmap = overlayBitmap,
@@ -228,6 +234,49 @@ class TranslationCoordinator(
         null
       } finally {
         _isOcrInProgress.value = false
+        _isTranslating.value = false
+      }
+    }
+
+  suspend fun retranslateImageWithOverlay(
+    cachedPlan: PreparedImageOverlay,
+    from: Language,
+    to: Language,
+    onMessage: (TranslatorMessage.ImageTextDetected) -> Unit,
+  ): ProcessedImageResult? =
+    withContext(Dispatchers.IO) {
+      _isTranslating.value = true
+      try {
+        val catalog = imageProcessor.loadCatalog() ?: return@withContext null
+        val plan =
+          try {
+            catalog.retranslateImagePlan(cachedPlan, from, to)
+          } catch (e: uniffi.bindings.CatalogException) {
+            Log.d("OCR", "retranslateImagePlan failed: ${e.message}")
+            return@withContext null
+          }
+
+        val extractedText = plan.extractedText
+        onMessage(TranslatorMessage.ImageTextDetected(extractedText))
+        lateinit var overlayBitmap: Bitmap
+        val translatePaint =
+          measureTimeMillis {
+            val rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
+            overlayBitmap = bitmapFromRgba(rendered, plan.width.toInt(), plan.height.toInt())
+              ?: return@withContext null
+          }
+        Log.i("TranslationCoordinator", "Retranslate overpainting took ${translatePaint}ms")
+
+        ProcessedImageResult(
+          correctedBitmap = overlayBitmap,
+          extractedText = extractedText,
+          translatedText = plan.translatedText,
+          metadata = plan,
+        )
+      } catch (e: Exception) {
+        Log.e("TranslationCoordinator", "Exception ${e.stackTrace}")
+        null
+      } finally {
         _isTranslating.value = false
       }
     }

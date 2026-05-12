@@ -269,6 +269,15 @@ class LanguageCatalog private constructor(
 
   fun hasTtsVoices(languageCode: String): Boolean = handle.hasTtsVoices(languageCode)
 
+  fun installedOcrEngines(languageCode: String): List<String> = handle.installedOcrEngines(languageCode)
+
+  fun availableOcrEngines(languageCode: String): List<String> = handle.availableOcrEngines(languageCode)
+
+  fun planOcrEngineDownload(
+    languageCode: String,
+    engine: String,
+  ): DownloadPlan? = handle.planOcrEngineDownload(languageCode, engine)
+
   fun ttsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.ttsVoicePickerRegions(languageCode)
 
   fun installedTtsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.installedTtsVoicePickerRegions(languageCode)
@@ -354,22 +363,33 @@ class LanguageCatalog private constructor(
   @Throws(CatalogException::class)
   fun translateImagePlan(
     bitmap: Bitmap,
+    maxImageSize: Int,
     from: Language,
     to: Language,
     minConfidence: Int,
     readingOrder: ReadingOrder,
     backgroundMode: BackgroundMode,
+    preferredOcrEngine: PreferredOcrEngine,
   ): uniffi.translator.PreparedImageOverlay =
     handle.translateImagePlan(
       rgbaBytes(bitmap),
       bitmap.width.toUInt(),
       bitmap.height.toUInt(),
+      maxImageSize.toUInt(),
       from.code,
       to.code,
       minConfidence.toUInt(),
       readingOrder,
       backgroundMode,
+      preferredOcrEngine,
     )
+
+  @Throws(CatalogException::class)
+  fun retranslateImagePlan(
+    prepared: uniffi.translator.PreparedImageOverlay,
+    from: Language,
+    to: Language,
+  ): uniffi.translator.PreparedImageOverlay = handle.retranslateImagePlan(prepared, from.code, to.code)
 
   @Throws(CatalogException::class)
   fun renderTranslatedOverlay(

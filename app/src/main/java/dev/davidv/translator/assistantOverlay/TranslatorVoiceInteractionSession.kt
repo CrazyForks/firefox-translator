@@ -574,12 +574,9 @@ class TranslatorVoiceInteractionSession(
     }
 
     val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
-    val maxImageSize = settingsManager.settings.value.maxImageSize
     val cropped = cropSystemBars(screenshot)
-    val copy = cropped.copy(Bitmap.Config.ARGB_8888, false)
+    val workingBitmap = cropped.copy(Bitmap.Config.ARGB_8888, false)
     if (cropped !== screenshot) cropped.recycle()
-    val workingBitmap = imageProcessor.downscaleImage(copy, maxImageSize)
-    if (workingBitmap !== copy) copy.recycle()
     translationJob =
       sessionScope.launch {
         val result =

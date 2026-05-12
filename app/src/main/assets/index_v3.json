@@ -1,10 +1,10 @@
 {
   "formatVersion": 3,
-  "generatedAt": 1778532135,
+  "generatedAt": 1778615180,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778532135,
+    "languageIndexUpdatedAt": 1778615180,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -25,7 +25,8 @@
           "translate-en-ar"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ar"
+          "tesseract": "ocr-tesseract-ar",
+          "ppocr": "ocr-ppocr-arabic"
         },
         "dictionary": "dict-ar",
         "preferredOcrEngine": "tesseract"
@@ -57,7 +58,8 @@
           "translate-en-az"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-az"
+          "tesseract": "ocr-tesseract-az",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-az",
         "preferredOcrEngine": "tesseract"
@@ -87,7 +89,8 @@
           "translate-be-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-be"
+          "tesseract": "ocr-tesseract-be",
+          "ppocr": "ocr-ppocr-eslav"
         },
         "dictionary": "dict-be",
         "preferredOcrEngine": "tesseract"
@@ -106,7 +109,8 @@
           "translate-en-bg"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-bg"
+          "tesseract": "ocr-tesseract-bg",
+          "ppocr": "ocr-ppocr-cyrillic"
         },
         "dictionary": "dict-bg",
         "preferredOcrEngine": "tesseract"
@@ -168,7 +172,8 @@
           "translate-en-bs"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-bs"
+          "tesseract": "ocr-tesseract-bs",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-hr",
         "preferredOcrEngine": "tesseract"
@@ -199,7 +204,8 @@
           "translate-en-ca"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ca"
+          "tesseract": "ocr-tesseract-ca",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-ca",
         "preferredOcrEngine": "tesseract"
@@ -232,7 +238,8 @@
           "translate-en-cs"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-cs"
+          "tesseract": "ocr-tesseract-cs",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-cs",
         "preferredOcrEngine": "tesseract"
@@ -264,7 +271,8 @@
           "translate-en-da"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-da"
+          "tesseract": "ocr-tesseract-da",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-da",
         "preferredOcrEngine": "tesseract"
@@ -295,7 +303,8 @@
           "translate-en-de"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-de"
+          "tesseract": "ocr-tesseract-de",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-de",
         "preferredOcrEngine": "tesseract"
@@ -329,7 +338,8 @@
           "translate-en-el"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-el"
+          "tesseract": "ocr-tesseract-el",
+          "ppocr": "ocr-ppocr-el"
         },
         "dictionary": "dict-el",
         "preferredOcrEngine": "tesseract"
@@ -461,7 +471,8 @@
           "translate-zh_hant-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-en"
+          "tesseract": "ocr-tesseract-en",
+          "ppocr": "ocr-ppocr-en"
         },
         "dictionary": "dict-en",
         "preferredOcrEngine": "tesseract"
@@ -504,7 +515,8 @@
           "translate-es-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-es"
+          "tesseract": "ocr-tesseract-es",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-es",
         "preferredOcrEngine": "tesseract"
@@ -550,7 +562,8 @@
           "translate-et-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-et"
+          "tesseract": "ocr-tesseract-et",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-et",
         "preferredOcrEngine": "tesseract"
@@ -581,7 +594,8 @@
           "translate-fa-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-fa"
+          "tesseract": "ocr-tesseract-fa",
+          "ppocr": "ocr-ppocr-arabic"
         },
         "dictionary": "dict-fa",
         "preferredOcrEngine": "tesseract"
@@ -615,7 +629,8 @@
           "translate-fi-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-fi"
+          "tesseract": "ocr-tesseract-fi",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-fi",
         "preferredOcrEngine": "tesseract"
@@ -647,7 +662,8 @@
           "translate-fr-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-fr"
+          "tesseract": "ocr-tesseract-fr",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-fr",
         "preferredOcrEngine": "tesseract"
@@ -743,7 +759,8 @@
           "translate-hi-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-hi"
+          "tesseract": "ocr-tesseract-hi",
+          "ppocr": "ocr-ppocr-devanagari"
         },
         "dictionary": "dict-hi",
         "preferredOcrEngine": "tesseract"
@@ -776,7 +793,8 @@
           "translate-hr-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-hr"
+          "tesseract": "ocr-tesseract-hr",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-hr",
         "preferredOcrEngine": "tesseract"
@@ -807,7 +825,8 @@
           "translate-hu-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-hu"
+          "tesseract": "ocr-tesseract-hu",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-hu",
         "preferredOcrEngine": "tesseract"
@@ -840,7 +859,8 @@
           "translate-id-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-id"
+          "tesseract": "ocr-tesseract-id",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-id",
         "preferredOcrEngine": "tesseract"
@@ -871,7 +891,8 @@
           "translate-is-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-is"
+          "tesseract": "ocr-tesseract-is",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-is",
         "preferredOcrEngine": "tesseract"
@@ -905,7 +926,8 @@
           "translate-it-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-it"
+          "tesseract": "ocr-tesseract-it",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-it",
         "preferredOcrEngine": "tesseract"
@@ -937,7 +959,8 @@
           "translate-ja-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ja"
+          "tesseract": "ocr-tesseract-ja",
+          "ppocr": "ocr-ppocr-cjk"
         },
         "support": [
           "support-ja-mucab"
@@ -1002,7 +1025,8 @@
           "translate-ko-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ko"
+          "tesseract": "ocr-tesseract-ko",
+          "ppocr": "ocr-ppocr-korean"
         },
         "dictionary": "dict-ko",
         "preferredOcrEngine": "tesseract"
@@ -1034,7 +1058,8 @@
           "translate-lt-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-lt"
+          "tesseract": "ocr-tesseract-lt",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-lt",
         "preferredOcrEngine": "tesseract"
@@ -1065,7 +1090,8 @@
           "translate-lv-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-lv"
+          "tesseract": "ocr-tesseract-lv",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-lv",
         "preferredOcrEngine": "tesseract"
@@ -1128,7 +1154,8 @@
           "translate-ms-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ms"
+          "tesseract": "ocr-tesseract-ms",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-ms",
         "preferredOcrEngine": "tesseract"
@@ -1159,7 +1186,8 @@
           "translate-nb-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-nb"
+          "tesseract": "ocr-tesseract-nb",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-nb",
         "preferredOcrEngine": "tesseract"
@@ -1178,7 +1206,8 @@
           "translate-nl-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-nl"
+          "tesseract": "ocr-tesseract-nl",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-nl",
         "preferredOcrEngine": "tesseract"
@@ -1219,7 +1248,8 @@
           "translate-nn-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-nb"
+          "tesseract": "ocr-tesseract-nb",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-nn",
         "preferredOcrEngine": "tesseract"
@@ -1238,7 +1268,8 @@
           "translate-no-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-nb"
+          "tesseract": "ocr-tesseract-nb",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-no",
         "preferredOcrEngine": "tesseract"
@@ -1269,7 +1300,8 @@
           "translate-pl-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-pl"
+          "tesseract": "ocr-tesseract-pl",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-pl",
         "preferredOcrEngine": "tesseract"
@@ -1303,7 +1335,8 @@
           "translate-pt-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-pt"
+          "tesseract": "ocr-tesseract-pt",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-pt",
         "preferredOcrEngine": "tesseract"
@@ -1343,7 +1376,8 @@
           "translate-ro-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ro"
+          "tesseract": "ocr-tesseract-ro",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-ro",
         "preferredOcrEngine": "tesseract"
@@ -1374,7 +1408,8 @@
           "translate-ru-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ru"
+          "tesseract": "ocr-tesseract-ru",
+          "ppocr": "ocr-ppocr-eslav"
         },
         "dictionary": "dict-ru",
         "preferredOcrEngine": "tesseract"
@@ -1408,7 +1443,8 @@
           "translate-sk-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-sk"
+          "tesseract": "ocr-tesseract-sk",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-sk",
         "preferredOcrEngine": "tesseract"
@@ -1439,7 +1475,8 @@
           "translate-sl-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-sl"
+          "tesseract": "ocr-tesseract-sl",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-sl",
         "preferredOcrEngine": "tesseract"
@@ -1470,7 +1507,8 @@
           "translate-sq-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-sq"
+          "tesseract": "ocr-tesseract-sq",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-sq",
         "preferredOcrEngine": "tesseract"
@@ -1501,7 +1539,8 @@
           "translate-sr-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-sr"
+          "tesseract": "ocr-tesseract-sr",
+          "ppocr": "ocr-ppocr-cyrillic"
         },
         "dictionary": "dict-hr",
         "preferredOcrEngine": "tesseract"
@@ -1532,7 +1571,8 @@
           "translate-sv-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-sv"
+          "tesseract": "ocr-tesseract-sv",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-sv",
         "preferredOcrEngine": "tesseract"
@@ -1565,7 +1605,8 @@
           "translate-ta-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-ta"
+          "tesseract": "ocr-tesseract-ta",
+          "ppocr": "ocr-ppocr-ta"
         },
         "dictionary": "dict-ta",
         "preferredOcrEngine": "tesseract"
@@ -1596,7 +1637,8 @@
           "translate-te-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-te"
+          "tesseract": "ocr-tesseract-te",
+          "ppocr": "ocr-ppocr-te"
         },
         "dictionary": "dict-te",
         "preferredOcrEngine": "tesseract"
@@ -1629,7 +1671,8 @@
           "translate-th-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-th"
+          "tesseract": "ocr-tesseract-th",
+          "ppocr": "ocr-ppocr-th"
         },
         "dictionary": "dict-th",
         "preferredOcrEngine": "tesseract"
@@ -1660,7 +1703,8 @@
           "translate-tr-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-tr"
+          "tesseract": "ocr-tesseract-tr",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-tr",
         "preferredOcrEngine": "tesseract"
@@ -1691,7 +1735,8 @@
           "translate-uk-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-uk"
+          "tesseract": "ocr-tesseract-uk",
+          "ppocr": "ocr-ppocr-eslav"
         },
         "dictionary": "dict-uk",
         "preferredOcrEngine": "tesseract"
@@ -1723,7 +1768,8 @@
           "translate-vi-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-vi"
+          "tesseract": "ocr-tesseract-vi",
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-vi",
         "preferredOcrEngine": "tesseract"
@@ -1756,7 +1802,8 @@
           "translate-zh-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-zh"
+          "tesseract": "ocr-tesseract-zh",
+          "ppocr": "ocr-ppocr-cjk"
         },
         "dictionary": "dict-zh",
         "preferredOcrEngine": "tesseract"
@@ -1788,7 +1835,8 @@
           "translate-zh_hant-en"
         ],
         "ocr": {
-          "tesseract": "ocr-tesseract-zh_hant"
+          "tesseract": "ocr-tesseract-zh_hant",
+          "ppocr": "ocr-ppocr-cjk"
         },
         "dictionary": "dict-zh",
         "preferredOcrEngine": "tesseract"
@@ -10333,6 +10381,295 @@
         }
       ],
       "dependsOn": []
+    },
+    "ocr-ppocr-detector": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "_detector",
+      "files": [
+        {
+          "name": "PP-OCRv5_mobile_det.mnn",
+          "sizeBytes": 4760244,
+          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_det.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_det.mnn"
+        }
+      ],
+      "dependsOn": []
+    },
+    "ocr-ppocr-arabic": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "arabic",
+      "files": [
+        {
+          "name": "arabic_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 4043724,
+          "installPath": "ppocr/PP-OCRv5/arabic_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/arabic_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "arabic_PP-OCRv5_keys.txt",
+          "sizeBytes": 2369,
+          "installPath": "ppocr/PP-OCRv5/arabic_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/arabic_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-cyrillic": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "cyrillic",
+      "files": [
+        {
+          "name": "cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 4068856,
+          "installPath": "ppocr/PP-OCRv5/cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/cyrillic_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "cyrillic_PP-OCRv5_keys.txt",
+          "sizeBytes": 2781,
+          "installPath": "ppocr/PP-OCRv5/cyrillic_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/cyrillic_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-devanagari": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "devanagari",
+      "files": [
+        {
+          "name": "devanagari_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 4000048,
+          "installPath": "ppocr/PP-OCRv5/devanagari_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/devanagari_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "devanagari_PP-OCRv5_keys.txt",
+          "sizeBytes": 1943,
+          "installPath": "ppocr/PP-OCRv5/devanagari_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/devanagari_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-el": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "el",
+      "files": [
+        {
+          "name": "el_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 3947832,
+          "installPath": "ppocr/PP-OCRv5/el_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/el_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "el_PP-OCRv5_keys.txt",
+          "sizeBytes": 1103,
+          "installPath": "ppocr/PP-OCRv5/el_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/el_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-en": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "en",
+      "files": [
+        {
+          "name": "en_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 3967840,
+          "installPath": "ppocr/PP-OCRv5/en_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/en_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "en_PP-OCRv5_keys.txt",
+          "sizeBytes": 1416,
+          "installPath": "ppocr/PP-OCRv5/en_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/en_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector"
+      ]
+    },
+    "ocr-ppocr-eslav": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "eslav",
+      "files": [
+        {
+          "name": "eslav_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 3987604,
+          "installPath": "ppocr/PP-OCRv5/eslav_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/eslav_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "eslav_PP-OCRv5_keys.txt",
+          "sizeBytes": 1663,
+          "installPath": "ppocr/PP-OCRv5/eslav_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/eslav_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-korean": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "korean",
+      "files": [
+        {
+          "name": "korean_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 6776036,
+          "installPath": "ppocr/PP-OCRv5/korean_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/korean_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "korean_PP-OCRv5_keys.txt",
+          "sizeBytes": 47451,
+          "installPath": "ppocr/PP-OCRv5/korean_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/korean_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-latin": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "latin",
+      "files": [
+        {
+          "name": "latin_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 4065440,
+          "installPath": "ppocr/PP-OCRv5/latin_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/latin_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "latin_PP-OCRv5_keys.txt",
+          "sizeBytes": 2616,
+          "installPath": "ppocr/PP-OCRv5/latin_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/latin_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-ta": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "ta",
+      "files": [
+        {
+          "name": "ta_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 3986628,
+          "installPath": "ppocr/PP-OCRv5/ta_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/ta_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "ta_PP-OCRv5_keys.txt",
+          "sizeBytes": 1723,
+          "installPath": "ppocr/PP-OCRv5/ta_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/ta_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-te": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "te",
+      "files": [
+        {
+          "name": "te_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 3993216,
+          "installPath": "ppocr/PP-OCRv5/te_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/te_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "te_PP-OCRv5_keys.txt",
+          "sizeBytes": 1831,
+          "installPath": "ppocr/PP-OCRv5/te_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/te_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-th": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "th",
+      "files": [
+        {
+          "name": "th_PP-OCRv5_mobile_rec_infer.mnn",
+          "sizeBytes": 3989312,
+          "installPath": "ppocr/PP-OCRv5/th_PP-OCRv5_mobile_rec_infer.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/th_PP-OCRv5_mobile_rec_infer.mnn"
+        },
+        {
+          "name": "th_PP-OCRv5_keys.txt",
+          "sizeBytes": 1767,
+          "installPath": "ppocr/PP-OCRv5/th_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/th_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
+    },
+    "ocr-ppocr-cjk": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "language": "cjk",
+      "files": [
+        {
+          "name": "PP-OCRv5_mobile_rec.mnn",
+          "sizeBytes": 16531596,
+          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_rec.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_rec.mnn"
+        },
+        {
+          "name": "cjk_PP-OCRv5_keys.txt",
+          "sizeBytes": 74012,
+          "installPath": "ppocr/PP-OCRv5/cjk_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/cjk_PP-OCRv5_keys.txt"
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-en"
+      ]
     },
     "support-adblock-lists-v1": {
       "feature": "support",

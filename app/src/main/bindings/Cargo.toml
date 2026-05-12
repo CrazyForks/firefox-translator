@@ -9,7 +9,7 @@ name = "bindings"
 path = "src/lib.rs"
 
 [features]
-default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "transliterate", "image-render", "pdf-image-translate", "doc-align"]
+default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "transliterate", "image-render", "pdf-image-translate", "doc-align", "ppocr"]
 dictionary = ["translator/dictionary"]
 mucab = ["translator/mucab"]
 tesseract = ["translator/tesseract"]
@@ -20,6 +20,7 @@ transliterate = ["translator/transliterate"]
 image-render = ["translator/image-render"]
 pdf-image-translate = ["translator/pdf-image-translate"]
 doc-align = ["translator/doc-align"]
+ppocr = ["translator/ppocr"]
 
 [dependencies]
 adblock = { version = "0.12.2", default-features = false, features = ["full-regex-handling", "embedded-domain-resolver"] }
@@ -47,5 +48,4 @@ lto = "thin"
 codegen-units = 2
 debug = false
 strip = "debuginfo"
-#
 #

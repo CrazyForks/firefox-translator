@@ -591,6 +591,32 @@ impl CatalogHandle {
             .has_tts_voices(&translator::LanguageCode::from(language_code))
     }
 
+    fn installed_ocr_engines(&self, language_code: String) -> Vec<String> {
+        translator::installed_ocr_engines_for_language(
+            &self.snapshot(),
+            &translator::LanguageCode::from(language_code),
+        )
+    }
+
+    fn available_ocr_engines(&self, language_code: String) -> Vec<String> {
+        translator::available_ocr_engines_for_language(
+            &self.snapshot(),
+            &translator::LanguageCode::from(language_code),
+        )
+    }
+
+    fn plan_ocr_engine_download(
+        &self,
+        language_code: String,
+        engine: String,
+    ) -> Option<translator::DownloadPlan> {
+        translator::plan_ocr_engine_download(
+            &self.snapshot(),
+            &translator::LanguageCode::from(language_code),
+            &engine,
+        )
+    }
+
     fn tts_sample_text(&self, language_code: String) -> Option<String> {
         self.snapshot()
             .catalog
@@ -711,11 +737,13 @@ impl CatalogHandle {
         rgba_bytes: Vec<u8>,
         width: u32,
         height: u32,
+        max_image_size: u32,
         source_code: String,
         target_code: String,
         min_confidence: u32,
         reading_order: translator::ReadingOrder,
         background_mode: translator::BackgroundMode,
+        preferred_engine: translator::PreferredOcrEngine,
     ) -> Result<translator::PreparedImageOverlay, CatalogError> {
         #[cfg(feature = "tesseract")]
         {
@@ -725,11 +753,13 @@ impl CatalogHandle {
                     &rgba_bytes,
                     width,
                     height,
+                    max_image_size,
                     &source_code,
                     &target_code,
                     min_confidence,
                     reading_order,
                     background_mode,
+                    preferred_engine,
                 )
                 .map_err(CatalogError::from);
         }
@@ -739,16 +769,29 @@ impl CatalogHandle {
                 rgba_bytes,
                 width,
                 height,
+                max_image_size,
                 source_code,
                 target_code,
                 min_confidence,
                 reading_order,
                 background_mode,
+                preferred_engine,
             );
             Err(CatalogError::Other {
                 reason: "tesseract feature disabled".to_string(),
             })
         }
+    }
+
+    fn retranslate_image_plan(
+        &self,
+        prepared: translator::PreparedImageOverlay,
+        source_code: String,
+        target_code: String,
+    ) -> Result<translator::PreparedImageOverlay, CatalogError> {
+        self.session
+            .retranslate_prepared_overlay(prepared, &source_code, &target_code)
+            .map_err(CatalogError::from)
     }
 
     fn translate_document_path(

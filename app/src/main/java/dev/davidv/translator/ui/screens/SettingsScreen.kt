@@ -76,6 +76,7 @@ import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageCatalog
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.PermissionHelper
+import dev.davidv.translator.PreferredOcrEngine
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadonlyModalOutputAlignment
 import dev.davidv.translator.TapToTranslateNotification
@@ -639,6 +640,47 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.primary,
           )
 
+          // Preferred OCR Engine
+          var preferredEngineExpanded by remember { mutableStateOf(false) }
+
+          Text(
+            text = "Preferred Engine",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+
+          ExposedDropdownMenuBox(
+            expanded = preferredEngineExpanded,
+            onExpandedChange = { preferredEngineExpanded = it },
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            OutlinedTextField(
+              value = settings.preferredOcrEngine.displayName,
+              onValueChange = {},
+              readOnly = true,
+              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = preferredEngineExpanded) },
+              modifier =
+                Modifier
+                  .menuAnchor()
+                  .fillMaxWidth(),
+              colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            )
+            ExposedDropdownMenu(
+              expanded = preferredEngineExpanded,
+              onDismissRequest = { preferredEngineExpanded = false },
+            ) {
+              PreferredOcrEngine.entries.forEach { engine ->
+                DropdownMenuItem(
+                  text = { Text(engine.displayName) },
+                  onClick = {
+                    onSettingsChange(settings.copy(preferredOcrEngine = engine))
+                    preferredEngineExpanded = false
+                  },
+                )
+              }
+            }
+          }
+
           // Background Mode
           var backgroundModeExpanded by remember { mutableStateOf(false) }
 
@@ -709,8 +751,8 @@ fun SettingsScreen(
             onValueChange = { value ->
               onSettingsChange(settings.copy(maxImageSize = value.toInt()))
             },
-            valueRange = 1500f..4000f,
-            steps = 24,
+            valueRange = 600f..2000f,
+            steps = 27,
             modifier = Modifier.fillMaxWidth(),
           )
         }

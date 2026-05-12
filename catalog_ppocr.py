@@ -3,28 +3,33 @@
 The PPOCR rec models are organised by script, not by language: one model
 covers every language that uses that script. Maps the script "slugs" used
 in PaddleOCR filenames to the catalog's language codes.
-
-Pack emission is deliberately not wired up yet (URLs not finalised); see
-the TODO at the bottom of this file for the next step.
 """
 
-PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det_fp16.onnx"
+import catalog_base
+
+
+PPOCR_ENGINE = "ppocr"
+PPOCR_BUCKET_BASE = "ocr/1/PP-OCRv5"
+PPOCR_INSTALL_BASE = "ppocr/PP-OCRv5"
+PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
+
+PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det.mnn"
 
 # Recognizer model filename per script slug. The "cjk" slug uses the shared
 # PP-OCRv5 model that handles Japanese + Chinese together.
 PPOCR_RECOGNIZER_FILENAMES = {
-    "arabic": "arabic_PP-OCRv5_mobile_rec_infer.onnx",
-    "cyrillic": "cyrillic_PP-OCRv5_mobile_rec_infer.onnx",
-    "devanagari": "devanagari_PP-OCRv5_mobile_rec_infer.onnx",
-    "el": "el_PP-OCRv5_mobile_rec_infer.onnx",
-    "en": "en_PP-OCRv5_mobile_rec_infer.onnx",
-    "eslav": "eslav_PP-OCRv5_mobile_rec_infer.onnx",
-    "korean": "korean_PP-OCRv5_mobile_rec_infer.onnx",
-    "latin": "latin_PP-OCRv5_mobile_rec_infer.onnx",
-    "ta": "ta_PP-OCRv5_mobile_rec_infer.onnx",
-    "te": "te_PP-OCRv5_mobile_rec_infer.onnx",
-    "th": "th_PP-OCRv5_mobile_rec_infer.onnx",
-    "cjk": "PP-OCRv5_mobile_rec_fp16.onnx",
+    "arabic": "arabic_PP-OCRv5_mobile_rec_infer.mnn",
+    "cyrillic": "cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
+    "devanagari": "devanagari_PP-OCRv5_mobile_rec_infer.mnn",
+    "el": "el_PP-OCRv5_mobile_rec_infer.mnn",
+    "en": "en_PP-OCRv5_mobile_rec_infer.mnn",
+    "eslav": "eslav_PP-OCRv5_mobile_rec_infer.mnn",
+    "korean": "korean_PP-OCRv5_mobile_rec_infer.mnn",
+    "latin": "latin_PP-OCRv5_mobile_rec_infer.mnn",
+    "ta": "ta_PP-OCRv5_mobile_rec_infer.mnn",
+    "te": "te_PP-OCRv5_mobile_rec_infer.mnn",
+    "th": "th_PP-OCRv5_mobile_rec_infer.mnn",
+    "cjk": "PP-OCRv5_mobile_rec.mnn",
 }
 
 # Language codes (catalog keys) served by each PPOCR script.
@@ -77,13 +82,58 @@ def language_to_ppocr_script() -> dict:
     return out
 
 
-# TODO: when the PPOCR pack URLs are ready, add a function similar to
-# catalog_doc_detect.add_doc_detect_pack that:
-#  1. Emits one pack per script in PPOCR_RECOGNIZER_FILENAMES, with
-#     `feature: "ocr"`, `engine: "ppocr"`, `language: <script slug>`,
-#     and `dependsOn: [<detector pack id>]`.
-#  2. Emits one detector pack referencing PPOCR_DETECTOR_FILENAME.
-#  3. For every language in PPOCR_SCRIPT_TO_LANGUAGES[script], adds the
-#     pack id to that language's `assets.ocr` map under engine key "ppocr".
-#  4. Optionally flips `preferredOcrEngine` to "ppocr" for those languages
-#     (decide policy before generation).
+def _keys_filename(script: str) -> str:
+    return f"{script}_PP-OCRv5_keys.txt"
+
+
+def _make_file(name: str) -> dict:
+    install_path = f"{PPOCR_INSTALL_BASE}/{name}"
+    mirror_path = f"{PPOCR_BUCKET_BASE}/{name}"
+    return {
+        "name": name,
+        "sizeBytes": 0,
+        "installPath": install_path,
+        "url": f"https://offline-translator.davidv.dev/{mirror_path}",
+        "mirrorPath": mirror_path,
+    }
+
+
+def add_ppocr_packs(catalog: dict) -> None:
+    catalog["packs"][PPOCR_DETECTOR_PACK_ID] = {
+        "feature": "ocr",
+        "engine": PPOCR_ENGINE,
+        "language": "_detector",
+        "files": [_make_file(PPOCR_DETECTOR_FILENAME)],
+        "dependsOn": [],
+    }
+
+    languages = catalog["languages"]
+    en_pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, "en")
+    for script, langs in PPOCR_SCRIPT_TO_LANGUAGES.items():
+        rec_filename = PPOCR_RECOGNIZER_FILENAMES[script]
+        keys_filename = _keys_filename(script)
+        pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, script)
+        # Every non-en rec pack pulls in the English rec as a sibling install,
+        # mirroring the tesseract layout where `ocr-tesseract-en` is a hard
+        # dependency of every other tesseract pack. English has no separate
+        # "core" install path in the UI, so without this dependency edge the
+        # `en` rec model would only get installed if the user manually picked
+        # English for OCR — which the UI doesn't surface.
+        depends_on = [PPOCR_DETECTOR_PACK_ID]
+        if script != "en":
+            depends_on.append(en_pack_id)
+        catalog["packs"][pack_id] = {
+            "feature": "ocr",
+            "engine": PPOCR_ENGINE,
+            "language": script,
+            "files": [
+                _make_file(rec_filename),
+                _make_file(keys_filename),
+            ],
+            "dependsOn": depends_on,
+        }
+        for lang in langs:
+            if lang not in languages:
+                continue
+            ocr_assets = languages[lang]["assets"].setdefault("ocr", {})
+            ocr_assets[PPOCR_ENGINE] = pack_id

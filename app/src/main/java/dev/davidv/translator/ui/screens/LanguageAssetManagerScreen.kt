@@ -91,6 +91,7 @@ import dev.davidv.translator.LanguageCatalog
 import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
+import dev.davidv.translator.PreferredOcrEngine
 import dev.davidv.translator.R
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.encodeVoiceOverride
@@ -122,6 +123,16 @@ private data class PendingSharedDictionaryDelete(
 private data class PendingTtsVoicePicker(
   val language: Language,
 )
+
+private data class PaddleUpgrade(
+  val languages: List<Language>,
+  val triggers: List<Language>,
+  val totalBytes: Long,
+) {
+  companion object {
+    val EMPTY = PaddleUpgrade(emptyList(), emptyList(), 0L)
+  }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -600,6 +611,7 @@ fun LanguageAssetManagerScreen(
   queuedTtsPackIds: Map<Language, List<String>> = emptyMap(),
 ) {
   val languageMetadata by languageMetadataManager.metadata.collectAsState()
+  val appSettings by settingsManager.settings.collectAsState()
   val expandedLanguages = remember { mutableStateMapOf<String, Boolean>() }
   var isRefreshing by remember { mutableStateOf(false) }
   var filterQuery by remember { mutableStateOf("") }
@@ -654,6 +666,33 @@ fun LanguageAssetManagerScreen(
         }
         ?: emptyList()
     }
+  val paddleUpgrade =
+    remember(catalog, rows, appSettings.preferredOcrEngine, catalogRefreshToken) {
+      if (appSettings.preferredOcrEngine != PreferredOcrEngine.PADDLE || catalog == null) {
+        PaddleUpgrade.EMPTY
+      } else {
+        val languages = mutableListOf<Language>()
+        val triggers = mutableListOf<Language>()
+        val seenPaths = mutableSetOf<String>()
+        var totalBytes = 0L
+        rows.forEach { row ->
+          if (!row.availability.ocrFiles) return@forEach
+          val installed = catalog.installedOcrEngines(row.language.code).toSet()
+          if ("tesseract" !in installed || "ppocr" in installed) return@forEach
+          val plan = catalog.planOcrEngineDownload(row.language.code, "ppocr") ?: return@forEach
+          if (plan.tasks.isEmpty()) return@forEach
+          languages.add(row.language)
+          val newTasks = plan.tasks.filter { it.installPath !in seenPaths }
+          if (newTasks.isNotEmpty()) {
+            seenPaths.addAll(newTasks.map { it.installPath })
+            totalBytes += newTasks.sumOf { it.sizeBytes.toLong() }
+            triggers.add(row.language)
+          }
+        }
+        PaddleUpgrade(languages = languages, triggers = triggers, totalBytes = totalBytes)
+      }
+    }
+
   val sharedDictionaryUsersByLanguageCode =
     remember(rows) {
       rows
@@ -698,6 +737,18 @@ fun LanguageAssetManagerScreen(
         singleLine = true,
         label = { Text("Filter languages") },
       )
+
+      if (paddleUpgrade.languages.isNotEmpty()) {
+        PaddleUpgradeCard(
+          languageCount = paddleUpgrade.languages.size,
+          totalBytes = paddleUpgrade.totalBytes,
+          onDownload = {
+            paddleUpgrade.triggers.forEach { language ->
+              DownloadService.startOcrEngineDownload(context, language, "ppocr")
+            }
+          },
+        )
+      }
 
       LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -1306,6 +1357,37 @@ private fun ProgressIconButton(
         contentDescription = contentDescription,
         modifier = Modifier.size(14.dp),
       )
+    }
+  }
+}
+
+@Composable
+private fun PaddleUpgradeCard(
+  languageCount: Int,
+  totalBytes: Long,
+  onDownload: () -> Unit,
+) {
+  val languageLabel = if (languageCount == 1) "1 language" else "$languageCount languages"
+  Surface(
+    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    shape = RoundedCornerShape(12.dp),
+    modifier =
+      Modifier
+        .fillMaxWidth()
+        .padding(bottom = 6.dp),
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(
+        text = "You have files for $languageLabel in a suboptimal format.",
+        style = MaterialTheme.typography.bodySmall,
+        modifier = Modifier.weight(1f),
+      )
+      TextButton(onClick = onDownload) {
+        Text("Download ${formatSize(totalBytes)}")
+      }
     }
   }
 }

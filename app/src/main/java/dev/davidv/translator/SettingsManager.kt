@@ -71,8 +71,20 @@ class SettingsManager(
         defaults.backgroundMode
       }
 
+    val preferredOcrEngineName = prefs.getString("preferred_ocr_engine", null)
+    val preferredOcrEngine =
+      if (preferredOcrEngineName != null) {
+        try {
+          PreferredOcrEngine.valueOf(preferredOcrEngineName)
+        } catch (_: IllegalArgumentException) {
+          defaults.preferredOcrEngine
+        }
+      } else {
+        defaults.preferredOcrEngine
+      }
+
     val minConfidence = prefs.getInt("min_confidence", defaults.minConfidence)
-    val maxImageSize = prefs.getInt("max_image_size", defaults.maxImageSize)
+    val maxImageSize = prefs.getInt("max_image_size", defaults.maxImageSize).coerceIn(600, 2000)
     val disableCLD = prefs.getBoolean("disable_cld", defaults.disableCLD)
     val enableOutputTransliteration = prefs.getBoolean("enable_output_transliteration", defaults.enableOutputTransliteration)
     val useExternalStorage = prefs.getBoolean("use_external_storage", defaults.useExternalStorage)
@@ -130,6 +142,7 @@ class SettingsManager(
       defaultSourceLanguageCode = defaultSourceLanguageCode,
       catalogIndexUrl = catalogIndexUrl,
       backgroundMode = backgroundMode,
+      preferredOcrEngine = preferredOcrEngine,
       minConfidence = minConfidence,
       maxImageSize = maxImageSize,
       disableCLD = disableCLD,
@@ -174,6 +187,10 @@ class SettingsManager(
       if (newSettings.backgroundMode != currentSettings.backgroundMode) {
         putString("background_mode", newSettings.backgroundMode.name)
         modifiedSettings.add("background_mode")
+      }
+      if (newSettings.preferredOcrEngine != currentSettings.preferredOcrEngine) {
+        putString("preferred_ocr_engine", newSettings.preferredOcrEngine.name)
+        modifiedSettings.add("preferred_ocr_engine")
       }
       if (newSettings.minConfidence != currentSettings.minConfidence) {
         putInt("min_confidence", newSettings.minConfidence)
