@@ -734,8 +734,8 @@ fun SettingsScreen(
             onValueChange = { value ->
               onSettingsChange(settings.copy(minConfidence = value.toInt()))
             },
-            valueRange = 50f..100f,
-            steps = 9,
+            valueRange = 70f..100f,
+            steps = 5,
             modifier = Modifier.fillMaxWidth(),
           )
 
@@ -751,8 +751,8 @@ fun SettingsScreen(
             onValueChange = { value ->
               onSettingsChange(settings.copy(maxImageSize = value.toInt()))
             },
-            valueRange = 600f..2000f,
-            steps = 27,
+            valueRange = 1300f..2000f,
+            steps = 6,
             modifier = Modifier.fillMaxWidth(),
           )
         }

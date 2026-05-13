@@ -28,7 +28,7 @@ data class AppSettings(
   val backgroundMode: BackgroundMode = BackgroundMode.AUTO_DETECT,
   val preferredOcrEngine: PreferredOcrEngine = PreferredOcrEngine.PADDLE,
   val minConfidence: Int = 75,
-  val maxImageSize: Int = 1200,
+  val maxImageSize: Int = 1400,
   val disableCLD: Boolean = false,
   val enableOutputTransliteration: Boolean = true,
   val useExternalStorage: Boolean = false,
