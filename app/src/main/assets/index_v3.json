@@ -1,10 +1,10 @@
 {
   "formatVersion": 3,
-  "generatedAt": 1778615180,
+  "generatedAt": 1778695887,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778615180,
+    "languageIndexUpdatedAt": 1778695887,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -974,6 +974,7 @@
           "JP": {
             "displayName": "Japan",
             "voices": [
+              "tts-kokoro_mnn-ja-jp-jf-alpha-kokoro-mnn-v1.0",
               "tts-kokoro-ja-jp-jf-alpha-kokoro-v1.0"
             ]
           }
@@ -1038,6 +1039,7 @@
             "displayName": "South Korea",
             "voices": [
               "tts-mimic3-ko-ko-kss-low",
+              "tts-kokoro_mnn-ko-kr-jf-alpha-kokoro-mnn-v1.0",
               "tts-kokoro-ko-kr-jf-alpha-kokoro-v1.0"
             ]
           }
@@ -7004,6 +7006,19 @@
         "tts-espeak-core-v1"
       ]
     },
+    "tts-kokoro-voices-v1.0": {
+      "feature": "support",
+      "kind": "tts-kokoro-voices",
+      "files": [
+        {
+          "name": "voices-v1.0.bin",
+          "sizeBytes": 28214398,
+          "installPath": "bin/kokoro/voices-v1.0.bin",
+          "url": "https://offline-translator.davidv.dev/tts/1/kokoro/voices-v1.0.bin"
+        }
+      ],
+      "dependsOn": []
+    },
     "tts-kokoro-v1.0-core": {
       "feature": "support",
       "kind": "tts-kokoro-core",
@@ -7013,15 +7028,32 @@
           "sizeBytes": 92361271,
           "installPath": "bin/kokoro/kokoro-v1.0.int8.onnx",
           "url": "https://offline-translator.davidv.dev/tts/1/kokoro/kokoro-v1.0.int8.onnx"
-        },
-        {
-          "name": "voices-v1.0.bin",
-          "sizeBytes": 28214398,
-          "installPath": "bin/kokoro/voices-v1.0.bin",
-          "url": "https://offline-translator.davidv.dev/tts/1/kokoro/voices-v1.0.bin"
         }
       ],
-      "dependsOn": []
+      "dependsOn": [
+        "tts-kokoro-voices-v1.0"
+      ]
+    },
+    "tts-kokoro-mnn-v1.0-core": {
+      "feature": "support",
+      "kind": "tts-kokoro-mnn-core",
+      "files": [
+        {
+          "name": "kokoro.mnn",
+          "sizeBytes": 1028464,
+          "installPath": "bin/kokoro_mnn/kokoro.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/kokoro_mnn/kokoro.mnn"
+        },
+        {
+          "name": "kokoro.mnn.weight",
+          "sizeBytes": 86949555,
+          "installPath": "bin/kokoro_mnn/kokoro.mnn.weight",
+          "url": "https://offline-translator.davidv.dev/tts/1/kokoro_mnn/kokoro.mnn.weight"
+        }
+      ],
+      "dependsOn": [
+        "tts-kokoro-voices-v1.0"
+      ]
     },
     "tts-piper-ar-jo-kareem-medium": {
       "feature": "tts",
@@ -8804,9 +8836,9 @@
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/it/riccardo_x_low.opus"
     },
-    "tts-kokoro-ja-jp-jf-alpha-kokoro-v1.0": {
+    "tts-kokoro_mnn-ja-jp-jf-alpha-kokoro-mnn-v1.0": {
       "feature": "tts",
-      "engine": "kokoro",
+      "engine": "kokoro_mnn",
       "language": "ja",
       "locale": "ja_JP",
       "region": "JP",
@@ -8817,9 +8849,25 @@
       "files": [],
       "dependsOn": [
         "tts-espeak-dict-ja",
-        "tts-kokoro-v1.0-core"
+        "tts-kokoro-mnn-v1.0-core"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ja/jf_alpha_high.opus"
+    },
+    "tts-kokoro-ja-jp-jf-alpha-kokoro-v1.0": {
+      "feature": "tts",
+      "engine": "kokoro",
+      "language": "ja",
+      "locale": "ja_JP",
+      "region": "JP",
+      "voice": "jf_alpha (deprecated)",
+      "quality": "high",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [],
+      "dependsOn": [
+        "tts-espeak-dict-ja",
+        "tts-kokoro-v1.0-core"
+      ]
     },
     "tts-mms-kn-in-standard-mms": {
       "feature": "tts",
@@ -8883,9 +8931,9 @@
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ko/kss_low.opus"
     },
-    "tts-kokoro-ko-kr-jf-alpha-kokoro-v1.0": {
+    "tts-kokoro_mnn-ko-kr-jf-alpha-kokoro-mnn-v1.0": {
       "feature": "tts",
-      "engine": "kokoro",
+      "engine": "kokoro_mnn",
       "language": "ko",
       "locale": "ko_KR",
       "region": "KR",
@@ -8896,9 +8944,25 @@
       "files": [],
       "dependsOn": [
         "tts-espeak-dict-ko",
-        "tts-kokoro-v1.0-core"
+        "tts-kokoro-mnn-v1.0-core"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ko/jf_alpha_high.opus"
+    },
+    "tts-kokoro-ko-kr-jf-alpha-kokoro-v1.0": {
+      "feature": "tts",
+      "engine": "kokoro",
+      "language": "ko",
+      "locale": "ko_KR",
+      "region": "KR",
+      "voice": "jf_alpha (deprecated)",
+      "quality": "high",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [],
+      "dependsOn": [
+        "tts-espeak-dict-ko",
+        "tts-kokoro-v1.0-core"
+      ]
     },
     "tts-coqui_vits-lt-lt-cv-coqui-vits": {
       "feature": "tts",

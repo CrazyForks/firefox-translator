@@ -16,6 +16,8 @@ COQUI_VITS_BASE_URL = "https://offline-translator.davidv.dev/tts/1"
 TTS_BASE_URL = "https://offline-translator.davidv.dev/tts"
 TTS_VERSION = 1
 KOKORO_SHARED_PACK_ID = "tts-kokoro-v1.0-core"
+KOKORO_MNN_SHARED_PACK_ID = "tts-kokoro-mnn-v1.0-core"
+KOKORO_VOICES_PACK_ID = "tts-kokoro-voices-v1.0"
 CORE_ESPEAK_FILES = ("phondata", "phonindex", "phontab", "intonations")
 QUALITY_PRIORITY = {
     "medium": 0,
@@ -26,6 +28,7 @@ QUALITY_PRIORITY = {
 ENGINE_PRIORITY = {
     "piper": 0,
     "mimic3": 0,
+    "kokoro_mnn": 0,
     "mms": 1,
     "sherpa_vits": 2,
     "coqui_vits": 2,
@@ -309,6 +312,25 @@ EXTRA_TTS_VOICES = {
         "engine": "kokoro",
         "shared_pack": KOKORO_SHARED_PACK_ID,
         "key": "ja_JP-jf_alpha-kokoro-v1.0",
+        "name": "jf_alpha (deprecated)",
+        "language": {
+            "code": "ja_JP",
+            "family": "ja",
+            "region": "JP",
+            "name_native": "日本語",
+            "name_english": "Japanese",
+            "country_english": "Japan",
+        },
+        "quality": "high",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {},
+        "aliases": [],
+    },
+    "ja_JP-jf_alpha-kokoro-mnn-v1.0": {
+        "engine": "kokoro_mnn",
+        "shared_pack": KOKORO_MNN_SHARED_PACK_ID,
+        "key": "ja_JP-jf_alpha-kokoro-mnn-v1.0",
         "name": "jf_alpha",
         "language": {
             "code": "ja_JP",
@@ -330,6 +352,25 @@ EXTRA_TTS_VOICES = {
         "engine": "kokoro",
         "shared_pack": KOKORO_SHARED_PACK_ID,
         "key": "ko_KR-jf_alpha-kokoro-v1.0",
+        "name": "jf_alpha (deprecated)",
+        "language": {
+            "code": "ko_KR",
+            "family": "ko",
+            "region": "KR",
+            "name_native": "한국어",
+            "name_english": "Korean",
+            "country_english": "South Korea",
+        },
+        "quality": "high",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {},
+        "aliases": [],
+    },
+    "ko_KR-jf_alpha-kokoro-mnn-v1.0": {
+        "engine": "kokoro_mnn",
+        "shared_pack": KOKORO_MNN_SHARED_PACK_ID,
+        "key": "ko_KR-jf_alpha-kokoro-mnn-v1.0",
         "name": "jf_alpha",
         "language": {
             "code": "ko_KR",
@@ -659,6 +700,20 @@ KOKORO_SHARED_FILES = {
         "size_bytes": 92361271,
         "url": f"{KOKORO_BASE_URL}/kokoro-v1.0.int8.onnx",
     },
+}
+
+KOKORO_MNN_SHARED_FILES = {
+    "kokoro.mnn": {
+        "size_bytes": 1028464,
+        "url": f"{TTS_BASE_URL}/{TTS_VERSION}/kokoro_mnn/kokoro.mnn",
+    },
+    "kokoro.mnn.weight": {
+        "size_bytes": 86949555,
+        "url": f"{TTS_BASE_URL}/{TTS_VERSION}/kokoro_mnn/kokoro.mnn.weight",
+    },
+}
+
+KOKORO_VOICES_FILES = {
     "voices-v1.0.bin": {
         "size_bytes": 28214398,
         "url": f"{KOKORO_BASE_URL}/voices-v1.0.bin",
@@ -815,27 +870,60 @@ def build_espeak_support_packs(
 
 
 def build_shared_tts_support_packs(catalog: dict, voices: dict) -> None:
-    if not any(voice.get("shared_pack") == KOKORO_SHARED_PACK_ID for voice in voices.values()):
-        return
+    needs_kokoro = any(voice.get("shared_pack") == KOKORO_SHARED_PACK_ID for voice in voices.values())
+    needs_kokoro_mnn = any(voice.get("shared_pack") == KOKORO_MNN_SHARED_PACK_ID for voice in voices.values())
 
-    catalog["packs"][KOKORO_SHARED_PACK_ID] = {
-        "feature": "support",
-        "kind": "tts-kokoro-core",
-        "files": [
-            {
-                "name": filename,
-                "sizeBytes": file_info["size_bytes"],
-                "installPath": f"bin/kokoro/{filename}",
-                "url": file_info["url"],
-            }
-            for filename, file_info in KOKORO_SHARED_FILES.items()
-        ],
-        "dependsOn": [],
-    }
+    if needs_kokoro or needs_kokoro_mnn:
+        catalog["packs"][KOKORO_VOICES_PACK_ID] = {
+            "feature": "support",
+            "kind": "tts-kokoro-voices",
+            "files": [
+                {
+                    "name": filename,
+                    "sizeBytes": file_info["size_bytes"],
+                    "installPath": f"bin/kokoro/{filename}",
+                    "url": file_info["url"],
+                }
+                for filename, file_info in KOKORO_VOICES_FILES.items()
+            ],
+            "dependsOn": [],
+        }
+
+    if needs_kokoro:
+        catalog["packs"][KOKORO_SHARED_PACK_ID] = {
+            "feature": "support",
+            "kind": "tts-kokoro-core",
+            "files": [
+                {
+                    "name": filename,
+                    "sizeBytes": file_info["size_bytes"],
+                    "installPath": f"bin/kokoro/{filename}",
+                    "url": file_info["url"],
+                }
+                for filename, file_info in KOKORO_SHARED_FILES.items()
+            ],
+            "dependsOn": [KOKORO_VOICES_PACK_ID],
+        }
+
+    if needs_kokoro_mnn:
+        catalog["packs"][KOKORO_MNN_SHARED_PACK_ID] = {
+            "feature": "support",
+            "kind": "tts-kokoro-mnn-core",
+            "files": [
+                {
+                    "name": filename,
+                    "sizeBytes": file_info["size_bytes"],
+                    "installPath": f"bin/kokoro_mnn/{filename}",
+                    "url": file_info["url"],
+                }
+                for filename, file_info in KOKORO_MNN_SHARED_FILES.items()
+            ],
+            "dependsOn": [KOKORO_VOICES_PACK_ID],
+        }
 
 
 def engine_supports_espeak(engine: str) -> bool:
-    return engine in {"piper", "mimic3", "kokoro"}
+    return engine in {"piper", "mimic3", "kokoro", "kokoro_mnn"}
 
 
 def merge_tts(
