@@ -63,6 +63,8 @@ fun LanguageSelector(
   detectedInstalled: Language? = null,
   showAutoOption: Boolean = false,
   onAutoSelected: (() -> Unit)? = null,
+  textColor: androidx.compose.ui.graphics.Color? = null,
+  marquee: Boolean = true,
 ) {
   var expanded by remember { mutableStateOf(false) }
   val interactionSource = remember { MutableInteractionSource() }
@@ -81,7 +83,7 @@ fun LanguageSelector(
     Text(
       modifier =
         Modifier
-          .basicMarquee()
+          .then(if (marquee) Modifier.basicMarquee() else Modifier)
           .clip(RoundedCornerShape(10.dp))
           .clickable(
             interactionSource = interactionSource,
@@ -94,8 +96,9 @@ fun LanguageSelector(
       text = displayText,
       textAlign = TextAlign.Center,
       maxLines = 1,
+      overflow = if (marquee) androidx.compose.ui.text.style.TextOverflow.Clip else androidx.compose.ui.text.style.TextOverflow.Ellipsis,
       style = MaterialTheme.typography.bodyMedium,
-      color = MaterialTheme.colorScheme.onSurface,
+      color = textColor ?: MaterialTheme.colorScheme.onSurface,
     )
 
     DropdownMenu(

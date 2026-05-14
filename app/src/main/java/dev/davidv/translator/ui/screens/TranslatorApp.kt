@@ -694,6 +694,7 @@ fun TranslatorApp(
               val targetTtsPlaybackSpeed = ttsPlaybackSpeedFor(settings, currentTo, selectedTtsVoiceName)
               MainScreen(
                 onSettings = { navController.navigate("settings") },
+                onLiveCamera = { navController.navigate("live_camera") },
                 input = input,
                 inputTransliteration = inputTransliterated,
                 output = output,
@@ -870,6 +871,24 @@ fun TranslatorApp(
           }
           composable("how_to_use") {
             HowToUseScreen(onBack = { navController.popBackStack() })
+          }
+          composable("live_camera") {
+            val currentFrom = from
+            val currentTo = to
+            if (currentFrom != null && currentTo != null) {
+              LiveCameraScreen(
+                from = currentFrom,
+                to = currentTo,
+                canSwap = viewModel.languageStateManager.canSwapLanguages(currentFrom, currentTo),
+                languageState = languageState,
+                languageMetadata = languageMetadata,
+                onMessage = viewModel::handleMessage,
+                liveOverlayDefaultEnabled = settings.liveCameraOverlayEnabled,
+                onClose = {
+                  navController.popBackStack("main", inclusive = false)
+                },
+              )
+            }
           }
         }
       }

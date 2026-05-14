@@ -17,7 +17,6 @@
 
 package dev.davidv.translator.ui.components
 
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -199,6 +198,7 @@ fun ImageCaptureHandler(
   onMessage: (TranslatorMessage) -> Unit,
   showImageSourceSheet: Boolean,
   onDismissImageSourceSheet: () -> Unit,
+  onCameraClick: () -> Unit,
   pendingSharedImage: SharedFlow<Uri>? = null,
 ) {
   val context = LocalContext.current
@@ -323,27 +323,6 @@ fun ImageCaptureHandler(
     }
   }
 
-  val takePictureIntent =
-    rememberLauncherForActivityResult(
-      ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-      if (result.resultCode == android.app.Activity.RESULT_OK) {
-        val activeImport = pendingImport.value
-        val cameraImageUri = activeImport?.sourceUri
-        if (cameraImageUri == null) {
-          Log.d("Camera", "Photo capture completed without an active import session")
-          return@rememberLauncherForActivityResult
-        }
-        Log.d("Camera", "Photo captured: $cameraImageUri")
-        launchCrop(cameraImageUri, activeImport.cropOutputUri)
-      } else {
-        pendingImport.value?.sourceUri?.let { deleteTemporaryImageUri(context, it) }
-        pendingImport.value?.cropOutputUri?.let { deleteTemporaryImageUri(context, it) }
-        pendingImport.value = null
-        Log.d("Camera", "Photo capture cancelled or failed")
-      }
-    }
-
   val pickMedia =
     rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
       if (uri != null) {
@@ -409,19 +388,7 @@ fun ImageCaptureHandler(
       onDismiss = onDismissImageSourceSheet,
       onCameraClick = {
         onDismissImageSourceSheet()
-        val cameraImageUri = createTemporaryImageUri(context, "camera_image")
-        val cropOutputUri = createTemporaryImageUri(context, "cropped_image")
-        pendingImport.value = PendingImageImport(sourceUri = cameraImageUri, cropOutputUri = cropOutputUri)
-        val cameraIntent =
-          Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
-            putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri)
-          }
-        try {
-          takePictureIntent.launch(cameraIntent)
-        } catch (e: ActivityNotFoundException) {
-          Log.e("Camera", "No camera app found to handle IMAGE_CAPTURE intent", e)
-          Toast.makeText(context, "No camera app found", Toast.LENGTH_SHORT).show()
-        }
+        onCameraClick()
       },
       onMediaPickerClick = {
         onDismissImageSourceSheet()
@@ -468,27 +435,6 @@ fun ImageSourceBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
       ) {
-        // Camera (always present)
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.clickable { onCameraClick() },
-        ) {
-          Icon(
-            painter = painterResource(id = R.drawable.camera),
-            contentDescription = "Camera",
-            modifier =
-              Modifier
-                .size(48.dp)
-                .padding(bottom = 8.dp),
-            tint = MaterialTheme.colorScheme.onSurface,
-          )
-          Text(
-            text = "Camera",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-          )
-        }
-
         // Conditional: Photos (Android 13+) or Gallery (older versions)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
           // Modern Photos picker for Android 13+
@@ -551,6 +497,27 @@ fun ImageSourceBottomSheet(
           )
           Text(
             text = "Document",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+          )
+        }
+
+        // Camera (rightmost — live camera surface)
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          modifier = Modifier.clickable { onCameraClick() },
+        ) {
+          Icon(
+            painter = painterResource(id = R.drawable.camera),
+            contentDescription = "Camera",
+            modifier =
+              Modifier
+                .size(48.dp)
+                .padding(bottom = 8.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = "Camera",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
           )

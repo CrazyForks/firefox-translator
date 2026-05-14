@@ -136,6 +136,8 @@ class SettingsManager(
       )
     val translatePdfImages =
       prefs.getBoolean("translate_pdf_images", defaults.translatePdfImages)
+    val liveCameraOverlayEnabled =
+      prefs.getBoolean("live_camera_overlay_enabled", defaults.liveCameraOverlayEnabled)
 
     return AppSettings(
       defaultTargetLanguageCode = defaultTargetLanguageCode,
@@ -161,6 +163,7 @@ class SettingsManager(
       tapToTranslateEnabled = tapToTranslateEnabled,
       clearWebTranslatorDataOnClose = clearWebTranslatorDataOnClose,
       translatePdfImages = translatePdfImages,
+      liveCameraOverlayEnabled = liveCameraOverlayEnabled,
     )
   }
 
@@ -264,6 +267,10 @@ class SettingsManager(
       if (newSettings.translatePdfImages != currentSettings.translatePdfImages) {
         putBoolean("translate_pdf_images", newSettings.translatePdfImages)
         modifiedSettings.add("translate_pdf_images")
+      }
+      if (newSettings.liveCameraOverlayEnabled != currentSettings.liveCameraOverlayEnabled) {
+        putBoolean("live_camera_overlay_enabled", newSettings.liveCameraOverlayEnabled)
+        modifiedSettings.add("live_camera_overlay_enabled")
       }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")

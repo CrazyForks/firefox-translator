@@ -113,6 +113,7 @@ import kotlinx.coroutines.flow.asStateFlow
 fun MainScreen(
   // Navigation
   onSettings: () -> Unit,
+  onLiveCamera: () -> Unit,
   // Current state (read-only)
   input: String,
   inputTransliteration: String?,
@@ -523,6 +524,7 @@ fun MainScreen(
     onMessage = onMessage,
     showImageSourceSheet = showImageSourceSheet,
     onDismissImageSourceSheet = { showImageSourceSheet = false },
+    onCameraClick = onLiveCamera,
     pendingSharedImage = pendingSharedImage,
   )
 
@@ -719,6 +721,7 @@ fun PopupMode() {
   WideDialogTheme {
     MainScreen(
       onSettings = { },
+      onLiveCamera = { },
       input = "Example input",
       output = TranslatedText("Example output", null),
       from = previewLanguage("az", "Azerbaijani"),
@@ -757,6 +760,7 @@ fun MainScreenPreview() {
   TranslatorTheme {
     MainScreen(
       onSettings = { },
+      onLiveCamera = { },
       input = "Example input",
       output = TranslatedText("Example output", null),
       from = previewLanguage("en", "English"),
@@ -795,6 +799,7 @@ fun PreviewTranslitText() {
   TranslatorTheme {
     MainScreen(
       onSettings = { },
+      onLiveCamera = { },
       input = "東京",
       output =
         TranslatedText(
@@ -838,6 +843,7 @@ fun PreviewVeryLongText() {
   TranslatorTheme {
     MainScreen(
       onSettings = { },
+      onLiveCamera = { },
       input = vlong,
       output =
         TranslatedText(
@@ -885,6 +891,7 @@ fun PreviewVeryLongTextImage() {
   TranslatorTheme {
     MainScreen(
       onSettings = { },
+      onLiveCamera = { },
       input = vlong,
       output =
         TranslatedText(
