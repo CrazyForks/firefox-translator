@@ -1074,11 +1074,19 @@ impl CatalogHandle {
         }
     }
 
-    /// Allocate a Rust-side frame buffer. The caller hands over raw RGBA bytes
-    /// from the camera (sensor orientation) and the rotation needed to align
-    /// sensor → display. Subsequent `detect_in_frame` / `recognize_in_frame`
-    /// calls reference this `Arc<FrameHandle>` by handle — no bitmap re-copy
-    /// across the FFI boundary per call.
+    /// Allocate a Rust-side frame buffer with a pre-sized capacity. The buffer is
+    /// reusable: feed bytes in via either [`FrameHandle::reset_via_uniffi`] or the
+    /// `LiveFrameJni.writeFrom` JNI fast-path, then call detect/recognize. Pool
+    /// the handle on the Kotlin side to amortise the Rust allocation across many
+    /// frames.
+    #[cfg(feature = "ppocr")]
+    fn make_frame_buffer(&self, capacity: u32) -> Arc<FrameHandle> {
+        Arc::new(FrameHandle::new(capacity as usize))
+    }
+
+    /// Back-compat one-shot frame creation. Allocates a fresh buffer and writes
+    /// bytes into it via the standard uniffi marshalling. Prefer the
+    /// `make_frame_buffer` + reset flow for performance.
     #[cfg(feature = "ppocr")]
     fn make_frame(
         &self,
@@ -1087,13 +1095,9 @@ impl CatalogHandle {
         height: u32,
         rotation_degrees: i32,
     ) -> Arc<FrameHandle> {
-        Arc::new(FrameHandle {
-            rgba,
-            width,
-            height,
-            rotation_degrees,
-            cached: std::sync::Mutex::new(None),
-        })
+        let handle = FrameHandle::new(rgba.len());
+        handle.reset_via_uniffi_inner(rgba, width, height, rotation_degrees);
+        Arc::new(handle)
     }
 
     /// Detect in a previously-allocated `FrameHandle`. The first call for a given
@@ -1112,9 +1116,9 @@ impl CatalogHandle {
         det_max_pixels: u32,
         source_code: String,
     ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
-        frame.ensure_oriented(crop, det_max_pixels)?;
-        let guard = frame.cached.lock().map_err(|_| poisoned())?;
-        let oriented = guard.as_ref().expect("ensure_oriented populated cache");
+        let mut state = frame.state.lock().map_err(|_| poisoned())?;
+        ensure_oriented_locked(&mut state, crop, det_max_pixels)?;
+        let oriented = state.cached.as_ref().expect("ensure_oriented populated cache");
         let raw = self
             .session
             .detect_in_oriented_image(oriented, &source_code)
@@ -1140,8 +1144,9 @@ impl CatalogHandle {
         boxes: Vec<translator::DetectedTextBox>,
         source_code: String,
     ) -> Result<Vec<translator::RecognizedTextLine>, CatalogError> {
-        let guard = frame.cached.lock().map_err(|_| poisoned())?;
-        let oriented = guard
+        let state = frame.state.lock().map_err(|_| poisoned())?;
+        let oriented = state
+            .cached
             .as_ref()
             .filter(|oi| oi.display_crop == crop)
             .ok_or_else(|| CatalogError::Other {
@@ -1154,47 +1159,101 @@ impl CatalogHandle {
     }
 }
 
-/// Rust-side live-OCR frame buffer. Holds the raw RGBA sensor frame plus a
-/// lazily-built cropped + rotated + downscaled derivation, so detection and
-/// recognition can both reference the same in-memory image without crossing
-/// the FFI boundary per call.
+/// Rust-side live-OCR frame buffer. Pool of these on the Kotlin side keeps the
+/// per-frame allocation at zero; the underlying `Vec<u8>` is written into in
+/// place each frame (either via the standard uniffi marshalling path or — the
+/// fast path — directly from a DirectByteBuffer through a JNI shim). The
+/// cached oriented image is rebuilt whenever the crop region changes.
 #[derive(uniffi::Object)]
 pub struct FrameHandle {
-    rgba: Vec<u8>,
-    width: u32,
-    height: u32,
-    rotation_degrees: i32,
-    /// Built on first detect for a given crop. Lock is held only during build /
-    /// detect / recognize — short critical sections.
-    cached: std::sync::Mutex<Option<translator::live_frame::OrientedImage>>,
+    state: std::sync::Mutex<FrameState>,
+}
+
+pub(crate) struct FrameState {
+    pub rgba: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub rotation_degrees: i32,
+    pub cached: Option<translator::live_frame::OrientedImage>,
 }
 
 impl FrameHandle {
-    #[cfg(feature = "ppocr")]
-    fn ensure_oriented(
-        &self,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-    ) -> Result<(), CatalogError> {
-        let mut guard = self.cached.lock().map_err(|_| poisoned())?;
-        let needs_rebuild = match guard.as_ref() {
-            Some(oi) => oi.display_crop != display_crop,
-            None => true,
-        };
-        if needs_rebuild {
-            let oi = translator::live_frame::OrientedImage::build(
-                &self.rgba,
-                self.width,
-                self.height,
-                self.rotation_degrees,
-                display_crop,
-                det_max_pixels,
-            )
-            .map_err(CatalogError::from)?;
-            *guard = Some(oi);
+    fn new(initial_capacity: usize) -> Self {
+        FrameHandle {
+            state: std::sync::Mutex::new(FrameState {
+                rgba: Vec::with_capacity(initial_capacity),
+                width: 0,
+                height: 0,
+                rotation_degrees: 0,
+                cached: None,
+            }),
         }
-        Ok(())
     }
+
+    /// Exposes the inner state mutex to the JNI shim (same crate). Not part of
+    /// the uniffi-visible surface.
+    pub(crate) fn state(&self) -> &std::sync::Mutex<FrameState> {
+        &self.state
+    }
+
+    /// Address of this handle on the Rust heap. Used by the JNI fast-path —
+    /// Kotlin passes this `u64` to a non-uniffi extern "system" fn which casts
+    /// it back to `&FrameHandle`. The `Arc` keeps the address stable, so as long
+    /// as Kotlin still holds the wrapper, this pointer is valid.
+    fn raw_address(&self) -> u64 {
+        self as *const FrameHandle as u64
+    }
+
+    fn reset_via_uniffi_inner(&self, rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: i32) {
+        let mut state = self.state.lock().expect("frame mutex poisoned");
+        state.rgba = rgba;
+        state.width = width;
+        state.height = height;
+        state.rotation_degrees = rotation_degrees;
+        state.cached = None;
+    }
+}
+
+#[uniffi::export]
+impl FrameHandle {
+    /// Returns this handle's Rust-heap address as a `u64`. Pair with
+    /// `LiveFrameJni.writeFrom(...)` for zero-JVM-copy byte transfer from a
+    /// camera DirectByteBuffer into this buffer.
+    fn raw_address_for_jni(&self) -> u64 {
+        self.raw_address()
+    }
+
+    /// Fallback path that copies bytes in via uniffi's standard marshalling.
+    /// Slower than the JNI shim (extra JVM ByteArray copy) but useful when the
+    /// camera's plane isn't a DirectByteBuffer or row stride doesn't match.
+    fn reset_via_uniffi(&self, rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: i32) {
+        self.reset_via_uniffi_inner(rgba, width, height, rotation_degrees);
+    }
+}
+
+#[cfg(feature = "ppocr")]
+fn ensure_oriented_locked(
+    state: &mut FrameState,
+    display_crop: translator::Rect,
+    det_max_pixels: u32,
+) -> Result<(), CatalogError> {
+    let needs_rebuild = match state.cached.as_ref() {
+        Some(oi) => oi.display_crop != display_crop,
+        None => true,
+    };
+    if needs_rebuild {
+        let oi = translator::live_frame::OrientedImage::build(
+            &state.rgba,
+            state.width,
+            state.height,
+            state.rotation_degrees,
+            display_crop,
+            det_max_pixels,
+        )
+        .map_err(CatalogError::from)?;
+        state.cached = Some(oi);
+    }
+    Ok(())
 }
 
 fn poisoned() -> CatalogError {

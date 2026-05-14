@@ -18,7 +18,6 @@
 package dev.davidv.translator
 
 import android.util.Log
-import dev.davidv.translator.ui.screens.RgbaFrame
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,10 +32,18 @@ import kotlinx.coroutines.sync.withLock
 import uniffi.bindings.FrameHandle
 import uniffi.translator.DetectedTextBox
 import uniffi.translator.OrientedRect
+import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 import kotlin.math.max
 import uniffi.translator.Rect as NativeRect
+
+/** Buffer size we allocate per [FrameHandle]. Covers a 1.5 MP RGBA frame
+ *  comfortably (~6 MB) with a small slack for safety. The Rust-side `Vec<u8>`
+ *  is allocated once at this capacity and reused frame-to-frame. */
+private const val FRAME_BUFFER_CAPACITY_BYTES: Int = 8 * 1024 * 1024
+private const val MAX_RETAINED_FRAME_HANDLES: Int = 4
 
 private const val TAG = "LiveOcrEngine"
 
@@ -84,11 +91,15 @@ private data class CacheEntry(
   val cropOffsetY: Int,
 )
 
-/** Carries one camera frame's data through the engine's pipeline stages. The
- *  `RgbaFrame` is held until the detector stage builds a [FrameHandle] from it;
- *  conflated channel semantics mean older frames are dropped when newer ones land. */
+/** Carries one camera frame through the engine's pipeline stages. The [FrameHandle]
+ *  is the canonical Rust-owned RGBA buffer (already filled by the analyzer via
+ *  [LiveFrameJni.writeFrom]); the engine releases it back to the pool when the
+ *  detector + rec worker are both done. */
 private data class PendingFrame(
-  val rgba: RgbaFrame,
+  val handle: FrameHandle,
+  val sensorWidth: Int,
+  val sensorHeight: Int,
+  val rotationDegrees: Int,
   val focusXNormalized: Float,
   val focusYNormalized: Float,
   val from: Language,
@@ -115,12 +126,18 @@ class LiveOcrEngine(
   data class TranslationKey(val sourceCode: String, val targetCode: String, val text: String)
 
   /** Manual conflation: only the latest frame is held; if a new one arrives while
-   *  another is pending, the previous one's RGBA buffer is returned to the pool
-   *  (no GC pressure). `frameSignal` is just a wake-up notification — the actual
-   *  payload lives in `pendingFrame`. */
+   *  another is pending, the previous one's [FrameHandle] is returned to the
+   *  pool. `frameSignal` is just a wake-up notification — the actual payload
+   *  lives in `pendingFrame`. */
   private val pendingFrame = java.util.concurrent.atomic.AtomicReference<PendingFrame?>(null)
   private val frameSignal = Channel<Unit>(Channel.CONFLATED)
-  private val bytePool = ByteArrayPool(maxRetained = 3)
+  private val handlePool = ConcurrentLinkedDeque<FrameHandle>()
+
+  /** Owned (allocated by us) [FrameHandle]s in flight or in the pool. Limited
+   *  so a runaway burst doesn't allocate unbounded Rust-side buffers. */
+  private val allocatedHandles = AtomicInteger(0)
+  private val maxAllocatedHandles: Int = MAX_RETAINED_FRAME_HANDLES + 2
+
   private val detectorExecutor =
     Executors.newSingleThreadExecutor { r ->
       Thread(r, "LiveOcrDetector").apply { isDaemon = true }
@@ -136,33 +153,64 @@ class LiveOcrEngine(
       workerScope.launch(detectorDispatcher) {
         for (signal in frameSignal) {
           val frame = pendingFrame.getAndSet(null) ?: continue
-          try {
-            runDetectionStage(frame)
-          } finally {
-            bytePool.release(frame.rgba.rgba)
-          }
+          // runDetectionStage releases the handle: either directly (no work for
+          // rec) or via the rec worker's `finally`.
+          runDetectionStage(frame)
         }
       }
   }
 
-  /** Acquire a pooled RGBA buffer of at least `size` bytes. Caller fills it,
-   *  then passes via [submitFrame]; the engine takes ownership of the buffer
-   *  and releases it back to the pool when the detector is done. */
-  fun acquireRgbaBuffer(size: Int): ByteArray = bytePool.acquire(size)
+  /** Pop a [FrameHandle] from the pool, allocating one on first use until the
+   *  pool steady-state is reached. Returns `null` if we've already allocated
+   *  the max and none are free (caller should drop the frame). */
+  fun acquireFrameHandle(): FrameHandle? {
+    handlePool.pollFirst()?.let { return it }
+    if (allocatedHandles.incrementAndGet() <= maxAllocatedHandles) {
+      return catalog.makeFrameBuffer(FRAME_BUFFER_CAPACITY_BYTES)
+    }
+    allocatedHandles.decrementAndGet()
+    return null
+  }
 
-  /** Non-blocking handoff from the analyzer thread. If a previous frame was
-   *  pending, its RGBA buffer is returned to the pool. */
+  /** Return a [FrameHandle] to the pool, or close it if the pool is already
+   *  full. Safe to call from any thread. */
+  fun releaseFrameHandle(handle: FrameHandle) {
+    if (handlePool.size < MAX_RETAINED_FRAME_HANDLES) {
+      handlePool.offerFirst(handle)
+    } else {
+      handle.close()
+      allocatedHandles.decrementAndGet()
+    }
+  }
+
+  /** Non-blocking handoff from the analyzer thread. The engine takes ownership
+   *  of `handle`; if a previous frame was pending, its handle is returned to
+   *  the pool. */
   fun submitFrame(
-    rgba: RgbaFrame,
+    handle: FrameHandle,
+    sensorWidth: Int,
+    sensorHeight: Int,
+    rotationDegrees: Int,
     focusXNormalized: Float,
     focusYNormalized: Float,
     from: Language,
     to: Language,
     convertMs: Double = 0.0,
   ) {
-    val newFrame = PendingFrame(rgba, focusXNormalized, focusYNormalized, from, to, convertMs)
+    val newFrame =
+      PendingFrame(
+        handle,
+        sensorWidth,
+        sensorHeight,
+        rotationDegrees,
+        focusXNormalized,
+        focusYNormalized,
+        from,
+        to,
+        convertMs,
+      )
     val replaced = pendingFrame.getAndSet(newFrame)
-    if (replaced != null) bytePool.release(replaced.rgba.rgba)
+    if (replaced != null) releaseFrameHandle(replaced.handle)
     frameSignal.trySend(Unit)
   }
 
@@ -179,30 +227,28 @@ class LiveOcrEngine(
   fun shutdown() {
     detectorJob.cancel()
     detectorExecutor.shutdown()
+    while (true) {
+      val h = handlePool.pollFirst() ?: break
+      h.close()
+    }
   }
 
-  /** Stage B (detector thread). Builds the FrameHandle, runs detect, IoU-matches
-   *  against cache, kicks off async rec on Stage C for new boxes. */
+  /** Stage B (detector thread). Runs detect on the pre-filled [FrameHandle],
+   *  IoU-matches against cache, kicks off async rec on Stage C for new boxes.
+   *  Hands off the handle to the rec worker (which releases it on completion);
+   *  if there's no rec work, releases the handle directly. */
   private suspend fun runDetectionStage(pending: PendingFrame) {
-    val rgba = pending.rgba
-    val handle: FrameHandle =
-      try {
-        catalog.makeFrame(rgba.rgba, rgba.width, rgba.height, rgba.rotationDegrees)
-      } catch (e: Exception) {
-        Log.w(TAG, "make_frame failed", e)
-        return
-      }
+    val handle = pending.handle
 
-    // Compute display dimensions (post-rotation) and the crop region in display coords.
-    val rotation = rgba.rotationDegrees
+    val rotation = pending.rotationDegrees
     val displayW: Int
     val displayH: Int
     if (rotation == 90 || rotation == 270) {
-      displayW = rgba.height
-      displayH = rgba.width
+      displayW = pending.sensorHeight
+      displayH = pending.sensorWidth
     } else {
-      displayW = rgba.width
-      displayH = rgba.height
+      displayW = pending.sensorWidth
+      displayH = pending.sensorHeight
     }
     val cropW = (displayW * CENTER_CROP_FRACTION).toInt().coerceAtLeast(1)
     val cropH = (displayH * CENTER_CROP_FRACTION).toInt().coerceAtLeast(1)
@@ -224,7 +270,7 @@ class LiveOcrEngine(
         catalog.detectInFrame(handle, cropRect, DETECTOR_TARGET_PIXELS, pending.from)
       } catch (e: Exception) {
         Log.w(TAG, "detect failed", e)
-        handle.close()
+        releaseFrameHandle(handle)
         return
       }
     val detMs = (System.nanoTime() - tDet) / 1_000_000.0
@@ -281,12 +327,12 @@ class LiveOcrEngine(
     }
 
     if (toRecognize.isEmpty()) {
-      handle.close()
+      releaseFrameHandle(handle)
       return
     }
 
-    // Schedule rec on the worker pool. The frame's handle is moved into the worker
-    // closure so the Rust-side buffer stays alive until rec is done.
+    // Schedule rec on the worker pool. The handle is owned by the worker until
+    // it finishes (it releases back to the pool in `finally`).
     scheduleRecognition(handle, cropRect, toRecognize, toRecognizeIds, pending.from, pending.to)
   }
 
@@ -333,7 +379,7 @@ class LiveOcrEngine(
           if (myGeneration == globalGeneration) publishOverlaysLocked()
         }
       } finally {
-        handle.close()
+        releaseFrameHandle(handle)
       }
     }
   }
@@ -540,36 +586,5 @@ private class FrameStats {
     newBoxesSum = 0
     overlayCountSum = 0
     dedupEvictions = 0
-  }
-}
-
-/** Bounded free-list of [ByteArray]s. We sit on at most `maxRetained` buffers;
- *  beyond that the older ones are dropped on the floor and the GC handles them.
- *  Each acquire prefers a pooled buffer that's at least the requested size.
- *
- *  Live-OCR keeps ~2–3 buffers live at any moment (one in the analyzer hand,
- *  one in the pendingFrame slot, optionally one being processed by the
- *  detector). With `maxRetained = 3` we essentially eliminate the per-frame
- *  ~6 MB allocation that was driving the GC every 1–2 s.
- */
-private class ByteArrayPool(private val maxRetained: Int) {
-  private val pool = ArrayDeque<ByteArray>(maxRetained)
-
-  @Synchronized
-  fun acquire(size: Int): ByteArray {
-    val it = pool.iterator()
-    while (it.hasNext()) {
-      val candidate = it.next()
-      if (candidate.size >= size) {
-        it.remove()
-        return candidate
-      }
-    }
-    return ByteArray(size)
-  }
-
-  @Synchronized
-  fun release(b: ByteArray) {
-    if (pool.size < maxRetained) pool.addFirst(b)
   }
 }

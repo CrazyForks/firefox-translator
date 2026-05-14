@@ -427,6 +427,10 @@ class LanguageCatalog private constructor(
     rotationDegrees: Int,
   ): uniffi.bindings.FrameHandle = handle.makeFrame(rgba, width.toUInt(), height.toUInt(), rotationDegrees)
 
+  /** Allocate an empty Rust-side frame buffer with reserved `capacity` bytes,
+   *  to be filled later via JNI memcpy or `resetViaUniffi`. */
+  fun makeFrameBuffer(capacity: Int): uniffi.bindings.FrameHandle = handle.makeFrameBuffer(capacity.toUInt())
+
   @Throws(CatalogException::class)
   fun detectInFrame(
     frame: uniffi.bindings.FrameHandle,

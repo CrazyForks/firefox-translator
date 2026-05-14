@@ -33,7 +33,6 @@ import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -91,6 +90,7 @@ import androidx.core.content.FileProvider
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityState
 import dev.davidv.translator.LanguageMetadata
+import dev.davidv.translator.LiveFrameJni
 import dev.davidv.translator.LiveOcrEngine
 import dev.davidv.translator.LiveOverlayItem
 import dev.davidv.translator.R
@@ -311,17 +311,54 @@ private fun CameraSurface(
     if (liveOverlayOn && engine != null) {
       imageAnalysis.setAnalyzer(analyzerExecutor) { proxy ->
         val tConvert = System.nanoTime()
-        val rgba = proxyToRgba(proxy, engine::acquireRgbaBuffer)
+        val handle = engine.acquireFrameHandle()
+        if (handle == null) {
+          proxy.close()
+          return@setAnalyzer
+        }
+        val plane = proxy.planes[0]
+        val rowStride = plane.rowStride
+        val pixelStride = plane.pixelStride
+        val width = proxy.width
+        val height = proxy.height
+        val rotation = proxy.imageInfo.rotationDegrees
+        val length = width * pixelStride * height
+        val ok =
+          if (rowStride == width * pixelStride) {
+            // Fast path: contiguous DirectByteBuffer → straight memcpy into the
+            // Rust-side buffer via JNI. Zero JVM-side allocation.
+            plane.buffer.rewind()
+            LiveFrameJni.writeFrom(
+              handle.rawAddressForJni().toLong(),
+              plane.buffer,
+              length,
+              width,
+              height,
+              rotation,
+            )
+          } else {
+            // Stride padding — rare for RGBA_8888. Repack row-by-row into a
+            // temp ByteArray and use the uniffi marshalling fallback.
+            val src = ByteArray(plane.buffer.remaining())
+            plane.buffer.rewind()
+            plane.buffer.get(src)
+            val packed = ByteArray(length)
+            val rowBytes = width * pixelStride
+            for (row in 0 until height) {
+              System.arraycopy(src, row * rowStride, packed, row * rowBytes, rowBytes)
+            }
+            handle.resetViaUniffi(packed, width.toUInt(), height.toUInt(), rotation)
+            true
+          }
         proxy.close()
         val convertMs = (System.nanoTime() - tConvert) / 1_000_000.0
-        if (rgba == null) return@setAnalyzer
-        if (analyzerSession.get() != mySession) return@setAnalyzer
+        if (!ok || analyzerSession.get() != mySession) {
+          engine.releaseFrameHandle(handle)
+          return@setAnalyzer
+        }
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
-        // Non-blocking: hands off to the engine's manual-conflation slot. The
-        // detector coroutine picks up the latest frame; older frames' buffers
-        // go back into the pool.
-        engine.submitFrame(rgba, fx, fy, from, to, convertMs)
+        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, convertMs)
       }
     } else {
       imageAnalysis.clearAnalyzer()
@@ -741,52 +778,3 @@ private data class Placement(
   val heightDp: androidx.compose.ui.unit.Dp,
   val angleDeg: Float,
 )
-
-/** Container for an analyzer frame's RGBA bytes in sensor orientation, plus the
- *  rotation needed to align sensor → display. The actual crop + rotate +
- *  RGB-conversion happens in Rust inside `FrameHandle`, so Kotlin's job here is
- *  just to extract bytes from the native ImageProxy buffer (one copy). */
-data class RgbaFrame(
-  val rgba: ByteArray,
-  val width: Int,
-  val height: Int,
-  val rotationDegrees: Int,
-)
-
-/** Copy RGBA out of the camera's native buffer into a (preferably pooled)
- *  ByteArray. `acquire` should be backed by [LiveOcrEngine.acquireRgbaBuffer]
- *  so we don't allocate ~6 MB per frame. */
-fun proxyToRgba(
-  proxy: ImageProxy,
-  acquire: (Int) -> ByteArray,
-): RgbaFrame? {
-  return try {
-    val plane = proxy.planes[0]
-    val buffer = plane.buffer
-    buffer.rewind()
-    val rowStride = plane.rowStride
-    val pixelStride = plane.pixelStride
-    val width = proxy.width
-    val height = proxy.height
-    val rotation = proxy.imageInfo.rotationDegrees
-
-    val needed = width * pixelStride * height
-    val rgba = acquire(needed)
-    if (rowStride == width * pixelStride) {
-      buffer.get(rgba, 0, needed)
-    } else {
-      // Stride padding — read row-by-row out of the padded native buffer into
-      // the contiguous pooled `rgba`.
-      val rowBytes = width * pixelStride
-      val tmp = ByteArray(rowStride)
-      for (row in 0 until height) {
-        buffer.get(tmp, 0, rowStride)
-        System.arraycopy(tmp, 0, rgba, row * rowBytes, rowBytes)
-      }
-    }
-    RgbaFrame(rgba, width, height, rotation)
-  } catch (e: Exception) {
-    Log.w(TAG, "frame conversion failed", e)
-    null
-  }
-}
