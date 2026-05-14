@@ -20,11 +20,11 @@ pub(crate) fn init_logging() {
     // log at Debug ("got character l" per char) and bury anything
     // useful.
     let filter = android_logger::FilterBuilder::new()
-        .parse("info,translator=debug,bindings=debug")
+        .parse("info,translator=info,bindings=info")
         .build();
     android_logger::init_once(
         android_logger::Config::default()
-            .with_max_level(log::LevelFilter::Debug)
+            .with_max_level(log::LevelFilter::Info)
             .with_filter(filter)
             .with_tag("rust-bindings"),
     );
