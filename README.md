@@ -28,13 +28,16 @@ Language packs contain the full translation models, translation happens _on your
 ## Tech
 
 - Translation models are Firefox' [translations models](https://github.com/mozilla/translations)
-  - The translation models run on a modified [slimt](https://github.com/jerinphilip/slimt)
 - OCR models are [Tesseract](https://github.com/tesseract-ocr/tesseract)
 - Automatic language detection is done via [cld2](https://github.com/CLD2Owners/cld2)
 - Dictionary is based on data from Wiktionary, exported by [Kaikki](https://kaikki.org/)
   - For Japanese specifically, there's a second "word dictionary" (Mecab) for transliterating Kanji
 - TTS uses [Piper](https://github.com/OHF-Voice/piper1-gpl), [Coqui](https://github.com/coqui-ai/tts), [Kokoro](https://github.com/hexgrad/kokoro), [MMS](https://huggingface.co/facebook/mms-tts), [Sherpa ONNX](https://github.com/k2-fsa/sherpa-onnx), [Mimic3](https://github.com/MycroftAI/mimic3) voices
 - PDF surgery uses [mupdf](https://github.com/ArtifexSoftware/mupdf) and [lopdf](https://github.com/J-F-Liu/lopdf).
+- Inference engines are:
+  - Translation models: [slimt](https://github.com/jerinphilip/slimt)
+  - Paddle OCR, Kokoro TTS: [MNN](https://github.com/alibaba/MNN/)
+  - Other TTS: [OnnxRuntime](https://github.com/microsoft/onnxruntime)
 
 ## Features & How to Use
 
