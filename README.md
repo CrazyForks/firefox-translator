@@ -61,6 +61,22 @@ This app exposes an API (see `ITranslationService.aidl`) that other apps can use
 If you want to use this app on a device with no internet access, you can put the language files on `Documents/dev.davidv.translator`. Check
 `OFFLINE_SETUP.md` for details.
 
+### Verification info
+
+SHA-256 hash of signing certificate: `2B:38:06:E7:45:D8:09:01:8A:51:BE:58:D0:63:5F:FC:74:CC:97:33:43:94:07:AB:1E:D0:42:4A:4D:B3:E1:FB`
+
+## Funding
+
+<img src="https://nlnet.nl/logo/banner.svg" width="200px">
+
+This project was funded through the [NGI Mobifree Fund](https://nlnet.nl/mobifree), a fund established by [NLnet](https://nlnet.nl).
+
+---
+
+If you want, you can help pay for the CDN costs:
+
+<a href="https://liberapay.com/DavidV/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a>
+
 ## Building
 
 ```sh
@@ -88,20 +104,3 @@ bash sign-apk.sh keystore.jks keystorepass pass alias
 ```
 
 will sign the APKs built by `build.sh` and place the signed copies in `signed/translator-{arm64,armv7}-${version}.apk`
-
-### Verification info
-
-SHA-256 hash of signing certificate: `2B:38:06:E7:45:D8:09:01:8A:51:BE:58:D0:63:5F:FC:74:CC:97:33:43:94:07:AB:1E:D0:42:4A:4D:B3:E1:FB`
-
-## Funding
-
-<img src="https://nlnet.nl/logo/banner.svg" width="200px">
-
-This project was funded through the [NGI Mobifree Fund](https://nlnet.nl/mobifree), a fund established by [NLnet](https://nlnet.nl).
-
----
-
-If you want, you can help pay for the CDN costs:
-
-<a href="https://liberapay.com/DavidV/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a><
-
