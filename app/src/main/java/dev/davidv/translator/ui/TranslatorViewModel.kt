@@ -46,6 +46,7 @@ import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationResult
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.WordWithTaggedEntries
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -307,6 +308,9 @@ class TranslatorViewModel(
 
     when (message) {
       is TranslatorMessage.TextInput -> {
+        if (_inputType.value == InputType.TEXT && _input.value == message.text) {
+          return
+        }
         if (_inputType.value != InputType.TEXT) {
           _displayImage.value = null
           _originalImage.value = null
@@ -505,34 +509,36 @@ class TranslatorViewModel(
     _inputType.value = InputType.TEXT
   }
 
+  private var translationJob: Job? = null
+
   private fun triggerTranslation() {
     val toLang = _to.value ?: return
 
-    if (translationCoordinator.isTranslating.value) return
-
-    viewModelScope.launch {
-      val settings = settingsManager.settings.value
-      if (!settings.disableCLD) {
-        if (_input.value.isBlank()) {
-          _currentDetectedLanguage.value = null
-        } else {
-          val detected = translationCoordinator.detectLanguage(_input.value, _from.value)
-          if (detected != null) {
-            _currentDetectedLanguage.value = detected
+    translationJob?.cancel()
+    translationJob =
+      viewModelScope.launch {
+        val settings = settingsManager.settings.value
+        if (!settings.disableCLD) {
+          if (_input.value.isBlank()) {
+            _currentDetectedLanguage.value = null
+          } else {
+            val detected = translationCoordinator.detectLanguage(_input.value, _from.value)
+            if (detected != null) {
+              _currentDetectedLanguage.value = detected
+            }
           }
-        }
-        if (_isAutoSource.value) {
-          val detected = _currentDetectedLanguage.value
-          if (detected != null && languageStateManager.languageState.value.availabilityFor(detected)?.translatorFiles == true) {
-            if (detected != _to.value) {
-              _from.value = detected
+          if (_isAutoSource.value) {
+            val detected = _currentDetectedLanguage.value
+            if (detected != null && languageStateManager.languageState.value.availabilityFor(detected)?.translatorFiles == true) {
+              if (detected != _to.value) {
+                _from.value = detected
+              }
             }
           }
         }
+        val fromLang = _from.value ?: return@launch
+        translateWithLanguages(fromLang, toLang)
       }
-      val fromLang = _from.value ?: return@launch
-      translateWithLanguages(fromLang, toLang)
-    }
   }
 
   fun retranslateIfNeeded() {
@@ -540,10 +546,11 @@ class TranslatorViewModel(
     val fromLang = _from.value ?: return
     val toLang = _to.value ?: return
     if (translationCoordinator.isTranslating.value) return
-    if (translationCoordinator.lastTranslatedInput == _input.value) return
+    val current = _input.value.trim()
+    if (translationCoordinator.lastTranslatedInput == current) return
 
     viewModelScope.launch {
-      translationCoordinator.translateText(fromLang, toLang, _input.value).let {
+      translationCoordinator.translateText(fromLang, toLang, current).let {
         _output.value =
           when (it) {
             is TranslationResult.Success -> it.result
