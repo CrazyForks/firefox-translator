@@ -417,6 +417,32 @@ class LanguageCatalog private constructor(
       from.code,
     )
 
+  /** Allocate a Rust-side frame buffer for the live-OCR pipeline. The returned
+   *  [uniffi.bindings.FrameHandle] is `AutoCloseable`; close it when the frame is
+   *  fully done. */
+  fun makeFrame(
+    rgba: ByteArray,
+    width: Int,
+    height: Int,
+    rotationDegrees: Int,
+  ): uniffi.bindings.FrameHandle = handle.makeFrame(rgba, width.toUInt(), height.toUInt(), rotationDegrees)
+
+  @Throws(CatalogException::class)
+  fun detectInFrame(
+    frame: uniffi.bindings.FrameHandle,
+    crop: uniffi.translator.Rect,
+    detMaxPixels: Int,
+    from: Language,
+  ): List<uniffi.translator.DetectedTextBox> = handle.detectInFrame(frame, crop, detMaxPixels.toUInt(), from.code)
+
+  @Throws(CatalogException::class)
+  fun recognizeInFrame(
+    frame: uniffi.bindings.FrameHandle,
+    crop: uniffi.translator.Rect,
+    boxes: List<uniffi.translator.DetectedTextBox>,
+    from: Language,
+  ): List<uniffi.translator.RecognizedTextLine> = handle.recognizeInFrame(frame, crop, boxes, from.code)
+
   @Throws(CatalogException::class)
   fun renderTranslatedOverlay(
     plan: uniffi.translator.PreparedImageOverlay,

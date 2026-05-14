@@ -17,48 +17,45 @@
 
 package dev.davidv.translator
 
-import android.graphics.Bitmap
 import android.util.Log
+import dev.davidv.translator.ui.screens.RgbaFrame
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
+import uniffi.bindings.FrameHandle
 import uniffi.translator.DetectedTextBox
 import uniffi.translator.OrientedRect
+import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.sqrt
 import uniffi.translator.Rect as NativeRect
 
 private const val TAG = "LiveOcrEngine"
 
 private const val CENTER_CROP_FRACTION = 0.8f
-private const val DETECTOR_TARGET_PIXELS = 400_000.0
+
+// private const val DETECTOR_TARGET_PIXELS = 400_000
+private const val DETECTOR_TARGET_PIXELS = 300_000
 
 /** Stateless-overlay architecture: each frame's detection set is rendered as-is, with
- *  recognition results pulled from a memoization cache. The cache key is approximate
+ *  recognition results pulled from a memoization cache. Cache key is approximate
  *  (position + size + angle within tolerance); a cache miss kicks off async rec, a
- *  cache hit avoids it. Cache entries persist briefly past their last detection (to
- *  smooth detector flicker) and then evict — there's no tracker lifecycle.
- *
- *  These tolerances are deliberately tight: caching is a speed-up only, never trading
- *  correctness. A position that's drifted more than POS_TOL_FRAC of the crop width
- *  away counts as different content → fresh rec, no risk of stale text.
+ *  cache hit avoids it. Tight tolerances on purpose — caching is a speed-up, not a
+ *  correctness trade-off.
  */
 private const val POS_TOL_FRAC = 0.07f
 private const val SIZE_TOL_FRAC = 0.10f
 private const val ANGLE_TOL_RAD = 0.087f
 private const val GRACE_FRAMES = 1L
 
-/** Post-rec dedup: a cache entry whose centre is within this fraction of its own width
- *  of another entry with identical (whitespace-normalised) text is collapsed into it.
- *  Catches "same content drifted just outside POS_TOL" duplicates without risking the
- *  collapse of two genuinely different lines (text equality is the gate). */
 private const val DEDUP_CENTRE_FRAC_OF_BOX_SIZE = 0.5f
 
 data class LiveOverlayItem(
@@ -73,7 +70,6 @@ data class LiveOverlayItem(
   val frameHeight: Int,
 )
 
-/** A memoized recognition result. `translatedText == null` means rec is in flight. */
 private data class CacheEntry(
   val id: Long,
   val rect: NativeRect,
@@ -88,6 +84,18 @@ private data class CacheEntry(
   val cropOffsetY: Int,
 )
 
+/** Carries one camera frame's data through the engine's pipeline stages. The
+ *  `RgbaFrame` is held until the detector stage builds a [FrameHandle] from it;
+ *  conflated channel semantics mean older frames are dropped when newer ones land. */
+private data class PendingFrame(
+  val rgba: RgbaFrame,
+  val focusXNormalized: Float,
+  val focusYNormalized: Float,
+  val from: Language,
+  val to: Language,
+  val convertMs: Double,
+)
+
 class LiveOcrEngine(
   private val catalog: LanguageCatalog,
   private val workerScope: CoroutineScope,
@@ -98,7 +106,7 @@ class LiveOcrEngine(
   private var nextId: Long = 0L
   private var frameId: Long = 0L
 
-  /** Bumped by clear() to invalidate all in-flight workers wholesale. */
+  /** Bumped by clear() to invalidate all in-flight rec workers wholesale. */
   private var globalGeneration: Long = 0L
 
   private val _overlays = MutableStateFlow<List<LiveOverlayItem>>(emptyList())
@@ -106,76 +114,117 @@ class LiveOcrEngine(
 
   data class TranslationKey(val sourceCode: String, val targetCode: String, val text: String)
 
-  /** Rolling stats. Aggregated under `mutex` and emitted as a single Log line every
-   *  ~STATS_LOG_INTERVAL_NS so per-frame logs don't blast Logcat. */
+  /** Frame intake channel. Conflated: only the latest frame is kept. The detector
+   *  coroutine pulls from this. */
+  private val frameChannel = Channel<PendingFrame>(Channel.CONFLATED)
+  private val detectorExecutor =
+    Executors.newSingleThreadExecutor { r ->
+      Thread(r, "LiveOcrDetector").apply { isDaemon = true }
+    }
+  private val detectorDispatcher = detectorExecutor.asCoroutineDispatcher()
+  private val detectorJob: Job
+
   private val stats = FrameStats()
   private var statsWindowStartNs: Long = System.nanoTime()
 
-  /** Single frame end-to-end.
-   *  @param focusXNormalized 0..1 horizontal centre of the crop region.
-   *  @param focusYNormalized 0..1 vertical centre of the crop region.
-   */
-  suspend fun submitFrame(
-    fullBitmap: Bitmap,
+  init {
+    detectorJob =
+      workerScope.launch(detectorDispatcher) {
+        for (frame in frameChannel) {
+          runDetectionStage(frame)
+        }
+      }
+  }
+
+  /** Non-blocking handoff from the analyzer thread. Conflated — replaces any
+   *  pending frame, no backpressure. */
+  fun submitFrame(
+    rgba: RgbaFrame,
     focusXNormalized: Float,
     focusYNormalized: Float,
     from: Language,
     to: Language,
     convertMs: Double = 0.0,
-  ) = withContext(Dispatchers.Default) {
-    val currentFrame: Long
-    // `fullBitmap` is in display orientation (proxyToBitmap rotates the sensor frame
-    // by `rotationDegrees` so the detector receives upright text).
-    val frameW = fullBitmap.width
-    val frameH = fullBitmap.height
-    val cropW = (frameW * CENTER_CROP_FRACTION).toInt().coerceAtLeast(1)
-    val cropH = (frameH * CENTER_CROP_FRACTION).toInt().coerceAtLeast(1)
-    val focusFx = (focusXNormalized.coerceIn(0f, 1f) * frameW).toInt()
-    val focusFy = (focusYNormalized.coerceIn(0f, 1f) * frameH).toInt()
-    val cropLeft = (focusFx - cropW / 2).coerceIn(0, frameW - cropW)
-    val cropTop = (focusFy - cropH / 2).coerceIn(0, frameH - cropH)
+  ) {
+    frameChannel.trySend(
+      PendingFrame(rgba, focusXNormalized, focusYNormalized, from, to, convertMs),
+    )
+  }
 
-    val cropBitmap = Bitmap.createBitmap(fullBitmap, cropLeft, cropTop, cropW, cropH)
-    val cropPixels = cropW.toDouble() * cropH.toDouble()
-    val detScale =
-      if (cropPixels > DETECTOR_TARGET_PIXELS) {
-        sqrt(DETECTOR_TARGET_PIXELS / cropPixels).toFloat()
-      } else {
-        1f
+  fun clear() {
+    workerScope.launch {
+      mutex.withLock {
+        cache.clear()
+        globalGeneration++
+        publishOverlaysLocked()
       }
-    val detW = (cropW * detScale).toInt().coerceAtLeast(1)
-    val detH = (cropH * detScale).toInt().coerceAtLeast(1)
-    val detBitmap =
-      if (detScale < 1f) Bitmap.createScaledBitmap(cropBitmap, detW, detH, true) else cropBitmap
+    }
+  }
+
+  fun shutdown() {
+    detectorJob.cancel()
+    detectorExecutor.shutdown()
+  }
+
+  /** Stage B (detector thread). Builds the FrameHandle, runs detect, IoU-matches
+   *  against cache, kicks off async rec on Stage C for new boxes. */
+  private suspend fun runDetectionStage(pending: PendingFrame) {
+    val rgba = pending.rgba
+    val handle: FrameHandle =
+      try {
+        catalog.makeFrame(rgba.rgba, rgba.width, rgba.height, rgba.rotationDegrees)
+      } catch (e: Exception) {
+        Log.w(TAG, "make_frame failed", e)
+        return
+      }
+
+    // Compute display dimensions (post-rotation) and the crop region in display coords.
+    val rotation = rgba.rotationDegrees
+    val displayW: Int
+    val displayH: Int
+    if (rotation == 90 || rotation == 270) {
+      displayW = rgba.height
+      displayH = rgba.width
+    } else {
+      displayW = rgba.width
+      displayH = rgba.height
+    }
+    val cropW = (displayW * CENTER_CROP_FRACTION).toInt().coerceAtLeast(1)
+    val cropH = (displayH * CENTER_CROP_FRACTION).toInt().coerceAtLeast(1)
+    val focusFx = (pending.focusXNormalized.coerceIn(0f, 1f) * displayW).toInt()
+    val focusFy = (pending.focusYNormalized.coerceIn(0f, 1f) * displayH).toInt()
+    val cropLeft = (focusFx - cropW / 2).coerceIn(0, displayW - cropW)
+    val cropTop = (focusFy - cropH / 2).coerceIn(0, displayH - cropH)
+    val cropRect =
+      NativeRect(
+        left = cropLeft.toUInt(),
+        top = cropTop.toUInt(),
+        right = (cropLeft + cropW).toUInt(),
+        bottom = (cropTop + cropH).toUInt(),
+      )
 
     val tDet = System.nanoTime()
     val detected =
       try {
-        catalog.detectTextBoxes(detBitmap, from)
+        catalog.detectInFrame(handle, cropRect, DETECTOR_TARGET_PIXELS, pending.from)
       } catch (e: Exception) {
         Log.w(TAG, "detect failed", e)
-        if (detBitmap !== cropBitmap) detBitmap.recycle()
-        cropBitmap.recycle()
-        return@withContext
+        handle.close()
+        return
       }
     val detMs = (System.nanoTime() - tDet) / 1_000_000.0
-    if (detBitmap !== cropBitmap) detBitmap.recycle()
-
-    val invScale = 1f / detScale
-    val cropBoxes = detected.map { scaleBoxToCrop(it, invScale, cropW, cropH) }
 
     val toRecognize = mutableListOf<DetectedTextBox>()
     val toRecognizeIds = mutableListOf<Long>()
     val posTolPx = cropW.toFloat() * POS_TOL_FRAC
+
+    val currentFrame: Long
     mutex.withLock {
       frameId++
       currentFrame = frameId
 
-      // Each cache entry can be claimed by at most one current detection (greedy
-      // bipartite). For each detection, find the closest unclaimed cache entry within
-      // tolerance; if none, this detection is a fresh observation → new pending entry.
       val claimed = HashSet<Long>()
-      for (box in cropBoxes) {
+      for (box in detected) {
         val match = bestCacheMatch(box, claimed, posTolPx)
         if (match != null) {
           claimed.add(match.id)
@@ -191,8 +240,8 @@ class LiveOcrEngine(
               sourceText = null,
               translatedText = null,
               lastSeenFrame = currentFrame,
-              frameWidth = frameW,
-              frameHeight = frameH,
+              frameWidth = displayW,
+              frameHeight = displayH,
               cropOffsetX = cropLeft,
               cropOffsetY = cropTop,
             )
@@ -202,47 +251,74 @@ class LiveOcrEngine(
         }
       }
 
-      // Evict cache entries not seen in the last GRACE_FRAMES. Anything older is gone
-      // from the rendered overlay set, and we don't want it to influence future cache
-      // lookups.
       cache.removeAll { it.lastSeenFrame < currentFrame - GRACE_FRAMES }
       publishOverlaysLocked()
 
       stats.record(
-        convertMs = convertMs,
+        convertMs = pending.convertMs,
         detMs = detMs,
-        boxes = cropBoxes.size,
-        cacheHits = cropBoxes.size - toRecognize.size,
+        boxes = detected.size,
+        cacheHits = detected.size - toRecognize.size,
         newBoxes = toRecognize.size,
         overlayCount = _overlays.value.size,
       )
       maybeEmitStatsLocked()
     }
 
-    if (toRecognize.isNotEmpty()) {
-      scheduleRecognition(cropBitmap, toRecognize, toRecognizeIds, from, to)
-    } else {
-      cropBitmap.recycle()
+    if (toRecognize.isEmpty()) {
+      handle.close()
+      return
     }
+
+    // Schedule rec on the worker pool. The frame's handle is moved into the worker
+    // closure so the Rust-side buffer stays alive until rec is done.
+    scheduleRecognition(handle, cropRect, toRecognize, toRecognizeIds, pending.from, pending.to)
   }
 
-  /** Mutex must be held. Emits a stats line if the rolling window has elapsed. */
-  private fun maybeEmitStatsLocked() {
-    val now = System.nanoTime()
-    val elapsedNs = now - statsWindowStartNs
-    if (elapsedNs < STATS_LOG_INTERVAL_NS) return
-    val elapsedSec = elapsedNs / 1e9
-    Log.i(TAG, stats.format(elapsedSec))
-    stats.reset()
-    statsWindowStartNs = now
-  }
-
-  fun clear() {
-    workerScope.launch {
-      mutex.withLock {
-        cache.clear()
-        globalGeneration++
-        publishOverlaysLocked()
+  /** Stage C (rec worker, Dispatchers.Default). Recognises + translates, updates
+   *  cache, publishes overlays. Closes the FrameHandle when done. */
+  private fun scheduleRecognition(
+    handle: FrameHandle,
+    cropRect: NativeRect,
+    boxes: List<DetectedTextBox>,
+    entryIds: List<Long>,
+    from: Language,
+    to: Language,
+  ) {
+    val myGeneration = globalGeneration
+    workerScope.launch(Dispatchers.Default) {
+      try {
+        val tRec = System.nanoTime()
+        val recognized =
+          try {
+            catalog.recognizeInFrame(handle, cropRect, boxes, from)
+          } catch (e: Exception) {
+            Log.w(TAG, "recognize failed", e)
+            return@launch
+          }
+        val recMs = (System.nanoTime() - tRec) / 1_000_000.0
+        mutex.withLock { stats.recordRec(recMs) }
+        for ((idx, line) in recognized.withIndex()) {
+          val source = line.text.trim()
+          if (source.isEmpty()) continue
+          val translated = translateCached(from, to, source) ?: continue
+          mutex.withLock {
+            if (myGeneration != globalGeneration) return@launch
+            if (idx >= entryIds.size) return@withLock
+            val entryId = entryIds[idx]
+            val entry = cache.firstOrNull { it.id == entryId }
+            if (entry != null && entry.translatedText == null) {
+              entry.sourceText = source
+              entry.translatedText = translated
+              dedupAgainstEntry(entry)
+            }
+          }
+        }
+        mutex.withLock {
+          if (myGeneration == globalGeneration) publishOverlaysLocked()
+        }
+      } finally {
+        handle.close()
       }
     }
   }
@@ -280,56 +356,9 @@ class LiveOcrEngine(
     return best
   }
 
-  private fun scheduleRecognition(
-    cropBitmap: Bitmap,
-    boxes: List<DetectedTextBox>,
-    entryIds: List<Long>,
-    from: Language,
-    to: Language,
-  ) {
-    val myGeneration = globalGeneration
-    workerScope.launch(Dispatchers.Default) {
-      try {
-        val tRec = System.nanoTime()
-        val recognized =
-          try {
-            catalog.recognizeTextInBoxes(cropBitmap, boxes, from)
-          } catch (e: Exception) {
-            Log.w(TAG, "recognize failed", e)
-            return@launch
-          }
-        val recMs = (System.nanoTime() - tRec) / 1_000_000.0
-        mutex.withLock { stats.recordRec(recMs) }
-        // Same-length output (Rust returns one entry per input box; filtered ones
-        // come back with empty text). Match by index → cache entry id.
-        for ((idx, line) in recognized.withIndex()) {
-          val source = line.text.trim()
-          if (source.isEmpty()) continue
-          val translated = translateCached(from, to, source) ?: continue
-          mutex.withLock {
-            if (myGeneration != globalGeneration) return@launch
-            if (idx >= entryIds.size) return@withLock
-            val entryId = entryIds[idx]
-            val entry = cache.firstOrNull { it.id == entryId }
-            if (entry != null && entry.translatedText == null) {
-              entry.sourceText = source
-              entry.translatedText = translated
-              dedupAgainstEntry(entry)
-            }
-          }
-        }
-        mutex.withLock {
-          if (myGeneration == globalGeneration) publishOverlaysLocked()
-        }
-      } finally {
-        cropBitmap.recycle()
-      }
-    }
-  }
-
-  /** Mutex must be held. Collapses already-recognised cache entries whose translated
-   *  text is identical (after whitespace normalisation) to `entry`'s, and whose centre
-   *  is within `DEDUP_CENTRE_FRAC_OF_BOX_SIZE` of the entry's box size. */
+  /** Mutex must be held. Collapses already-recognised cache entries whose
+   *  translated text is identical (after normalisation) to `entry`'s, and whose
+   *  centre is within `DEDUP_CENTRE_FRAC_OF_BOX_SIZE` of the entry's box size. */
   private fun dedupAgainstEntry(entry: CacheEntry) {
     val translated = entry.translatedText ?: return
     val normalisedNew = normaliseForDedup(translated)
@@ -352,9 +381,7 @@ class LiveOcrEngine(
     }
   }
 
-  /** Mutex must be held. Cache entries are in display orientation already (bitmap
-   *  is pre-rotated in `proxyToBitmap`), so just translate by the crop offset and
-   *  emit. */
+  /** Mutex must be held. */
   private fun publishOverlaysLocked() {
     _overlays.value =
       cache.filter { it.translatedText != null }.map { entry ->
@@ -370,6 +397,17 @@ class LiveOcrEngine(
           frameHeight = entry.frameHeight,
         )
       }
+  }
+
+  /** Mutex must be held. */
+  private fun maybeEmitStatsLocked() {
+    val now = System.nanoTime()
+    val elapsedNs = now - statsWindowStartNs
+    if (elapsedNs < STATS_LOG_INTERVAL_NS) return
+    val elapsedSec = elapsedNs / 1e9
+    Log.i(TAG, stats.format(elapsedSec))
+    stats.reset()
+    statsWindowStartNs = now
   }
 
   private fun translateCached(
@@ -399,6 +437,10 @@ class LiveOcrEngine(
     private const val STATS_LOG_INTERVAL_NS: Long = 5_000_000_000L
   }
 }
+
+private val WHITESPACE = Regex("\\s+")
+
+private fun normaliseForDedup(text: String): String = text.lowercase().replace(WHITESPACE, " ").trim()
 
 private class FrameStats {
   var frames: Int = 0
@@ -484,37 +526,4 @@ private class FrameStats {
     overlayCountSum = 0
     dedupEvictions = 0
   }
-}
-
-private val WHITESPACE = Regex("\\s+")
-
-private fun normaliseForDedup(text: String): String = text.lowercase().replace(WHITESPACE, " ").trim()
-
-private fun scaleBoxToCrop(
-  box: DetectedTextBox,
-  scale: Float,
-  cropW: Int,
-  cropH: Int,
-): DetectedTextBox {
-  val left = (box.rect.left.toFloat() * scale).toInt().coerceIn(0, cropW - 1)
-  val top = (box.rect.top.toFloat() * scale).toInt().coerceIn(0, cropH - 1)
-  val right = (box.rect.right.toFloat() * scale).toInt().coerceIn(left + 1, cropW)
-  val bottom = (box.rect.bottom.toFloat() * scale).toInt().coerceIn(top + 1, cropH)
-  val scaledOriented =
-    OrientedRect(
-      cx = box.orientedBox.cx * scale,
-      cy = box.orientedBox.cy * scale,
-      width = box.orientedBox.width * scale,
-      height = box.orientedBox.height * scale,
-      angleRadians = box.orientedBox.angleRadians,
-    )
-  val scaledContour = FloatArray(box.contour.size)
-  for (i in box.contour.indices) {
-    scaledContour[i] = box.contour[i] * scale
-  }
-  return DetectedTextBox(
-    rect = NativeRect(left = left.toUInt(), top = top.toUInt(), right = right.toUInt(), bottom = bottom.toUInt()),
-    orientedBox = scaledOriented,
-    contour = scaledContour.toList(),
-  )
 }

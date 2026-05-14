@@ -1073,4 +1073,169 @@ impl CatalogHandle {
             })
         }
     }
+
+    /// Allocate a Rust-side frame buffer. The caller hands over raw RGBA bytes
+    /// from the camera (sensor orientation) and the rotation needed to align
+    /// sensor → display. Subsequent `detect_in_frame` / `recognize_in_frame`
+    /// calls reference this `Arc<FrameHandle>` by handle — no bitmap re-copy
+    /// across the FFI boundary per call.
+    #[cfg(feature = "ppocr")]
+    fn make_frame(
+        &self,
+        rgba: Vec<u8>,
+        width: u32,
+        height: u32,
+        rotation_degrees: i32,
+    ) -> Arc<FrameHandle> {
+        Arc::new(FrameHandle {
+            rgba,
+            width,
+            height,
+            rotation_degrees,
+            cached: std::sync::Mutex::new(None),
+        })
+    }
+
+    /// Detect in a previously-allocated `FrameHandle`. The first call for a given
+    /// display crop region builds the cropped + rotated derived images and caches
+    /// them inside the handle; subsequent `recognize_in_frame` calls for the same
+    /// crop will reuse that cache.
+    ///
+    /// Returned boxes are in the **full-crop coord space** (display-orient, with
+    /// (0, 0) at top-left of the crop region), already scaled up from the
+    /// downscaled detection image.
+    #[cfg(feature = "ppocr")]
+    fn detect_in_frame(
+        &self,
+        frame: Arc<FrameHandle>,
+        crop: translator::Rect,
+        det_max_pixels: u32,
+        source_code: String,
+    ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
+        frame.ensure_oriented(crop, det_max_pixels)?;
+        let guard = frame.cached.lock().map_err(|_| poisoned())?;
+        let oriented = guard.as_ref().expect("ensure_oriented populated cache");
+        let raw = self
+            .session
+            .detect_in_oriented_image(oriented, &source_code)
+            .map_err(CatalogError::from)?;
+        let scale = oriented.det_to_full_scale;
+        let max_w = oriented.rgb.width();
+        let max_h = oriented.rgb.height();
+        let scaled: Vec<translator::DetectedTextBox> = raw
+            .into_iter()
+            .map(|b| scale_detected_box(b, scale, max_w, max_h))
+            .collect();
+        Ok(scaled)
+    }
+
+    /// Recognize text in a previously-allocated `FrameHandle`. The same crop must
+    /// have been previously passed to `detect_in_frame` (which built the cached
+    /// oriented image used here). Boxes must be in full-crop coord space.
+    #[cfg(feature = "ppocr")]
+    fn recognize_in_frame(
+        &self,
+        frame: Arc<FrameHandle>,
+        crop: translator::Rect,
+        boxes: Vec<translator::DetectedTextBox>,
+        source_code: String,
+    ) -> Result<Vec<translator::RecognizedTextLine>, CatalogError> {
+        let guard = frame.cached.lock().map_err(|_| poisoned())?;
+        let oriented = guard
+            .as_ref()
+            .filter(|oi| oi.display_crop == crop)
+            .ok_or_else(|| CatalogError::Other {
+                reason: "recognize_in_frame called without prior detect_in_frame for this crop"
+                    .to_string(),
+            })?;
+        self.session
+            .recognize_in_oriented_image(oriented, &boxes, &source_code)
+            .map_err(CatalogError::from)
+    }
+}
+
+/// Rust-side live-OCR frame buffer. Holds the raw RGBA sensor frame plus a
+/// lazily-built cropped + rotated + downscaled derivation, so detection and
+/// recognition can both reference the same in-memory image without crossing
+/// the FFI boundary per call.
+#[derive(uniffi::Object)]
+pub struct FrameHandle {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    rotation_degrees: i32,
+    /// Built on first detect for a given crop. Lock is held only during build /
+    /// detect / recognize — short critical sections.
+    cached: std::sync::Mutex<Option<translator::live_frame::OrientedImage>>,
+}
+
+impl FrameHandle {
+    #[cfg(feature = "ppocr")]
+    fn ensure_oriented(
+        &self,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+    ) -> Result<(), CatalogError> {
+        let mut guard = self.cached.lock().map_err(|_| poisoned())?;
+        let needs_rebuild = match guard.as_ref() {
+            Some(oi) => oi.display_crop != display_crop,
+            None => true,
+        };
+        if needs_rebuild {
+            let oi = translator::live_frame::OrientedImage::build(
+                &self.rgba,
+                self.width,
+                self.height,
+                self.rotation_degrees,
+                display_crop,
+                det_max_pixels,
+            )
+            .map_err(CatalogError::from)?;
+            *guard = Some(oi);
+        }
+        Ok(())
+    }
+}
+
+fn poisoned() -> CatalogError {
+    CatalogError::Other {
+        reason: "frame mutex poisoned".to_string(),
+    }
+}
+
+/// Scale a `DetectedTextBox` from detector-image coords up to full-crop coords,
+/// clamping inside the destination dimensions.
+#[cfg(feature = "ppocr")]
+fn scale_detected_box(
+    b: translator::DetectedTextBox,
+    scale: f32,
+    max_w: u32,
+    max_h: u32,
+) -> translator::DetectedTextBox {
+    let left = ((b.rect.left as f32) * scale).max(0.0) as u32;
+    let top = ((b.rect.top as f32) * scale).max(0.0) as u32;
+    let right = ((b.rect.right as f32) * scale).min(max_w as f32) as u32;
+    let bottom = ((b.rect.bottom as f32) * scale).min(max_h as f32) as u32;
+    let rect = translator::Rect {
+        left: left.min(right.saturating_sub(1)),
+        top: top.min(bottom.saturating_sub(1)),
+        right: right.max(left + 1),
+        bottom: bottom.max(top + 1),
+    };
+    let oriented = translator::ocr::OrientedRect {
+        cx: b.oriented_box.cx * scale,
+        cy: b.oriented_box.cy * scale,
+        width: b.oriented_box.width * scale,
+        height: b.oriented_box.height * scale,
+        angle_radians: b.oriented_box.angle_radians,
+    };
+    let mut contour = Vec::with_capacity(b.contour.len());
+    for v in &b.contour {
+        contour.push(v * scale);
+    }
+    translator::DetectedTextBox {
+        rect,
+        oriented_box: oriented,
+        contour,
+    }
 }

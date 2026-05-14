@@ -20,7 +20,6 @@ package dev.davidv.translator.ui.screens
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -312,14 +311,16 @@ private fun CameraSurface(
     if (liveOverlayOn && engine != null) {
       imageAnalysis.setAnalyzer(analyzerExecutor) { proxy ->
         val tConvert = System.nanoTime()
-        val bitmap = proxyToBitmap(proxy)
+        val rgba = proxyToRgba(proxy)
         proxy.close()
         val convertMs = (System.nanoTime() - tConvert) / 1_000_000.0
-        if (bitmap == null) return@setAnalyzer
+        if (rgba == null) return@setAnalyzer
         if (analyzerSession.get() != mySession) return@setAnalyzer
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
-        kotlinx.coroutines.runBlocking { engine.submitFrame(bitmap, fx, fy, from, to, convertMs) }
+        // Non-blocking: pushes onto the engine's conflated frame channel. The
+        // detector coroutine inside the engine picks up the latest frame.
+        engine.submitFrame(rgba, fx, fy, from, to, convertMs)
       }
     } else {
       imageAnalysis.clearAnalyzer()
@@ -740,7 +741,18 @@ private data class Placement(
   val angleDeg: Float,
 )
 
-private fun proxyToBitmap(proxy: ImageProxy): Bitmap? {
+/** Container for an analyzer frame's RGBA bytes in sensor orientation, plus the
+ *  rotation needed to align sensor → display. The actual crop + rotate +
+ *  RGB-conversion happens in Rust inside `FrameHandle`, so Kotlin's job here is
+ *  just to extract bytes from the native ImageProxy buffer (one copy). */
+data class RgbaFrame(
+  val rgba: ByteArray,
+  val width: Int,
+  val height: Int,
+  val rotationDegrees: Int,
+)
+
+fun proxyToRgba(proxy: ImageProxy): RgbaFrame? {
   return try {
     val plane = proxy.planes[0]
     val buffer = plane.buffer
@@ -749,34 +761,23 @@ private fun proxyToBitmap(proxy: ImageProxy): Bitmap? {
     val pixelStride = plane.pixelStride
     val width = proxy.width
     val height = proxy.height
-
-    val srcBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-    if (rowStride == width * pixelStride) {
-      srcBitmap.copyPixelsFromBuffer(buffer)
-    } else {
-      val bytes = ByteArray(buffer.remaining())
-      buffer.get(bytes)
-      val packed = ByteArray(width * pixelStride * height)
-      for (row in 0 until height) {
-        System.arraycopy(bytes, row * rowStride, packed, row * width * pixelStride, width * pixelStride)
-      }
-      srcBitmap.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(packed))
-    }
-
-    // Rotate to display orientation. The detector's `estimate_horizontal_tilt`
-    // assumes mostly-horizontal text in its input, so we have to align the bitmap to
-    // the display before detection (otherwise vertical-in-sensor text gets treated
-    // as axis-aligned and the overlay angles come out wrong). 90° is a pure
-    // permutation — filter=false skips unneeded interpolation.
     val rotation = proxy.imageInfo.rotationDegrees
-    if (rotation == 0) {
-      srcBitmap
-    } else {
-      val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
-      val rotated = Bitmap.createBitmap(srcBitmap, 0, 0, width, height, matrix, false)
-      if (rotated !== srcBitmap) srcBitmap.recycle()
-      rotated
-    }
+
+    val rgba =
+      if (rowStride == width * pixelStride) {
+        val tmp = ByteArray(buffer.remaining())
+        buffer.get(tmp)
+        tmp
+      } else {
+        val srcBytes = ByteArray(buffer.remaining())
+        buffer.get(srcBytes)
+        val packed = ByteArray(width * pixelStride * height)
+        for (row in 0 until height) {
+          System.arraycopy(srcBytes, row * rowStride, packed, row * width * pixelStride, width * pixelStride)
+        }
+        packed
+      }
+    RgbaFrame(rgba, width, height, rotation)
   } catch (e: Exception) {
     Log.w(TAG, "frame conversion failed", e)
     null
