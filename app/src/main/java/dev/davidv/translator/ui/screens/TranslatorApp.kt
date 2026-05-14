@@ -376,6 +376,7 @@ fun TranslatorApp(
   val from by viewModel.from.collectAsState()
   val to by viewModel.to.collectAsState()
   val displayImage by viewModel.displayImage.collectAsState()
+  val originalImage by viewModel.originalImage.collectAsState()
   val ocrReadingOrder by viewModel.ocrReadingOrder.collectAsState()
   val currentDetectedLanguage by viewModel.currentDetectedLanguage.collectAsState()
   val isAutoSource by viewModel.isAutoSource.collectAsState()
@@ -700,6 +701,7 @@ fun TranslatorApp(
                 to = currentTo,
                 detectedLanguage = currentDetectedLanguage,
                 displayImage = displayImage,
+                originalImage = originalImage,
                 ocrReadingOrder = ocrReadingOrder,
                 isTranslating = viewModel.translationCoordinator.isTranslating,
                 isOcrInProgress = viewModel.translationCoordinator.isOcrInProgress,

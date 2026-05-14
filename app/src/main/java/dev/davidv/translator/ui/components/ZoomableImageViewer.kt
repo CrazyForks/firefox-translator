@@ -23,6 +23,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -56,9 +57,12 @@ import kotlin.math.roundToInt
 @Composable
 fun ZoomableImageViewer(
   bitmap: Bitmap,
+  originalBitmap: Bitmap,
   onDismiss: () -> Unit,
   onShare: () -> Unit,
 ) {
+  var showOriginal by remember { mutableStateOf(false) }
+  val displayed = if (showOriginal) originalBitmap else bitmap
   Dialog(
     onDismissRequest = onDismiss,
     properties =
@@ -89,7 +93,7 @@ fun ZoomableImageViewer(
             Offset.Zero
           } else {
             // Calculate the image display size (how it's actually shown on screen)
-            val imageAspectRatio = bitmap.width.toFloat() / bitmap.height.toFloat()
+            val imageAspectRatio = displayed.width.toFloat() / displayed.height.toFloat()
             val screenAspectRatio = screenWidth / screenHeight
 
             val (displayWidth, displayHeight) =
@@ -127,8 +131,8 @@ fun ZoomableImageViewer(
           .background(Color.Black),
     ) {
       Image(
-        bitmap = bitmap.asImageBitmap(),
-        contentDescription = "Zoomable translated image",
+        bitmap = displayed.asImageBitmap(),
+        contentDescription = if (showOriginal) "Zoomable original image" else "Zoomable translated image",
         modifier =
           Modifier
             .fillMaxSize()
@@ -140,19 +144,35 @@ fun ZoomableImageViewer(
             ).transformable(state = state),
       )
 
-      // Share button
-      IconButton(
-        onClick = onShare,
-        modifier =
-          Modifier
-            .align(Alignment.TopEnd)
-            .size(48.dp),
+      Row(
+        modifier = Modifier.align(Alignment.TopEnd),
       ) {
-        Icon(
-          painterResource(id = R.drawable.share),
-          contentDescription = "Share image",
-          tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-        )
+        IconButton(
+          onClick = { showOriginal = !showOriginal },
+          modifier = Modifier.size(48.dp),
+        ) {
+          Icon(
+            painterResource(id = R.drawable.flip),
+            contentDescription = if (showOriginal) "Show translated image" else "Show original image",
+            tint =
+              if (showOriginal) {
+                MaterialTheme.colorScheme.primary
+              } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+              },
+          )
+        }
+
+        IconButton(
+          onClick = onShare,
+          modifier = Modifier.size(48.dp),
+        ) {
+          Icon(
+            painterResource(id = R.drawable.share),
+            contentDescription = "Share image",
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+          )
+        }
       }
 
       // Back button

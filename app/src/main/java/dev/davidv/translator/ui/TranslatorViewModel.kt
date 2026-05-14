@@ -93,7 +93,8 @@ class TranslatorViewModel(
   private val _displayImage = MutableStateFlow<Bitmap?>(null)
   val displayImage: StateFlow<Bitmap?> = _displayImage.asStateFlow()
 
-  private val originalImage = MutableStateFlow<Bitmap?>(null)
+  private val _originalImage = MutableStateFlow<Bitmap?>(null)
+  val originalImage: StateFlow<Bitmap?> = _originalImage.asStateFlow()
 
   private data class OcrCacheEntry(
     val plan: PreparedImageOverlay,
@@ -308,7 +309,7 @@ class TranslatorViewModel(
       is TranslatorMessage.TextInput -> {
         if (_inputType.value != InputType.TEXT) {
           _displayImage.value = null
-          originalImage.value = null
+          _originalImage.value = null
           ocrCache = null
           _inputType.value = InputType.TEXT
         }
@@ -354,7 +355,7 @@ class TranslatorViewModel(
         viewModelScope.launch {
           val bm = translationCoordinator.correctBitmap(message.uri, message.deleteAfterLoad)
           ocrCache = null
-          originalImage.value = bm
+          _originalImage.value = bm
           _displayImage.value = bm
           _inputType.value = InputType.IMAGE
           _currentDetectedLanguage.value = null
@@ -392,7 +393,7 @@ class TranslatorViewModel(
         _output.value = null
         _input.value = ""
         _inputType.value = InputType.TEXT
-        originalImage.value = null
+        _originalImage.value = null
         ocrCache = null
         _currentDetectedLanguage.value = null
       }
@@ -658,7 +659,7 @@ class TranslatorViewModel(
       return
     }
     _displayImage.value = null
-    originalImage.value = null
+    _originalImage.value = null
     ocrCache = null
     _output.value = null
     _input.value = ""

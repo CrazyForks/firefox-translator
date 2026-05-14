@@ -121,6 +121,7 @@ fun MainScreen(
   to: Language,
   detectedLanguage: Language?,
   displayImage: Bitmap?,
+  originalImage: Bitmap?,
   ocrReadingOrder: ReadingOrder,
   isTranslating: StateFlow<Boolean>,
   isOcrInProgress: StateFlow<Boolean>,
@@ -526,9 +527,10 @@ fun MainScreen(
   )
 
   // Full screen image viewer
-  if (showFullScreenImage && displayImage != null) {
+  if (showFullScreenImage && displayImage != null && originalImage != null) {
     ZoomableImageViewer(
       bitmap = displayImage,
+      originalBitmap = originalImage,
       onDismiss = { showFullScreenImage = false },
       onShare = {
         onMessage(TranslatorMessage.ShareTranslatedImage)
@@ -723,6 +725,7 @@ fun PopupMode() {
       to = previewLanguage("es", "Spanish"),
       detectedLanguage = previewLanguage("fr", "French"),
       displayImage = null,
+      originalImage = null,
       ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
@@ -760,6 +763,7 @@ fun MainScreenPreview() {
       to = previewLanguage("es", "Spanish"),
       detectedLanguage = previewLanguage("fr", "French"),
       displayImage = null,
+      originalImage = null,
       ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
@@ -801,6 +805,7 @@ fun PreviewTranslitText() {
       to = previewLanguage("en", "English"),
       detectedLanguage = null,
       displayImage = null,
+      originalImage = null,
       ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
@@ -843,6 +848,7 @@ fun PreviewVeryLongText() {
       to = previewLanguage("en", "English"),
       detectedLanguage = null,
       displayImage = null,
+      originalImage = null,
       ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
@@ -889,6 +895,7 @@ fun PreviewVeryLongTextImage() {
       to = previewLanguage("en", "English"),
       detectedLanguage = null,
       displayImage = bitmap,
+      originalImage = bitmap,
       ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
       isTranslating = MutableStateFlow(false).asStateFlow(),
       isOcrInProgress = MutableStateFlow(false).asStateFlow(),
