@@ -982,6 +982,31 @@ fun SettingsScreen(
                 },
               )
             }
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "Live camera overlay",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = "Default state for the live OCR overlay when opening the camera. Can be toggled per session from the camera screen.",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              Switch(
+                checked = settings.liveCameraOverlayEnabled,
+                onCheckedChange = { checked ->
+                  onSettingsChange(settings.copy(liveCameraOverlayEnabled = checked))
+                },
+              )
+            }
           }
         }
       }

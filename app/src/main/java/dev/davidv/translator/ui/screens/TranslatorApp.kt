@@ -875,6 +875,7 @@ fun TranslatorApp(
           composable("live_camera") {
             val currentFrom = from
             val currentTo = to
+            val liveCatalog by viewModel.languageStateManager.catalog.collectAsState()
             if (currentFrom != null && currentTo != null) {
               LiveCameraScreen(
                 from = currentFrom,
@@ -884,6 +885,7 @@ fun TranslatorApp(
                 languageMetadata = languageMetadata,
                 onMessage = viewModel::handleMessage,
                 liveOverlayDefaultEnabled = settings.liveCameraOverlayEnabled,
+                catalog = liveCatalog,
                 onClose = {
                   navController.popBackStack("main", inclusive = false)
                 },

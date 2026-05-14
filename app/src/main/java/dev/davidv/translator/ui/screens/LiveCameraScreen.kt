@@ -20,6 +20,7 @@ package dev.davidv.translator.ui.screens
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -30,8 +31,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
@@ -64,6 +67,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,6 +79,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -86,6 +92,8 @@ import androidx.core.content.FileProvider
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityState
 import dev.davidv.translator.LanguageMetadata
+import dev.davidv.translator.LiveOcrEngine
+import dev.davidv.translator.LiveOverlayItem
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.ui.components.LanguageSelector
@@ -95,6 +103,7 @@ import android.util.Size as AndroidSize
 
 private const val TAG = "LiveCameraScreen"
 private val TARGET_RESOLUTION = AndroidSize(1080, 1920)
+private val ANALYZER_RESOLUTION = AndroidSize(1080, 1920)
 
 @Composable
 fun LiveCameraScreen(
@@ -105,6 +114,7 @@ fun LiveCameraScreen(
   languageMetadata: Map<Language, LanguageMetadata>,
   onMessage: (TranslatorMessage) -> Unit,
   liveOverlayDefaultEnabled: Boolean,
+  catalog: dev.davidv.translator.LanguageCatalog?,
   onClose: () -> Unit,
 ) {
   val context = LocalContext.current
@@ -145,6 +155,7 @@ fun LiveCameraScreen(
           languageMetadata = languageMetadata,
           onMessage = onMessage,
           liveOverlayDefaultEnabled = liveOverlayDefaultEnabled,
+          catalog = catalog,
           onClose = onClose,
         )
       hasAsked ->
@@ -209,6 +220,7 @@ private fun CameraSurface(
   languageMetadata: Map<Language, LanguageMetadata>,
   onMessage: (TranslatorMessage) -> Unit,
   liveOverlayDefaultEnabled: Boolean,
+  catalog: dev.davidv.translator.LanguageCatalog?,
   onClose: () -> Unit,
 ) {
   val context = LocalContext.current
@@ -224,6 +236,9 @@ private fun CameraSurface(
   var focusPoint by remember { mutableStateOf<Offset?>(null) }
   val focusScale = remember { Animatable(1.5f) }
   val focusAlpha = remember { Animatable(0f) }
+  // Persistent crop centre for the live OCR engine. Defaults to dead centre; a tap
+  // moves it so we crop around the user's focus area instead of the middle of the frame.
+  var cropFocusNormalized by remember { mutableStateOf(Offset(0.5f, 0.5f)) }
 
   LaunchedEffect(focusPoint) {
     val point = focusPoint ?: return@LaunchedEffect
@@ -250,6 +265,72 @@ private fun CameraSurface(
         .setResolutionSelector(resolutionSelector)
         .build()
     }
+
+  val imageAnalysis =
+    remember {
+      // Cap analyzer source at ~1.5 MP regardless of device. The bigger the source,
+      // the slower the per-frame bitmap conversion (RGBA copy + rotation) — and
+      // detection downscales to a fixed 400k target anyway, so the larger source
+      // mostly burns memory bandwidth.
+      val maxPixels = 1_500_000L
+      val resolutionSelector =
+        ResolutionSelector.Builder()
+          .setResolutionStrategy(
+            ResolutionStrategy(
+              ANALYZER_RESOLUTION,
+              ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+            ),
+          )
+          .setResolutionFilter { sizes, _ ->
+            sizes.filter { it.width.toLong() * it.height <= maxPixels }
+          }
+          .build()
+      ImageAnalysis.Builder()
+        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+        .setResolutionSelector(resolutionSelector)
+        .build()
+    }
+  val analyzerExecutor =
+    remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
+
+  val workerScope = androidx.compose.runtime.rememberCoroutineScope()
+  val liveOcrEngine: LiveOcrEngine? =
+    remember(catalog) { catalog?.let { LiveOcrEngine(it, workerScope) } }
+  val liveOverlays by (liveOcrEngine?.overlays ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList()) })
+    .collectAsState()
+  var previewSizePx by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+
+  DisposableEffect(Unit) {
+    onDispose { analyzerExecutor.shutdown() }
+  }
+
+  val analyzerSession = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+  DisposableEffect(liveOverlayOn, liveOcrEngine, from.code, to.code) {
+    val engine = liveOcrEngine
+    val mySession = analyzerSession.incrementAndGet()
+    if (liveOverlayOn && engine != null) {
+      imageAnalysis.setAnalyzer(analyzerExecutor) { proxy ->
+        val tConvert = System.nanoTime()
+        val bitmap = proxyToBitmap(proxy)
+        proxy.close()
+        val convertMs = (System.nanoTime() - tConvert) / 1_000_000.0
+        if (bitmap == null) return@setAnalyzer
+        if (analyzerSession.get() != mySession) return@setAnalyzer
+        val fx = cropFocusNormalized.x
+        val fy = cropFocusNormalized.y
+        kotlinx.coroutines.runBlocking { engine.submitFrame(bitmap, fx, fy, from, to, convertMs) }
+      }
+    } else {
+      imageAnalysis.clearAnalyzer()
+      engine?.clear()
+    }
+    onDispose {
+      analyzerSession.incrementAndGet()
+      imageAnalysis.clearAnalyzer()
+      engine?.clear()
+    }
+  }
 
   val previewView =
     remember {
@@ -281,6 +362,13 @@ private fun CameraSurface(
         object : GestureDetector.SimpleOnGestureListener() {
           override fun onSingleTapUp(e: MotionEvent): Boolean {
             focusPoint = Offset(e.x, e.y)
+            val viewW = previewView.width.toFloat().coerceAtLeast(1f)
+            val viewH = previewView.height.toFloat().coerceAtLeast(1f)
+            cropFocusNormalized =
+              Offset(
+                (e.x / viewW).coerceIn(0f, 1f),
+                (e.y / viewH).coerceIn(0f, 1f),
+              )
             val cam = camera ?: return true
             val point = previewView.meteringPointFactory.createPoint(e.x, e.y)
             val action =
@@ -328,6 +416,7 @@ private fun CameraSurface(
             CameraSelector.DEFAULT_BACK_CAMERA,
             preview,
             imageCapture,
+            imageAnalysis,
           )
         camera = boundCamera
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
@@ -345,10 +434,20 @@ private fun CameraSurface(
     cameraControl?.enableTorch(torchOn && hasFlashUnit)
   }
 
-  Box(modifier = Modifier.fillMaxSize()) {
+  Box(
+    modifier =
+      Modifier
+        .fillMaxSize()
+        .onSizeChanged { previewSizePx = it },
+  ) {
     AndroidView(
       factory = { previewView },
       modifier = Modifier.fillMaxSize(),
+    )
+
+    LiveOverlayLayer(
+      overlays = liveOverlays,
+      previewSizePx = previewSizePx,
     )
 
     val indicatorSizeDp = 72.dp
@@ -553,5 +652,133 @@ private fun BottomControls(
         tint = if (liveOverlayOn) Color.White else Color.White.copy(alpha = 0.4f),
       )
     }
+  }
+}
+
+@Composable
+private fun LiveOverlayLayer(
+  overlays: List<LiveOverlayItem>,
+  previewSizePx: androidx.compose.ui.unit.IntSize,
+) {
+  if (overlays.isEmpty() || previewSizePx.width == 0 || previewSizePx.height == 0) return
+  val density = androidx.compose.ui.platform.LocalDensity.current
+  val placements =
+    overlays.map { item ->
+      // FILL_CENTER scale from full-frame pixels to PreviewView pixels.
+      val scale =
+        maxOf(
+          previewSizePx.width.toFloat() / item.frameWidth.toFloat(),
+          previewSizePx.height.toFloat() / item.frameHeight.toFloat(),
+        )
+      val displayedW = item.frameWidth * scale
+      val displayedH = item.frameHeight * scale
+      val offX = (displayedW - previewSizePx.width) / 2f
+      val offY = (displayedH - previewSizePx.height) / 2f
+      val cxPx = item.cx * scale - offX
+      val cyPx = item.cy * scale - offY
+      val widthPx = (item.width * scale).coerceAtLeast(1f)
+      val heightPx = (item.height * scale).coerceAtLeast(1f)
+      val widthDp = with(density) { widthPx.toDp() }
+      val heightDp = with(density) { heightPx.toDp() }
+      // graphicsLayer rotates around the box centre; we offset by (cx - w/2, cy - h/2).
+      val leftPx = (cxPx - widthPx / 2f).toInt()
+      val topPx = (cyPx - heightPx / 2f).toInt()
+      val angleDeg = item.angleRadians * 180f / kotlin.math.PI.toFloat()
+      Placement(item.translatedText, leftPx, topPx, widthDp, heightDp, angleDeg)
+    }
+
+  // Background pass: draw opaque rounded rects inside an offscreen layer composited at
+  // alpha=0.7 — overlapping shapes merge into a single union instead of stacking the dim.
+  Box(
+    modifier =
+      Modifier
+        .fillMaxSize()
+        .graphicsLayer {
+          alpha = 0.7f
+          compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+        },
+  ) {
+    for (p in placements) {
+      Box(
+        modifier =
+          Modifier
+            .offset { IntOffset(p.left, p.top) }
+            .size(p.widthDp, p.heightDp)
+            .graphicsLayer { rotationZ = p.angleDeg }
+            .background(Color.Black, RoundedCornerShape(4.dp)),
+      )
+    }
+  }
+  // Text pass: always on top of every background.
+  for (p in placements) {
+    Box(
+      modifier =
+        Modifier
+          .offset { IntOffset(p.left, p.top) }
+          .size(p.widthDp, p.heightDp)
+          .graphicsLayer { rotationZ = p.angleDeg }
+          .padding(horizontal = 2.dp),
+      contentAlignment = Alignment.Center,
+    ) {
+      Text(
+        text = p.text,
+        color = Color.White,
+        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+        maxLines = 2,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+      )
+    }
+  }
+}
+
+private data class Placement(
+  val text: String,
+  val left: Int,
+  val top: Int,
+  val widthDp: androidx.compose.ui.unit.Dp,
+  val heightDp: androidx.compose.ui.unit.Dp,
+  val angleDeg: Float,
+)
+
+private fun proxyToBitmap(proxy: ImageProxy): Bitmap? {
+  return try {
+    val plane = proxy.planes[0]
+    val buffer = plane.buffer
+    buffer.rewind()
+    val rowStride = plane.rowStride
+    val pixelStride = plane.pixelStride
+    val width = proxy.width
+    val height = proxy.height
+
+    val srcBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    if (rowStride == width * pixelStride) {
+      srcBitmap.copyPixelsFromBuffer(buffer)
+    } else {
+      val bytes = ByteArray(buffer.remaining())
+      buffer.get(bytes)
+      val packed = ByteArray(width * pixelStride * height)
+      for (row in 0 until height) {
+        System.arraycopy(bytes, row * rowStride, packed, row * width * pixelStride, width * pixelStride)
+      }
+      srcBitmap.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(packed))
+    }
+
+    // Rotate to display orientation. The detector's `estimate_horizontal_tilt`
+    // assumes mostly-horizontal text in its input, so we have to align the bitmap to
+    // the display before detection (otherwise vertical-in-sensor text gets treated
+    // as axis-aligned and the overlay angles come out wrong). 90° is a pure
+    // permutation — filter=false skips unneeded interpolation.
+    val rotation = proxy.imageInfo.rotationDegrees
+    if (rotation == 0) {
+      srcBitmap
+    } else {
+      val matrix = android.graphics.Matrix().apply { postRotate(rotation.toFloat()) }
+      val rotated = Bitmap.createBitmap(srcBitmap, 0, 0, width, height, matrix, false)
+      if (rotated !== srcBitmap) srcBitmap.recycle()
+      rotated
+    }
+  } catch (e: Exception) {
+    Log.w(TAG, "frame conversion failed", e)
+    null
   }
 }
