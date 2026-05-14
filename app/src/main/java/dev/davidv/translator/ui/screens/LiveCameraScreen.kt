@@ -311,15 +311,16 @@ private fun CameraSurface(
     if (liveOverlayOn && engine != null) {
       imageAnalysis.setAnalyzer(analyzerExecutor) { proxy ->
         val tConvert = System.nanoTime()
-        val rgba = proxyToRgba(proxy)
+        val rgba = proxyToRgba(proxy, engine::acquireRgbaBuffer)
         proxy.close()
         val convertMs = (System.nanoTime() - tConvert) / 1_000_000.0
         if (rgba == null) return@setAnalyzer
         if (analyzerSession.get() != mySession) return@setAnalyzer
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
-        // Non-blocking: pushes onto the engine's conflated frame channel. The
-        // detector coroutine inside the engine picks up the latest frame.
+        // Non-blocking: hands off to the engine's manual-conflation slot. The
+        // detector coroutine picks up the latest frame; older frames' buffers
+        // go back into the pool.
         engine.submitFrame(rgba, fx, fy, from, to, convertMs)
       }
     } else {
@@ -752,7 +753,13 @@ data class RgbaFrame(
   val rotationDegrees: Int,
 )
 
-fun proxyToRgba(proxy: ImageProxy): RgbaFrame? {
+/** Copy RGBA out of the camera's native buffer into a (preferably pooled)
+ *  ByteArray. `acquire` should be backed by [LiveOcrEngine.acquireRgbaBuffer]
+ *  so we don't allocate ~6 MB per frame. */
+fun proxyToRgba(
+  proxy: ImageProxy,
+  acquire: (Int) -> ByteArray,
+): RgbaFrame? {
   return try {
     val plane = proxy.planes[0]
     val buffer = plane.buffer
@@ -763,20 +770,20 @@ fun proxyToRgba(proxy: ImageProxy): RgbaFrame? {
     val height = proxy.height
     val rotation = proxy.imageInfo.rotationDegrees
 
-    val rgba =
-      if (rowStride == width * pixelStride) {
-        val tmp = ByteArray(buffer.remaining())
-        buffer.get(tmp)
-        tmp
-      } else {
-        val srcBytes = ByteArray(buffer.remaining())
-        buffer.get(srcBytes)
-        val packed = ByteArray(width * pixelStride * height)
-        for (row in 0 until height) {
-          System.arraycopy(srcBytes, row * rowStride, packed, row * width * pixelStride, width * pixelStride)
-        }
-        packed
+    val needed = width * pixelStride * height
+    val rgba = acquire(needed)
+    if (rowStride == width * pixelStride) {
+      buffer.get(rgba, 0, needed)
+    } else {
+      // Stride padding — read row-by-row out of the padded native buffer into
+      // the contiguous pooled `rgba`.
+      val rowBytes = width * pixelStride
+      val tmp = ByteArray(rowStride)
+      for (row in 0 until height) {
+        buffer.get(tmp, 0, rowStride)
+        System.arraycopy(tmp, 0, rgba, row * rowBytes, rowBytes)
       }
+    }
     RgbaFrame(rgba, width, height, rotation)
   } catch (e: Exception) {
     Log.w(TAG, "frame conversion failed", e)

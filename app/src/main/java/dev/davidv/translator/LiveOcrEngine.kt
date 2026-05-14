@@ -114,9 +114,13 @@ class LiveOcrEngine(
 
   data class TranslationKey(val sourceCode: String, val targetCode: String, val text: String)
 
-  /** Frame intake channel. Conflated: only the latest frame is kept. The detector
-   *  coroutine pulls from this. */
-  private val frameChannel = Channel<PendingFrame>(Channel.CONFLATED)
+  /** Manual conflation: only the latest frame is held; if a new one arrives while
+   *  another is pending, the previous one's RGBA buffer is returned to the pool
+   *  (no GC pressure). `frameSignal` is just a wake-up notification — the actual
+   *  payload lives in `pendingFrame`. */
+  private val pendingFrame = java.util.concurrent.atomic.AtomicReference<PendingFrame?>(null)
+  private val frameSignal = Channel<Unit>(Channel.CONFLATED)
+  private val bytePool = ByteArrayPool(maxRetained = 3)
   private val detectorExecutor =
     Executors.newSingleThreadExecutor { r ->
       Thread(r, "LiveOcrDetector").apply { isDaemon = true }
@@ -130,14 +134,24 @@ class LiveOcrEngine(
   init {
     detectorJob =
       workerScope.launch(detectorDispatcher) {
-        for (frame in frameChannel) {
-          runDetectionStage(frame)
+        for (signal in frameSignal) {
+          val frame = pendingFrame.getAndSet(null) ?: continue
+          try {
+            runDetectionStage(frame)
+          } finally {
+            bytePool.release(frame.rgba.rgba)
+          }
         }
       }
   }
 
-  /** Non-blocking handoff from the analyzer thread. Conflated — replaces any
-   *  pending frame, no backpressure. */
+  /** Acquire a pooled RGBA buffer of at least `size` bytes. Caller fills it,
+   *  then passes via [submitFrame]; the engine takes ownership of the buffer
+   *  and releases it back to the pool when the detector is done. */
+  fun acquireRgbaBuffer(size: Int): ByteArray = bytePool.acquire(size)
+
+  /** Non-blocking handoff from the analyzer thread. If a previous frame was
+   *  pending, its RGBA buffer is returned to the pool. */
   fun submitFrame(
     rgba: RgbaFrame,
     focusXNormalized: Float,
@@ -146,9 +160,10 @@ class LiveOcrEngine(
     to: Language,
     convertMs: Double = 0.0,
   ) {
-    frameChannel.trySend(
-      PendingFrame(rgba, focusXNormalized, focusYNormalized, from, to, convertMs),
-    )
+    val newFrame = PendingFrame(rgba, focusXNormalized, focusYNormalized, from, to, convertMs)
+    val replaced = pendingFrame.getAndSet(newFrame)
+    if (replaced != null) bytePool.release(replaced.rgba.rgba)
+    frameSignal.trySend(Unit)
   }
 
   fun clear() {
@@ -525,5 +540,36 @@ private class FrameStats {
     newBoxesSum = 0
     overlayCountSum = 0
     dedupEvictions = 0
+  }
+}
+
+/** Bounded free-list of [ByteArray]s. We sit on at most `maxRetained` buffers;
+ *  beyond that the older ones are dropped on the floor and the GC handles them.
+ *  Each acquire prefers a pooled buffer that's at least the requested size.
+ *
+ *  Live-OCR keeps ~2–3 buffers live at any moment (one in the analyzer hand,
+ *  one in the pendingFrame slot, optionally one being processed by the
+ *  detector). With `maxRetained = 3` we essentially eliminate the per-frame
+ *  ~6 MB allocation that was driving the GC every 1–2 s.
+ */
+private class ByteArrayPool(private val maxRetained: Int) {
+  private val pool = ArrayDeque<ByteArray>(maxRetained)
+
+  @Synchronized
+  fun acquire(size: Int): ByteArray {
+    val it = pool.iterator()
+    while (it.hasNext()) {
+      val candidate = it.next()
+      if (candidate.size >= size) {
+        it.remove()
+        return candidate
+      }
+    }
+    return ByteArray(size)
+  }
+
+  @Synchronized
+  fun release(b: ByteArray) {
+    if (pool.size < maxRetained) pool.addFirst(b)
   }
 }
