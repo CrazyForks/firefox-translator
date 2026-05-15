@@ -304,7 +304,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     ui.removeTranslationOverlays()
 
     val sourceLang = ocrSourceLanguage()
-    if (sourceLang == null) {
+    if (!isAutoSource && sourceLang == null) {
       ui.setOcrButtonVisible(true)
       ui.showOverlayMessage("Set source language first")
       return
@@ -376,17 +376,19 @@ class TranslatorAccessibilityService : AccessibilityService() {
     bitmap: Bitmap,
     region: Rect,
   ) {
-    val sourceLang = ocrSourceLanguage() ?: return
+    val sourceLang = ocrSourceLanguage()
     val targetLang = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
+    val ocrSourceLang = sourceLang ?: targetLang
 
     val result =
       withContext(Dispatchers.IO) {
         translationCoordinator.translateImageWithOverlay(
-          sourceLang,
+          ocrSourceLang,
           targetLang,
           bitmap,
           onMessage = {},
           readingOrder = currentReadingOrderFor(sourceLang),
+          isAutoSource = isAutoSource,
         )
       }
 

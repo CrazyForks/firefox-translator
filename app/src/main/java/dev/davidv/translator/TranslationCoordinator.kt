@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import uniffi.translator.OcrSourceSelection
 import uniffi.translator.PreparedImageOverlay
 import java.nio.ByteBuffer
 import kotlin.system.measureTimeMillis
@@ -180,6 +181,8 @@ class TranslationCoordinator(
     finalBitmap: Bitmap,
     onMessage: (TranslatorMessage.ImageTextDetected) -> Unit,
     readingOrder: ReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
+    isAutoSource: Boolean = false,
+    onMissingDetectedLanguage: (Language) -> Unit = {},
   ): ProcessedImageResult? =
     withContext(Dispatchers.IO) {
       _isTranslating.value = true
@@ -191,18 +194,32 @@ class TranslationCoordinator(
         val backgroundMode = settingsManager.settings.value.backgroundMode
         val preferredOcrEngine = settingsManager.settings.value.preferredOcrEngine
         val maxImageSize = settingsManager.settings.value.maxImageSize
+        val sourceSelection =
+          if (isAutoSource) {
+            OcrSourceSelection.Auto
+          } else {
+            OcrSourceSelection.Specific(uniffi.translator.LanguageCode(from.code))
+          }
         val plan =
           try {
             catalog.translateImagePlan(
               finalBitmap,
               maxImageSize,
-              from,
+              sourceSelection,
               to,
               minConfidence,
               readingOrder,
               backgroundMode,
               preferredOcrEngine,
             )
+          } catch (e: uniffi.bindings.CatalogException.MissingAsset) {
+            Log.d("OCR", "translateImagePlan failed: ${e.message}")
+            if (isAutoSource) {
+              detectedLanguageCodeFromMissingAsset(e.message)
+                ?.let(catalog::languageByCode)
+                ?.let(onMissingDetectedLanguage)
+            }
+            return@withContext null
           } catch (e: uniffi.bindings.CatalogException) {
             Log.d("OCR", "translateImagePlan failed: ${e.message}")
             return@withContext null
@@ -285,6 +302,12 @@ class TranslationCoordinator(
     text: String,
     from: Language,
   ): String? = translationService.transliterate(text, from)
+
+  private fun detectedLanguageCodeFromMissingAsset(message: String?): String? {
+    if (message == null) return null
+    val direction = Regex("\\b([a-z]{2,3}(?:-[A-Za-z0-9]+)?)->[a-z]{2,3}(?:-[A-Za-z0-9]+)?\\b").find(message)
+    return direction?.groupValues?.getOrNull(1)
+  }
 
   suspend fun synthesizeSpeech(
     language: Language,

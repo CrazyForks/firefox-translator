@@ -3,6 +3,9 @@
 The PPOCR rec models are organised by script, not by language: one model
 covers every language that uses that script. Maps the script "slugs" used
 in PaddleOCR filenames to the catalog's language codes.
+
+The shared "cj" model handles Chinese (simplified + traditional) and Japanese
+together. Korean uses its own recognizer.
 """
 
 import catalog_base
@@ -14,9 +17,9 @@ PPOCR_INSTALL_BASE = "ppocr/PP-OCRv5"
 PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 
 PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det_fp16.mnn"
+PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC.mnn"
 
-# Recognizer model filename per script slug. The "cjk" slug uses the shared
-# PP-OCRv5 model that handles Japanese + Chinese together.
+# Recognizer model filename per script slug.
 PPOCR_RECOGNIZER_FILENAMES = {
     "arabic": "arabic_PP-OCRv5_mobile_rec_infer.mnn",
     "cyrillic": "cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
@@ -28,7 +31,7 @@ PPOCR_RECOGNIZER_FILENAMES = {
     "ta": "ta_PP-OCRv5_mobile_rec_infer.mnn",
     "te": "te_PP-OCRv5_mobile_rec_infer.mnn",
     "th": "th_PP-OCRv5_mobile_rec_infer.mnn",
-    "cjk": "PP-OCRv5_mobile_rec_fp16.mnn",
+    "cj": "PP-OCRv5_mobile_rec_fp16.mnn",
 }
 
 # Language codes (catalog keys) served by each PPOCR script.
@@ -58,7 +61,7 @@ PPOCR_SCRIPT_TO_LANGUAGES = {
     "ta": ["ta"],
     "te": ["te"],
     "th": ["th"],
-    "cjk": ["ja", "zh", "zh_hant"],
+    "cj": ["ja", "zh", "zh_hant"],
 }
 
 
@@ -100,8 +103,11 @@ def add_ppocr_packs(catalog: dict) -> None:
     catalog["packs"][PPOCR_DETECTOR_PACK_ID] = {
         "feature": "ocr",
         "engine": PPOCR_ENGINE,
-        "language": "_detector",
-        "files": [_make_file(PPOCR_DETECTOR_FILENAME)],
+        "role": "detector",
+        "files": [
+            _make_file(PPOCR_DETECTOR_FILENAME),
+            _make_file(PPOCR_SCRIPT_CLASSIFIER_FILENAME),
+        ],
         "dependsOn": [],
     }
 
@@ -117,7 +123,8 @@ def add_ppocr_packs(catalog: dict) -> None:
         catalog["packs"][pack_id] = {
             "feature": "ocr",
             "engine": PPOCR_ENGINE,
-            "language": script,
+            "role": "recognizer",
+            "script": script,
             "files": [
                 _make_file(rec_filename),
                 _make_file(keys_filename),

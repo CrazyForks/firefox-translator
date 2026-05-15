@@ -1,13 +1,13 @@
 {
   "formatVersion": 3,
-  "generatedAt": 1778843833,
+  "generatedAt": 1778878692,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "tesseractModelsBaseUrl": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778843833,
+    "languageIndexUpdatedAt": 1778878692,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -963,7 +963,7 @@
         ],
         "ocr": {
           "tesseract": "ocr-tesseract-ja",
-          "ppocr": "ocr-ppocr-cjk"
+          "ppocr": "ocr-ppocr-cj"
         },
         "support": [
           "support-ja-mucab"
@@ -1808,7 +1808,7 @@
         ],
         "ocr": {
           "tesseract": "ocr-tesseract-zh",
-          "ppocr": "ocr-ppocr-cjk"
+          "ppocr": "ocr-ppocr-cj"
         },
         "dictionary": "dict-zh",
         "preferredOcrEngine": "tesseract"
@@ -1841,7 +1841,7 @@
         ],
         "ocr": {
           "tesseract": "ocr-tesseract-zh_hant",
-          "ppocr": "ocr-ppocr-cjk"
+          "ppocr": "ocr-ppocr-cj"
         },
         "dictionary": "dict-zh",
         "preferredOcrEngine": "tesseract"
@@ -11549,7 +11549,7 @@
     "ocr-ppocr-detector": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "_detector",
+      "role": "detector",
       "files": [
         {
           "name": "PP-OCRv5_mobile_det_fp16.mnn",
@@ -11557,6 +11557,13 @@
           "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_det_fp16.mnn",
           "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_det_fp16.mnn",
           "mirrorPath": "ocr/1/PP-OCRv5/PP-OCRv5_mobile_det_fp16.mnn"
+        },
+        {
+          "name": "PULC.mnn",
+          "sizeBytes": 0,
+          "installPath": "ppocr/PP-OCRv5/PULC.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PULC.mnn",
+          "mirrorPath": "ocr/1/PP-OCRv5/PULC.mnn"
         }
       ],
       "dependsOn": []
@@ -11564,7 +11571,8 @@
     "ocr-ppocr-arabic": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "arabic",
+      "role": "recognizer",
+      "script": "arabic",
       "files": [
         {
           "name": "arabic_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11589,7 +11597,8 @@
     "ocr-ppocr-cyrillic": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "cyrillic",
+      "role": "recognizer",
+      "script": "cyrillic",
       "files": [
         {
           "name": "cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11614,7 +11623,8 @@
     "ocr-ppocr-devanagari": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "devanagari",
+      "role": "recognizer",
+      "script": "devanagari",
       "files": [
         {
           "name": "devanagari_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11639,7 +11649,8 @@
     "ocr-ppocr-el": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "el",
+      "role": "recognizer",
+      "script": "el",
       "files": [
         {
           "name": "el_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11664,7 +11675,8 @@
     "ocr-ppocr-eslav": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "eslav",
+      "role": "recognizer",
+      "script": "eslav",
       "files": [
         {
           "name": "eslav_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11689,7 +11701,8 @@
     "ocr-ppocr-korean": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "korean",
+      "role": "recognizer",
+      "script": "korean",
       "files": [
         {
           "name": "korean_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11714,7 +11727,8 @@
     "ocr-ppocr-latin": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "latin",
+      "role": "recognizer",
+      "script": "latin",
       "files": [
         {
           "name": "latin_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11738,7 +11752,8 @@
     "ocr-ppocr-ta": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "ta",
+      "role": "recognizer",
+      "script": "ta",
       "files": [
         {
           "name": "ta_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11763,7 +11778,8 @@
     "ocr-ppocr-te": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "te",
+      "role": "recognizer",
+      "script": "te",
       "files": [
         {
           "name": "te_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11788,7 +11804,8 @@
     "ocr-ppocr-th": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "th",
+      "role": "recognizer",
+      "script": "th",
       "files": [
         {
           "name": "th_PP-OCRv5_mobile_rec_infer.mnn",
@@ -11810,10 +11827,11 @@
         "ocr-ppocr-latin"
       ]
     },
-    "ocr-ppocr-cjk": {
+    "ocr-ppocr-cj": {
       "feature": "ocr",
       "engine": "ppocr",
-      "language": "cjk",
+      "role": "recognizer",
+      "script": "cj",
       "files": [
         {
           "name": "PP-OCRv5_mobile_rec_fp16.mnn",
@@ -11823,11 +11841,11 @@
           "mirrorPath": "ocr/1/PP-OCRv5/PP-OCRv5_mobile_rec_fp16.mnn"
         },
         {
-          "name": "cjk_PP-OCRv5_keys.txt",
+          "name": "cj_PP-OCRv5_keys.txt",
           "sizeBytes": 0,
-          "installPath": "ppocr/PP-OCRv5/cjk_PP-OCRv5_keys.txt",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/cjk_PP-OCRv5_keys.txt",
-          "mirrorPath": "ocr/1/PP-OCRv5/cjk_PP-OCRv5_keys.txt"
+          "installPath": "ppocr/PP-OCRv5/cj_PP-OCRv5_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/cj_PP-OCRv5_keys.txt",
+          "mirrorPath": "ocr/1/PP-OCRv5/cj_PP-OCRv5_keys.txt"
         }
       ],
       "dependsOn": [

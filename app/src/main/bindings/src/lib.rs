@@ -38,9 +38,3 @@ pub(crate) fn init_logging() {
 
 #[cfg(not(target_os = "android"))]
 pub(crate) fn init_logging() {}
-
-
-
-
-
-

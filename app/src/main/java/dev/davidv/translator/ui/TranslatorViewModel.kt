@@ -569,7 +569,8 @@ class TranslatorViewModel(
     val engine = settingsManager.settings.value.preferredOcrEngine
     val cached =
       ocrCache?.takeIf { entry ->
-        entry.imageRef === bitmap &&
+        !_isAutoSource.value &&
+          entry.imageRef === bitmap &&
           entry.readingOrder == readingOrder &&
           entry.engine == engine &&
           when (engine) {
@@ -596,6 +597,10 @@ class TranslatorViewModel(
           bitmap,
           onMessage = onMessage,
           readingOrder = readingOrder,
+          isAutoSource = _isAutoSource.value,
+          onMissingDetectedLanguage = { detected ->
+            _currentDetectedLanguage.value = detected
+          },
         )
       }
     result?.let {

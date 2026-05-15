@@ -180,29 +180,10 @@ fun MainScreen(
     floatingActionButton = {
       when (launchMode) {
         LaunchMode.Normal -> {
-          val fabDisabled = isAutoSource
           FloatingActionButton(
             onClick = {
-              if (fabDisabled) {
-                android.widget.Toast
-                  .makeText(context, "Please select source language first", android.widget.Toast.LENGTH_SHORT)
-                  .show()
-              } else {
-                showImageSourceSheet = true
-              }
+              showImageSourceSheet = true
             },
-            containerColor =
-              if (fabDisabled) {
-                MaterialTheme.colorScheme.surfaceVariant
-              } else {
-                FloatingActionButtonDefaults.containerColor
-              },
-            contentColor =
-              if (fabDisabled) {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-              } else {
-                MaterialTheme.colorScheme.onPrimaryContainer
-              },
           ) {
             Icon(
               painterResource(id = R.drawable.attach_file_add),

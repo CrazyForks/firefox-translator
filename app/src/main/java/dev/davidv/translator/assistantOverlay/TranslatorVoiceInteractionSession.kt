@@ -400,7 +400,7 @@ class TranslatorVoiceInteractionSession(
     val screenshotReady = screenshotBitmap != null
     val noCaptureCallbacksArrived = !hasReceivedAssistCallback && !hasReceivedScreenshotCallback
     val screenshotExpected = isAssistScreenshotEnabled()
-    val canOcr = ocrSourceLanguage() != null
+    val canOcr = isAutoSource || ocrSourceLanguage() != null
     Log.d(
       tag,
       "maybeProcessCapture blocks=${capturedFragments.size} expectedAssistCount=$expectedCount receivedAssist=${receivedAssistIndexes.size} assistReady=$assistReady screenshotReady=$screenshotReady screenshotExpected=$screenshotExpected timedOut=$assistCollectionTimedOut canOcr=$canOcr",
@@ -566,7 +566,7 @@ class TranslatorVoiceInteractionSession(
     setOcrButtonVisible(false)
     showLoading(true)
     val sourceLanguage = ocrSourceLanguage()
-    if (sourceLanguage == null) {
+    if (!isAutoSource && sourceLanguage == null) {
       processing = false
       showLoading(false)
       showStatus("Set a default source language for OCR.")
@@ -574,6 +574,7 @@ class TranslatorVoiceInteractionSession(
     }
 
     val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
+    val ocrSourceLanguage = sourceLanguage ?: targetLanguage
     val cropped = cropSystemBars(screenshot)
     val workingBitmap = cropped.copy(Bitmap.Config.ARGB_8888, false)
     if (cropped !== screenshot) cropped.recycle()
@@ -582,11 +583,12 @@ class TranslatorVoiceInteractionSession(
         val result =
           withContext(Dispatchers.IO) {
             translationCoordinator.translateImageWithOverlay(
-              sourceLanguage,
+              ocrSourceLanguage,
               targetLanguage,
               workingBitmap,
               onMessage = {},
               readingOrder = currentReadingOrderFor(sourceLanguage),
+              isAutoSource = isAutoSource,
             )
           }
         ensureActive()
@@ -800,11 +802,12 @@ class TranslatorVoiceInteractionSession(
       forcedSourceLanguage ?: settingsManager.settings.value.defaultSourceLanguageCode?.let {
         langStateManager.languageByCode(it)
       }
-    if (sourceLanguage == null) {
+    if (!isAutoSource && sourceLanguage == null) {
       showStatus("Set source language first for OCR")
       return
     }
     val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
+    val ocrSourceLanguage = sourceLanguage ?: targetLanguage
 
     overlayContainer.removeAllViews()
     processing = true
@@ -818,11 +821,12 @@ class TranslatorVoiceInteractionSession(
         val result =
           withContext(Dispatchers.IO) {
             translationCoordinator.translateImageWithOverlay(
-              sourceLanguage,
+              ocrSourceLanguage,
               targetLanguage,
               bitmap,
               onMessage = {},
               readingOrder = currentReadingOrderFor(sourceLanguage),
+              isAutoSource = isAutoSource,
             )
           }
         ensureActive()

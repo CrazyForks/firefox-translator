@@ -31,6 +31,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import uniffi.bindings.FrameHandle
 import uniffi.translator.DetectedTextBox
+import uniffi.translator.OcrSourceSelection
 import uniffi.translator.OrientedRect
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
@@ -99,12 +100,14 @@ private data class TrackEntry(
   var lastMatchedDetection: Long,
   var frameWidth: Int,
   var frameHeight: Int,
+  var sourceCode: String?,
 )
 
 private data class LiveRenderGroup(
   val id: String,
   val tracks: List<TrackEntry>,
   val sourceText: String,
+  val sourceCode: String,
 )
 
 /** Carries one camera frame through the engine's pipeline stages. The [FrameHandle]
@@ -120,6 +123,7 @@ private data class PendingFrame(
   val focusYNormalized: Float,
   val from: Language,
   val to: Language,
+  val isAutoSource: Boolean,
   val convertMs: Double,
 )
 
@@ -224,6 +228,7 @@ class LiveOcrEngine(
     focusYNormalized: Float,
     from: Language,
     to: Language,
+    isAutoSource: Boolean,
     convertMs: Double = 0.0,
   ) {
     val newFrame =
@@ -236,6 +241,7 @@ class LiveOcrEngine(
         focusYNormalized,
         from,
         to,
+        isAutoSource,
         convertMs,
       )
     val replaced = pendingFrame.getAndSet(newFrame)
@@ -324,7 +330,7 @@ class LiveOcrEngine(
     mutex.withLock {
       frameId++
       currentFrame = frameId
-      activeSourceCode = pending.from.code
+      activeSourceCode = if (pending.isAutoSource) null else pending.from.code
       activeTargetCode = pending.to.code
       if (cropChanged) {
         tracks.clear()
@@ -349,7 +355,7 @@ class LiveOcrEngine(
     val tDet = System.nanoTime()
     val detected =
       try {
-        catalog.detectInFrame(handle, cropRect, DETECTOR_TARGET_PIXELS, pending.from)
+        catalog.detectTextInFrame(handle, cropRect, DETECTOR_TARGET_PIXELS)
       } catch (e: Exception) {
         Log.w(TAG, "detect failed", e)
         releaseFrameHandle(handle)
@@ -409,6 +415,7 @@ class LiveOcrEngine(
                 lastMatchedDetection = currentDetection,
                 frameWidth = displayW,
                 frameHeight = displayH,
+                sourceCode = if (pending.isAutoSource) null else pending.from.code,
               )
             tracks.add(entry)
             toRecognize.add(box)
@@ -430,7 +437,7 @@ class LiveOcrEngine(
           overlayCount = _overlays.value.size,
         )
         maybeEmitStatsLocked()
-        collectMissingGroupTranslationsLocked(pending.from, pending.to)
+        collectMissingGroupTranslationsLocked(pending.to)
       }
     translateGroupRequests(groupRequests)
 
@@ -441,7 +448,7 @@ class LiveOcrEngine(
 
     // Schedule rec on the worker pool. The handle is owned by the worker until
     // it finishes (it releases back to the pool in `finally`).
-    scheduleRecognition(handle, cropRect, toRecognize, toRecognizeIds, pending.from, pending.to)
+    scheduleRecognition(handle, cropRect, toRecognize, toRecognizeIds, pending.from, pending.to, pending.isAutoSource)
   }
 
   /** Stage C (rec worker, Dispatchers.Default). Recognises + translates, updates
@@ -453,6 +460,7 @@ class LiveOcrEngine(
     entryIds: List<Long>,
     from: Language,
     to: Language,
+    isAutoSource: Boolean,
   ) {
     val myGeneration = globalGeneration
     workerScope.launch(Dispatchers.Default) {
@@ -460,7 +468,13 @@ class LiveOcrEngine(
         val tRec = System.nanoTime()
         val recognized =
           try {
-            catalog.recognizeInFrame(handle, cropRect, boxes, from)
+            val sourceSelection =
+              if (isAutoSource) {
+                OcrSourceSelection.Auto
+              } else {
+                OcrSourceSelection.Specific(uniffi.translator.LanguageCode(from.code))
+              }
+            catalog.recognizeInFrame(handle, cropRect, boxes, sourceSelection)
           } catch (e: Exception) {
             Log.w(TAG, "recognize failed", e)
             mutex.withLock {
@@ -487,6 +501,7 @@ class LiveOcrEngine(
                 line.confidence > entry.recognitionConfidence + REC_REPLACE_EPSILON
             if (!better) continue
             entry.sourceText = source
+            entry.sourceCode = if (isAutoSource) line.sourceCode else from.code
             entry.recognitionConfidence = line.confidence
             dedupAgainstEntry(entry)
           }
@@ -494,7 +509,7 @@ class LiveOcrEngine(
         val requests =
           mutex.withLock {
             if (myGeneration == globalGeneration) {
-              collectMissingGroupTranslationsLocked(from, to)
+              collectMissingGroupTranslationsLocked(to)
             } else {
               emptyList()
             }
@@ -661,15 +676,14 @@ class LiveOcrEngine(
 
   /** Mutex must be held. */
   private fun publishOverlaysLocked() {
-    val fromCode = activeSourceCode
     val toCode = activeTargetCode
-    if (fromCode == null || toCode == null) {
+    if (toCode == null) {
       _overlays.value = emptyList()
       return
     }
     val items = mutableListOf<LiveOverlayItem>()
     for (group in buildLiveGroupsLocked()) {
-      val translated = translationCache[TranslationKey(fromCode, toCode, group.sourceText)] ?: continue
+      val translated = translationCache[TranslationKey(group.sourceCode, toCode, group.sourceText)] ?: continue
       for (entry in group.tracks) {
         items +=
           LiveOverlayItem(
@@ -709,12 +723,14 @@ class LiveOcrEngine(
         uniffi.bindings.groupLiveTextLines(inputs)
       } catch (e: Throwable) {
         Log.w(TAG, "live grouping failed", e)
-        return renderable.map { entry ->
+        return renderable.mapNotNull { entry ->
           val source = entry.sourceText.orEmpty().trim()
+          val sourceCode = entry.sourceCode ?: return@mapNotNull null
           LiveRenderGroup(
             id = entry.id.toString(),
             tracks = listOf(entry),
             sourceText = source,
+            sourceCode = sourceCode,
           )
         }
       }
@@ -723,22 +739,28 @@ class LiveOcrEngine(
       if (groupTracks.isEmpty()) return@mapNotNull null
       val source = groupTracks.joinToString(" ") { it.sourceText.orEmpty().trim() }.trim()
       if (source.isEmpty()) return@mapNotNull null
+      val sourceCode =
+        groupTracks
+          .mapNotNull { it.sourceCode }
+          .groupingBy { it }
+          .eachCount()
+          .maxByOrNull { it.value }
+          ?.key ?: return@mapNotNull null
       LiveRenderGroup(
         id = groupTracks.joinToString(separator = "-") { it.id.toString() },
         tracks = groupTracks,
         sourceText = source,
+        sourceCode = sourceCode,
       )
     }
   }
 
   /** Mutex must be held. */
-  private fun collectMissingGroupTranslationsLocked(
-    from: Language,
-    to: Language,
-  ): List<GroupTranslationRequest> {
+  private fun collectMissingGroupTranslationsLocked(to: Language): List<GroupTranslationRequest> {
     val requests = mutableListOf<GroupTranslationRequest>()
     for (group in buildLiveGroupsLocked()) {
-      val key = TranslationKey(from.code, to.code, group.sourceText)
+      val from = catalog.languageByCode(group.sourceCode) ?: continue
+      val key = TranslationKey(group.sourceCode, to.code, group.sourceText)
       if (translationCache.containsKey(key) || key in pendingGroupTranslations) continue
       pendingGroupTranslations.add(key)
       requests += GroupTranslationRequest(key, from, to)

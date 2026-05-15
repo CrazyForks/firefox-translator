@@ -121,6 +121,7 @@ private val ANALYZER_RESOLUTION = AndroidSize(1080, 1920)
 fun LiveCameraScreen(
   from: Language,
   to: Language,
+  isAutoSource: Boolean,
   canSwap: Boolean,
   languageState: LanguageAvailabilityState,
   languageMetadata: Map<Language, LanguageMetadata>,
@@ -162,6 +163,7 @@ fun LiveCameraScreen(
         CameraSurface(
           from = from,
           to = to,
+          isAutoSource = isAutoSource,
           canSwap = canSwap,
           languageState = languageState,
           languageMetadata = languageMetadata,
@@ -227,6 +229,7 @@ private fun PermissionPrompt(
 private fun CameraSurface(
   from: Language,
   to: Language,
+  isAutoSource: Boolean,
   canSwap: Boolean,
   languageState: LanguageAvailabilityState,
   languageMetadata: Map<Language, LanguageMetadata>,
@@ -241,8 +244,15 @@ private fun CameraSurface(
 
   var torchOn by remember { mutableStateOf(false) }
   val hasPaddleOcrModels =
-    remember(catalog, from.code) {
-      catalog?.installedOcrEngines(from.code)?.contains("ppocr") == true
+    remember(catalog, languageState, from.code, isAutoSource) {
+      if (isAutoSource) {
+        catalog != null &&
+          languageState.allLanguages().any { language ->
+            catalog.installedOcrEngines(language.code).contains("ppocr")
+          }
+      } else {
+        catalog?.installedOcrEngines(from.code)?.contains("ppocr") == true
+      }
     }
   var liveOverlayOn by remember { mutableStateOf(liveOverlayDefaultEnabled && hasPaddleOcrModels) }
   var camera by remember { mutableStateOf<Camera?>(null) }
@@ -322,12 +332,12 @@ private fun CameraSurface(
   }
 
   val analyzerSession = remember { java.util.concurrent.atomic.AtomicLong(0L) }
-  LaunchedEffect(from.code, hasPaddleOcrModels, liveOverlayDefaultEnabled) {
+  LaunchedEffect(from.code, isAutoSource, hasPaddleOcrModels, liveOverlayDefaultEnabled) {
     liveOverlayOn = liveOverlayDefaultEnabled && hasPaddleOcrModels
     if (!liveOverlayOn) liveOcrEngine?.clear()
   }
 
-  DisposableEffect(liveOverlayOn, liveOcrEngine, from.code, to.code) {
+  DisposableEffect(liveOverlayOn, liveOcrEngine, from.code, to.code, isAutoSource) {
     val engine = liveOcrEngine
     val mySession = analyzerSession.incrementAndGet()
     if (liveOverlayOn && engine != null) {
@@ -380,7 +390,7 @@ private fun CameraSurface(
         }
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
-        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, convertMs)
+        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, isAutoSource, convertMs)
       }
     } else {
       imageAnalysis.clearAnalyzer()
@@ -536,6 +546,7 @@ private fun CameraSurface(
     TopLanguagePills(
       from = from,
       to = to,
+      isAutoSource = isAutoSource,
       canSwap = canSwap,
       languageState = languageState,
       languageMetadata = languageMetadata,
@@ -609,6 +620,7 @@ private fun CameraSurface(
 private fun TopLanguagePills(
   from: Language,
   to: Language,
+  isAutoSource: Boolean,
   canSwap: Boolean,
   languageState: LanguageAvailabilityState,
   languageMetadata: Map<Language, LanguageMetadata>,
@@ -617,7 +629,7 @@ private fun TopLanguagePills(
 ) {
   val fromLanguages =
     languageState.allLanguages().filter { x ->
-      x != from && (languageState.availabilityFor(x)?.hasToEnglish == true || x.isEnglish)
+      (isAutoSource || x != from) && (languageState.availabilityFor(x)?.hasToEnglish == true || x.isEnglish)
     }
   val toLanguages =
     languageState.allLanguages().filter { x ->
@@ -644,6 +656,9 @@ private fun TopLanguagePills(
         availableLanguages = fromLanguages,
         languageMetadata = languageMetadata,
         onLanguageSelected = { onMessage(TranslatorMessage.FromLang(it)) },
+        isAutoSource = isAutoSource,
+        showAutoOption = true,
+        onAutoSelected = { onMessage(TranslatorMessage.EnableAutoSource) },
         textColor = Color.White,
         marquee = false,
       )

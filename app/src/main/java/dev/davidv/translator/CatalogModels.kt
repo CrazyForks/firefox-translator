@@ -369,7 +369,7 @@ class LanguageCatalog private constructor(
   fun translateImagePlan(
     bitmap: Bitmap,
     maxImageSize: Int,
-    from: Language,
+    sourceSelection: uniffi.translator.OcrSourceSelection,
     to: Language,
     minConfidence: Int,
     readingOrder: ReadingOrder,
@@ -381,7 +381,7 @@ class LanguageCatalog private constructor(
       bitmap.width.toUInt(),
       bitmap.height.toUInt(),
       maxImageSize.toUInt(),
-      from.code,
+      sourceSelection,
       to.code,
       minConfidence.toUInt(),
       readingOrder,
@@ -411,20 +411,19 @@ class LanguageCatalog private constructor(
   fun makeFrameBuffer(capacity: Int): uniffi.bindings.FrameHandle = handle.makeFrameBuffer(capacity.toUInt())
 
   @Throws(CatalogException::class)
-  fun detectInFrame(
+  fun detectTextInFrame(
     frame: uniffi.bindings.FrameHandle,
     crop: uniffi.translator.Rect,
     detMaxPixels: Int,
-    from: Language,
-  ): List<uniffi.translator.DetectedTextBox> = handle.detectInFrame(frame, crop, detMaxPixels.toUInt(), from.code)
+  ): List<uniffi.translator.DetectedTextBox> = handle.detectTextInFrame(frame, crop, detMaxPixels.toUInt())
 
   @Throws(CatalogException::class)
   fun recognizeInFrame(
     frame: uniffi.bindings.FrameHandle,
     crop: uniffi.translator.Rect,
     boxes: List<uniffi.translator.DetectedTextBox>,
-    from: Language,
-  ): List<uniffi.translator.RecognizedTextLine> = handle.recognizeInFrame(frame, crop, boxes, from.code)
+    sourceSelection: uniffi.translator.OcrSourceSelection,
+  ): List<uniffi.translator.RecognizedTextLine> = handle.recognizeInFrame(frame, crop, boxes, sourceSelection)
 
   @Throws(CatalogException::class)
   fun renderTranslatedOverlay(

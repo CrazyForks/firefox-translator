@@ -19,7 +19,7 @@ BUCKET_DIR = Path.home() / "AndroidStudioProjects/bucket/ocr/1/PP-OCRv5"
 
 
 def cache_inference_yml(script: str, onnx_filename: str) -> Path:
-    if script == "cjk":
+    if script == "cj":
         outer = "PP-OCRv5_mobile_rec"
     else:
         stem = onnx_filename.removesuffix(".onnx")

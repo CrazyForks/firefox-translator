@@ -880,6 +880,7 @@ fun TranslatorApp(
               LiveCameraScreen(
                 from = currentFrom,
                 to = currentTo,
+                isAutoSource = isAutoSource,
                 canSwap = viewModel.languageStateManager.canSwapLanguages(currentFrom, currentTo),
                 languageState = languageState,
                 languageMetadata = languageMetadata,

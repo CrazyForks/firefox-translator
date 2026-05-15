@@ -769,14 +769,14 @@ impl CatalogHandle {
         width: u32,
         height: u32,
         max_image_size: u32,
-        source_code: String,
+        source_selection: translator::OcrSourceSelection,
         target_code: String,
         min_confidence: u32,
         reading_order: translator::ReadingOrder,
         background_mode: translator::BackgroundMode,
         preferred_engine: translator::PreferredOcrEngine,
     ) -> Result<translator::PreparedImageOverlay, CatalogError> {
-        #[cfg(feature = "tesseract")]
+        #[cfg(any(feature = "tesseract", feature = "ppocr"))]
         {
             return self
                 .session
@@ -785,7 +785,7 @@ impl CatalogHandle {
                     width,
                     height,
                     max_image_size,
-                    &source_code,
+                    source_selection,
                     &target_code,
                     min_confidence,
                     reading_order,
@@ -794,14 +794,14 @@ impl CatalogHandle {
                 )
                 .map_err(CatalogError::from);
         }
-        #[cfg(not(feature = "tesseract"))]
+        #[cfg(not(any(feature = "tesseract", feature = "ppocr")))]
         {
             let _ = (
                 rgba_bytes,
                 width,
                 height,
                 max_image_size,
-                source_code,
+                source_selection,
                 target_code,
                 min_confidence,
                 reading_order,
@@ -809,7 +809,7 @@ impl CatalogHandle {
                 preferred_engine,
             );
             Err(CatalogError::Other {
-                reason: "tesseract feature disabled".to_string(),
+                reason: "OCR feature disabled".to_string(),
             })
         }
     }
@@ -1111,12 +1111,11 @@ impl CatalogHandle {
     /// (0, 0) at top-left of the crop region), already scaled up from the
     /// downscaled detection image.
     #[cfg(feature = "ppocr")]
-    fn detect_in_frame(
+    fn detect_text_in_frame(
         &self,
         frame: Arc<FrameHandle>,
         crop: translator::Rect,
         det_max_pixels: u32,
-        source_code: String,
     ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
         let mut state = frame.state.lock().map_err(|_| poisoned())?;
         ensure_oriented_locked(&mut state, crop, det_max_pixels)?;
@@ -1126,7 +1125,7 @@ impl CatalogHandle {
             .expect("ensure_oriented populated cache");
         let raw = self
             .session
-            .detect_in_oriented_image(oriented, &source_code)
+            .detect_text_in_oriented_image(oriented)
             .map_err(CatalogError::from)?;
         let scale = oriented.det_to_full_scale;
         let max_w = oriented.rgb.width();
@@ -1139,15 +1138,15 @@ impl CatalogHandle {
     }
 
     /// Recognize text in a previously-allocated `FrameHandle`. The same crop must
-    /// have been previously passed to `detect_in_frame` (which built the cached
-    /// oriented image used here). Boxes must be in full-crop coord space.
+    /// have been previously passed to `detect_text_in_frame` (which built the
+    /// cached oriented image used here). Boxes must be in full-crop coord space.
     #[cfg(feature = "ppocr")]
     fn recognize_in_frame(
         &self,
         frame: Arc<FrameHandle>,
         crop: translator::Rect,
         boxes: Vec<translator::DetectedTextBox>,
-        source_code: String,
+        source_selection: translator::OcrSourceSelection,
     ) -> Result<Vec<translator::RecognizedTextLine>, CatalogError> {
         let state = frame.state.lock().map_err(|_| poisoned())?;
         let oriented = state
@@ -1155,11 +1154,11 @@ impl CatalogHandle {
             .as_ref()
             .filter(|oi| oi.display_crop == crop)
             .ok_or_else(|| CatalogError::Other {
-                reason: "recognize_in_frame called without prior detect_in_frame for this crop"
+                reason: "recognize_in_frame called without prior detect_text_in_frame for this crop"
                     .to_string(),
             })?;
         self.session
-            .recognize_in_oriented_image(oriented, &boxes, &source_code)
+            .recognize_in_oriented_image(oriented, &boxes, source_selection)
             .map_err(CatalogError::from)
     }
 }

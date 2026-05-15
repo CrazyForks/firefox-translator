@@ -417,7 +417,8 @@ impl FontProvider for AndroidFontProvider {
         if let Some(family) = families()
             .iter()
             .find(|f| f.name.as_deref() == Some("sans-serif"))
-            && let Some(font) = pick_font(family, if request.bold { 700 } else { 400 }, request.italic)
+            && let Some(font) =
+                pick_font(family, if request.bold { 700 } else { 400 }, request.italic)
             && let Some((path, ttc_index)) = resolve(&font.file_name, font.ttc_index)
         {
             chain.push(FontHandle::new(path, ttc_index));
