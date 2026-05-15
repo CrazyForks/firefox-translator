@@ -37,6 +37,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.InputStream
@@ -126,6 +128,8 @@ class DownloadService : Service() {
   private val dictionaryDownloadJobs = mutableMapOf<Language, Job>()
   private val ttsDownloadJobs = mutableMapOf<Language, Job>()
   private var adblockDownloadJob: Job? = null
+  private val fileDownloadLocksGuard = Any()
+  private val fileDownloadLocks = mutableMapOf<String, Mutex>()
   private val baseDirPath: String
     get() = filePathManager.currentBaseDir().absolutePath
 
@@ -163,6 +167,21 @@ class DownloadService : Service() {
         Intent(context, DownloadService::class.java).apply {
           action = "START_OCR_ENGINE_DOWNLOAD"
           putExtra("language_code", language.code)
+          putExtra("engine", engine)
+        }
+      context.startService(intent)
+    }
+
+    fun startOcrEngineDownloads(
+      context: Context,
+      languages: List<Language>,
+      engine: String,
+    ) {
+      val languageCodes = ArrayList(languages.map { it.code })
+      val intent =
+        Intent(context, DownloadService::class.java).apply {
+          action = "START_OCR_ENGINE_DOWNLOADS"
+          putStringArrayListExtra("language_codes", languageCodes)
           putExtra("engine", engine)
         }
       context.startService(intent)
@@ -272,6 +291,14 @@ class DownloadService : Service() {
         val catalog = getCatalog() ?: return START_NOT_STICKY
         val language = catalog.languageByCode(languageCode) ?: return START_NOT_STICKY
         startOcrEngineDownload(language, engine)
+      }
+
+      "START_OCR_ENGINE_DOWNLOADS" -> {
+        val languageCodes = intent.getStringArrayListExtra("language_codes").orEmpty()
+        val engine = intent.getStringExtra("engine") ?: return START_NOT_STICKY
+        val catalog = getCatalog() ?: return START_NOT_STICKY
+        val languages = languageCodes.mapNotNull(catalog::languageByCode)
+        startOcrEngineDownloads(languages, engine)
       }
 
       "START_DICT_DOWNLOAD" -> {
@@ -425,6 +452,91 @@ class DownloadService : Service() {
         catalog.planOcrEngineDownload(language.code, engine) ?: DownloadPlan(0UL, emptyList())
       },
     )
+  }
+
+  private fun startOcrEngineDownloads(
+    languages: List<Language>,
+    engine: String,
+  ) {
+    val activeLanguages = languages.distinctBy { it.code }.filter { _downloadStates.value[it]?.isDownloading != true }
+    if (activeLanguages.isEmpty()) return
+
+    activeLanguages.forEach { language ->
+      updateDownloadState(language) {
+        DownloadState(
+          isDownloading = true,
+          isCompleted = false,
+          downloaded = 1,
+        )
+      }
+    }
+
+    val job =
+      serviceScope.launch {
+        try {
+          val catalog = getCatalog() ?: return@launch
+          val downloadPlan = catalog.planOcrEngineDownloads(activeLanguages.map { it.code }, engine)
+          var success = true
+          if (downloadPlan.tasks.isNotEmpty()) {
+            activeLanguages.forEach { language ->
+              updateDownloadState(language) {
+                it.copy(
+                  isDownloading = true,
+                  downloaded = 1,
+                  totalSize = downloadPlan.totalSize.toLong(),
+                )
+              }
+            }
+            Log.i(
+              "DownloadService",
+              "Starting OCR engine batch download for ${activeLanguages.size} languages",
+            )
+            val activeJobs =
+              downloadPlan.tasks.map { task ->
+                async {
+                  downloadPackFile(task) { incrementalProgress ->
+                    activeLanguages.forEach { language ->
+                      incrementDownloadBytes(language, incrementalProgress)
+                    }
+                  }
+                }
+              }
+            success = activeJobs.awaitAll().all { it }
+          }
+
+          activeLanguages.forEach { language ->
+            updateDownloadState(language) {
+              DownloadState(
+                isDownloading = false,
+                isCompleted = success,
+              )
+            }
+          }
+          if (success) {
+            filePathManager.reloadCatalog()
+            Log.i("DownloadService", "OCR engine batch download complete")
+            activeLanguages.forEach { language ->
+              _downloadEvents.emit(DownloadEvent.NewTranslationAvailable(language))
+            }
+          } else {
+            _downloadEvents.emit(DownloadEvent.DownloadError("OCR batch download failed"))
+          }
+        } catch (e: Exception) {
+          Log.e("DownloadService", "OCR engine batch download failed", e)
+          activeLanguages.forEach { language ->
+            updateDownloadState(language) {
+              it.copy(isDownloading = false, error = e.message)
+            }
+          }
+          _downloadEvents.emit(DownloadEvent.DownloadError("OCR batch download failed"))
+        } finally {
+          activeLanguages.forEach(downloadJobs::remove)
+        }
+      }
+
+    activeLanguages.forEach { language ->
+      downloadJobs[language] = job
+    }
   }
 
   private fun startDictionaryDownload(
@@ -836,6 +948,28 @@ class DownloadService : Service() {
     onProgress: (Long) -> Unit,
   ): Boolean {
     val outputFile = filePathManager.resolveInstallPath(task.installPath)
+    val lock = fileDownloadLock(outputFile)
+    return lock.withLock {
+      if (task.archiveFormat != "zip" && outputFile.exists() && outputFile.length() > 0L) {
+        onProgress(task.sizeBytes.toLong())
+        Log.i("DownloadService", "Reusing downloaded ${task.packId}:${task.installPath}")
+        true
+      } else {
+        downloadPackFileLocked(task, outputFile, onProgress)
+      }
+    }
+  }
+
+  private fun fileDownloadLock(outputFile: File): Mutex =
+    synchronized(fileDownloadLocksGuard) {
+      fileDownloadLocks.getOrPut(outputFile.absolutePath) { Mutex() }
+    }
+
+  private suspend fun downloadPackFileLocked(
+    task: DownloadTask,
+    outputFile: File,
+    onProgress: (Long) -> Unit,
+  ): Boolean {
     val url = task.url
     val extractTo = task.extractTo
     val installMarkerPath = task.installMarkerPath

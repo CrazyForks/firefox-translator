@@ -24,6 +24,7 @@ import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,6 +68,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -106,6 +108,7 @@ import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.ui.components.LanguageSelector
 import java.io.File
 import java.util.concurrent.Executor
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import android.util.Size as AndroidSize
@@ -237,7 +240,11 @@ private fun CameraSurface(
   val mainExecutor: Executor = remember { ContextCompat.getMainExecutor(context) }
 
   var torchOn by remember { mutableStateOf(false) }
-  var liveOverlayOn by remember { mutableStateOf(liveOverlayDefaultEnabled) }
+  val hasPaddleOcrModels =
+    remember(catalog, from.code) {
+      catalog?.installedOcrEngines(from.code)?.contains("ppocr") == true
+    }
+  var liveOverlayOn by remember { mutableStateOf(liveOverlayDefaultEnabled && hasPaddleOcrModels) }
   var camera by remember { mutableStateOf<Camera?>(null) }
   val cameraControl = camera?.cameraControl
   var hasFlashUnit by remember { mutableStateOf(false) }
@@ -315,6 +322,11 @@ private fun CameraSurface(
   }
 
   val analyzerSession = remember { java.util.concurrent.atomic.AtomicLong(0L) }
+  LaunchedEffect(from.code, hasPaddleOcrModels, liveOverlayDefaultEnabled) {
+    liveOverlayOn = liveOverlayDefaultEnabled && hasPaddleOcrModels
+    if (!liveOverlayOn) liveOcrEngine?.clear()
+  }
+
   DisposableEffect(liveOverlayOn, liveOcrEngine, from.code, to.code) {
     val engine = liveOcrEngine
     val mySession = analyzerSession.incrementAndGet()
@@ -540,7 +552,18 @@ private fun CameraSurface(
       hasFlashUnit = hasFlashUnit,
       onTorchToggle = { torchOn = !torchOn },
       liveOverlayOn = liveOverlayOn,
+      liveOverlayAvailable = hasPaddleOcrModels,
       onLiveOverlayToggle = {
+        if (!hasPaddleOcrModels) {
+          Toast
+            .makeText(
+              context,
+              "You need to download the OCR models for this language",
+              Toast.LENGTH_SHORT,
+            )
+            .show()
+          return@BottomControls
+        }
         liveOverlayOn = !liveOverlayOn
         if (!liveOverlayOn) liveOcrEngine?.clear()
       },
@@ -662,6 +685,7 @@ private fun BottomControls(
   hasFlashUnit: Boolean,
   onTorchToggle: () -> Unit,
   liveOverlayOn: Boolean,
+  liveOverlayAvailable: Boolean,
   onLiveOverlayToggle: () -> Unit,
   isCapturing: Boolean,
   onCapture: () -> Unit,
@@ -701,7 +725,12 @@ private fun BottomControls(
       Icon(
         painter = painterResource(R.drawable.auto_awesome),
         contentDescription = if (liveOverlayOn) "Live overlay on" else "Live overlay off",
-        tint = if (liveOverlayOn) Color.White else Color.White.copy(alpha = 0.4f),
+        tint =
+          when {
+            !liveOverlayAvailable -> Color.White.copy(alpha = 0.25f)
+            liveOverlayOn -> Color.White
+            else -> Color.White.copy(alpha = 0.4f)
+          },
       )
     }
   }
@@ -715,6 +744,7 @@ private fun LiveOverlayLayer(
   if (overlays.isEmpty() || previewSizePx.width == 0 || previewSizePx.height == 0) return
   val density = LocalDensity.current
   val textMeasurer = rememberTextMeasurer()
+  val stableLayouts = remember { mutableStateMapOf<String, StableLayout>() }
   val placements =
     overlays.map { item ->
       // FILL_CENTER scale from full-frame pixels to PreviewView pixels.
@@ -750,17 +780,23 @@ private fun LiveOverlayLayer(
         angleDeg = angleDeg,
       )
     }
+  val groupedPlacements = placements.groupBy { it.groupId }
+  stableLayouts.keys.retainAll(groupedPlacementsStableKeys(groupedPlacements))
   val fittedGroups =
-    placements
-      .groupBy { it.groupId }
-      .mapValues { (_, groupPlacements) ->
+    groupedPlacements.mapValues { (groupId, groupPlacements) ->
+      val stableKey = stableLayoutKey(groupId, groupPlacements.firstOrNull()?.groupText.orEmpty())
+      val previous = stableLayouts[stableKey]
+      val fitted =
         fitLiveOverlayGroup(
           placements = groupPlacements,
           textMeasurer = textMeasurer,
           density = density,
           baseStyle = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+          previous = previous,
         )
-      }
+      stableLayouts[stableKey] = fitted.stable
+      fitted
+    }
   val fittedByPlacement =
     fittedGroups.values
       .flatMap { it.items }
@@ -815,6 +851,7 @@ private fun LiveOverlayLayer(
         style =
           androidx.compose.material3.MaterialTheme.typography.bodySmall.copy(
             fontSize = block.fontSize,
+            lineHeight = block.lineHeight,
             textAlign = TextAlign.Center,
           ),
         maxLines = block.maxLines,
@@ -864,6 +901,7 @@ private data class FittedOverlayGroup(
   val fontSize: TextUnit,
   val items: List<FittedPlacement>,
   val block: FittedBlock?,
+  val stable: StableLayout,
 )
 
 private data class FittedPlacement(
@@ -878,19 +916,51 @@ private data class FittedBlock(
   val widthDp: androidx.compose.ui.unit.Dp,
   val heightDp: androidx.compose.ui.unit.Dp,
   val fontSize: TextUnit,
+  val lineHeight: TextUnit,
   val maxLines: Int,
 )
+
+private enum class OverlayLayoutMode {
+  PerLine,
+  Block,
+}
+
+private data class StableLayout(
+  val mode: OverlayLayoutMode,
+  val fontSizePx: Float,
+  val lineCount: Int,
+  val geometry: GroupGeometry,
+  val slices: List<String> = emptyList(),
+)
+
+private data class GroupGeometry(
+  val left: Float,
+  val top: Float,
+  val right: Float,
+  val bottom: Float,
+  val linearWidth: Float,
+) {
+  val width: Float get() = (right - left).coerceAtLeast(1f)
+  val height: Float get() = (bottom - top).coerceAtLeast(1f)
+}
 
 private fun fitLiveOverlayGroup(
   placements: List<Placement>,
   textMeasurer: androidx.compose.ui.text.TextMeasurer,
   density: androidx.compose.ui.unit.Density,
   baseStyle: TextStyle,
+  previous: StableLayout?,
 ): FittedOverlayGroup {
   val ordered = placements.sortedWith(compareBy<Placement> { it.top }.thenBy { it.left })
   val text = ordered.firstOrNull()?.groupText.orEmpty()
+  val geometry = groupGeometry(ordered, with(density) { 4.dp.toPx() })
   if (ordered.isEmpty() || text.isBlank()) {
-    return FittedOverlayGroup(baseStyle.fontSize, emptyList(), null)
+    return FittedOverlayGroup(
+      fontSize = baseStyle.fontSize,
+      items = emptyList(),
+      block = null,
+      stable = StableLayout(OverlayLayoutMode.PerLine, textUnitToPx(baseStyle.fontSize, density), 0, geometry),
+    )
   }
 
   val horizontalPaddingPx = with(density) { 4.dp.toPx() }
@@ -910,17 +980,40 @@ private fun fitLiveOverlayGroup(
       density = density,
       baseStyle = baseStyle,
     )
-  if (shouldUseBlockMode(ordered, text, fittedFontPx, minFontPx, textMeasurer, density, baseStyle, availableLinearPx)) {
-    return fitLiveOverlayBlock(ordered, text, textMeasurer, density, baseStyle, minFontPx)
+  val previousPerLine =
+    previous?.takeIf {
+      it.mode == OverlayLayoutMode.PerLine &&
+        geometry.isCloseTo(it.geometry) &&
+        previousPerLineStillFits(it.slices, ordered, horizontalPaddingPx, it.fontSizePx, textMeasurer, density, baseStyle)
+    }
+  val blockCandidate = shouldUseBlockMode(ordered, text, fittedFontPx, minFontPx, textMeasurer, density, baseStyle, availableLinearPx)
+  val previousBlock =
+    previous?.takeIf {
+      it.mode == OverlayLayoutMode.Block &&
+        geometry.isCloseTo(it.geometry)
+    }
+  val useBlock =
+    if (previousPerLine != null) {
+      false
+    } else if (previousBlock != null) {
+      blockCandidate || !oneLineFitsWithSpare(text, availableLinearPx, minFontPx, textMeasurer, density, baseStyle)
+    } else {
+      blockCandidate
+    }
+  if (useBlock) {
+    return fitLiveOverlayBlock(ordered, text, textMeasurer, density, baseStyle, minFontPx, previous, geometry)
   }
-  val fontSize = with(density) { fittedFontPx.toSp() }
+  val fontPx = previousPerLine?.fontSizePx ?: fittedFontPx
+  val fontSize = with(density) { fontPx.toSp() }
   val style = baseStyle.copy(fontSize = fontSize)
   val capacities = ordered.map { (it.widthPx - horizontalPaddingPx).coerceAtLeast(1f) }
-  val slices = splitTextAcrossCapacities(text, capacities, textMeasurer, style)
+  val slices = previousPerLine?.slices ?: splitTextAcrossCapacities(text, capacities, textMeasurer, style)
+  val lineCount = slices.count { it.isNotBlank() }.coerceAtLeast(1)
   return FittedOverlayGroup(
     fontSize = fontSize,
     items = ordered.mapIndexed { index, placement -> FittedPlacement(placement, slices.getOrElse(index) { "" }) },
     block = null,
+    stable = StableLayout(OverlayLayoutMode.PerLine, fontPx, lineCount, geometry, slices),
   )
 }
 
@@ -936,11 +1029,141 @@ private fun shouldUseBlockMode(
 ): Boolean {
   if (placements.size < 2) return false
   if (placementsHaveInflatedOverlap(placements, inflatePx = with(density) { 2.dp.toPx() })) return true
+  if (perLineTextWouldOverlap(placements, fittedFontPx)) return true
   val minStyle = baseStyle.copy(fontSize = with(density) { minFontPx.toSp() })
   val fitsAtMinimum = measureOneLineWidth(text, textMeasurer, minStyle) <= availableLinearPx
   if (!fitsAtMinimum || fittedFontPx <= minFontPx + 0.25f) return true
   return false
 }
+
+private fun perLineTextWouldOverlap(
+  placements: List<Placement>,
+  fontSizePx: Float,
+): Boolean {
+  val ordered = placements.sortedBy { it.top + it.heightPx * 0.5f }
+  val minCenterGap = fontSizePx * 1.18f
+  for (i in 0 until ordered.lastIndex) {
+    val a = ordered[i]
+    val b = ordered[i + 1]
+    val acy = a.top + a.heightPx * 0.5f
+    val bcy = b.top + b.heightPx * 0.5f
+    val horizontalOverlap = min(a.left + a.widthPx, b.left + b.widthPx) > max(a.left.toFloat(), b.left.toFloat())
+    if (horizontalOverlap && abs(bcy - acy) < minCenterGap) return true
+  }
+  return false
+}
+
+private fun groupedPlacementsStableKeys(grouped: Map<String, List<Placement>>): Set<String> =
+  grouped.map { (groupId, placements) ->
+    stableLayoutKey(groupId, placements.firstOrNull()?.groupText.orEmpty())
+  }.toSet()
+
+private fun stableLayoutKey(
+  groupId: String,
+  text: String,
+): String = "$groupId\u0000$text"
+
+private fun groupGeometry(
+  placements: List<Placement>,
+  horizontalPaddingPx: Float,
+): GroupGeometry {
+  if (placements.isEmpty()) {
+    return GroupGeometry(0f, 0f, 1f, 1f, 1f)
+  }
+  return GroupGeometry(
+    left = placements.minOf { it.left }.toFloat(),
+    top = placements.minOf { it.top }.toFloat(),
+    right = placements.maxOf { it.left + it.widthPx },
+    bottom = placements.maxOf { it.top + it.heightPx },
+    linearWidth = placements.sumOf { max(1.0, (it.widthPx - horizontalPaddingPx).toDouble()) }.toFloat(),
+  )
+}
+
+private fun GroupGeometry.isCloseTo(previous: GroupGeometry): Boolean {
+  fun ratioDelta(
+    a: Float,
+    b: Float,
+  ): Float = abs(a - b) / max(max(a, b), 1f)
+  val centerX = (left + right) * 0.5f
+  val centerY = (top + bottom) * 0.5f
+  val previousCenterX = (previous.left + previous.right) * 0.5f
+  val previousCenterY = (previous.top + previous.bottom) * 0.5f
+  val centerMove =
+    max(abs(centerX - previousCenterX) / max(width, previous.width), abs(centerY - previousCenterY) / max(height, previous.height))
+  return centerMove <= 0.15f &&
+    ratioDelta(width, previous.width) <= 0.18f &&
+    ratioDelta(height, previous.height) <= 0.18f &&
+    ratioDelta(linearWidth, previous.linearWidth) <= 0.18f
+}
+
+private fun previousPerLineStillFits(
+  slices: List<String>,
+  placements: List<Placement>,
+  horizontalPaddingPx: Float,
+  fontSizePx: Float,
+  textMeasurer: androidx.compose.ui.text.TextMeasurer,
+  density: androidx.compose.ui.unit.Density,
+  baseStyle: TextStyle,
+): Boolean {
+  if (slices.size != placements.size || slices.isEmpty()) return false
+  val style = baseStyle.copy(fontSize = with(density) { fontSizePx.toSp() })
+  return slices.zip(placements).all { (slice, placement) ->
+    if (slice.isBlank()) {
+      true
+    } else {
+      val capacity = (placement.widthPx - horizontalPaddingPx).coerceAtLeast(1f)
+      measureOneLineWidth(slice, textMeasurer, style) <= capacity * 1.08f
+    }
+  }
+}
+
+private fun previousBlockStillFits(
+  text: String,
+  widthPx: Float,
+  heightPx: Float,
+  fontSizePx: Float,
+  textMeasurer: androidx.compose.ui.text.TextMeasurer,
+  density: androidx.compose.ui.unit.Density,
+  baseStyle: TextStyle,
+): Boolean {
+  val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, fontSizePx), widthPx)
+  return layout.size.height <= heightPx * 1.08f
+}
+
+private fun oneLineFitsWithSpare(
+  text: String,
+  availableLinearPx: Float,
+  minFontPx: Float,
+  textMeasurer: androidx.compose.ui.text.TextMeasurer,
+  density: androidx.compose.ui.unit.Density,
+  baseStyle: TextStyle,
+): Boolean {
+  val width = measureOneLineWidth(text, textMeasurer, baseStyle.copy(fontSize = with(density) { minFontPx.toSp() }))
+  return width <= availableLinearPx * 0.85f
+}
+
+private fun liveOverlayTextStyle(
+  baseStyle: TextStyle,
+  density: androidx.compose.ui.unit.Density,
+  fontPx: Float,
+  textAlign: TextAlign = TextAlign.Unspecified,
+): TextStyle {
+  return baseStyle.copy(
+    fontSize = with(density) { fontPx.toSp() },
+    lineHeight = with(density) { (fontPx * 1.12f).toSp() },
+    textAlign = textAlign,
+  )
+}
+
+private fun textUnitToPx(
+  value: TextUnit,
+  density: androidx.compose.ui.unit.Density,
+): Float =
+  if (value.isSp) {
+    with(density) { value.toPx() }
+  } else {
+    with(density) { 14.sp.toPx() }
+  }
 
 private fun placementsHaveInflatedOverlap(
   placements: List<Placement>,
@@ -977,6 +1200,8 @@ private fun fitLiveOverlayBlock(
   density: androidx.compose.ui.unit.Density,
   baseStyle: TextStyle,
   minFontPx: Float,
+  previous: StableLayout?,
+  geometry: GroupGeometry,
 ): FittedOverlayGroup {
   val padPx = with(density) { 3.dp.toPx() }
   val leftPx = placements.minOf { it.left }.toFloat() - padPx
@@ -987,22 +1212,37 @@ private fun fitLiveOverlayBlock(
   val heightPx = (bottomPx - topPx).coerceAtLeast(1f)
   val contentWidthPx = (widthPx - padPx * 2f).coerceAtLeast(1f)
   val contentHeightPx = (heightPx - padPx * 2f).coerceAtLeast(1f)
+  val blockMinFontPx = min(minFontPx, with(density) { 6.sp.toPx() })
+  val heights = placements.map { it.heightPx }.sorted()
+  val sourceFontCapPx =
+    (heights[heights.size / 2].coerceAtLeast(1f) * 0.62f)
+      .coerceIn(blockMinFontPx, with(density) { 30.sp.toPx() })
   val startFontPx =
     (contentHeightPx / max(1, estimateLineCount(text, contentWidthPx, textMeasurer, baseStyle, with(density) { minFontPx.toSp() })))
-      .coerceIn(minFontPx, with(density) { 30.sp.toPx() })
-  val fontPx =
+      .coerceIn(blockMinFontPx, sourceFontCapPx)
+  val fittedFontPx =
     shrinkFontToBlockFit(
       text = text,
       widthPx = contentWidthPx,
       heightPx = contentHeightPx,
       startPx = startFontPx,
-      minPx = minFontPx,
+      minPx = blockMinFontPx,
       textMeasurer = textMeasurer,
       density = density,
       baseStyle = baseStyle,
     )
+  val previousBlock =
+    previous?.takeIf {
+      it.mode == OverlayLayoutMode.Block &&
+        geometry.isCloseTo(it.geometry) &&
+        previousBlockStillFits(text, contentWidthPx, contentHeightPx, it.fontSizePx, textMeasurer, density, baseStyle)
+    }
+  val fontPx = previousBlock?.fontSizePx ?: fittedFontPx
   val fontSize = with(density) { fontPx.toSp() }
-  val layout = measureWrappedText(text, textMeasurer, baseStyle.copy(fontSize = fontSize), contentWidthPx)
+  val lineHeight = with(density) { (fontPx * 1.12f).toSp() }
+  val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, fontPx, TextAlign.Center), contentWidthPx)
+  val fittedHeightPx = max(heightPx, layout.size.height + padPx * 2f)
+  val fittedTopPx = (((topPx + bottomPx) * 0.5f) - fittedHeightPx * 0.5f).coerceAtLeast(0f)
   return FittedOverlayGroup(
     fontSize = fontSize,
     items = emptyList(),
@@ -1010,12 +1250,14 @@ private fun fitLiveOverlayBlock(
       FittedBlock(
         text = text,
         left = leftPx.toInt(),
-        top = topPx.toInt(),
+        top = fittedTopPx.toInt(),
         widthDp = with(density) { widthPx.toDp() },
-        heightDp = with(density) { heightPx.toDp() },
+        heightDp = with(density) { fittedHeightPx.toDp() },
         fontSize = fontSize,
+        lineHeight = lineHeight,
         maxLines = max(1, layout.lineCount),
       ),
+    stable = StableLayout(OverlayLayoutMode.Block, fontPx, max(1, layout.lineCount), geometry),
   )
 }
 
@@ -1058,7 +1300,7 @@ private fun shrinkFontToBlockFit(
   var hi = startPx.coerceAtLeast(minPx)
   repeat(8) {
     val mid = (lo + hi) * 0.5f
-    val layout = measureWrappedText(text, textMeasurer, baseStyle.copy(fontSize = with(density) { mid.toSp() }), widthPx)
+    val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, mid), widthPx)
     if (layout.size.height <= heightPx) {
       lo = mid
     } else {

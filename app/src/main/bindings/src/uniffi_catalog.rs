@@ -76,6 +76,19 @@ pub struct LiveMotionEstimate {
     pub reset: bool,
 }
 
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LiveTextLineInput {
+    pub track_id: u64,
+    pub rect: translator::Rect,
+    pub oriented_box: translator::ocr::OrientedRect,
+    pub tight_box: translator::ocr::OrientedRect,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LiveTextGroup {
+    pub track_ids: Vec<u64>,
+}
+
 #[uniffi::export(with_foreign)]
 pub trait DocumentProgressSink: Send + Sync {
     fn on_progress(&self, event: DocumentProgressEvent);
@@ -349,9 +362,7 @@ fn translate_document_path_impl(
                         // text); the raster pass refines its `total`
                         // down to whatever survives the image pass.
                         if let Some(inv) =
-                            translator::pdf_image_translate::pdf_translation_inventory(
-                                &input_bytes,
-                            )
+                            translator::pdf_image_translate::pdf_translation_inventory(&input_bytes)
                         {
                             on_progress(DocumentProgressEvent::PdfPlan {
                                 text_pages: inv.total_pages,
@@ -365,35 +376,32 @@ fn translate_document_path_impl(
                     };
 
                 // Pass 1: text translation over the original bytes.
-                let translations_result =
-                    translator::pdf_translate::translate_pdf_with_progress(
-                        session,
-                        &input_bytes,
-                        forced_source_code.as_deref(),
-                        &target_code,
-                        &available,
-                        |progress| {
-                            if is_cancelled() {
-                                return Err(
-                                    translator::pdf_translate::PdfTranslateError::Cancelled,
-                                );
-                            }
-                            let translator::pdf_translate::PdfTranslateProgress::TranslatingPage {
-                                current,
-                                total,
-                            } = progress;
-                            on_progress(DocumentProgressEvent::Translating {
-                                current: current as u32,
-                                total: total as u32,
-                                unit: "page".to_string(),
-                            });
-                            if is_cancelled() {
-                                Err(translator::pdf_translate::PdfTranslateError::Cancelled)
-                            } else {
-                                Ok(())
-                            }
-                        },
-                    );
+                let translations_result = translator::pdf_translate::translate_pdf_with_progress(
+                    session,
+                    &input_bytes,
+                    forced_source_code.as_deref(),
+                    &target_code,
+                    &available,
+                    |progress| {
+                        if is_cancelled() {
+                            return Err(translator::pdf_translate::PdfTranslateError::Cancelled);
+                        }
+                        let translator::pdf_translate::PdfTranslateProgress::TranslatingPage {
+                            current,
+                            total,
+                        } = progress;
+                        on_progress(DocumentProgressEvent::Translating {
+                            current: current as u32,
+                            total: total as u32,
+                            unit: "page".to_string(),
+                        });
+                        if is_cancelled() {
+                            Err(translator::pdf_translate::PdfTranslateError::Cancelled)
+                        } else {
+                            Ok(())
+                        }
+                    },
+                );
                 // If no native text was found but image translation
                 // can still add overlay content, proceed with an empty
                 // translation set so the writer round-trips the bytes.
@@ -626,6 +634,18 @@ impl CatalogHandle {
             &translator::LanguageCode::from(language_code),
             &engine,
         )
+    }
+
+    fn plan_ocr_engine_downloads(
+        &self,
+        language_codes: Vec<String>,
+        engine: String,
+    ) -> translator::DownloadPlan {
+        let language_codes = language_codes
+            .into_iter()
+            .map(translator::LanguageCode::from)
+            .collect::<Vec<_>>();
+        translator::plan_ocr_engine_downloads(&self.snapshot(), &language_codes, &engine)
     }
 
     fn tts_sample_text(&self, language_code: String) -> Option<String> {
@@ -1017,7 +1037,14 @@ impl CatalogHandle {
 
         #[cfg(not(feature = "tts"))]
         {
-            let _ = (language_code, text, speech_speed, voice_name, is_phonemes, pack_id);
+            let _ = (
+                language_code,
+                text,
+                speech_speed,
+                voice_name,
+                is_phonemes,
+                pack_id,
+            );
             Err(CatalogError::Other {
                 reason: "tts feature disabled".to_string(),
             })
@@ -1073,12 +1100,28 @@ impl CatalogHandle {
         {
             return self
                 .session
-                .warp_document_rgba(&rgba_bytes, width, height, &quad, out_width, out_height, postprocess)
+                .warp_document_rgba(
+                    &rgba_bytes,
+                    width,
+                    height,
+                    &quad,
+                    out_width,
+                    out_height,
+                    postprocess,
+                )
                 .map_err(CatalogError::from);
         }
         #[cfg(not(feature = "doc-align"))]
         {
-            let _ = (rgba_bytes, width, height, quad, out_width, out_height, postprocess);
+            let _ = (
+                rgba_bytes,
+                width,
+                height,
+                quad,
+                out_width,
+                out_height,
+                postprocess,
+            );
             Err(CatalogError::Other {
                 reason: "doc-align feature disabled".to_string(),
             })
@@ -1129,7 +1172,10 @@ impl CatalogHandle {
     ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
         let mut state = frame.state.lock().map_err(|_| poisoned())?;
         ensure_oriented_locked(&mut state, crop, det_max_pixels)?;
-        let oriented = state.cached.as_ref().expect("ensure_oriented populated cache");
+        let oriented = state
+            .cached
+            .as_ref()
+            .expect("ensure_oriented populated cache");
         let raw = self
             .session
             .detect_in_oriented_image(oriented, &source_code)
@@ -1215,7 +1261,13 @@ impl FrameHandle {
         self as *const FrameHandle as u64
     }
 
-    fn reset_via_uniffi_inner(&self, rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: i32) {
+    fn reset_via_uniffi_inner(
+        &self,
+        rgba: Vec<u8>,
+        width: u32,
+        height: u32,
+        rotation_degrees: i32,
+    ) {
         let mut state = self.state.lock().expect("frame mutex poisoned");
         state.rgba = rgba;
         state.width = width;
@@ -1295,6 +1347,48 @@ impl LiveMotionTracker {
 }
 
 #[cfg(feature = "ppocr")]
+#[uniffi::export]
+pub fn group_live_text_lines(lines: Vec<LiveTextLineInput>) -> Vec<LiveTextGroup> {
+    if lines.is_empty() {
+        return Vec::new();
+    }
+
+    let text_lines: Vec<translator::ocr::TextLine> = lines
+        .iter()
+        .map(|line| translator::ocr::TextLine {
+            text: format!("track{}", line.track_id),
+            bounding_box: line.rect,
+            oriented_box: line.oriented_box,
+            tight_box: line.tight_box,
+            word_rects: vec![line.rect],
+        })
+        .collect();
+
+    translator::ocr::group_live_lines_into_blocks(text_lines)
+        .into_iter()
+        .filter_map(|block| {
+            let mut ids = Vec::new();
+            for line in block.lines {
+                for token in line.text.split_whitespace() {
+                    if let Some(raw_id) = token.strip_prefix("track") {
+                        if let Ok(id) = raw_id.parse::<u64>() {
+                            ids.push(id);
+                        }
+                    } else if let Ok(id) = token.parse::<u64>() {
+                        ids.push(id);
+                    }
+                }
+            }
+            if ids.is_empty() {
+                None
+            } else {
+                Some(LiveTextGroup { track_ids: ids })
+            }
+        })
+        .collect()
+}
+
+#[cfg(feature = "ppocr")]
 fn ensure_oriented_locked(
     state: &mut FrameState,
     display_crop: translator::Rect,
@@ -1351,6 +1445,13 @@ fn scale_detected_box(
         height: b.oriented_box.height * scale,
         angle_radians: b.oriented_box.angle_radians,
     };
+    let tight = translator::ocr::OrientedRect {
+        cx: b.tight_box.cx * scale,
+        cy: b.tight_box.cy * scale,
+        width: b.tight_box.width * scale,
+        height: b.tight_box.height * scale,
+        angle_radians: b.tight_box.angle_radians,
+    };
     let mut contour = Vec::with_capacity(b.contour.len());
     for v in &b.contour {
         contour.push(v * scale);
@@ -1358,6 +1459,48 @@ fn scale_detected_box(
     translator::DetectedTextBox {
         rect,
         oriented_box: oriented,
+        tight_box: tight,
         contour,
+        score: b.score,
+    }
+}
+
+#[cfg(all(test, feature = "ppocr"))]
+mod live_grouping_tests {
+    use super::*;
+
+    fn line(track_id: u64, left: u32, top: u32, right: u32, bottom: u32) -> LiveTextLineInput {
+        let rect = translator::Rect {
+            left,
+            top,
+            right,
+            bottom,
+        };
+        let oriented = translator::ocr::OrientedRect::axis_aligned(rect);
+        let tight = translator::ocr::OrientedRect {
+            cx: oriented.cx,
+            cy: oriented.cy,
+            width: oriented.width,
+            height: (oriented.height * 0.55).max(1.0),
+            angle_radians: oriented.angle_radians,
+        };
+        LiveTextLineInput {
+            track_id,
+            rect,
+            oriented_box: oriented,
+            tight_box: tight,
+        }
+    }
+
+    #[test]
+    fn live_grouping_keeps_three_stacked_label_lines_in_one_group() {
+        let groups = group_live_text_lines(vec![
+            line(10, 100, 100, 260, 126),
+            line(11, 101, 132, 258, 158),
+            line(12, 99, 164, 255, 190),
+        ]);
+
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].track_ids, vec![10, 11, 12]);
     }
 }

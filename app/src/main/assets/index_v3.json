@@ -1,10 +1,10 @@
 {
   "formatVersion": 3,
-  "generatedAt": 1778695887,
+  "generatedAt": 1778843833,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778695887,
+    "languageIndexUpdatedAt": 1778843833,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -472,7 +472,7 @@
         ],
         "ocr": {
           "tesseract": "ocr-tesseract-en",
-          "ppocr": "ocr-ppocr-en"
+          "ppocr": "ocr-ppocr-latin"
         },
         "dictionary": "dict-en",
         "preferredOcrEngine": "tesseract"
@@ -10452,10 +10452,10 @@
       "language": "_detector",
       "files": [
         {
-          "name": "PP-OCRv5_mobile_det.mnn",
-          "sizeBytes": 4760244,
-          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_det.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_det.mnn"
+          "name": "PP-OCRv5_mobile_det_fp16.mnn",
+          "sizeBytes": 2439100,
+          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_det_fp16.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_det_fp16.mnn"
         }
       ],
       "dependsOn": []
@@ -10480,7 +10480,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-cyrillic": {
@@ -10503,7 +10503,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-devanagari": {
@@ -10526,7 +10526,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-el": {
@@ -10549,29 +10549,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
-      ]
-    },
-    "ocr-ppocr-en": {
-      "feature": "ocr",
-      "engine": "ppocr",
-      "language": "en",
-      "files": [
-        {
-          "name": "en_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 3967840,
-          "installPath": "ppocr/PP-OCRv5/en_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/en_PP-OCRv5_mobile_rec_infer.mnn"
-        },
-        {
-          "name": "en_PP-OCRv5_keys.txt",
-          "sizeBytes": 1416,
-          "installPath": "ppocr/PP-OCRv5/en_PP-OCRv5_keys.txt",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/en_PP-OCRv5_keys.txt"
-        }
-      ],
-      "dependsOn": [
-        "ocr-ppocr-detector"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-eslav": {
@@ -10594,7 +10572,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-korean": {
@@ -10617,7 +10595,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-latin": {
@@ -10639,8 +10617,7 @@
         }
       ],
       "dependsOn": [
-        "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-detector"
       ]
     },
     "ocr-ppocr-ta": {
@@ -10663,7 +10640,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-te": {
@@ -10686,7 +10663,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-th": {
@@ -10709,7 +10686,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "ocr-ppocr-cjk": {
@@ -10718,10 +10695,10 @@
       "language": "cjk",
       "files": [
         {
-          "name": "PP-OCRv5_mobile_rec.mnn",
-          "sizeBytes": 16531596,
-          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_rec.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_rec.mnn"
+          "name": "PP-OCRv5_mobile_rec_fp16.mnn",
+          "sizeBytes": 8371960,
+          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_rec_fp16.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_rec_fp16.mnn"
         },
         {
           "name": "cjk_PP-OCRv5_keys.txt",
@@ -10732,7 +10709,7 @@
       ],
       "dependsOn": [
         "ocr-ppocr-detector",
-        "ocr-ppocr-en"
+        "ocr-ppocr-latin"
       ]
     },
     "support-adblock-lists-v1": {

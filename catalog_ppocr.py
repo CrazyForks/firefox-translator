@@ -13,7 +13,7 @@ PPOCR_BUCKET_BASE = "ocr/1/PP-OCRv5"
 PPOCR_INSTALL_BASE = "ppocr/PP-OCRv5"
 PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 
-PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det.mnn"
+PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det_fp16.mnn"
 
 # Recognizer model filename per script slug. The "cjk" slug uses the shared
 # PP-OCRv5 model that handles Japanese + Chinese together.
@@ -22,23 +22,22 @@ PPOCR_RECOGNIZER_FILENAMES = {
     "cyrillic": "cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
     "devanagari": "devanagari_PP-OCRv5_mobile_rec_infer.mnn",
     "el": "el_PP-OCRv5_mobile_rec_infer.mnn",
-    "en": "en_PP-OCRv5_mobile_rec_infer.mnn",
     "eslav": "eslav_PP-OCRv5_mobile_rec_infer.mnn",
     "korean": "korean_PP-OCRv5_mobile_rec_infer.mnn",
     "latin": "latin_PP-OCRv5_mobile_rec_infer.mnn",
     "ta": "ta_PP-OCRv5_mobile_rec_infer.mnn",
     "te": "te_PP-OCRv5_mobile_rec_infer.mnn",
     "th": "th_PP-OCRv5_mobile_rec_infer.mnn",
-    "cjk": "PP-OCRv5_mobile_rec.mnn",
+    "cjk": "PP-OCRv5_mobile_rec_fp16.mnn",
 }
 
 # Language codes (catalog keys) served by each PPOCR script.
 #
-# Specialization tiers: each language is assigned to its most specialized
-# model. `en` is preferred over `latin` for English; `eslav` is preferred
-# over `cyrillic` for Russian / Belarusian / Ukrainian. The fallback slugs
-# (`latin`, `cyrillic`) cover only the languages that don't have a
-# script-or-language-specific model.
+# Specialization tiers: each language is assigned to its most suitable model.
+# English uses the shared Latin model instead of the dedicated English model;
+# `eslav` is preferred over `cyrillic` for Russian / Belarusian / Ukrainian.
+# The fallback slugs (`latin`, `cyrillic`) cover the languages that don't have
+# a script-or-language-specific model.
 #
 # Languages whose script is not covered by PPOCR at all (Bengali,
 # Gujarati, Hebrew, Kannada, Malayalam) are absent here and stay
@@ -48,14 +47,13 @@ PPOCR_SCRIPT_TO_LANGUAGES = {
     "cyrillic": ["bg", "sr"],          # non-East-Slavic Cyrillic only
     "devanagari": ["hi"],
     "el": ["el"],
-    "en": ["en"],                      # specialized; `latin` excludes en
     "eslav": ["be", "ru", "uk"],       # specialized East Slavic Cyrillic
     "korean": ["ko"],
-    "latin": [                         # all Latin-script langs except en
+    "latin": [                         # all Latin-script langs, including en
         "az", "bs", "ca", "cs", "da", "de", "es", "et", "fi", "fr",
         "hr", "hu", "id", "is", "it", "lt", "lv", "ms", "nb", "nl",
         "nn", "no", "pl", "pt", "ro", "sk", "sl", "sq", "sv", "tr",
-        "vi",
+        "vi", "en",
     ],
     "ta": ["ta"],
     "te": ["te"],
@@ -108,20 +106,14 @@ def add_ppocr_packs(catalog: dict) -> None:
     }
 
     languages = catalog["languages"]
-    en_pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, "en")
+    latin_pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, "latin")
     for script, langs in PPOCR_SCRIPT_TO_LANGUAGES.items():
         rec_filename = PPOCR_RECOGNIZER_FILENAMES[script]
         keys_filename = _keys_filename(script)
         pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, script)
-        # Every non-en rec pack pulls in the English rec as a sibling install,
-        # mirroring the tesseract layout where `ocr-tesseract-en` is a hard
-        # dependency of every other tesseract pack. English has no separate
-        # "core" install path in the UI, so without this dependency edge the
-        # `en` rec model would only get installed if the user manually picked
-        # English for OCR — which the UI doesn't surface.
         depends_on = [PPOCR_DETECTOR_PACK_ID]
-        if script != "en":
-            depends_on.append(en_pack_id)
+        if script != "latin":
+            depends_on.append(latin_pack_id)
         catalog["packs"][pack_id] = {
             "feature": "ocr",
             "engine": PPOCR_ENGINE,

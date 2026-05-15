@@ -126,11 +126,10 @@ private data class PendingTtsVoicePicker(
 
 private data class PaddleUpgrade(
   val languages: List<Language>,
-  val triggers: List<Language>,
   val totalBytes: Long,
 ) {
   companion object {
-    val EMPTY = PaddleUpgrade(emptyList(), emptyList(), 0L)
+    val EMPTY = PaddleUpgrade(emptyList(), 0L)
   }
 }
 
@@ -672,24 +671,18 @@ fun LanguageAssetManagerScreen(
         PaddleUpgrade.EMPTY
       } else {
         val languages = mutableListOf<Language>()
-        val triggers = mutableListOf<Language>()
-        val seenPaths = mutableSetOf<String>()
-        var totalBytes = 0L
         rows.forEach { row ->
           if (!row.availability.ocrFiles) return@forEach
           val installed = catalog.installedOcrEngines(row.language.code).toSet()
           if ("tesseract" !in installed || "ppocr" in installed) return@forEach
-          val plan = catalog.planOcrEngineDownload(row.language.code, "ppocr") ?: return@forEach
-          if (plan.tasks.isEmpty()) return@forEach
           languages.add(row.language)
-          val newTasks = plan.tasks.filter { it.installPath !in seenPaths }
-          if (newTasks.isNotEmpty()) {
-            seenPaths.addAll(newTasks.map { it.installPath })
-            totalBytes += newTasks.sumOf { it.sizeBytes.toLong() }
-            triggers.add(row.language)
-          }
         }
-        PaddleUpgrade(languages = languages, triggers = triggers, totalBytes = totalBytes)
+        val plan = catalog.planOcrEngineDownloads(languages.map { it.code }, "ppocr")
+        if (plan.tasks.isEmpty()) {
+          PaddleUpgrade.EMPTY
+        } else {
+          PaddleUpgrade(languages = languages, totalBytes = plan.totalSize.toLong())
+        }
       }
     }
 
@@ -743,9 +736,7 @@ fun LanguageAssetManagerScreen(
           languageCount = paddleUpgrade.languages.size,
           totalBytes = paddleUpgrade.totalBytes,
           onDownload = {
-            paddleUpgrade.triggers.forEach { language ->
-              DownloadService.startOcrEngineDownload(context, language, "ppocr")
-            }
+            DownloadService.startOcrEngineDownloads(context, paddleUpgrade.languages, "ppocr")
           },
         )
       }
