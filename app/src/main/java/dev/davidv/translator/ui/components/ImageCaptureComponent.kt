@@ -435,6 +435,27 @@ fun ImageSourceBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
       ) {
+        // File picker
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          modifier = Modifier.clickable { onFilePickerClick() },
+        ) {
+          Icon(
+            painter = painterResource(id = R.drawable.draft),
+            contentDescription = "Document",
+            modifier =
+              Modifier
+                .size(48.dp)
+                .padding(bottom = 8.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = "Document",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+          )
+        }
+
         // Conditional: Photos (Android 13+) or Gallery (older versions)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
           // Modern Photos picker for Android 13+
@@ -479,27 +500,6 @@ fun ImageSourceBottomSheet(
               textAlign = TextAlign.Center,
             )
           }
-        }
-
-        // File picker
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.clickable { onFilePickerClick() },
-        ) {
-          Icon(
-            painter = painterResource(id = R.drawable.draft),
-            contentDescription = "Document",
-            modifier =
-              Modifier
-                .size(48.dp)
-                .padding(bottom = 8.dp),
-            tint = MaterialTheme.colorScheme.onSurface,
-          )
-          Text(
-            text = "Document",
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-          )
         }
 
         // Camera (rightmost — live camera surface)
