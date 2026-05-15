@@ -37,6 +37,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 import uniffi.translator.Rect as NativeRect
 
 /** Buffer size we allocate per [FrameHandle]. Covers a 1.5 MP RGBA frame
@@ -49,19 +50,20 @@ private const val TAG = "LiveOcrEngine"
 
 private const val CENTER_CROP_FRACTION = 0.8f
 
-// private const val DETECTOR_TARGET_PIXELS = 400_000
-private const val DETECTOR_TARGET_PIXELS = 300_000
+private const val DETECTOR_TARGET_PIXELS = 350_000
+private const val DETECTOR_INTERVAL_NS: Long = 200_000_000L
 
-/** Stateless-overlay architecture: each frame's detection set is rendered as-is, with
- *  recognition results pulled from a memoization cache. Cache key is approximate
- *  (position + size + angle within tolerance); a cache miss kicks off async rec, a
- *  cache hit avoids it. Tight tolerances on purpose — caching is a speed-up, not a
- *  correctness trade-off.
- */
-private const val POS_TOL_FRAC = 0.07f
-private const val SIZE_TOL_FRAC = 0.10f
-private const val ANGLE_TOL_RAD = 0.087f
-private const val GRACE_FRAMES = 1L
+/** Detector observations are now corrections to stable visual tracks. Matching
+ *  tolerances are deliberately looser than the old cache because frame-to-frame
+ *  tracking predicts where the text should be before the detector result lands. */
+private const val POS_TOL_FRAC = 0.12f
+private const val SIZE_TOL_FRAC = 0.25f
+private const val ANGLE_TOL_RAD = 0.22f
+private const val DETECTOR_CORRECTION_ALPHA = 0.22f
+private const val DETECTOR_CORRECTION_ALPHA_UNTRACKED = 0.45f
+private const val MAX_DETECTOR_MISSES = 2L
+private const val MAX_UNTRACKED_FRAMES = 4L
+private const val MIN_SINGLE_CHAR_RENDER_DETECTOR_HITS = 2
 
 private const val DEDUP_CENTRE_FRAC_OF_BOX_SIZE = 0.5f
 
@@ -77,18 +79,18 @@ data class LiveOverlayItem(
   val frameHeight: Int,
 )
 
-private data class CacheEntry(
+private data class TrackEntry(
   val id: Long,
-  val rect: NativeRect,
-  val orientedBox: OrientedRect,
-  val contour: List<Float>,
+  var rect: NativeRect,
+  var orientedBox: OrientedRect,
   var sourceText: String?,
   var translatedText: String?,
-  var lastSeenFrame: Long,
-  val frameWidth: Int,
-  val frameHeight: Int,
-  val cropOffsetX: Int,
-  val cropOffsetY: Int,
+  var recognitionPending: Boolean,
+  var detectorHits: Int,
+  var lastVisualFrame: Long,
+  var lastMatchedDetection: Long,
+  var frameWidth: Int,
+  var frameHeight: Int,
 )
 
 /** Carries one camera frame through the engine's pipeline stages. The [FrameHandle]
@@ -112,10 +114,13 @@ class LiveOcrEngine(
   private val workerScope: CoroutineScope,
 ) {
   private val mutex = Mutex()
-  private val cache: MutableList<CacheEntry> = mutableListOf()
+  private val tracks: MutableList<TrackEntry> = mutableListOf()
   private val translationCache = HashMap<TranslationKey, String>()
   private var nextId: Long = 0L
   private var frameId: Long = 0L
+  private var detectionId: Long = 0L
+  private var lastDetectionNs: Long = 0L
+  private var lastCropRect: NativeRect? = null
 
   /** Bumped by clear() to invalidate all in-flight rec workers wholesale. */
   private var globalGeneration: Long = 0L
@@ -147,6 +152,7 @@ class LiveOcrEngine(
 
   private val stats = FrameStats()
   private var statsWindowStartNs: Long = System.nanoTime()
+  private val motionTracker = uniffi.bindings.LiveMotionTracker()
 
   init {
     detectorJob =
@@ -215,9 +221,12 @@ class LiveOcrEngine(
   }
 
   fun clear() {
+    motionTracker.reset()
     workerScope.launch {
       mutex.withLock {
-        cache.clear()
+        tracks.clear()
+        lastCropRect = null
+        lastDetectionNs = 0L
         globalGeneration++
         publishOverlaysLocked()
       }
@@ -233,8 +242,9 @@ class LiveOcrEngine(
     }
   }
 
-  /** Stage B (detector thread). Runs detect on the pre-filled [FrameHandle],
-   *  IoU-matches against cache, kicks off async rec on Stage C for new boxes.
+  /** Stage B (detector thread). First updates visual tracks from frame-to-frame
+   *  crop motion, then periodically runs PPOCR detection as a correction /
+   *  re-acquisition source. New or still-unresolved tracks kick off async rec.
    *  Hands off the handle to the rec worker (which releases it on completion);
    *  if there's no rec work, releases the handle directly. */
   private suspend fun runDetectionStage(pending: PendingFrame) {
@@ -264,6 +274,50 @@ class LiveOcrEngine(
         bottom = (cropTop + cropH).toUInt(),
       )
 
+    val cropChanged =
+      lastCropRect?.let {
+        it.left != cropRect.left ||
+          it.top != cropRect.top ||
+          it.right != cropRect.right ||
+          it.bottom != cropRect.bottom
+      } ?: false
+    if (cropChanged) motionTracker.reset()
+    lastCropRect = cropRect
+
+    val motion =
+      try {
+        motionTracker.update(handle, cropRect)
+      } catch (e: Exception) {
+        Log.w(TAG, "motion tracking failed", e)
+        null
+      }
+
+    val nowNs = System.nanoTime()
+    val currentFrame: Long
+    var shouldDetect: Boolean
+    mutex.withLock {
+      frameId++
+      currentFrame = frameId
+      if (cropChanged) {
+        tracks.clear()
+      } else {
+        applyMotionLocked(motion, currentFrame, displayW, displayH)
+      }
+      pruneTracksLocked(currentFrame)
+      publishOverlaysLocked()
+      val hasRenderableTrack = tracks.any { it.translatedText != null }
+      val hasPendingTrack = tracks.any { it.recognitionPending }
+      shouldDetect =
+        lastDetectionNs == 0L ||
+        nowNs - lastDetectionNs >= DETECTOR_INTERVAL_NS ||
+        (!hasRenderableTrack && !hasPendingTrack)
+    }
+
+    if (!shouldDetect) {
+      releaseFrameHandle(handle)
+      return
+    }
+
     val tDet = System.nanoTime()
     val detected =
       try {
@@ -274,45 +328,60 @@ class LiveOcrEngine(
         return
       }
     val detMs = (System.nanoTime() - tDet) / 1_000_000.0
+    lastDetectionNs = System.nanoTime()
 
     val toRecognize = mutableListOf<DetectedTextBox>()
     val toRecognizeIds = mutableListOf<Long>()
     val posTolPx = cropW.toFloat() * POS_TOL_FRAC
+    val correctionAlpha =
+      if (motion?.valid == true) DETECTOR_CORRECTION_ALPHA else DETECTOR_CORRECTION_ALPHA_UNTRACKED
 
-    val currentFrame: Long
     mutex.withLock {
-      frameId++
-      currentFrame = frameId
+      detectionId++
+      val currentDetection = detectionId
 
       val claimed = HashSet<Long>()
       for (box in detected) {
-        val match = bestCacheMatch(box, claimed, posTolPx)
+        val fullBox = offsetDetectedBox(box, cropLeft, cropTop)
+        val match = bestTrackMatch(fullBox, claimed, posTolPx)
         if (match != null) {
           claimed.add(match.id)
-          match.lastSeenFrame = currentFrame
+          correctTrackGeometry(match, fullBox, correctionAlpha, displayW, displayH)
+          match.lastVisualFrame = currentFrame
+          match.lastMatchedDetection = currentDetection
+          match.detectorHits += 1
+          match.frameWidth = displayW
+          match.frameHeight = displayH
+          if (match.translatedText == null && !match.recognitionPending) {
+            match.recognitionPending = true
+            toRecognize.add(box)
+            toRecognizeIds.add(match.id)
+          }
         } else {
           val newId = nextId++
           val entry =
-            CacheEntry(
+            TrackEntry(
               id = newId,
-              rect = box.rect,
-              orientedBox = box.orientedBox,
-              contour = box.contour,
+              rect = fullBox.rect,
+              orientedBox = fullBox.orientedBox,
               sourceText = null,
               translatedText = null,
-              lastSeenFrame = currentFrame,
+              recognitionPending = true,
+              detectorHits = 1,
+              lastVisualFrame = currentFrame,
+              lastMatchedDetection = currentDetection,
               frameWidth = displayW,
               frameHeight = displayH,
-              cropOffsetX = cropLeft,
-              cropOffsetY = cropTop,
             )
-          cache.add(entry)
+          tracks.add(entry)
           toRecognize.add(box)
           toRecognizeIds.add(newId)
         }
       }
 
-      cache.removeAll { it.lastSeenFrame < currentFrame - GRACE_FRAMES }
+      tracks.removeAll {
+        currentDetection - it.lastMatchedDetection > MAX_DETECTOR_MISSES
+      }
       publishOverlaysLocked()
 
       stats.record(
@@ -355,20 +424,25 @@ class LiveOcrEngine(
             catalog.recognizeInFrame(handle, cropRect, boxes, from)
           } catch (e: Exception) {
             Log.w(TAG, "recognize failed", e)
+            mutex.withLock {
+              entryIds.forEach { entryId ->
+                tracks.firstOrNull { it.id == entryId }?.recognitionPending = false
+              }
+            }
             return@launch
           }
         val recMs = (System.nanoTime() - tRec) / 1_000_000.0
         mutex.withLock { stats.recordRec(recMs) }
         for ((idx, line) in recognized.withIndex()) {
           val source = line.text.trim()
-          if (source.isEmpty()) continue
-          val translated = translateCached(from, to, source) ?: continue
+          val translated = if (source.isEmpty()) null else translateCached(from, to, source)
           mutex.withLock {
             if (myGeneration != globalGeneration) return@launch
             if (idx >= entryIds.size) return@withLock
             val entryId = entryIds[idx]
-            val entry = cache.firstOrNull { it.id == entryId }
-            if (entry != null && entry.translatedText == null) {
+            val entry = tracks.firstOrNull { it.id == entryId }
+            if (entry != null) entry.recognitionPending = false
+            if (entry != null && translated != null && entry.translatedText == null) {
               entry.sourceText = source
               entry.translatedText = translated
               dedupAgainstEntry(entry)
@@ -385,18 +459,18 @@ class LiveOcrEngine(
   }
 
   /** Mutex must be held. */
-  private fun bestCacheMatch(
+  private fun bestTrackMatch(
     box: DetectedTextBox,
     claimed: Set<Long>,
     posTolPx: Float,
-  ): CacheEntry? {
+  ): TrackEntry? {
     val boxCx = (box.rect.left.toFloat() + box.rect.right.toFloat()) * 0.5f
     val boxCy = (box.rect.top.toFloat() + box.rect.bottom.toFloat()) * 0.5f
     val boxW = (box.rect.right.toFloat() - box.rect.left.toFloat()).coerceAtLeast(1f)
     val boxH = (box.rect.bottom.toFloat() - box.rect.top.toFloat()).coerceAtLeast(1f)
-    var best: CacheEntry? = null
+    var best: TrackEntry? = null
     var bestDist = Float.MAX_VALUE
-    for (entry in cache) {
+    for (entry in tracks) {
       if (entry.id in claimed) continue
       if (abs(entry.orientedBox.angleRadians - box.orientedBox.angleRadians) > ANGLE_TOL_RAD) continue
       val entryCx = (entry.rect.left.toFloat() + entry.rect.right.toFloat()) * 0.5f
@@ -417,10 +491,87 @@ class LiveOcrEngine(
     return best
   }
 
+  /** Mutex must be held. */
+  private fun applyMotionLocked(
+    motion: uniffi.bindings.LiveMotionEstimate?,
+    currentFrame: Long,
+    frameWidth: Int,
+    frameHeight: Int,
+  ) {
+    if (motion?.valid != true) return
+    for (track in tracks) {
+      track.orientedBox = translatedOrientedRect(track.orientedBox, motion.dx, motion.dy)
+      track.rect = translatedRect(track.rect, motion.dx, motion.dy, frameWidth, frameHeight)
+      track.lastVisualFrame = currentFrame
+      track.frameWidth = frameWidth
+      track.frameHeight = frameHeight
+    }
+  }
+
+  /** Mutex must be held. */
+  private fun pruneTracksLocked(currentFrame: Long) {
+    tracks.removeAll {
+      it.translatedText == null &&
+        !it.recognitionPending &&
+        currentFrame - it.lastVisualFrame > MAX_UNTRACKED_FRAMES
+    }
+  }
+
+  private fun offsetDetectedBox(
+    box: DetectedTextBox,
+    offsetX: Int,
+    offsetY: Int,
+  ): DetectedTextBox {
+    val rect =
+      NativeRect(
+        left = (box.rect.left.toLong() + offsetX).coerceAtLeast(0).toUInt(),
+        top = (box.rect.top.toLong() + offsetY).coerceAtLeast(0).toUInt(),
+        right = (box.rect.right.toLong() + offsetX).coerceAtLeast(0).toUInt(),
+        bottom = (box.rect.bottom.toLong() + offsetY).coerceAtLeast(0).toUInt(),
+      )
+    val oriented =
+      OrientedRect(
+        cx = box.orientedBox.cx + offsetX,
+        cy = box.orientedBox.cy + offsetY,
+        width = box.orientedBox.width,
+        height = box.orientedBox.height,
+        angleRadians = box.orientedBox.angleRadians,
+      )
+    return DetectedTextBox(rect, oriented, box.contour)
+  }
+
+  private fun correctTrackGeometry(
+    track: TrackEntry,
+    observed: DetectedTextBox,
+    alpha: Float,
+    frameWidth: Int,
+    frameHeight: Int,
+  ) {
+    val keep = 1f - alpha
+    val angle = track.orientedBox.angleRadians + normalizedAngleDelta(track.orientedBox.angleRadians, observed.orientedBox.angleRadians) * alpha
+    track.orientedBox =
+      OrientedRect(
+        cx = track.orientedBox.cx * keep + observed.orientedBox.cx * alpha,
+        cy = track.orientedBox.cy * keep + observed.orientedBox.cy * alpha,
+        width = track.orientedBox.width * keep + observed.orientedBox.width * alpha,
+        height = track.orientedBox.height * keep + observed.orientedBox.height * alpha,
+        angleRadians = angle,
+      )
+    track.rect =
+      clampedRect(
+        left = blendEdge(track.rect.left, observed.rect.left, alpha),
+        top = blendEdge(track.rect.top, observed.rect.top, alpha),
+        right = blendEdge(track.rect.right, observed.rect.right, alpha),
+        bottom = blendEdge(track.rect.bottom, observed.rect.bottom, alpha),
+        frameWidth = frameWidth,
+        frameHeight = frameHeight,
+      )
+  }
+
   /** Mutex must be held. Collapses already-recognised cache entries whose
    *  translated text is identical (after normalisation) to `entry`'s, and whose
    *  centre is within `DEDUP_CENTRE_FRAC_OF_BOX_SIZE` of the entry's box size. */
-  private fun dedupAgainstEntry(entry: CacheEntry) {
+  private fun dedupAgainstEntry(entry: TrackEntry) {
     val translated = entry.translatedText ?: return
     val normalisedNew = normaliseForDedup(translated)
     val ecx = entry.orientedBox.cx
@@ -428,7 +579,7 @@ class LiveOcrEngine(
     val maxBoxSize = max(entry.orientedBox.width, entry.orientedBox.height)
     val tol = maxBoxSize * DEDUP_CENTRE_FRAC_OF_BOX_SIZE
     val victims =
-      cache.filter { other ->
+      tracks.filter { other ->
         if (other.id == entry.id) return@filter false
         val otherText = other.translatedText ?: return@filter false
         if (normaliseForDedup(otherText) != normalisedNew) return@filter false
@@ -438,17 +589,17 @@ class LiveOcrEngine(
       }
     if (victims.isNotEmpty()) {
       stats.dedupEvictions += victims.size
-      cache.removeAll(victims)
+      tracks.removeAll(victims)
     }
   }
 
   /** Mutex must be held. */
   private fun publishOverlaysLocked() {
     _overlays.value =
-      cache.filter { it.translatedText != null }.map { entry ->
+      tracks.filter { isRenderableTrack(it) }.map { entry ->
         LiveOverlayItem(
-          cx = entry.orientedBox.cx + entry.cropOffsetX,
-          cy = entry.orientedBox.cy + entry.cropOffsetY,
+          cx = entry.orientedBox.cx,
+          cy = entry.orientedBox.cy,
           width = entry.orientedBox.width,
           height = entry.orientedBox.height,
           angleRadians = entry.orientedBox.angleRadians,
@@ -502,6 +653,83 @@ class LiveOcrEngine(
 private val WHITESPACE = Regex("\\s+")
 
 private fun normaliseForDedup(text: String): String = text.lowercase().replace(WHITESPACE, " ").trim()
+
+private fun isRenderableTrack(track: TrackEntry): Boolean {
+  val translated = track.translatedText ?: return false
+  val source = track.sourceText.orEmpty().trim()
+  if (translated.isBlank()) return false
+  if (source.length <= 1 && track.detectorHits < MIN_SINGLE_CHAR_RENDER_DETECTOR_HITS) return false
+  return true
+}
+
+private fun translatedOrientedRect(
+  rect: OrientedRect,
+  dx: Float,
+  dy: Float,
+): OrientedRect =
+  OrientedRect(
+    cx = rect.cx + dx,
+    cy = rect.cy + dy,
+    width = rect.width,
+    height = rect.height,
+    angleRadians = rect.angleRadians,
+  )
+
+private fun translatedRect(
+  rect: NativeRect,
+  dx: Float,
+  dy: Float,
+  frameWidth: Int,
+  frameHeight: Int,
+): NativeRect {
+  return clampedRect(
+    left = (rect.left.toInt() + dx).roundToInt(),
+    top = (rect.top.toInt() + dy).roundToInt(),
+    right = (rect.right.toInt() + dx).roundToInt(),
+    bottom = (rect.bottom.toInt() + dy).roundToInt(),
+    frameWidth = frameWidth,
+    frameHeight = frameHeight,
+  )
+}
+
+private fun clampedRect(
+  left: Int,
+  top: Int,
+  right: Int,
+  bottom: Int,
+  frameWidth: Int,
+  frameHeight: Int,
+): NativeRect {
+  val maxX = frameWidth.coerceAtLeast(1)
+  val maxY = frameHeight.coerceAtLeast(1)
+  val l = left.coerceIn(0, maxX - 1)
+  val t = top.coerceIn(0, maxY - 1)
+  val r = right.coerceIn(l + 1, maxX)
+  val b = bottom.coerceIn(t + 1, maxY)
+  return NativeRect(
+    left = l.toUInt(),
+    top = t.toUInt(),
+    right = r.toUInt(),
+    bottom = b.toUInt(),
+  )
+}
+
+private fun blendEdge(
+  current: UInt,
+  observed: UInt,
+  alpha: Float,
+): Int = (current.toFloat() * (1f - alpha) + observed.toFloat() * alpha).roundToInt()
+
+private fun normalizedAngleDelta(
+  current: Float,
+  observed: Float,
+): Float {
+  var delta = observed - current
+  val pi = kotlin.math.PI.toFloat()
+  while (delta > pi) delta -= 2f * pi
+  while (delta < -pi) delta += 2f * pi
+  return delta
+}
 
 private class FrameStats {
   var frames: Int = 0

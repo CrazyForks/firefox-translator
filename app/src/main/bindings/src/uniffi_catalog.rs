@@ -65,6 +65,17 @@ pub enum DocumentProgressEvent {
     Writing,
 }
 
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct LiveMotionEstimate {
+    pub valid: bool,
+    pub dx: f32,
+    pub dy: f32,
+    pub confidence: f32,
+    pub matches: u32,
+    pub inliers: u32,
+    pub reset: bool,
+}
+
 #[uniffi::export(with_foreign)]
 pub trait DocumentProgressSink: Send + Sync {
     fn on_progress(&self, event: DocumentProgressEvent);
@@ -1228,6 +1239,58 @@ impl FrameHandle {
     /// camera's plane isn't a DirectByteBuffer or row stride doesn't match.
     fn reset_via_uniffi(&self, rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: i32) {
         self.reset_via_uniffi_inner(rgba, width, height, rotation_degrees);
+    }
+}
+
+#[cfg(feature = "ppocr")]
+#[derive(uniffi::Object)]
+pub struct LiveMotionTracker {
+    state: std::sync::Mutex<translator::live_tracking::LiveFrameTracker>,
+}
+
+#[cfg(feature = "ppocr")]
+#[uniffi::export]
+impl LiveMotionTracker {
+    #[uniffi::constructor]
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            state: std::sync::Mutex::new(translator::live_tracking::LiveFrameTracker::new()),
+        })
+    }
+
+    fn reset(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.reset();
+        }
+    }
+
+    fn update(
+        &self,
+        frame: Arc<FrameHandle>,
+        crop: translator::Rect,
+    ) -> Result<LiveMotionEstimate, CatalogError> {
+        let frame_state = frame.state.lock().map_err(|_| poisoned())?;
+        let mut tracker = self.state.lock().map_err(|_| CatalogError::Other {
+            reason: "motion tracker mutex poisoned".to_string(),
+        })?;
+        let estimate = tracker
+            .update(
+                &frame_state.rgba,
+                frame_state.width,
+                frame_state.height,
+                frame_state.rotation_degrees,
+                crop,
+            )
+            .map_err(CatalogError::from)?;
+        Ok(LiveMotionEstimate {
+            valid: estimate.valid,
+            dx: estimate.dx,
+            dy: estimate.dy,
+            confidence: estimate.confidence,
+            matches: estimate.matches,
+            inliers: estimate.inliers,
+            reset: estimate.reset,
+        })
     }
 }
 
