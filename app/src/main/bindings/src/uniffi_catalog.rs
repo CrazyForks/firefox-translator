@@ -814,58 +814,6 @@ impl CatalogHandle {
         }
     }
 
-    /// Run only the PaddlePaddle detector on a frame — no recognition. Returns box geometry
-    /// for the live OCR overlay to track across frames.
-    fn detect_text_boxes(
-        &self,
-        rgba_bytes: Vec<u8>,
-        width: u32,
-        height: u32,
-        source_code: String,
-    ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
-        #[cfg(feature = "ppocr")]
-        {
-            return self
-                .session
-                .detect_text_boxes_rgba(&rgba_bytes, width, height, &source_code)
-                .map_err(CatalogError::from);
-        }
-        #[cfg(not(feature = "ppocr"))]
-        {
-            let _ = (rgba_bytes, width, height, source_code);
-            Err(CatalogError::Other {
-                reason: "ppocr feature disabled".to_string(),
-            })
-        }
-    }
-
-    /// Recognize text in caller-supplied boxes (typically from a previous `detect_text_boxes`
-    /// call, possibly after stability-tracking across frames). Boxes must be in the same
-    /// coordinate space as the frame.
-    fn recognize_text_in_boxes(
-        &self,
-        rgba_bytes: Vec<u8>,
-        width: u32,
-        height: u32,
-        boxes: Vec<translator::DetectedTextBox>,
-        source_code: String,
-    ) -> Result<Vec<translator::RecognizedTextLine>, CatalogError> {
-        #[cfg(feature = "ppocr")]
-        {
-            return self
-                .session
-                .recognize_text_in_boxes_rgba(&rgba_bytes, width, height, &boxes, &source_code)
-                .map_err(CatalogError::from);
-        }
-        #[cfg(not(feature = "ppocr"))]
-        {
-            let _ = (rgba_bytes, width, height, boxes, source_code);
-            Err(CatalogError::Other {
-                reason: "ppocr feature disabled".to_string(),
-            })
-        }
-    }
-
     fn retranslate_image_plan(
         &self,
         prepared: translator::PreparedImageOverlay,

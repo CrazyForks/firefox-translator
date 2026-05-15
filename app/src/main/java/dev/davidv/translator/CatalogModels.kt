@@ -396,32 +396,6 @@ class LanguageCatalog private constructor(
     to: Language,
   ): uniffi.translator.PreparedImageOverlay = handle.retranslateImagePlan(prepared, from.code, to.code)
 
-  @Throws(CatalogException::class)
-  fun detectTextBoxes(
-    bitmap: Bitmap,
-    from: Language,
-  ): List<uniffi.translator.DetectedTextBox> =
-    handle.detectTextBoxes(
-      rgbaBytes(bitmap),
-      bitmap.width.toUInt(),
-      bitmap.height.toUInt(),
-      from.code,
-    )
-
-  @Throws(CatalogException::class)
-  fun recognizeTextInBoxes(
-    bitmap: Bitmap,
-    boxes: List<uniffi.translator.DetectedTextBox>,
-    from: Language,
-  ): List<uniffi.translator.RecognizedTextLine> =
-    handle.recognizeTextInBoxes(
-      rgbaBytes(bitmap),
-      bitmap.width.toUInt(),
-      bitmap.height.toUInt(),
-      boxes,
-      from.code,
-    )
-
   /** Allocate a Rust-side frame buffer for the live-OCR pipeline. The returned
    *  [uniffi.bindings.FrameHandle] is `AutoCloseable`; close it when the frame is
    *  fully done. */
