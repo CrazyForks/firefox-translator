@@ -50,7 +50,7 @@ private const val TAG = "LiveOcrEngine"
 
 private const val CENTER_CROP_FRACTION = 0.8f
 
-private const val DETECTOR_TARGET_PIXELS = 350_000
+private const val DETECTOR_TARGET_PIXELS = 450_000
 private const val DETECTOR_INTERVAL_NS: Long = 200_000_000L
 
 /** Detector observations are now corrections to stable visual tracks. Matching
@@ -63,11 +63,11 @@ private const val DETECTOR_CORRECTION_ALPHA = 0.22f
 private const val DETECTOR_CORRECTION_ALPHA_UNTRACKED = 0.45f
 private const val MAX_DETECTOR_MISSES = 2L
 private const val MAX_UNTRACKED_FRAMES = 4L
-private const val MIN_SINGLE_CHAR_RENDER_DETECTOR_HITS = 2
 
 private const val DEDUP_CENTRE_FRAC_OF_BOX_SIZE = 0.5f
 
 data class LiveOverlayItem(
+  val groupId: String,
   val cx: Float,
   val cy: Float,
   val width: Float,
@@ -75,6 +75,7 @@ data class LiveOverlayItem(
   val angleRadians: Float,
   val sourceText: String,
   val translatedText: String,
+  val groupText: String,
   val frameWidth: Int,
   val frameHeight: Int,
 )
@@ -83,14 +84,22 @@ private data class TrackEntry(
   val id: Long,
   var rect: NativeRect,
   var orientedBox: OrientedRect,
+  var tightBox: OrientedRect,
   var sourceText: String?,
-  var translatedText: String?,
+  var recognitionConfidence: Float,
+  var detectorScore: Float,
   var recognitionPending: Boolean,
   var detectorHits: Int,
   var lastVisualFrame: Long,
   var lastMatchedDetection: Long,
   var frameWidth: Int,
   var frameHeight: Int,
+)
+
+private data class LiveRenderGroup(
+  val id: String,
+  val tracks: List<TrackEntry>,
+  val sourceText: String,
 )
 
 /** Carries one camera frame through the engine's pipeline stages. The [FrameHandle]
@@ -116,11 +125,14 @@ class LiveOcrEngine(
   private val mutex = Mutex()
   private val tracks: MutableList<TrackEntry> = mutableListOf()
   private val translationCache = HashMap<TranslationKey, String>()
+  private val pendingGroupTranslations = HashSet<TranslationKey>()
   private var nextId: Long = 0L
   private var frameId: Long = 0L
   private var detectionId: Long = 0L
   private var lastDetectionNs: Long = 0L
   private var lastCropRect: NativeRect? = null
+  private var activeSourceCode: String? = null
+  private var activeTargetCode: String? = null
 
   /** Bumped by clear() to invalidate all in-flight rec workers wholesale. */
   private var globalGeneration: Long = 0L
@@ -129,6 +141,12 @@ class LiveOcrEngine(
   val overlays: StateFlow<List<LiveOverlayItem>> = _overlays.asStateFlow()
 
   data class TranslationKey(val sourceCode: String, val targetCode: String, val text: String)
+
+  private data class GroupTranslationRequest(
+    val key: TranslationKey,
+    val from: Language,
+    val to: Language,
+  )
 
   /** Manual conflation: only the latest frame is held; if a new one arrives while
    *  another is pending, the previous one's [FrameHandle] is returned to the
@@ -225,8 +243,11 @@ class LiveOcrEngine(
     workerScope.launch {
       mutex.withLock {
         tracks.clear()
+        pendingGroupTranslations.clear()
         lastCropRect = null
         lastDetectionNs = 0L
+        activeSourceCode = null
+        activeTargetCode = null
         globalGeneration++
         publishOverlaysLocked()
       }
@@ -298,6 +319,8 @@ class LiveOcrEngine(
     mutex.withLock {
       frameId++
       currentFrame = frameId
+      activeSourceCode = pending.from.code
+      activeTargetCode = pending.to.code
       if (cropChanged) {
         tracks.clear()
       } else {
@@ -305,7 +328,7 @@ class LiveOcrEngine(
       }
       pruneTracksLocked(currentFrame)
       publishOverlaysLocked()
-      val hasRenderableTrack = tracks.any { it.translatedText != null }
+      val hasRenderableTrack = tracks.any { isRenderableTrack(it) }
       val hasPendingTrack = tracks.any { it.recognitionPending }
       shouldDetect =
         lastDetectionNs == 0L ||
@@ -336,64 +359,70 @@ class LiveOcrEngine(
     val correctionAlpha =
       if (motion?.valid == true) DETECTOR_CORRECTION_ALPHA else DETECTOR_CORRECTION_ALPHA_UNTRACKED
 
-    mutex.withLock {
-      detectionId++
-      val currentDetection = detectionId
+    val groupRequests =
+      mutex.withLock {
+        detectionId++
+        val currentDetection = detectionId
 
-      val claimed = HashSet<Long>()
-      for (box in detected) {
-        val fullBox = offsetDetectedBox(box, cropLeft, cropTop)
-        val match = bestTrackMatch(fullBox, claimed, posTolPx)
-        if (match != null) {
-          claimed.add(match.id)
-          correctTrackGeometry(match, fullBox, correctionAlpha, displayW, displayH)
-          match.lastVisualFrame = currentFrame
-          match.lastMatchedDetection = currentDetection
-          match.detectorHits += 1
-          match.frameWidth = displayW
-          match.frameHeight = displayH
-          if (match.translatedText == null && !match.recognitionPending) {
-            match.recognitionPending = true
+        val claimed = HashSet<Long>()
+        for (box in detected) {
+          val fullBox = offsetDetectedBox(box, cropLeft, cropTop)
+          val match = bestTrackMatch(fullBox, claimed, posTolPx)
+          if (match != null) {
+            claimed.add(match.id)
+            correctTrackGeometry(match, fullBox, correctionAlpha, displayW, displayH)
+            match.lastVisualFrame = currentFrame
+            match.lastMatchedDetection = currentDetection
+            match.detectorHits += 1
+            match.detectorScore = fullBox.score
+            match.frameWidth = displayW
+            match.frameHeight = displayH
+            if (match.sourceText == null && !match.recognitionPending) {
+              match.recognitionPending = true
+              toRecognize.add(box)
+              toRecognizeIds.add(match.id)
+            }
+          } else {
+            val newId = nextId++
+            val entry =
+              TrackEntry(
+                id = newId,
+                rect = fullBox.rect,
+                orientedBox = fullBox.orientedBox,
+                tightBox = fullBox.tightBox,
+                sourceText = null,
+                recognitionConfidence = 0f,
+                detectorScore = fullBox.score,
+                recognitionPending = true,
+                detectorHits = 1,
+                lastVisualFrame = currentFrame,
+                lastMatchedDetection = currentDetection,
+                frameWidth = displayW,
+                frameHeight = displayH,
+              )
+            tracks.add(entry)
             toRecognize.add(box)
-            toRecognizeIds.add(match.id)
+            toRecognizeIds.add(newId)
           }
-        } else {
-          val newId = nextId++
-          val entry =
-            TrackEntry(
-              id = newId,
-              rect = fullBox.rect,
-              orientedBox = fullBox.orientedBox,
-              sourceText = null,
-              translatedText = null,
-              recognitionPending = true,
-              detectorHits = 1,
-              lastVisualFrame = currentFrame,
-              lastMatchedDetection = currentDetection,
-              frameWidth = displayW,
-              frameHeight = displayH,
-            )
-          tracks.add(entry)
-          toRecognize.add(box)
-          toRecognizeIds.add(newId)
         }
-      }
 
-      tracks.removeAll {
-        currentDetection - it.lastMatchedDetection > MAX_DETECTOR_MISSES
-      }
-      publishOverlaysLocked()
+        tracks.removeAll {
+          currentDetection - it.lastMatchedDetection > MAX_DETECTOR_MISSES
+        }
+        publishOverlaysLocked()
 
-      stats.record(
-        convertMs = pending.convertMs,
-        detMs = detMs,
-        boxes = detected.size,
-        cacheHits = detected.size - toRecognize.size,
-        newBoxes = toRecognize.size,
-        overlayCount = _overlays.value.size,
-      )
-      maybeEmitStatsLocked()
-    }
+        stats.record(
+          convertMs = pending.convertMs,
+          detMs = detMs,
+          boxes = detected.size,
+          cacheHits = detected.size - toRecognize.size,
+          newBoxes = toRecognize.size,
+          overlayCount = _overlays.value.size,
+        )
+        maybeEmitStatsLocked()
+        collectMissingGroupTranslationsLocked(pending.from, pending.to)
+      }
+    translateGroupRequests(groupRequests)
 
     if (toRecognize.isEmpty()) {
       releaseFrameHandle(handle)
@@ -435,20 +464,28 @@ class LiveOcrEngine(
         mutex.withLock { stats.recordRec(recMs) }
         for ((idx, line) in recognized.withIndex()) {
           val source = line.text.trim()
-          val translated = if (source.isEmpty()) null else translateCached(from, to, source)
           mutex.withLock {
             if (myGeneration != globalGeneration) return@launch
             if (idx >= entryIds.size) return@withLock
             val entryId = entryIds[idx]
             val entry = tracks.firstOrNull { it.id == entryId }
             if (entry != null) entry.recognitionPending = false
-            if (entry != null && translated != null && entry.translatedText == null) {
+            if (entry != null && source.isNotEmpty() && entry.sourceText == null) {
               entry.sourceText = source
-              entry.translatedText = translated
+              entry.recognitionConfidence = line.confidence
               dedupAgainstEntry(entry)
             }
           }
         }
+        val requests =
+          mutex.withLock {
+            if (myGeneration == globalGeneration) {
+              collectMissingGroupTranslationsLocked(from, to)
+            } else {
+              emptyList()
+            }
+          }
+        translateGroupRequests(requests)
         mutex.withLock {
           if (myGeneration == globalGeneration) publishOverlaysLocked()
         }
@@ -501,6 +538,7 @@ class LiveOcrEngine(
     if (motion?.valid != true) return
     for (track in tracks) {
       track.orientedBox = translatedOrientedRect(track.orientedBox, motion.dx, motion.dy)
+      track.tightBox = translatedOrientedRect(track.tightBox, motion.dx, motion.dy)
       track.rect = translatedRect(track.rect, motion.dx, motion.dy, frameWidth, frameHeight)
       track.lastVisualFrame = currentFrame
       track.frameWidth = frameWidth
@@ -511,7 +549,7 @@ class LiveOcrEngine(
   /** Mutex must be held. */
   private fun pruneTracksLocked(currentFrame: Long) {
     tracks.removeAll {
-      it.translatedText == null &&
+      it.sourceText == null &&
         !it.recognitionPending &&
         currentFrame - it.lastVisualFrame > MAX_UNTRACKED_FRAMES
     }
@@ -537,7 +575,15 @@ class LiveOcrEngine(
         height = box.orientedBox.height,
         angleRadians = box.orientedBox.angleRadians,
       )
-    return DetectedTextBox(rect, oriented, box.contour)
+    val tight =
+      OrientedRect(
+        cx = box.tightBox.cx + offsetX,
+        cy = box.tightBox.cy + offsetY,
+        width = box.tightBox.width,
+        height = box.tightBox.height,
+        angleRadians = box.tightBox.angleRadians,
+      )
+    return DetectedTextBox(rect, oriented, tight, box.contour, box.score)
   }
 
   private fun correctTrackGeometry(
@@ -557,6 +603,14 @@ class LiveOcrEngine(
         height = track.orientedBox.height * keep + observed.orientedBox.height * alpha,
         angleRadians = angle,
       )
+    track.tightBox =
+      OrientedRect(
+        cx = track.tightBox.cx * keep + observed.tightBox.cx * alpha,
+        cy = track.tightBox.cy * keep + observed.tightBox.cy * alpha,
+        width = track.tightBox.width * keep + observed.tightBox.width * alpha,
+        height = track.tightBox.height * keep + observed.tightBox.height * alpha,
+        angleRadians = angle,
+      )
     track.rect =
       clampedRect(
         left = blendEdge(track.rect.left, observed.rect.left, alpha),
@@ -568,12 +622,12 @@ class LiveOcrEngine(
       )
   }
 
-  /** Mutex must be held. Collapses already-recognised cache entries whose
-   *  translated text is identical (after normalisation) to `entry`'s, and whose
+  /** Mutex must be held. Collapses already-recognised entries whose source text
+   *  is identical (after normalisation) to `entry`'s, and whose
    *  centre is within `DEDUP_CENTRE_FRAC_OF_BOX_SIZE` of the entry's box size. */
   private fun dedupAgainstEntry(entry: TrackEntry) {
-    val translated = entry.translatedText ?: return
-    val normalisedNew = normaliseForDedup(translated)
+    val source = entry.sourceText ?: return
+    val normalisedNew = normaliseForDedup(source)
     val ecx = entry.orientedBox.cx
     val ecy = entry.orientedBox.cy
     val maxBoxSize = max(entry.orientedBox.width, entry.orientedBox.height)
@@ -581,7 +635,7 @@ class LiveOcrEngine(
     val victims =
       tracks.filter { other ->
         if (other.id == entry.id) return@filter false
-        val otherText = other.translatedText ?: return@filter false
+        val otherText = other.sourceText ?: return@filter false
         if (normaliseForDedup(otherText) != normalisedNew) return@filter false
         val dx = abs(other.orientedBox.cx - ecx)
         val dy = abs(other.orientedBox.cy - ecy)
@@ -595,20 +649,119 @@ class LiveOcrEngine(
 
   /** Mutex must be held. */
   private fun publishOverlaysLocked() {
-    _overlays.value =
-      tracks.filter { isRenderableTrack(it) }.map { entry ->
-        LiveOverlayItem(
-          cx = entry.orientedBox.cx,
-          cy = entry.orientedBox.cy,
-          width = entry.orientedBox.width,
-          height = entry.orientedBox.height,
-          angleRadians = entry.orientedBox.angleRadians,
-          sourceText = entry.sourceText.orEmpty(),
-          translatedText = entry.translatedText!!,
-          frameWidth = entry.frameWidth,
-          frameHeight = entry.frameHeight,
+    val fromCode = activeSourceCode
+    val toCode = activeTargetCode
+    if (fromCode == null || toCode == null) {
+      _overlays.value = emptyList()
+      return
+    }
+    val items = mutableListOf<LiveOverlayItem>()
+    for (group in buildLiveGroupsLocked()) {
+      val translated = translationCache[TranslationKey(fromCode, toCode, group.sourceText)] ?: continue
+      for (entry in group.tracks) {
+        items +=
+          LiveOverlayItem(
+            groupId = group.id,
+            cx = entry.orientedBox.cx,
+            cy = entry.orientedBox.cy,
+            width = entry.orientedBox.width,
+            height = entry.orientedBox.height,
+            angleRadians = entry.orientedBox.angleRadians,
+            sourceText = entry.sourceText.orEmpty(),
+            translatedText = translated,
+            groupText = translated,
+            frameWidth = entry.frameWidth,
+            frameHeight = entry.frameHeight,
+          )
+      }
+    }
+    _overlays.value = items
+  }
+
+  /** Mutex must be held. */
+  private fun buildLiveGroupsLocked(): List<LiveRenderGroup> {
+    val renderable = tracks.filter { isRenderableTrack(it) }
+    if (renderable.isEmpty()) return emptyList()
+    val byId = renderable.associateBy { it.id }
+    val inputs =
+      renderable.map { entry ->
+        uniffi.bindings.LiveTextLineInput(
+          trackId = entry.id.toULong(),
+          rect = entry.rect,
+          orientedBox = entry.orientedBox,
+          tightBox = entry.tightBox,
         )
       }
+    val groups =
+      try {
+        uniffi.bindings.groupLiveTextLines(inputs)
+      } catch (e: Throwable) {
+        Log.w(TAG, "live grouping failed", e)
+        return renderable.map { entry ->
+          val source = entry.sourceText.orEmpty().trim()
+          LiveRenderGroup(
+            id = entry.id.toString(),
+            tracks = listOf(entry),
+            sourceText = source,
+          )
+        }
+      }
+    return groups.mapNotNull { group ->
+      val groupTracks = group.trackIds.mapNotNull { byId[it.toLong()] }
+      if (groupTracks.isEmpty()) return@mapNotNull null
+      val source = groupTracks.joinToString(" ") { it.sourceText.orEmpty().trim() }.trim()
+      if (source.isEmpty()) return@mapNotNull null
+      LiveRenderGroup(
+        id = groupTracks.joinToString(separator = "-") { it.id.toString() },
+        tracks = groupTracks,
+        sourceText = source,
+      )
+    }
+  }
+
+  /** Mutex must be held. */
+  private fun collectMissingGroupTranslationsLocked(
+    from: Language,
+    to: Language,
+  ): List<GroupTranslationRequest> {
+    val requests = mutableListOf<GroupTranslationRequest>()
+    for (group in buildLiveGroupsLocked()) {
+      val key = TranslationKey(from.code, to.code, group.sourceText)
+      if (translationCache.containsKey(key) || key in pendingGroupTranslations) continue
+      pendingGroupTranslations.add(key)
+      requests += GroupTranslationRequest(key, from, to)
+    }
+    return requests
+  }
+
+  private fun translateGroupRequests(requests: List<GroupTranslationRequest>) {
+    if (requests.isEmpty()) return
+    workerScope.launch(Dispatchers.Default) {
+      var changed = false
+      for (request in requests) {
+        val key = request.key
+        val translated =
+          try {
+            catalog.translateText(request.from, request.to, key.text)
+          } catch (e: Exception) {
+            Log.w(TAG, "translate failed for '${key.text}'", e)
+            null
+          }
+        mutex.withLock {
+          pendingGroupTranslations.remove(key)
+          if (!translated.isNullOrBlank()) {
+            if (translationCache.size >= MAX_TRANSLATION_CACHE) {
+              translationCache.keys.firstOrNull()?.let(translationCache::remove)
+            }
+            translationCache[key] = translated
+            changed = true
+          }
+        }
+      }
+      if (changed) {
+        mutex.withLock { publishOverlaysLocked() }
+      }
+    }
   }
 
   /** Mutex must be held. */
@@ -622,28 +775,6 @@ class LiveOcrEngine(
     statsWindowStartNs = now
   }
 
-  private fun translateCached(
-    from: Language,
-    to: Language,
-    text: String,
-  ): String? {
-    val key = TranslationKey(from.code, to.code, text)
-    translationCache[key]?.let { return it }
-    val translated =
-      try {
-        catalog.translateText(from, to, text)
-      } catch (e: Exception) {
-        Log.w(TAG, "translate failed for '$text'", e)
-        return null
-      }
-    if (translated.isBlank()) return null
-    if (translationCache.size >= MAX_TRANSLATION_CACHE) {
-      translationCache.keys.firstOrNull()?.let(translationCache::remove)
-    }
-    translationCache[key] = translated
-    return translated
-  }
-
   companion object {
     private const val MAX_TRANSLATION_CACHE = 256
     private const val STATS_LOG_INTERVAL_NS: Long = 5_000_000_000L
@@ -655,11 +786,8 @@ private val WHITESPACE = Regex("\\s+")
 private fun normaliseForDedup(text: String): String = text.lowercase().replace(WHITESPACE, " ").trim()
 
 private fun isRenderableTrack(track: TrackEntry): Boolean {
-  val translated = track.translatedText ?: return false
   val source = track.sourceText.orEmpty().trim()
-  if (translated.isBlank()) return false
-  if (source.length <= 1 && track.detectorHits < MIN_SINGLE_CHAR_RENDER_DETECTOR_HITS) return false
-  return true
+  return source.isNotBlank()
 }
 
 private fun translatedOrientedRect(
