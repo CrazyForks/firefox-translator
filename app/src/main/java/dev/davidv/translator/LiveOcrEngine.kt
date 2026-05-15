@@ -66,6 +66,10 @@ private const val MAX_UNTRACKED_FRAMES = 4L
 
 private const val DEDUP_CENTRE_FRAC_OF_BOX_SIZE = 0.5f
 
+private const val REC_FREEZE_CONFIDENCE = 0.85f
+private const val REC_MAX_ATTEMPTS = 3
+private const val REC_REPLACE_EPSILON = 0.02f
+
 data class LiveOverlayItem(
   val groupId: String,
   val cx: Float,
@@ -87,6 +91,7 @@ private data class TrackEntry(
   var tightBox: OrientedRect,
   var sourceText: String?,
   var recognitionConfidence: Float,
+  var recognitionAttempts: Int,
   var detectorScore: Float,
   var recognitionPending: Boolean,
   var detectorHits: Int,
@@ -324,7 +329,7 @@ class LiveOcrEngine(
       if (cropChanged) {
         tracks.clear()
       } else {
-        applyMotionLocked(motion, currentFrame, displayW, displayH)
+        applyMotionLocked(motion, displayW, displayH)
       }
       pruneTracksLocked(currentFrame)
       publishOverlaysLocked()
@@ -377,7 +382,11 @@ class LiveOcrEngine(
             match.detectorScore = fullBox.score
             match.frameWidth = displayW
             match.frameHeight = displayH
-            if (match.sourceText == null && !match.recognitionPending) {
+            if (
+              !match.recognitionPending &&
+              match.recognitionAttempts < REC_MAX_ATTEMPTS &&
+              (match.sourceText == null || match.recognitionConfidence < REC_FREEZE_CONFIDENCE)
+            ) {
               match.recognitionPending = true
               toRecognize.add(box)
               toRecognizeIds.add(match.id)
@@ -392,6 +401,7 @@ class LiveOcrEngine(
                 tightBox = fullBox.tightBox,
                 sourceText = null,
                 recognitionConfidence = 0f,
+                recognitionAttempts = 0,
                 detectorScore = fullBox.score,
                 recognitionPending = true,
                 detectorHits = 1,
@@ -462,19 +472,23 @@ class LiveOcrEngine(
           }
         val recMs = (System.nanoTime() - tRec) / 1_000_000.0
         mutex.withLock { stats.recordRec(recMs) }
-        for ((idx, line) in recognized.withIndex()) {
-          val source = line.text.trim()
-          mutex.withLock {
-            if (myGeneration != globalGeneration) return@launch
-            if (idx >= entryIds.size) return@withLock
-            val entryId = entryIds[idx]
-            val entry = tracks.firstOrNull { it.id == entryId }
-            if (entry != null) entry.recognitionPending = false
-            if (entry != null && source.isNotEmpty() && entry.sourceText == null) {
-              entry.sourceText = source
-              entry.recognitionConfidence = line.confidence
-              dedupAgainstEntry(entry)
-            }
+        mutex.withLock {
+          if (myGeneration != globalGeneration) return@launch
+          val byId = tracks.associateBy { it.id }
+          for ((idx, line) in recognized.withIndex()) {
+            if (idx >= entryIds.size) break
+            val entry = byId[entryIds[idx]] ?: continue
+            entry.recognitionPending = false
+            entry.recognitionAttempts += 1
+            val source = line.text.trim()
+            if (source.isEmpty()) continue
+            val better =
+              entry.sourceText == null ||
+                line.confidence > entry.recognitionConfidence + REC_REPLACE_EPSILON
+            if (!better) continue
+            entry.sourceText = source
+            entry.recognitionConfidence = line.confidence
+            dedupAgainstEntry(entry)
           }
         }
         val requests =
@@ -531,7 +545,6 @@ class LiveOcrEngine(
   /** Mutex must be held. */
   private fun applyMotionLocked(
     motion: uniffi.bindings.LiveMotionEstimate?,
-    currentFrame: Long,
     frameWidth: Int,
     frameHeight: Int,
   ) {
@@ -540,7 +553,6 @@ class LiveOcrEngine(
       track.orientedBox = translatedOrientedRect(track.orientedBox, motion.dx, motion.dy)
       track.tightBox = translatedOrientedRect(track.tightBox, motion.dx, motion.dy)
       track.rect = translatedRect(track.rect, motion.dx, motion.dy, frameWidth, frameHeight)
-      track.lastVisualFrame = currentFrame
       track.frameWidth = frameWidth
       track.frameHeight = frameHeight
     }
