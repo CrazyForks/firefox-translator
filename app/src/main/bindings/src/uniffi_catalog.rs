@@ -76,6 +76,29 @@ pub struct LiveMotionEstimate {
     pub reset: bool,
 }
 
+/// Per-region similarity transform from the previous frame to the current one
+/// (display-coord 2x3 affine: new_x = a*x + b*y + c, new_y = d*x + e*y + f).
+/// When `valid` is false, the caller should apply the global motion estimate
+/// to the corresponding track instead.
+#[derive(Debug, Clone, Copy, uniffi::Record)]
+pub struct LiveRegionMotion {
+    pub valid: bool,
+    pub a: f32,
+    pub b: f32,
+    pub c: f32,
+    pub d: f32,
+    pub e: f32,
+    pub f: f32,
+    pub inliers: u32,
+    pub matches: u32,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LiveMotionUpdate {
+    pub global: LiveMotionEstimate,
+    pub regions: Vec<LiveRegionMotion>,
+}
+
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct LiveTextLineInput {
     pub track_id: u64,
@@ -1289,6 +1312,57 @@ impl LiveMotionTracker {
             matches: estimate.matches,
             inliers: estimate.inliers,
             reset: estimate.reset,
+        })
+    }
+
+    /// Like `update`, but also fits a per-track similarity for each region rect.
+    /// Returned `regions` is aligned 1:1 with `track_rects`; invalid entries mean
+    /// the caller should fall back to applying the `global` translation.
+    fn update_with_regions(
+        &self,
+        frame: Arc<FrameHandle>,
+        crop: translator::Rect,
+        track_rects: Vec<translator::Rect>,
+    ) -> Result<LiveMotionUpdate, CatalogError> {
+        let frame_state = frame.state.lock().map_err(|_| poisoned())?;
+        let mut tracker = self.state.lock().map_err(|_| CatalogError::Other {
+            reason: "motion tracker mutex poisoned".to_string(),
+        })?;
+        let (estimate, regions) = tracker
+            .update_with_regions(
+                &frame_state.rgba,
+                frame_state.width,
+                frame_state.height,
+                frame_state.rotation_degrees,
+                crop,
+                translator::live_tracking::default_target_pixels(),
+                &track_rects,
+            )
+            .map_err(CatalogError::from)?;
+        Ok(LiveMotionUpdate {
+            global: LiveMotionEstimate {
+                valid: estimate.valid,
+                dx: estimate.dx,
+                dy: estimate.dy,
+                confidence: estimate.confidence,
+                matches: estimate.matches,
+                inliers: estimate.inliers,
+                reset: estimate.reset,
+            },
+            regions: regions
+                .into_iter()
+                .map(|r| LiveRegionMotion {
+                    valid: r.valid,
+                    a: r.a,
+                    b: r.b,
+                    c: r.c,
+                    d: r.d,
+                    e: r.e,
+                    f: r.f,
+                    inliers: r.inliers,
+                    matches: r.matches,
+                })
+                .collect(),
         })
     }
 }

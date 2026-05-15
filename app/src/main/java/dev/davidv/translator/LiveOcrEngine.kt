@@ -316,9 +316,11 @@ class LiveOcrEngine(
     if (cropChanged) motionTracker.reset()
     lastCropRect = cropRect
 
-    val motion =
+    val trackSnapshot: List<Pair<Long, NativeRect>> =
+      mutex.withLock { tracks.map { it.id to it.rect } }
+    val motionUpdate =
       try {
-        motionTracker.update(handle, cropRect)
+        motionTracker.updateWithRegions(handle, cropRect, trackSnapshot.map { it.second })
       } catch (e: Exception) {
         Log.w(TAG, "motion tracking failed", e)
         null
@@ -335,7 +337,7 @@ class LiveOcrEngine(
       if (cropChanged) {
         tracks.clear()
       } else {
-        applyMotionLocked(motion, displayW, displayH)
+        applyMotionLocked(motionUpdate, trackSnapshot, displayW, displayH)
       }
       pruneTracksLocked(currentFrame)
       publishOverlaysLocked()
@@ -368,7 +370,7 @@ class LiveOcrEngine(
     val toRecognizeIds = mutableListOf<Long>()
     val posTolPx = cropW.toFloat() * POS_TOL_FRAC
     val correctionAlpha =
-      if (motion?.valid == true) DETECTOR_CORRECTION_ALPHA else DETECTOR_CORRECTION_ALPHA_UNTRACKED
+      if (motionUpdate?.global?.valid == true) DETECTOR_CORRECTION_ALPHA else DETECTOR_CORRECTION_ALPHA_UNTRACKED
 
     val groupRequests =
       mutex.withLock {
@@ -557,17 +559,35 @@ class LiveOcrEngine(
     return best
   }
 
-  /** Mutex must be held. */
+  /** Mutex must be held. Applies per-track similarity from the regional motion
+   *  estimator when valid; falls back to the global translation otherwise. */
   private fun applyMotionLocked(
-    motion: uniffi.bindings.LiveMotionEstimate?,
+    update: uniffi.bindings.LiveMotionUpdate?,
+    trackSnapshot: List<Pair<Long, NativeRect>>,
     frameWidth: Int,
     frameHeight: Int,
   ) {
-    if (motion?.valid != true) return
+    if (update == null) return
+    val global = update.global
+    if (!global.valid) return
+    val regionByTrackId: Map<Long, uniffi.bindings.LiveRegionMotion> =
+      trackSnapshot
+        .mapIndexedNotNull { idx, (id, _) ->
+          val region = update.regions.getOrNull(idx) ?: return@mapIndexedNotNull null
+          if (region.valid) id to region else null
+        }.toMap()
+
     for (track in tracks) {
-      track.orientedBox = translatedOrientedRect(track.orientedBox, motion.dx, motion.dy)
-      track.tightBox = translatedOrientedRect(track.tightBox, motion.dx, motion.dy)
-      track.rect = translatedRect(track.rect, motion.dx, motion.dy, frameWidth, frameHeight)
+      val region = regionByTrackId[track.id]
+      if (region != null) {
+        track.orientedBox = applyAffineToOrientedRect(track.orientedBox, region)
+        track.tightBox = applyAffineToOrientedRect(track.tightBox, region)
+        track.rect = applyAffineToRect(track.rect, region, frameWidth, frameHeight)
+      } else {
+        track.orientedBox = translatedOrientedRect(track.orientedBox, global.dx, global.dy)
+        track.tightBox = translatedOrientedRect(track.tightBox, global.dx, global.dy)
+        track.rect = translatedRect(track.rect, global.dx, global.dy, frameWidth, frameHeight)
+      }
       track.frameWidth = frameWidth
       track.frameHeight = frameHeight
     }
@@ -836,6 +856,96 @@ private fun translatedOrientedRect(
     height = rect.height,
     angleRadians = rect.angleRadians,
   )
+
+private fun applyAffinePoint(
+  region: uniffi.bindings.LiveRegionMotion,
+  x: Float,
+  y: Float,
+): Pair<Float, Float> {
+  val nx = region.a * x + region.b * y + region.c
+  val ny = region.d * x + region.e * y + region.f
+  return nx to ny
+}
+
+private fun applyAffineToOrientedRect(
+  rect: OrientedRect,
+  region: uniffi.bindings.LiveRegionMotion,
+): OrientedRect {
+  val cos = kotlin.math.cos(rect.angleRadians)
+  val sin = kotlin.math.sin(rect.angleRadians)
+  val hw = rect.width / 2f
+  val hh = rect.height / 2f
+  val tlx = rect.cx + (-hw) * cos - (-hh) * sin
+  val tly = rect.cy + (-hw) * sin + (-hh) * cos
+  val trx = rect.cx + (hw) * cos - (-hh) * sin
+  val tryY = rect.cy + (hw) * sin + (-hh) * cos
+  val brx = rect.cx + (hw) * cos - (hh) * sin
+  val bry = rect.cy + (hw) * sin + (hh) * cos
+  val blx = rect.cx + (-hw) * cos - (hh) * sin
+  val bly = rect.cy + (-hw) * sin + (hh) * cos
+  val (tlx2, tly2) = applyAffinePoint(region, tlx, tly)
+  val (trx2, try2) = applyAffinePoint(region, trx, tryY)
+  val (brx2, bry2) = applyAffinePoint(region, brx, bry)
+  val (blx2, bly2) = applyAffinePoint(region, blx, bly)
+  val ncx = (tlx2 + trx2 + brx2 + blx2) / 4f
+  val ncy = (tly2 + try2 + bry2 + bly2) / 4f
+  val topDx = trx2 - tlx2
+  val topDy = try2 - tly2
+  val botDx = brx2 - blx2
+  val botDy = bry2 - bly2
+  val newW =
+    (
+      kotlin.math.sqrt(topDx * topDx + topDy * topDy) +
+        kotlin.math.sqrt(botDx * botDx + botDy * botDy)
+    ) / 2f
+  val leftDx = blx2 - tlx2
+  val leftDy = bly2 - tly2
+  val rightDx = brx2 - trx2
+  val rightDy = bry2 - try2
+  val newH =
+    (
+      kotlin.math.sqrt(leftDx * leftDx + leftDy * leftDy) +
+        kotlin.math.sqrt(rightDx * rightDx + rightDy * rightDy)
+    ) / 2f
+  val topAngle = kotlin.math.atan2(topDy, topDx)
+  val botAngle = kotlin.math.atan2(botDy, botDx)
+  val newAngle = (topAngle + botAngle) / 2f
+  return OrientedRect(
+    cx = ncx,
+    cy = ncy,
+    width = newW.coerceAtLeast(1f),
+    height = newH.coerceAtLeast(1f),
+    angleRadians = newAngle,
+  )
+}
+
+private fun applyAffineToRect(
+  rect: NativeRect,
+  region: uniffi.bindings.LiveRegionMotion,
+  frameWidth: Int,
+  frameHeight: Int,
+): NativeRect {
+  val l = rect.left.toFloat()
+  val t = rect.top.toFloat()
+  val r = rect.right.toFloat()
+  val b = rect.bottom.toFloat()
+  val (x0, y0) = applyAffinePoint(region, l, t)
+  val (x1, y1) = applyAffinePoint(region, r, t)
+  val (x2, y2) = applyAffinePoint(region, r, b)
+  val (x3, y3) = applyAffinePoint(region, l, b)
+  val minX = minOf(x0, x1, x2, x3)
+  val maxX = maxOf(x0, x1, x2, x3)
+  val minY = minOf(y0, y1, y2, y3)
+  val maxY = maxOf(y0, y1, y2, y3)
+  return clampedRect(
+    left = minX.roundToInt(),
+    top = minY.roundToInt(),
+    right = maxX.roundToInt(),
+    bottom = maxY.roundToInt(),
+    frameWidth = frameWidth,
+    frameHeight = frameHeight,
+  )
+}
 
 private fun translatedRect(
   rect: NativeRect,
