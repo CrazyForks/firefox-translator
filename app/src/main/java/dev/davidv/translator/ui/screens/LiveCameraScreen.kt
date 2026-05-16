@@ -98,6 +98,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import dev.davidv.translator.CameraIntrinsicsRaw
+import dev.davidv.translator.DebugContourFrame
+import dev.davidv.translator.ImuService
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityState
 import dev.davidv.translator.LanguageMetadata
@@ -106,6 +109,7 @@ import dev.davidv.translator.LiveOcrEngine
 import dev.davidv.translator.LiveOverlayItem
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
+import dev.davidv.translator.cameraIntrinsicsFromCameraX
 import dev.davidv.translator.ui.components.LanguageSelector
 import java.io.File
 import java.util.concurrent.Executor
@@ -117,6 +121,30 @@ import android.util.Size as AndroidSize
 private const val TAG = "LiveCameraScreen"
 private val TARGET_RESOLUTION = AndroidSize(1080, 1920)
 private val ANALYZER_RESOLUTION = AndroidSize(1080, 1920)
+
+/** Phase 1 IMU smoke-test toggle. When true, locks the gyro baseline at first
+ *  composition and renders a crosshair at the projected position of the
+ *  initially-screen-center world point. If the gyro integration and intrinsics
+ *  are right, the crosshair stays glued to that world point under pure
+ *  rotation. Flip and rebuild — no UI toggle. */
+private const val DEBUG_IMU_CROSSHAIR: Boolean = true
+
+/** Debug overlay that draws the raw detector contour polygons (PaddleOCR DB
+ *  mask output) as cyan outlines, updated each detection cycle (~5 Hz).
+ *  Diagnostic: confirms whether the detector itself produces stable
+ *  contours across firings vs whether wobble is fully on the tracker side. */
+private const val DEBUG_DRAW_DETECTOR_CONTOUR: Boolean = true
+
+/** Suppress the live-overlay layer (labelled tracker boxes / translated text)
+ *  while diagnosing other overlays. Lets the cyan detector contour show
+ *  through without clutter. */
+private const val DEBUG_HIDE_TRACKER_OVERLAY: Boolean = true
+
+private data class FrameInfo(
+  val displayWidth: Int,
+  val displayHeight: Int,
+  val rotationDegrees: Int,
+)
 
 @Composable
 fun LiveCameraScreen(
@@ -321,10 +349,20 @@ private fun CameraSurface(
   val analyzerExecutor =
     remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
 
+  val imuService = remember { ImuService(context) }
+  DisposableEffect(imuService) {
+    imuService.start()
+    onDispose { imuService.stop() }
+  }
+  var cameraIntrinsics by remember { mutableStateOf<CameraIntrinsicsRaw?>(null) }
+  var latestFrameInfo by remember { mutableStateOf<FrameInfo?>(null) }
+
   val workerScope = androidx.compose.runtime.rememberCoroutineScope()
   val liveOcrEngine: LiveOcrEngine? =
-    remember(catalog) { catalog?.let { LiveOcrEngine(it, workerScope) } }
+    remember(catalog) { catalog?.let { LiveOcrEngine(it, workerScope, imuService) } }
   val liveOverlays by (liveOcrEngine?.overlays ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList()) })
+    .collectAsState()
+  val debugContours by (liveOcrEngine?.debugContours ?: remember { kotlinx.coroutines.flow.MutableStateFlow<DebugContourFrame?>(null) })
     .collectAsState()
   var previewSizePx by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
@@ -389,9 +427,15 @@ private fun CameraSurface(
           engine.releaseFrameHandle(handle)
           return@setAnalyzer
         }
+        if (DEBUG_IMU_CROSSHAIR) {
+          val dispW = if (rotation == 90 || rotation == 270) height else width
+          val dispH = if (rotation == 90 || rotation == 270) width else height
+          latestFrameInfo = FrameInfo(dispW, dispH, rotation)
+        }
+        val imuSnap = imuService.currentRotation()
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
-        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, isAutoSource, convertMs)
+        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, isAutoSource, convertMs, imuSnap)
       }
     } else {
       imageAnalysis.clearAnalyzer()
@@ -492,6 +536,8 @@ private fun CameraSurface(
           )
         camera = boundCamera
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
+        cameraIntrinsics = cameraIntrinsicsFromCameraX(boundCamera.cameraInfo)
+        liveOcrEngine?.setCameraIntrinsics(cameraIntrinsics)
       } catch (e: Exception) {
         Log.e(TAG, "Failed to bind camera", e)
       }
@@ -518,9 +564,27 @@ private fun CameraSurface(
     )
 
     LiveOverlayLayer(
-      overlays = if (liveOverlayOn) liveOverlays else emptyList(),
+      overlays = if (liveOverlayOn && !DEBUG_HIDE_TRACKER_OVERLAY) liveOverlays else emptyList(),
       previewSizePx = previewSizePx,
+      imuService = imuService,
+      intrinsics = cameraIntrinsics,
     )
+
+    if (DEBUG_IMU_CROSSHAIR) {
+      ImuCrosshairOverlay(
+        imuService = imuService,
+        intrinsics = cameraIntrinsics,
+        frameInfo = latestFrameInfo,
+        previewSizePx = previewSizePx,
+      )
+    }
+
+    if (DEBUG_DRAW_DETECTOR_CONTOUR) {
+      DebugContourOverlay(
+        frame = debugContours,
+        previewSizePx = previewSizePx,
+      )
+    }
 
     val indicatorSizeDp = 72.dp
     val indicatorRadiusPx =
@@ -756,6 +820,8 @@ private fun BottomControls(
 private fun LiveOverlayLayer(
   overlays: List<LiveOverlayItem>,
   previewSizePx: androidx.compose.ui.unit.IntSize,
+  imuService: ImuService?,
+  intrinsics: CameraIntrinsicsRaw?,
 ) {
   if (overlays.isEmpty() || previewSizePx.width == 0 || previewSizePx.height == 0) return
   val density = LocalDensity.current
@@ -795,6 +861,14 @@ private fun LiveOverlayLayer(
       val leftPx = (cxPx - widthPx / 2f).toInt()
       val topPx = (cyPx - heightPx / 2f).toInt()
       val angleDeg = item.angleRadians * 180f / kotlin.math.PI.toFloat()
+      val imuExtrap =
+        buildImuExtrap(
+          item = item,
+          intrinsics = intrinsics,
+          previewScale = scale,
+          previewOffX = offX,
+          previewOffY = offY,
+        )
       Placement(
         groupId = item.groupId,
         groupText = item.groupText,
@@ -806,9 +880,7 @@ private fun LiveOverlayLayer(
         widthDp = widthDp,
         heightDp = heightDp,
         angleDeg = angleDeg,
-        velocityXPx = item.velocityX * scale,
-        velocityYPx = item.velocityY * scale,
-        baseTimestampNs = item.baseTimestampNs,
+        imuExtrap = imuExtrap,
       )
     }
   val groupedPlacements = placements.groupBy { it.groupId }
@@ -851,16 +923,14 @@ private fun LiveOverlayLayer(
         modifier =
           Modifier
             .offset {
-              val dtSec =
-                ((renderTimeNs.longValue - p.baseTimestampNs) / 1e9f)
-                  .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
-              IntOffset(
-                (p.left + p.velocityXPx * dtSec).toInt(),
-                (p.top + p.velocityYPx * dtSec).toInt(),
-              )
+              renderTimeNs.longValue
+              renderOffset(p.left, p.top, p.imuExtrap, imuService)
             }
             .size(p.widthDp, p.heightDp)
-            .graphicsLayer { rotationZ = p.angleDeg }
+            .graphicsLayer {
+              renderTimeNs.longValue
+              rotationZ = renderAngleDeg(p.angleDeg, p.imuExtrap, imuService)
+            }
             .background(Color.Black, RoundedCornerShape(4.dp)),
       )
     }
@@ -869,13 +939,8 @@ private fun LiveOverlayLayer(
         modifier =
           Modifier
             .offset {
-              val dtSec =
-                ((renderTimeNs.longValue - block.baseTimestampNs) / 1e9f)
-                  .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
-              IntOffset(
-                (block.left + block.velocityXPx * dtSec).toInt(),
-                (block.top + block.velocityYPx * dtSec).toInt(),
-              )
+              renderTimeNs.longValue
+              renderOffset(block.left, block.top, block.imuExtrap, imuService)
             }
             .size(block.widthDp, block.heightDp)
             .background(Color.Black, RoundedCornerShape(4.dp)),
@@ -888,13 +953,8 @@ private fun LiveOverlayLayer(
       modifier =
         Modifier
           .offset {
-            val dtSec =
-              ((renderTimeNs.longValue - block.baseTimestampNs) / 1e9f)
-                .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
-            IntOffset(
-              (block.left + block.velocityXPx * dtSec).toInt(),
-              (block.top + block.velocityYPx * dtSec).toInt(),
-            )
+            renderTimeNs.longValue
+            renderOffset(block.left, block.top, block.imuExtrap, imuService)
           }
           .size(block.widthDp, block.heightDp)
           .padding(horizontal = 3.dp, vertical = 2.dp),
@@ -920,16 +980,14 @@ private fun LiveOverlayLayer(
       modifier =
         Modifier
           .offset {
-            val dtSec =
-              ((renderTimeNs.longValue - p.baseTimestampNs) / 1e9f)
-                .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
-            IntOffset(
-              (p.left + p.velocityXPx * dtSec).toInt(),
-              (p.top + p.velocityYPx * dtSec).toInt(),
-            )
+            renderTimeNs.longValue
+            renderOffset(p.left, p.top, p.imuExtrap, imuService)
           }
           .size(p.widthDp, p.heightDp)
-          .graphicsLayer { rotationZ = p.angleDeg }
+          .graphicsLayer {
+            renderTimeNs.longValue
+            rotationZ = renderAngleDeg(p.angleDeg, p.imuExtrap, imuService)
+          }
           .padding(horizontal = 2.dp),
       contentAlignment = Alignment.Center,
     ) {
@@ -947,10 +1005,284 @@ private fun LiveOverlayLayer(
   }
 }
 
-/** Cap how far forward we'll extrapolate from the last camera-frame
- *  measurement. If the engine stops publishing (background, paused frames),
- *  keeping the overlay frozen is better than running velocity into the void. */
-private const val MAX_EXTRAPOLATION_SECONDS: Float = 0.1f
+private fun buildImuExtrap(
+  item: LiveOverlayItem,
+  intrinsics: CameraIntrinsicsRaw?,
+  previewScale: Float,
+  previewOffX: Float,
+  previewOffY: Float,
+): ImuExtrapState? {
+  val base = item.baseRotation ?: return null
+  val intr = intrinsics ?: return null
+  val px = intr.pixelIntrinsics(item.frameWidth, item.frameHeight, item.rotationDegrees)
+  val rx = (item.cx - px.cx) / px.fx
+  val ry = (item.cy - px.cy) / px.fy
+  val rz = 1f
+  val invLen = 1f / kotlin.math.sqrt(rx * rx + ry * ry + rz * rz)
+  return ImuExtrapState(
+    baseRayCamX = rx * invLen,
+    baseRayCamY = ry * invLen,
+    baseRayCamZ = rz * invLen,
+    baseRotation = base,
+    fx = px.fx,
+    fy = px.fy,
+    cx = px.cx,
+    cy = px.cy,
+    previewScale = previewScale,
+    previewOffX = previewOffX,
+    previewOffY = previewOffY,
+    baseUEng = item.cx,
+    baseVEng = item.cy,
+  )
+}
+
+private fun aggregateImuExtrapForBlock(
+  placements: List<Placement>,
+  blockCenterUView: Float,
+  blockCenterVView: Float,
+): ImuExtrapState? {
+  val sample = placements.firstOrNull()?.imuExtrap ?: return null
+  val uEng = (blockCenterUView + sample.previewOffX) / sample.previewScale
+  val vEng = (blockCenterVView + sample.previewOffY) / sample.previewScale
+  val rx = (uEng - sample.cx) / sample.fx
+  val ry = (vEng - sample.cy) / sample.fy
+  val rz = 1f
+  val invLen = 1f / kotlin.math.sqrt(rx * rx + ry * ry + rz * rz)
+  return sample.copy(
+    baseRayCamX = rx * invLen,
+    baseRayCamY = ry * invLen,
+    baseRayCamZ = rz * invLen,
+    baseUEng = uEng,
+    baseVEng = vEng,
+  )
+}
+
+private fun renderOffset(
+  baseLeftPx: Int,
+  baseTopPx: Int,
+  imuExtrap: ImuExtrapState?,
+  imuService: ImuService?,
+): IntOffset {
+  val dCam = computeImuDeltaCam(imuExtrap, imuService)
+  if (dCam != null && imuExtrap != null) {
+    val bx = imuExtrap.baseRayCamX
+    val by = imuExtrap.baseRayCamY
+    val bz = imuExtrap.baseRayCamZ
+    val rx = dCam[0] * bx + dCam[1] * by + dCam[2] * bz
+    val ry = dCam[3] * bx + dCam[4] * by + dCam[5] * bz
+    val rz = dCam[6] * bx + dCam[7] * by + dCam[8] * bz
+    if (rz > 1e-3f) {
+      val uEng = imuExtrap.fx * rx / rz + imuExtrap.cx
+      val vEng = imuExtrap.fy * ry / rz + imuExtrap.cy
+      val dxView = (uEng - imuExtrap.baseUEng) * imuExtrap.previewScale
+      val dyView = (vEng - imuExtrap.baseVEng) * imuExtrap.previewScale
+      return IntOffset(
+        (baseLeftPx + dxView).toInt(),
+        (baseTopPx + dyView).toInt(),
+      )
+    }
+  }
+  return IntOffset(baseLeftPx, baseTopPx)
+}
+
+private fun renderAngleDeg(
+  baseAngleDeg: Float,
+  imuExtrap: ImuExtrapState?,
+  imuService: ImuService?,
+): Float {
+  val dCam = computeImuDeltaCam(imuExtrap, imuService) ?: return baseAngleDeg
+  return baseAngleDeg + extractRollDegrees(dCam)
+}
+
+private fun mul3x3TransposeLeft(
+  a: FloatArray,
+  b: FloatArray,
+): FloatArray {
+  val out = FloatArray(9)
+  for (i in 0..2) {
+    for (j in 0..2) {
+      var s = 0f
+      for (k in 0..2) s += a[k * 3 + i] * b[k * 3 + j]
+      out[i * 3 + j] = s
+    }
+  }
+  return out
+}
+
+/** Roll component (rotation around the camera's optical Z axis) of a 3x3
+ *  rotation matrix in camera frame, in degrees. Used to extrapolate a
+ *  rotated overlay's on-screen angle between camera-frame updates. */
+private fun extractRollDegrees(rCam: FloatArray): Float {
+  return kotlin.math.atan2(rCam[3], rCam[0]) * (180f / kotlin.math.PI.toFloat())
+}
+
+private const val RENDER_IMU_LEAD_NS: Long = 12_000_000L
+
+private fun computeImuDeltaCam(
+  imuExtrap: ImuExtrapState?,
+  imuService: ImuService?,
+): FloatArray? {
+  if (imuExtrap == null || imuService == null) return null
+  val currentRot = imuService.currentRotation(RENDER_IMU_LEAD_NS)
+  val d = mul3x3TransposeLeft(currentRot, imuExtrap.baseRotation)
+  val dCam = FloatArray(9)
+  for (i in 0..2) {
+    for (j in 0..2) {
+      val sign = (if (i == 0) 1 else -1) * (if (j == 0) 1 else -1)
+      dCam[i * 3 + j] = sign * d[i * 3 + j]
+    }
+  }
+  return dCam
+}
+
+@Composable
+private fun ImuCrosshairOverlay(
+  imuService: ImuService?,
+  intrinsics: CameraIntrinsicsRaw?,
+  frameInfo: FrameInfo?,
+  previewSizePx: androidx.compose.ui.unit.IntSize,
+) {
+  if (imuService == null || intrinsics == null || frameInfo == null) return
+  if (previewSizePx.width == 0 || previewSizePx.height == 0) return
+  val baselineRay = remember { floatArrayOf(0f, 0f, 1f) }
+  var baseRotation by remember { mutableStateOf<FloatArray?>(null) }
+  LaunchedEffect(imuService) {
+    baseRotation = imuService.currentRotation()
+  }
+  val baseRot = baseRotation ?: return
+
+  val renderTimeNs = remember { mutableLongStateOf(System.nanoTime()) }
+  LaunchedEffect(Unit) {
+    while (true) {
+      androidx.compose.runtime.withFrameNanos { ts ->
+        renderTimeNs.longValue = ts
+      }
+    }
+  }
+
+  val frameW = frameInfo.displayWidth
+  val frameH = frameInfo.displayHeight
+  val pixI = intrinsics.pixelIntrinsics(frameW, frameH, frameInfo.rotationDegrees)
+  val previewScale =
+    max(
+      previewSizePx.width.toFloat() / frameW.toFloat(),
+      previewSizePx.height.toFloat() / frameH.toFloat(),
+    )
+  val displayedW = frameW * previewScale
+  val displayedH = frameH * previewScale
+  val offX = (displayedW - previewSizePx.width) / 2f
+  val offY = (displayedH - previewSizePx.height) / 2f
+
+  val crosshairSizeDp = 28.dp
+  val density = LocalDensity.current
+  val crosshairRadiusPx = with(density) { (crosshairSizeDp / 2).toPx() }
+
+  var lastLogNs by remember { mutableLongStateOf(0L) }
+
+  Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+      modifier =
+        Modifier
+          .offset {
+            val nowNs = renderTimeNs.longValue
+            val rotDev = imuService.currentRotation(RENDER_IMU_LEAD_NS)
+            val dDev = mul3x3TransposeLeft(rotDev, baseRot)
+            val dCam = deviceToCameraSandwich(dDev)
+            val rNow = rotate(dCam, baselineRay)
+            if (nowNs - lastLogNs > 500_000_000L) {
+              lastLogNs = nowNs
+              Log.d(
+                TAG,
+                "imu rDev=[${rotDev.joinToString(",") { "%.3f".format(it) }}] " +
+                  "rayCam=[${"%.3f".format(rNow[0])},${"%.3f".format(rNow[1])},${"%.3f".format(rNow[2])}] " +
+                  "fx=${"%.1f".format(pixI.fx)} fy=${"%.1f".format(pixI.fy)} " +
+                  "frame=${frameW}x$frameH rot=${frameInfo.rotationDegrees}",
+              )
+            }
+            if (rNow[2] <= 0.01f) {
+              return@offset IntOffset(-9999, -9999)
+            }
+            val uImg = pixI.fx * rNow[0] / rNow[2] + pixI.cx
+            val vImg = pixI.fy * rNow[1] / rNow[2] + pixI.cy
+            val uView = uImg * previewScale - offX
+            val vView = vImg * previewScale - offY
+            IntOffset(
+              (uView - crosshairRadiusPx).toInt(),
+              (vView - crosshairRadiusPx).toInt(),
+            )
+          }
+          .size(crosshairSizeDp)
+          .border(2.dp, Color.Red, CircleShape),
+    )
+  }
+}
+
+/** Rotation conversion device-frame → camera-frame. Device frame: +X right,
+ *  +Y up, +Z out of screen (toward user). Camera frame (back camera, OpenCV
+ *  convention): +X right, +Y down, +Z into scene. Mapping matrix
+ *  `M = diag(1, -1, -1)`; for rotations `R_cam = M * R_dev * M` (M is its
+ *  own inverse). Valid when the phone is in natural portrait orientation
+ *  and the back camera is selected — sufficient for the Phase 1 smoke test. */
+private fun deviceToCameraSandwich(rDev: FloatArray): FloatArray {
+  // M * R * M with M = diag(1, -1, -1): flip signs on rows/columns 1 and 2.
+  val r = FloatArray(9)
+  for (i in 0..2) {
+    for (j in 0..2) {
+      val sign = (if (i == 0) 1 else -1) * (if (j == 0) 1 else -1)
+      r[i * 3 + j] = sign * rDev[i * 3 + j]
+    }
+  }
+  return r
+}
+
+@Composable
+private fun DebugContourOverlay(
+  frame: DebugContourFrame?,
+  previewSizePx: androidx.compose.ui.unit.IntSize,
+) {
+  if (frame == null) return
+  if (frame.frameWidth == 0 || frame.frameHeight == 0) return
+  if (previewSizePx.width == 0 || previewSizePx.height == 0) return
+  val scale =
+    max(
+      previewSizePx.width.toFloat() / frame.frameWidth.toFloat(),
+      previewSizePx.height.toFloat() / frame.frameHeight.toFloat(),
+    )
+  val offX = (frame.frameWidth * scale - previewSizePx.width) / 2f
+  val offY = (frame.frameHeight * scale - previewSizePx.height) / 2f
+  androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+    for (poly in frame.contoursDisplay) {
+      val n = poly.size / 2
+      if (n < 2) continue
+      val path = androidx.compose.ui.graphics.Path()
+      val x0 = poly[0] * scale - offX
+      val y0 = poly[1] * scale - offY
+      path.moveTo(x0, y0)
+      for (i in 1 until n) {
+        val x = poly[i * 2] * scale - offX
+        val y = poly[i * 2 + 1] * scale - offY
+        path.lineTo(x, y)
+      }
+      path.close()
+      drawPath(
+        path = path,
+        color = androidx.compose.ui.graphics.Color(0xFFFF00FF),
+        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f),
+      )
+    }
+  }
+}
+
+private fun rotate(
+  r: FloatArray,
+  v: FloatArray,
+): FloatArray {
+  return floatArrayOf(
+    r[0] * v[0] + r[1] * v[1] + r[2] * v[2],
+    r[3] * v[0] + r[4] * v[1] + r[5] * v[2],
+    r[6] * v[0] + r[7] * v[1] + r[8] * v[2],
+  )
+}
 
 private data class Placement(
   val groupId: String,
@@ -963,12 +1295,7 @@ private data class Placement(
   val widthDp: androidx.compose.ui.unit.Dp,
   val heightDp: androidx.compose.ui.unit.Dp,
   val angleDeg: Float,
-  /** Per-second preview-space velocity at [baseTimestampNs], so the render-
-   *  thread offset lambda can extrapolate this overlay forward at display
-   *  refresh rate (60-120Hz) between camera-frame updates (~30Hz). */
-  val velocityXPx: Float,
-  val velocityYPx: Float,
-  val baseTimestampNs: Long,
+  val imuExtrap: ImuExtrapState?,
 )
 
 private data class FittedOverlayGroup(
@@ -992,9 +1319,23 @@ private data class FittedBlock(
   val fontSize: TextUnit,
   val lineHeight: TextUnit,
   val maxLines: Int,
-  val velocityXPx: Float,
-  val velocityYPx: Float,
-  val baseTimestampNs: Long,
+  val imuExtrap: ImuExtrapState?,
+)
+
+private data class ImuExtrapState(
+  val baseRayCamX: Float,
+  val baseRayCamY: Float,
+  val baseRayCamZ: Float,
+  val baseRotation: FloatArray,
+  val fx: Float,
+  val fy: Float,
+  val cx: Float,
+  val cy: Float,
+  val previewScale: Float,
+  val previewOffX: Float,
+  val previewOffY: Float,
+  val baseUEng: Float,
+  val baseVEng: Float,
 )
 
 private enum class OverlayLayoutMode {
@@ -1320,12 +1661,9 @@ private fun fitLiveOverlayBlock(
   val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, fontPx, TextAlign.Center), contentWidthPx)
   val fittedHeightPx = max(heightPx, layout.size.height + padPx * 2f)
   val fittedTopPx = (((topPx + bottomPx) * 0.5f) - fittedHeightPx * 0.5f).coerceAtLeast(0f)
-  // Block velocity = mean of constituents. Good enough for short extrapolation
-  // windows; the block snaps to the next correct position on the next camera
-  // frame anyway.
-  val avgVx = if (placements.isEmpty()) 0f else placements.map { it.velocityXPx }.average().toFloat()
-  val avgVy = if (placements.isEmpty()) 0f else placements.map { it.velocityYPx }.average().toFloat()
-  val blockBaseTsNs = placements.firstOrNull()?.baseTimestampNs ?: 0L
+  val blockCenterUView = leftPx + widthPx * 0.5f
+  val blockCenterVView = fittedTopPx + fittedHeightPx * 0.5f
+  val blockImuExtrap = aggregateImuExtrapForBlock(placements, blockCenterUView, blockCenterVView)
   return FittedOverlayGroup(
     fontSize = fontSize,
     items = emptyList(),
@@ -1339,9 +1677,7 @@ private fun fitLiveOverlayBlock(
         fontSize = fontSize,
         lineHeight = lineHeight,
         maxLines = max(1, layout.lineCount),
-        velocityXPx = avgVx,
-        velocityYPx = avgVy,
-        baseTimestampNs = blockBaseTsNs,
+        imuExtrap = blockImuExtrap,
       ),
     stable = StableLayout(OverlayLayoutMode.Block, fontPx, max(1, layout.lineCount), geometry),
   )

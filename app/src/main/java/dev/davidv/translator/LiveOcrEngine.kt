@@ -122,6 +122,16 @@ private const val SIGNATURE_NCC_DEMOTE_THRESHOLD: Float = 0.3f
  *  camera that's ~100 ms of sustained mismatch. */
 private const val SIGNATURE_DEMOTE_STREAK = 3
 
+/** Latest detector contours expressed in *display* coords (crop offset
+ *  already applied). Each FloatArray is a flat `[x0, y0, x1, y1, ...]`
+ *  polygon. Used only by the debug-contour overlay; null when the
+ *  detector hasn't produced a result yet. */
+data class DebugContourFrame(
+  val contoursDisplay: List<FloatArray>,
+  val frameWidth: Int,
+  val frameHeight: Int,
+)
+
 data class LiveOverlayItem(
   val groupId: String,
   val cx: Float,
@@ -134,13 +144,15 @@ data class LiveOverlayItem(
   val groupText: String,
   val frameWidth: Int,
   val frameHeight: Int,
-  /** Display-space velocity at [baseTimestampNs], in pixels per second. The
-   *  render thread extrapolates `cx + vx * dt` between camera-frame updates
-   *  so the overlay paints at display refresh rate (60-120Hz) instead of
-   *  being clamped to the camera's ~30Hz update cadence. */
-  val velocityX: Float,
-  val velocityY: Float,
-  val baseTimestampNs: Long,
+  /** Analyzer rotation in degrees (0/90/180/270). Needed by the IMU-based
+   *  render-thread extrapolator to derive pixel intrinsics from the camera's
+   *  raw optical parameters. */
+  val rotationDegrees: Int = 0,
+  /** Snapshot of the IMU device-frame rotation (row-major 3x3, 9 floats)
+   *  taken when this item's motion was last updated. The render thread
+   *  projects this track's centre through the delta from this snapshot to
+   *  the latest IMU reading. */
+  val baseRotation: FloatArray? = null,
 )
 
 private enum class TrackLifecycle { Tentative, Confirmed, Dormant }
@@ -169,10 +181,6 @@ private data class TrackEntry(
   var frameWidth: Int,
   var frameHeight: Int,
   var sourceCode: String?,
-  /** Display-space velocity from the most recent motion frame, used to
-   *  extrapolate position between camera frames on the render thread. */
-  var velocityX: Float,
-  var velocityY: Float,
 ) {
   /** Grayscale signature patch sampled from the camera frame when this track
    *  first reached Confirmed (and refreshed on subsequent strong-IoU detector
@@ -212,11 +220,13 @@ private data class PendingFrame(
   val to: Language,
   val isAutoSource: Boolean,
   val convertMs: Double,
+  val imuRotationAtCapture: FloatArray?,
 )
 
 class LiveOcrEngine(
   private val catalog: LanguageCatalog,
   private val workerScope: CoroutineScope,
+  private val imuService: ImuService? = null,
 ) {
   private val mutex = Mutex()
   private val tracks: MutableList<TrackEntry> = mutableListOf()
@@ -227,33 +237,37 @@ class LiveOcrEngine(
   private var detectionId: Long = 0L
   private var lastDetectionNs: Long = 0L
 
-  /** Timestamp of the most recent motion update (System.nanoTime). Used as the
-   *  reference instant for the velocities stored on each track. */
-  private var lastMotionTimestampNs: Long = 0L
-
-  /** Per-track velocities are derived from `delta / dt` where `dt` is the
-   *  interval between motion updates. We clamp to this floor so a coincidental
-   *  short interval doesn't produce a wildly inflated velocity. */
-  private const val MIN_MOTION_DT_NS: Long = 16_000_000L
-
-  /** Above this gap we treat the next motion update as fresh (zero velocity).
-   *  Avoids overshoot when frames pause (e.g. app backgrounded) and resume. */
-  private const val MAX_MOTION_DT_NS: Long = 100_000_000L
-  private var lastCropRect: NativeRect? = null
+private var lastCropRect: NativeRect? = null
   private var activeSourceCode: String? = null
   private var activeTargetCode: String? = null
 
-  /** Latest global motion validity. While false (user moving hard, motion
-   *  estimate failed), we hide overlays: the tracks haven't moved with the
-   *  scene this frame and showing them at their stale positions is worse
-   *  than briefly blanking. */
-  private var lastGlobalMotionValid: Boolean = true
+/** Latest analyzer rotation (degrees) and IMU snapshot taken at the most
+   *  recent motion update. Attached to each published [LiveOverlayItem] so
+   *  the render-thread extrapolator can project tracks forward through IMU
+   *  delta instead of relying on per-track linear velocity. */
+  private var latestRotationDegrees: Int = 0
+  private var latestImuSnapshot: FloatArray? = null
+
+  /** IMU snapshot from the previous processed frame, used to derive the
+   *  per-region rotation prior we feed to the solver. Unlike
+   *  [latestImuSnapshot] this advances every frame (regardless of solver
+   *  success) because it's paired with [motionTracker]'s own `previous`
+   *  image, which advances unconditionally. */
+  private var previousFrameImuRotation: FloatArray? = null
+  private var cameraIntrinsics: CameraIntrinsicsRaw? = null
+
+  fun setCameraIntrinsics(intrinsics: CameraIntrinsicsRaw?) {
+    cameraIntrinsics = intrinsics
+  }
 
   /** Bumped by clear() to invalidate all in-flight rec workers wholesale. */
   private var globalGeneration: Long = 0L
 
   private val _overlays = MutableStateFlow<List<LiveOverlayItem>>(emptyList())
   val overlays: StateFlow<List<LiveOverlayItem>> = _overlays.asStateFlow()
+
+  private val _debugContours = MutableStateFlow<DebugContourFrame?>(null)
+  val debugContours: StateFlow<DebugContourFrame?> = _debugContours.asStateFlow()
 
   data class TranslationKey(val sourceCode: String, val targetCode: String, val text: String)
 
@@ -336,6 +350,7 @@ class LiveOcrEngine(
     to: Language,
     isAutoSource: Boolean,
     convertMs: Double = 0.0,
+    imuRotationAtCapture: FloatArray? = null,
   ) {
     val newFrame =
       PendingFrame(
@@ -349,6 +364,7 @@ class LiveOcrEngine(
         to,
         isAutoSource,
         convertMs,
+        imuRotationAtCapture,
       )
     val replaced = pendingFrame.getAndSet(newFrame)
     if (replaced != null) releaseFrameHandle(replaced.handle)
@@ -363,7 +379,6 @@ class LiveOcrEngine(
         pendingGroupTranslations.clear()
         lastCropRect = null
         lastDetectionNs = 0L
-        lastMotionTimestampNs = 0L
         activeSourceCode = null
         activeTargetCode = null
         globalGeneration++
@@ -425,18 +440,24 @@ class LiveOcrEngine(
 
     val trackSnapshot: List<Pair<Long, NativeRect>> =
       mutex.withLock { tracks.map { it.id to it.rect } }
+    val priors =
+      computeImuRegionPriors(
+        trackSnapshot.map { it.second },
+        previousFrameImuRotation,
+        pending.imuRotationAtCapture,
+        cameraIntrinsics,
+        displayW,
+        displayH,
+        pending.rotationDegrees,
+      )
     val motionUpdate =
       try {
-        motionTracker.updateWithRegions(handle, cropRect, trackSnapshot.map { it.second })
+        motionTracker.updateWithRegions(handle, cropRect, trackSnapshot.map { it.second }, priors)
       } catch (e: Exception) {
         Log.w(TAG, "motion tracking failed", e)
         null
       }
-    // Reset frames carry no motion (no previous image to compare against),
-    // so treat them as "valid" — they don't indicate user motion. Anything
-    // else: trust the tracker's own validity flag.
-    val motionValidThisFrame =
-      motionUpdate?.global?.let { it.valid || it.reset } ?: false
+    previousFrameImuRotation = pending.imuRotationAtCapture
 
     val nowNs = System.nanoTime()
     val currentFrame: Long
@@ -446,14 +467,15 @@ class LiveOcrEngine(
       currentFrame = frameId
       activeSourceCode = if (pending.isAutoSource) null else pending.from.code
       activeTargetCode = pending.to.code
-      lastGlobalMotionValid = motionValidThisFrame
+      latestRotationDegrees = pending.rotationDegrees
       if (cropChanged) {
         tracks.clear()
-        lastMotionTimestampNs = 0L
+        latestImuSnapshot = pending.imuRotationAtCapture
       } else {
-        applyMotionLocked(motionUpdate, trackSnapshot, displayW, displayH, nowNs, handle)
+        val motionApplied =
+          applyMotionLocked(motionUpdate, trackSnapshot, displayW, displayH, nowNs, handle)
+        if (motionApplied) latestImuSnapshot = pending.imuRotationAtCapture
       }
-      lastMotionTimestampNs = nowNs
       publishOverlaysLocked()
       val hasRenderableTrack = tracks.any { isRenderableTrack(it) }
       val hasPendingTrack = tracks.any { it.recognitionPending }
@@ -495,6 +517,22 @@ class LiveOcrEngine(
         // picks the strongest overlap first.
         data class Pairing(val detIdx: Int, val trackId: Long, val iou: Float)
         val fullBoxes = detected.map { offsetDetectedBox(it, cropLeft, cropTop) }
+        _debugContours.value =
+          DebugContourFrame(
+            contoursDisplay =
+              detected.map { det ->
+                val pts = det.contour
+                val n = pts.size / 2
+                val out = FloatArray(n * 2)
+                for (i in 0 until n) {
+                  out[i * 2] = pts[i * 2] + cropLeft
+                  out[i * 2 + 1] = pts[i * 2 + 1] + cropTop
+                }
+                out
+              },
+            frameWidth = displayW,
+            frameHeight = displayH,
+          )
         val pairings = mutableListOf<Pairing>()
         for ((detIdx, det) in fullBoxes.withIndex()) {
           for (track in tracks) {
@@ -571,8 +609,6 @@ class LiveOcrEngine(
                 frameWidth = displayW,
                 frameHeight = displayH,
                 sourceCode = if (pending.isAutoSource) null else pending.from.code,
-                velocityX = 0f,
-                velocityY = 0f,
               ),
             )
             continue
@@ -788,10 +824,7 @@ class LiveOcrEngine(
   }
 
   /** Mutex must be held. Applies per-track similarity from the regional motion
-   *  estimator when valid; falls back to the global translation otherwise.
-   *  Also computes each track's display-space velocity from the position delta
-   *  divided by the inter-motion-update interval, so the render thread can
-   *  extrapolate between camera frames. */
+   *  estimator when valid; falls back to the global translation otherwise. */
   private fun applyMotionLocked(
     update: uniffi.bindings.LiveMotionUpdate?,
     trackSnapshot: List<Pair<Long, NativeRect>>,
@@ -799,33 +832,18 @@ class LiveOcrEngine(
     frameHeight: Int,
     nowNs: Long,
     handle: FrameHandle,
-  ) {
-    if (update == null) return
+  ): Boolean {
+    if (update == null) return false
     val global = update.global
-    if (!global.valid) {
-      // Motion failed: stale velocity from a previous valid frame would mislead
-      // the render-thread extrapolator into pushing overlays toward where the
-      // scene used to be heading. Drop it.
-      for (track in tracks) {
-        track.velocityX = 0f
-        track.velocityY = 0f
-      }
-      return
-    }
+    if (!global.valid) return false
     val regionByTrackId: Map<Long, uniffi.bindings.LiveRegionMotion> =
       trackSnapshot
         .mapIndexedNotNull { idx, (id, _) ->
           val region = update.regions.getOrNull(idx) ?: return@mapIndexedNotNull null
           if (region.valid) id to region else null
         }.toMap()
-    val rawDt = if (lastMotionTimestampNs == 0L) 0L else (nowNs - lastMotionTimestampNs)
-    val dtNs = rawDt.coerceIn(MIN_MOTION_DT_NS, MAX_MOTION_DT_NS)
-    val canExtrapolate = rawDt in MIN_MOTION_DT_NS..MAX_MOTION_DT_NS
-    val invDtSec: Float = if (canExtrapolate) 1e9f / dtNs.toFloat() else 0f
 
     for (track in tracks) {
-      val prevCx = track.orientedBox.cx
-      val prevCy = track.orientedBox.cy
       val region = regionByTrackId[track.id]
       if (region != null) {
         track.orientedBox = applyAffineToOrientedRect(track.orientedBox, region)
@@ -838,10 +856,6 @@ class LiveOcrEngine(
       }
       track.frameWidth = frameWidth
       track.frameHeight = frameHeight
-      val deltaCx = track.orientedBox.cx - prevCx
-      val deltaCy = track.orientedBox.cy - prevCy
-      track.velocityX = deltaCx * invDtSec
-      track.velocityY = deltaCy * invDtSec
     }
 
     // A1: image-content sanity check. For every renderable-state track with
@@ -874,6 +888,7 @@ class LiveOcrEngine(
       val driftedSet = driftedIds.toHashSet()
       tracks.removeAll { it.id in driftedSet }
     }
+    return true
   }
 
   /** Mutex must be held. Samples a fresh grayscale patch at the track's
@@ -1058,10 +1073,8 @@ class LiveOcrEngine(
       _overlays.value = emptyList()
       return
     }
-    if (!lastGlobalMotionValid) {
-      _overlays.value = emptyList()
-      return
-    }
+    val rotationDeg = latestRotationDegrees
+    val baseRot = latestImuSnapshot
     val items = mutableListOf<LiveOverlayItem>()
     for (group in buildLiveGroupsLocked()) {
       val translated =
@@ -1084,9 +1097,8 @@ class LiveOcrEngine(
             groupText = translated,
             frameWidth = entry.frameWidth,
             frameHeight = entry.frameHeight,
-            velocityX = entry.velocityX,
-            velocityY = entry.velocityY,
-            baseTimestampNs = lastMotionTimestampNs,
+            rotationDegrees = rotationDeg,
+            baseRotation = baseRot,
           )
       }
     }
@@ -1220,6 +1232,54 @@ class LiveOcrEngine(
   }
 }
 
+private fun computeImuRegionPriors(
+  rects: List<NativeRect>,
+  previousImuRotation: FloatArray?,
+  currentImuRotation: FloatArray?,
+  intrinsics: CameraIntrinsicsRaw?,
+  displayWidth: Int,
+  displayHeight: Int,
+  rotationDegrees: Int,
+): List<uniffi.bindings.LiveRegionPrior> {
+  if (rects.isEmpty()) return emptyList()
+  if (previousImuRotation == null || currentImuRotation == null || intrinsics == null) {
+    return emptyList()
+  }
+  val px = intrinsics.pixelIntrinsics(displayWidth, displayHeight, rotationDegrees)
+  val dDev = FloatArray(9)
+  for (i in 0..2) {
+    for (j in 0..2) {
+      var s = 0f
+      for (k in 0..2) s += currentImuRotation[k * 3 + i] * previousImuRotation[k * 3 + j]
+      dDev[i * 3 + j] = s
+    }
+  }
+  val dCam = FloatArray(9)
+  for (i in 0..2) {
+    for (j in 0..2) {
+      val sign = (if (i == 0) 1 else -1) * (if (j == 0) 1 else -1)
+      dCam[i * 3 + j] = sign * dDev[i * 3 + j]
+    }
+  }
+  return rects.map { rect ->
+    val u = (rect.left.toFloat() + rect.right.toFloat()) * 0.5f
+    val v = (rect.top.toFloat() + rect.bottom.toFloat()) * 0.5f
+    val rx = (u - px.cx) / px.fx
+    val ry = (v - px.cy) / px.fy
+    val rz = 1f
+    val nx = dCam[0] * rx + dCam[1] * ry + dCam[2] * rz
+    val ny = dCam[3] * rx + dCam[4] * ry + dCam[5] * rz
+    val nz = dCam[6] * rx + dCam[7] * ry + dCam[8] * rz
+    if (nz <= 1e-3f) {
+      uniffi.bindings.LiveRegionPrior(0f, 0f)
+    } else {
+      val uPred = px.fx * nx / nz + px.cx
+      val vPred = px.fy * ny / nz + px.cy
+      uniffi.bindings.LiveRegionPrior(uPred - u, vPred - v)
+    }
+  }
+}
+
 private val WHITESPACE = Regex("\\s+")
 
 private fun normaliseForDedup(text: String): String = text.lowercase().replace(WHITESPACE, " ").trim()
@@ -1301,7 +1361,8 @@ private fun applyAffinePoint(
 ): Pair<Float, Float> {
   val nx = region.a * x + region.b * y + region.c
   val ny = region.d * x + region.e * y + region.f
-  return nx to ny
+  val w = region.g * x + region.h * y + region.i
+  return if (kotlin.math.abs(w) > 1e-6f) (nx / w) to (ny / w) else nx to ny
 }
 
 private fun applyAffineToOrientedRect(

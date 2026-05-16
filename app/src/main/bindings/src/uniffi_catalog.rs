@@ -89,6 +89,9 @@ pub struct LiveRegionMotion {
     pub d: f32,
     pub e: f32,
     pub f: f32,
+    pub g: f32,
+    pub h: f32,
+    pub i: f32,
     pub inliers: u32,
     pub matches: u32,
 }
@@ -97,6 +100,18 @@ pub struct LiveRegionMotion {
 pub struct LiveMotionUpdate {
     pub global: LiveMotionEstimate,
     pub regions: Vec<LiveRegionMotion>,
+}
+
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct LiveRegionPrior {
+    pub dx: f32,
+    pub dy: f32,
+    /// Optional pre-selected SAD sample positions in *display* coords, flat
+    /// `[x0, y0, x1, y1, ...]`. Empty means fall back to the 5x5 grid.
+    /// Used by the contour-anchor path: positions are sampled along each
+    /// track's detected contour at confirmation time and reprojected from
+    /// track-local coords each frame.
+    pub feature_positions: Vec<f32>,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -1363,16 +1378,33 @@ impl LiveMotionTracker {
     /// Like `update`, but also fits a per-track similarity for each region rect.
     /// Returned `regions` is aligned 1:1 with `track_rects`; invalid entries mean
     /// the caller should fall back to applying the `global` translation.
+    /// `track_priors_display` may be empty (use carry-over prior) or aligned 1:1
+    /// with `track_rects` (gyro-derived per-region prior translations in
+    /// display-pixel space).
     fn update_with_regions(
         &self,
         frame: Arc<FrameHandle>,
         crop: translator::Rect,
         track_rects: Vec<translator::Rect>,
+        track_priors_display: Vec<LiveRegionPrior>,
     ) -> Result<LiveMotionUpdate, CatalogError> {
         let frame_state = frame.state.lock().map_err(|_| poisoned())?;
         let mut tracker = self.state.lock().map_err(|_| CatalogError::Other {
             reason: "motion tracker mutex poisoned".to_string(),
         })?;
+        let priors_internal: Vec<(f32, f32)> = track_priors_display
+            .iter()
+            .map(|p| (p.dx, p.dy))
+            .collect();
+        let features_internal: Vec<Vec<(f32, f32)>> = track_priors_display
+            .iter()
+            .map(|p| {
+                let n = p.feature_positions.len() / 2;
+                (0..n)
+                    .map(|i| (p.feature_positions[i * 2], p.feature_positions[i * 2 + 1]))
+                    .collect()
+            })
+            .collect();
         let (estimate, regions) = tracker
             .update_with_regions(
                 &frame_state.rgba,
@@ -1382,6 +1414,8 @@ impl LiveMotionTracker {
                 crop,
                 translator::live_tracking::default_target_pixels(),
                 &track_rects,
+                &priors_internal,
+                &features_internal,
             )
             .map_err(CatalogError::from)?;
         Ok(LiveMotionUpdate {
@@ -1404,6 +1438,9 @@ impl LiveMotionTracker {
                     d: r.d,
                     e: r.e,
                     f: r.f,
+                    g: r.g,
+                    h: r.h,
+                    i: r.i,
                     inliers: r.inliers,
                     matches: r.matches,
                 })
