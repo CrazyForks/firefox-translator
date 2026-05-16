@@ -1265,6 +1265,51 @@ impl FrameHandle {
 }
 
 #[cfg(feature = "ppocr")]
+#[uniffi::export]
+impl FrameHandle {
+    /// Sample a normalized grayscale patch from the area covered by an
+    /// oriented rect (display coords). Used by live-OCR tracks to take a
+    /// content fingerprint at confirmation time and re-sample each frame to
+    /// detect drift: if the rect slides off its original content, a fresh
+    /// patch will NCC-mismatch the stored one and the track gets retired.
+    fn sample_oriented_gray_patch(
+        &self,
+        rect_cx: f32,
+        rect_cy: f32,
+        rect_width: f32,
+        rect_height: f32,
+        rect_angle_radians: f32,
+        patch_w: u32,
+        patch_h: u32,
+    ) -> Result<Vec<u8>, CatalogError> {
+        let state = self.state.lock().map_err(|_| poisoned())?;
+        translator::live_tracking::sample_oriented_gray_patch(
+            &state.rgba,
+            state.width,
+            state.height,
+            state.rotation_degrees,
+            rect_cx,
+            rect_cy,
+            rect_width,
+            rect_height,
+            rect_angle_radians,
+            patch_w,
+            patch_h,
+        )
+        .map_err(CatalogError::from)
+    }
+}
+
+/// Normalized cross-correlation in [-1, 1] between two equal-length grayscale
+/// patches. Brightness/contrast invariant. Companion to
+/// `FrameHandle::sample_oriented_gray_patch` for live-OCR drift detection.
+#[cfg(feature = "ppocr")]
+#[uniffi::export]
+pub fn ncc_gray_patches(a: Vec<u8>, b: Vec<u8>) -> f32 {
+    translator::live_tracking::ncc_gray(&a, &b)
+}
+
+#[cfg(feature = "ppocr")]
 #[derive(uniffi::Object)]
 pub struct LiveMotionTracker {
     state: std::sync::Mutex<translator::live_tracking::LiveFrameTracker>,

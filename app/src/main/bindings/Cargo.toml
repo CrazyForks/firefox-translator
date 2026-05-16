@@ -56,10 +56,11 @@ android_logger = { version = "0.14", default-features = false }
 
 # cache-buster: bump this comment after editing translator-rs to force a rebuild
 # (gradle's inputs.dir only watches bindings/src, not the path = ".." translator crate).
-# rev: 2
+# rev: 4
 
 [profile.release]
 lto = "thin"
 codegen-units = 2
 debug = false
 strip = "debuginfo"
+#

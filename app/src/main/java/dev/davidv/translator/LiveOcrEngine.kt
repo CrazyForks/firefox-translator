@@ -52,7 +52,7 @@ private const val TAG = "LiveOcrEngine"
 private const val CENTER_CROP_FRACTION = 0.8f
 
 private const val DETECTOR_TARGET_PIXELS = 450_000
-private const val DETECTOR_INTERVAL_NS: Long = 200_000_000L
+private const val DETECTOR_INTERVAL_NS: Long = 120_000_000L
 
 /** Detector observations are now corrections to stable visual tracks. Tracks
  *  associate to detections by IoU on the axis-aligned `rect` (cheap, scale-
@@ -88,6 +88,39 @@ private const val DEDUP_CENTRE_FRAC_OF_BOX_SIZE = 0.5f
 private const val REC_FREEZE_CONFIDENCE = 0.85f
 private const val REC_MAX_ATTEMPTS = 3
 private const val REC_REPLACE_EPSILON = 0.02f
+
+/** Hard cap on how long a Confirmed track can persist without ever
+ *  successfully recognising any text. Counted in primary-detection cycles
+ *  (i.e. only frames where the detector matched this track as primary).
+ *  Past this, the track is retired: it's almost certainly a dense-feature
+ *  non-text region (a remote control's button cluster, fabric texture, etc.)
+ *  that PP-OCR's detector consistently fires on but its recogniser correctly
+ *  returns empty for. ~30 cycles at the 120 ms detection cadence is ~3.6 s —
+ *  comfortably more than a real text region needs to be read under marginal
+ *  conditions (motion blur, glare, partial occlusion), but quick enough to
+ *  prune phantoms before they accumulate. */
+private const val CONFIRMED_NO_TEXT_GIVE_UP = 30
+
+/** Diagnostic mode for evaluating tracking quality in isolation. When true:
+ *  - Each confirmed track renders as its own overlay (no geometric grouping).
+ *  - Translation is bypassed; the overlay shows the recognised source text
+ *    (or `#<id>` if recognition hasn't completed yet).
+ *  - No translation requests are sent to the worker pool.
+ *  - Confirmed tracks render even with empty `sourceText`, so you can see
+ *    where the tracker has placed boxes that haven't recognised yet.
+ *  Flip and rebuild (no UI toggle). */
+private const val DEBUG_TRACKER_VIEW: Boolean = true
+
+private const val SIGNATURE_PATCH_W: UInt = 24u
+private const val SIGNATURE_PATCH_H: UInt = 8u
+private const val SIGNATURE_NCC_DEMOTE_THRESHOLD: Float = 0.3f
+
+/** Drift demotion requires this many consecutive frames below the NCC
+ *  threshold before retiring the track. A single low-NCC frame is usually
+ *  motion blur, partial occlusion, or sub-pixel sampling jitter — not real
+ *  content change — so we wait for the symptom to persist. With a ~30 Hz
+ *  camera that's ~100 ms of sustained mismatch. */
+private const val SIGNATURE_DEMOTE_STREAK = 3
 
 data class LiveOverlayItem(
   val groupId: String,
@@ -140,7 +173,22 @@ private data class TrackEntry(
    *  extrapolate position between camera frames on the render thread. */
   var velocityX: Float,
   var velocityY: Float,
-)
+) {
+  /** Grayscale signature patch sampled from the camera frame when this track
+   *  first reached Confirmed (and refreshed on subsequent strong-IoU detector
+   *  corrections). Each motion frame the engine re-samples a fresh patch at
+   *  the post-motion rect and NCCs it against this; sustained low correlation
+   *  demotes the track to Dormant. Null until first confirmation. Declared in
+   *  the class body (not the data-class constructor) so ByteArray reference-
+   *  equality doesn't infect TrackEntry's auto-generated equals/hashCode. */
+  var signature: ByteArray? = null
+
+  /** Consecutive motion frames where the signature NCC fell below threshold.
+   *  Reset on any frame at or above the threshold. Demotion fires only when
+   *  this streak reaches [SIGNATURE_DEMOTE_STREAK], so a single blurry frame
+   *  doesn't kill a healthy track. */
+  var signatureMissStreak: Int = 0
+}
 
 private data class LiveRenderGroup(
   val id: String,
@@ -403,7 +451,7 @@ class LiveOcrEngine(
         tracks.clear()
         lastMotionTimestampNs = 0L
       } else {
-        applyMotionLocked(motionUpdate, trackSnapshot, displayW, displayH, nowNs)
+        applyMotionLocked(motionUpdate, trackSnapshot, displayW, displayH, nowNs, handle)
       }
       lastMotionTimestampNs = nowNs
       publishOverlaysLocked()
@@ -556,6 +604,35 @@ class LiveOcrEngine(
           if (iou >= IOU_GEOMETRY_THRESHOLD) {
             correctTrackGeometry(track, det, correctionAlpha, displayW, displayH)
           }
+          // Capture or refresh the content signature whenever the track is
+          // confirmed and we have detector ground truth to anchor against:
+          //   - first time the track reaches Confirmed (signature is null)
+          //   - any subsequent strong-IoU detector correction (rect is now
+          //     re-grounded on the detector's box, so a fresh sample is the
+          //     best baseline for drift detection going forward).
+          // We intentionally don't refresh on weak (co-match) observations —
+          // that would slowly drag the baseline along with any drift.
+          if (
+            track.lifecycle == TrackLifecycle.Confirmed &&
+            (track.signature == null || iou >= IOU_GEOMETRY_THRESHOLD)
+          ) {
+            sampleTrackSignatureLocked(track, handle)
+            // Fresh ground-truth correction → previous low-NCC frames are
+            // obsolete (we just re-anchored to the detector's box).
+            track.signatureMissStreak = 0
+          }
+          // Strong-IoU detector match means "yes, there's content here" —
+          // reset the recognition-attempt counter for tracks that haven't
+          // landed any text yet, so we keep retrying as conditions change
+          // (focus shift, lighting, user steadying the phone). Tracks that
+          // already have recognised text aren't affected: REC_FREEZE_CONFIDENCE
+          // keeps them from re-recognising once they're confidently read.
+          if (iou >= IOU_GEOMETRY_THRESHOLD &&
+            track.sourceText.isNullOrEmpty() &&
+            track.recognitionAttempts >= REC_MAX_ATTEMPTS
+          ) {
+            track.recognitionAttempts = 0
+          }
           // Schedule recognition only for tracks the user will actually see.
           if (
             track.lifecycle != TrackLifecycle.Tentative &&
@@ -589,6 +666,15 @@ class LiveOcrEngine(
             TrackLifecycle.Confirmed -> {
               if (track.missedDetections >= CONFIRMED_TO_DORMANT_MISSES) {
                 track.lifecycle = TrackLifecycle.Dormant
+              } else if (
+                track.confirmDetections >= CONFIRMED_NO_TEXT_GIVE_UP &&
+                track.sourceText.isNullOrEmpty()
+              ) {
+                Log.i(
+                  TAG,
+                  "give-up retire: track #${track.id} no text after ${track.confirmDetections} confirms",
+                )
+                toRemove.add(track.id)
               }
             }
             TrackLifecycle.Dormant -> {
@@ -712,6 +798,7 @@ class LiveOcrEngine(
     frameWidth: Int,
     frameHeight: Int,
     nowNs: Long,
+    handle: FrameHandle,
   ) {
     if (update == null) return
     val global = update.global
@@ -755,6 +842,87 @@ class LiveOcrEngine(
       val deltaCy = track.orientedBox.cy - prevCy
       track.velocityX = deltaCx * invDtSec
       track.velocityY = deltaCy * invDtSec
+    }
+
+    // A1: image-content sanity check. For every renderable-state track with
+    // a stored signature, re-sample a fresh patch at the post-motion rect
+    // and NCC it against the stored one. Sustained low correlation across
+    // [SIGNATURE_DEMOTE_STREAK] consecutive frames means the rect has slid
+    // off its original content (the "lamppost case"). On drift confirmed,
+    // remove the track outright — the rect no longer overlaps the original
+    // content, so there's nothing for the lifecycle to recover. A fresh
+    // Tentative will spawn naturally if the original text is still in view.
+    // A single low frame is usually motion blur — we only act when the
+    // symptom persists. Tentatives have no signature yet (sampled at
+    // confirmation); they're skipped.
+    val driftedIds = mutableListOf<Long>()
+    for (track in tracks) {
+      if (track.lifecycle == TrackLifecycle.Tentative) continue
+      val stored = track.signature ?: continue
+      val ncc = computeSignatureNcc(track, stored, handle) ?: continue
+      if (ncc < SIGNATURE_NCC_DEMOTE_THRESHOLD) {
+        track.signatureMissStreak += 1
+        if (track.signatureMissStreak >= SIGNATURE_DEMOTE_STREAK) {
+          Log.i(TAG, "drift retire: track #${track.id} ncc=$ncc streak=${track.signatureMissStreak}")
+          driftedIds.add(track.id)
+        }
+      } else {
+        track.signatureMissStreak = 0
+      }
+    }
+    if (driftedIds.isNotEmpty()) {
+      val driftedSet = driftedIds.toHashSet()
+      tracks.removeAll { it.id in driftedSet }
+    }
+  }
+
+  /** Mutex must be held. Samples a fresh grayscale patch at the track's
+   *  current oriented rect and returns the NCC against `stored`. Returns
+   *  null on sampling failure (caller should skip the demote check that
+   *  frame rather than treat it as drift). */
+  private fun computeSignatureNcc(
+    track: TrackEntry,
+    stored: ByteArray,
+    handle: FrameHandle,
+  ): Float? {
+    val fresh =
+      try {
+        handle.sampleOrientedGrayPatch(
+          track.orientedBox.cx,
+          track.orientedBox.cy,
+          track.orientedBox.width,
+          track.orientedBox.height,
+          track.orientedBox.angleRadians,
+          SIGNATURE_PATCH_W,
+          SIGNATURE_PATCH_H,
+        )
+      } catch (e: Exception) {
+        Log.w(TAG, "signature re-sample failed for track ${track.id}", e)
+        return null
+      }
+    return uniffi.bindings.nccGrayPatches(stored, fresh)
+  }
+
+  /** Mutex must be held. Samples a fresh signature for `track` from `handle`
+   *  and stores it on the track. Called at first confirmation and on
+   *  subsequent strong-IoU detector corrections. */
+  private fun sampleTrackSignatureLocked(
+    track: TrackEntry,
+    handle: FrameHandle,
+  ) {
+    try {
+      track.signature =
+        handle.sampleOrientedGrayPatch(
+          track.orientedBox.cx,
+          track.orientedBox.cy,
+          track.orientedBox.width,
+          track.orientedBox.height,
+          track.orientedBox.angleRadians,
+          SIGNATURE_PATCH_W,
+          SIGNATURE_PATCH_H,
+        )
+    } catch (e: Exception) {
+      Log.w(TAG, "signature sample failed for track ${track.id}", e)
     }
   }
 
@@ -896,7 +1064,12 @@ class LiveOcrEngine(
     }
     val items = mutableListOf<LiveOverlayItem>()
     for (group in buildLiveGroupsLocked()) {
-      val translated = translationCache[TranslationKey(group.sourceCode, toCode, group.sourceText)] ?: continue
+      val translated =
+        if (DEBUG_TRACKER_VIEW) {
+          group.sourceText
+        } else {
+          translationCache[TranslationKey(group.sourceCode, toCode, group.sourceText)] ?: continue
+        }
       for (entry in group.tracks) {
         items +=
           LiveOverlayItem(
@@ -924,6 +1097,21 @@ class LiveOcrEngine(
   private fun buildLiveGroupsLocked(): List<LiveRenderGroup> {
     val renderable = tracks.filter { isRenderableTrack(it) }
     if (renderable.isEmpty()) return emptyList()
+    if (DEBUG_TRACKER_VIEW) {
+      // Skip the geometric grouper and the FFI call: each track is its own
+      // group. Label is the source text if recognised, otherwise `#<id>`.
+      return renderable.map { entry ->
+        val label =
+          entry.sourceText?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "#${entry.id}"
+        LiveRenderGroup(
+          id = entry.id.toString(),
+          tracks = listOf(entry),
+          sourceText = label,
+          sourceCode = entry.sourceCode ?: "?",
+        )
+      }
+    }
     val byId = renderable.associateBy { it.id }
     val inputs =
       renderable.map { entry ->
@@ -973,6 +1161,7 @@ class LiveOcrEngine(
 
   /** Mutex must be held. */
   private fun collectMissingGroupTranslationsLocked(to: Language): List<GroupTranslationRequest> {
+    if (DEBUG_TRACKER_VIEW) return emptyList()
     val requests = mutableListOf<GroupTranslationRequest>()
     for (group in buildLiveGroupsLocked()) {
       val from = catalog.languageByCode(group.sourceCode) ?: continue
@@ -1036,7 +1225,15 @@ private val WHITESPACE = Regex("\\s+")
 private fun normaliseForDedup(text: String): String = text.lowercase().replace(WHITESPACE, " ").trim()
 
 private fun isRenderableTrack(track: TrackEntry): Boolean {
-  if (track.lifecycle != TrackLifecycle.Confirmed) return false
+  // Both Confirmed and Dormant render: Dormant is "detector briefly stopped
+  // seeing this content but motion tracking is still placing it correctly,"
+  // not "track is dying." Without rendering Dormant the overlay flickers
+  // on/off at the detection edge — Confirmed for two cycles, miss → Dormant
+  // (invisible), re-match → Confirmed again. With Dormant rendered the
+  // motion-extrapolated position carries the overlay across the gap, and the
+  // dormant-forget timeout still prunes tracks the detector has truly lost.
+  if (track.lifecycle == TrackLifecycle.Tentative) return false
+  if (DEBUG_TRACKER_VIEW) return true
   val source = track.sourceText.orEmpty().trim()
   return source.isNotBlank()
 }
