@@ -1,10 +1,10 @@
 {
   "formatVersion": 3,
-  "generatedAt": 1778878692,
+  "generatedAt": 1778931393,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1778878692,
+    "languageIndexUpdatedAt": 1778931393,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -10452,16 +10452,16 @@
       "role": "detector",
       "files": [
         {
-          "name": "PP-OCRv5_mobile_det_fp16.mnn",
-          "sizeBytes": 2439100,
-          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_det_fp16.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_det_fp16.mnn"
+          "name": "PP-OCRv5_mobile_det_int8.mnn",
+          "sizeBytes": 1324660,
+          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_det_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_det_int8.mnn"
         },
         {
-          "name": "PULC.mnn",
+          "name": "PULC_int8.mnn",
           "sizeBytes": 1799836,
-          "installPath": "ppocr/PP-OCRv5/PULC.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PULC.mnn"
+          "installPath": "ppocr/PP-OCRv5/PULC_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PULC_int8.mnn"
         }
       ],
       "dependsOn": []
@@ -10473,10 +10473,10 @@
       "script": "arabic",
       "files": [
         {
-          "name": "arabic_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 4043724,
-          "installPath": "ppocr/PP-OCRv5/arabic_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/arabic_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "arabic_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2178136,
+          "installPath": "ppocr/PP-OCRv5/arabic_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/arabic_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "arabic_PP-OCRv5_keys.txt",
@@ -10497,10 +10497,10 @@
       "script": "cyrillic",
       "files": [
         {
-          "name": "cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 4068856,
-          "installPath": "ppocr/PP-OCRv5/cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/cyrillic_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "cyrillic_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2191732,
+          "installPath": "ppocr/PP-OCRv5/cyrillic_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/cyrillic_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "cyrillic_PP-OCRv5_keys.txt",
@@ -10521,10 +10521,10 @@
       "script": "devanagari",
       "files": [
         {
-          "name": "devanagari_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 4000048,
-          "installPath": "ppocr/PP-OCRv5/devanagari_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/devanagari_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "devanagari_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2154508,
+          "installPath": "ppocr/PP-OCRv5/devanagari_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/devanagari_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "devanagari_PP-OCRv5_keys.txt",
@@ -10545,10 +10545,10 @@
       "script": "el",
       "files": [
         {
-          "name": "el_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 3947832,
-          "installPath": "ppocr/PP-OCRv5/el_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/el_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "el_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2126260,
+          "installPath": "ppocr/PP-OCRv5/el_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/el_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "el_PP-OCRv5_keys.txt",
@@ -10569,10 +10569,10 @@
       "script": "eslav",
       "files": [
         {
-          "name": "eslav_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 3987604,
-          "installPath": "ppocr/PP-OCRv5/eslav_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/eslav_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "eslav_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2147776,
+          "installPath": "ppocr/PP-OCRv5/eslav_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/eslav_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "eslav_PP-OCRv5_keys.txt",
@@ -10593,10 +10593,10 @@
       "script": "korean",
       "files": [
         {
-          "name": "korean_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 6776036,
-          "installPath": "ppocr/PP-OCRv5/korean_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/korean_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "korean_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 3656272,
+          "installPath": "ppocr/PP-OCRv5/korean_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/korean_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "korean_PP-OCRv5_keys.txt",
@@ -10617,10 +10617,10 @@
       "script": "latin",
       "files": [
         {
-          "name": "latin_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 4065440,
-          "installPath": "ppocr/PP-OCRv5/latin_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/latin_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "latin_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2189884,
+          "installPath": "ppocr/PP-OCRv5/latin_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/latin_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "latin_PP-OCRv5_keys.txt",
@@ -10640,10 +10640,10 @@
       "script": "ta",
       "files": [
         {
-          "name": "ta_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 3986628,
-          "installPath": "ppocr/PP-OCRv5/ta_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/ta_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "ta_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2147248,
+          "installPath": "ppocr/PP-OCRv5/ta_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/ta_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "ta_PP-OCRv5_keys.txt",
@@ -10664,10 +10664,10 @@
       "script": "te",
       "files": [
         {
-          "name": "te_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 3993216,
-          "installPath": "ppocr/PP-OCRv5/te_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/te_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "te_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2150812,
+          "installPath": "ppocr/PP-OCRv5/te_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/te_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "te_PP-OCRv5_keys.txt",
@@ -10688,10 +10688,10 @@
       "script": "th",
       "files": [
         {
-          "name": "th_PP-OCRv5_mobile_rec_infer.mnn",
-          "sizeBytes": 3989312,
-          "installPath": "ppocr/PP-OCRv5/th_PP-OCRv5_mobile_rec_infer.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/th_PP-OCRv5_mobile_rec_infer.mnn"
+          "name": "th_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "sizeBytes": 2148700,
+          "installPath": "ppocr/PP-OCRv5/th_PP-OCRv5_mobile_rec_infer_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/th_PP-OCRv5_mobile_rec_infer_int8.mnn"
         },
         {
           "name": "th_PP-OCRv5_keys.txt",
@@ -10712,10 +10712,10 @@
       "script": "cj",
       "files": [
         {
-          "name": "PP-OCRv5_mobile_rec_fp16.mnn",
-          "sizeBytes": 8371960,
-          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_rec_fp16.mnn",
-          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_rec_fp16.mnn"
+          "name": "PP-OCRv5_mobile_rec_int8.mnn",
+          "sizeBytes": 4506088,
+          "installPath": "ppocr/PP-OCRv5/PP-OCRv5_mobile_rec_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/PP-OCRv5_mobile_rec_int8.mnn"
         },
         {
           "name": "cj_PP-OCRv5_keys.txt",

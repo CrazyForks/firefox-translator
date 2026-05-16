@@ -16,22 +16,22 @@ PPOCR_BUCKET_BASE = "ocr/1/PP-OCRv5"
 PPOCR_INSTALL_BASE = "ppocr/PP-OCRv5"
 PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 
-PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det_fp16.mnn"
-PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC.mnn"
+PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det_int8.mnn"
+PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
 
 # Recognizer model filename per script slug.
 PPOCR_RECOGNIZER_FILENAMES = {
-    "arabic": "arabic_PP-OCRv5_mobile_rec_infer.mnn",
-    "cyrillic": "cyrillic_PP-OCRv5_mobile_rec_infer.mnn",
-    "devanagari": "devanagari_PP-OCRv5_mobile_rec_infer.mnn",
-    "el": "el_PP-OCRv5_mobile_rec_infer.mnn",
-    "eslav": "eslav_PP-OCRv5_mobile_rec_infer.mnn",
-    "korean": "korean_PP-OCRv5_mobile_rec_infer.mnn",
-    "latin": "latin_PP-OCRv5_mobile_rec_infer.mnn",
-    "ta": "ta_PP-OCRv5_mobile_rec_infer.mnn",
-    "te": "te_PP-OCRv5_mobile_rec_infer.mnn",
-    "th": "th_PP-OCRv5_mobile_rec_infer.mnn",
-    "cj": "PP-OCRv5_mobile_rec_fp16.mnn",
+    "arabic": "arabic_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "cyrillic": "cyrillic_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "devanagari": "devanagari_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "el": "el_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "eslav": "eslav_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "korean": "korean_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "latin": "latin_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "ta": "ta_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "te": "te_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "th": "th_PP-OCRv5_mobile_rec_infer_int8.mnn",
+    "cj": "PP-OCRv5_mobile_rec_int8.mnn",
 }
 
 # Language codes (catalog keys) served by each PPOCR script.
