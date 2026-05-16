@@ -68,6 +68,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -760,6 +761,18 @@ private fun LiveOverlayLayer(
   val density = LocalDensity.current
   val textMeasurer = rememberTextMeasurer()
   val stableLayouts = remember { mutableStateMapOf<String, StableLayout>() }
+  // Display-refresh-rate ticker. Read inside `offset { ... }` lambdas so each
+  // overlay's position is re-evaluated during the layout phase on every frame
+  // (60-120Hz) — Compose runs the offset lambda when its state reads change,
+  // without retriggering composition or text-fitting work.
+  val renderTimeNs = remember { mutableLongStateOf(System.nanoTime()) }
+  LaunchedEffect(Unit) {
+    while (true) {
+      androidx.compose.runtime.withFrameNanos { ts ->
+        renderTimeNs.longValue = ts
+      }
+    }
+  }
   val placements =
     overlays.map { item ->
       // FILL_CENTER scale from full-frame pixels to PreviewView pixels.
@@ -793,6 +806,9 @@ private fun LiveOverlayLayer(
         widthDp = widthDp,
         heightDp = heightDp,
         angleDeg = angleDeg,
+        velocityXPx = item.velocityX * scale,
+        velocityYPx = item.velocityY * scale,
+        baseTimestampNs = item.baseTimestampNs,
       )
     }
   val groupedPlacements = placements.groupBy { it.groupId }
@@ -834,7 +850,15 @@ private fun LiveOverlayLayer(
       Box(
         modifier =
           Modifier
-            .offset { IntOffset(p.left, p.top) }
+            .offset {
+              val dtSec =
+                ((renderTimeNs.longValue - p.baseTimestampNs) / 1e9f)
+                  .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
+              IntOffset(
+                (p.left + p.velocityXPx * dtSec).toInt(),
+                (p.top + p.velocityYPx * dtSec).toInt(),
+              )
+            }
             .size(p.widthDp, p.heightDp)
             .graphicsLayer { rotationZ = p.angleDeg }
             .background(Color.Black, RoundedCornerShape(4.dp)),
@@ -844,7 +868,15 @@ private fun LiveOverlayLayer(
       Box(
         modifier =
           Modifier
-            .offset { IntOffset(block.left, block.top) }
+            .offset {
+              val dtSec =
+                ((renderTimeNs.longValue - block.baseTimestampNs) / 1e9f)
+                  .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
+              IntOffset(
+                (block.left + block.velocityXPx * dtSec).toInt(),
+                (block.top + block.velocityYPx * dtSec).toInt(),
+              )
+            }
             .size(block.widthDp, block.heightDp)
             .background(Color.Black, RoundedCornerShape(4.dp)),
       )
@@ -855,7 +887,15 @@ private fun LiveOverlayLayer(
     Box(
       modifier =
         Modifier
-          .offset { IntOffset(block.left, block.top) }
+          .offset {
+            val dtSec =
+              ((renderTimeNs.longValue - block.baseTimestampNs) / 1e9f)
+                .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
+            IntOffset(
+              (block.left + block.velocityXPx * dtSec).toInt(),
+              (block.top + block.velocityYPx * dtSec).toInt(),
+            )
+          }
           .size(block.widthDp, block.heightDp)
           .padding(horizontal = 3.dp, vertical = 2.dp),
       contentAlignment = Alignment.Center,
@@ -879,7 +919,15 @@ private fun LiveOverlayLayer(
     Box(
       modifier =
         Modifier
-          .offset { IntOffset(p.left, p.top) }
+          .offset {
+            val dtSec =
+              ((renderTimeNs.longValue - p.baseTimestampNs) / 1e9f)
+                .coerceIn(0f, MAX_EXTRAPOLATION_SECONDS)
+            IntOffset(
+              (p.left + p.velocityXPx * dtSec).toInt(),
+              (p.top + p.velocityYPx * dtSec).toInt(),
+            )
+          }
           .size(p.widthDp, p.heightDp)
           .graphicsLayer { rotationZ = p.angleDeg }
           .padding(horizontal = 2.dp),
@@ -899,6 +947,11 @@ private fun LiveOverlayLayer(
   }
 }
 
+/** Cap how far forward we'll extrapolate from the last camera-frame
+ *  measurement. If the engine stops publishing (background, paused frames),
+ *  keeping the overlay frozen is better than running velocity into the void. */
+private const val MAX_EXTRAPOLATION_SECONDS: Float = 0.1f
+
 private data class Placement(
   val groupId: String,
   val groupText: String,
@@ -910,6 +963,12 @@ private data class Placement(
   val widthDp: androidx.compose.ui.unit.Dp,
   val heightDp: androidx.compose.ui.unit.Dp,
   val angleDeg: Float,
+  /** Per-second preview-space velocity at [baseTimestampNs], so the render-
+   *  thread offset lambda can extrapolate this overlay forward at display
+   *  refresh rate (60-120Hz) between camera-frame updates (~30Hz). */
+  val velocityXPx: Float,
+  val velocityYPx: Float,
+  val baseTimestampNs: Long,
 )
 
 private data class FittedOverlayGroup(
@@ -933,6 +992,9 @@ private data class FittedBlock(
   val fontSize: TextUnit,
   val lineHeight: TextUnit,
   val maxLines: Int,
+  val velocityXPx: Float,
+  val velocityYPx: Float,
+  val baseTimestampNs: Long,
 )
 
 private enum class OverlayLayoutMode {
@@ -1258,6 +1320,12 @@ private fun fitLiveOverlayBlock(
   val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, fontPx, TextAlign.Center), contentWidthPx)
   val fittedHeightPx = max(heightPx, layout.size.height + padPx * 2f)
   val fittedTopPx = (((topPx + bottomPx) * 0.5f) - fittedHeightPx * 0.5f).coerceAtLeast(0f)
+  // Block velocity = mean of constituents. Good enough for short extrapolation
+  // windows; the block snaps to the next correct position on the next camera
+  // frame anyway.
+  val avgVx = if (placements.isEmpty()) 0f else placements.map { it.velocityXPx }.average().toFloat()
+  val avgVy = if (placements.isEmpty()) 0f else placements.map { it.velocityYPx }.average().toFloat()
+  val blockBaseTsNs = placements.firstOrNull()?.baseTimestampNs ?: 0L
   return FittedOverlayGroup(
     fontSize = fontSize,
     items = emptyList(),
@@ -1271,6 +1339,9 @@ private fun fitLiveOverlayBlock(
         fontSize = fontSize,
         lineHeight = lineHeight,
         maxLines = max(1, layout.lineCount),
+        velocityXPx = avgVx,
+        velocityYPx = avgVy,
+        baseTimestampNs = blockBaseTsNs,
       ),
     stable = StableLayout(OverlayLayoutMode.Block, fontPx, max(1, layout.lineCount), geometry),
   )

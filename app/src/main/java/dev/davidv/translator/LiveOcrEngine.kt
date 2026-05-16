@@ -54,16 +54,34 @@ private const val CENTER_CROP_FRACTION = 0.8f
 private const val DETECTOR_TARGET_PIXELS = 450_000
 private const val DETECTOR_INTERVAL_NS: Long = 200_000_000L
 
-/** Detector observations are now corrections to stable visual tracks. Matching
- *  tolerances are deliberately looser than the old cache because frame-to-frame
- *  tracking predicts where the text should be before the detector result lands. */
-private const val POS_TOL_FRAC = 0.12f
-private const val SIZE_TOL_FRAC = 0.25f
-private const val ANGLE_TOL_RAD = 0.22f
+/** Detector observations are now corrections to stable visual tracks. Tracks
+ *  associate to detections by IoU on the axis-aligned `rect` (cheap, scale-
+ *  invariant, and naturally permissive for the split/merge cases we care
+ *  about). A weaker IoU still confirms a track (it survives) but won't refine
+ *  its geometry, so a detector that briefly splits one line into two won't
+ *  shrink the surviving track to half its true size. */
+private const val IOU_MATCH_THRESHOLD = 0.3f
+private const val IOU_GEOMETRY_THRESHOLD = 0.6f
+
+/** When a detection has no IoU-matching track but sits mostly inside some
+ *  existing visible track (e.g. detector returned just "Maya" inside a track
+ *  that already covers "Maya Einde de stroom"), suppress the new tentative
+ *  and credit the containing track with a co-match. */
+private const val CONTAINMENT_SUPPRESS_RATIO = 0.7f
 private const val DETECTOR_CORRECTION_ALPHA = 0.22f
 private const val DETECTOR_CORRECTION_ALPHA_UNTRACKED = 0.45f
-private const val MAX_DETECTOR_MISSES = 2L
-private const val MAX_UNTRACKED_FRAMES = 4L
+
+/** Lifecycle controls. A new detection spawns a tentative track, invisible to
+ *  the renderer; only after [TENTATIVE_CONFIRM_HITS] confirmations within
+ *  [TENTATIVE_CONFIRM_WINDOW] detection cycles does it graduate to confirmed
+ *  and start recognising + rendering. Confirmed tracks tolerate up to
+ *  [CONFIRMED_TO_DORMANT_MISSES] missed cycles before going dormant (still
+ *  rendered, motion-extrapolated, available for re-match), and survive a
+ *  further [DORMANT_FORGET_MISSES] before being forgotten. */
+private const val TENTATIVE_CONFIRM_HITS = 2
+private const val TENTATIVE_CONFIRM_WINDOW = 4L
+private const val CONFIRMED_TO_DORMANT_MISSES = 2
+private const val DORMANT_FORGET_MISSES = 3
 
 private const val DEDUP_CENTRE_FRAC_OF_BOX_SIZE = 0.5f
 
@@ -83,10 +101,20 @@ data class LiveOverlayItem(
   val groupText: String,
   val frameWidth: Int,
   val frameHeight: Int,
+  /** Display-space velocity at [baseTimestampNs], in pixels per second. The
+   *  render thread extrapolates `cx + vx * dt` between camera-frame updates
+   *  so the overlay paints at display refresh rate (60-120Hz) instead of
+   *  being clamped to the camera's ~30Hz update cadence. */
+  val velocityX: Float,
+  val velocityY: Float,
+  val baseTimestampNs: Long,
 )
+
+private enum class TrackLifecycle { Tentative, Confirmed, Dormant }
 
 private data class TrackEntry(
   val id: Long,
+  var lifecycle: TrackLifecycle,
   var rect: NativeRect,
   var orientedBox: OrientedRect,
   var tightBox: OrientedRect,
@@ -96,11 +124,22 @@ private data class TrackEntry(
   var detectorScore: Float,
   var recognitionPending: Boolean,
   var detectorHits: Int,
+  /** Number of times this track has been primary-matched by a detection. */
+  var confirmDetections: Int,
+  /** detectionId at which this track was created (used to bound the
+   *  tentative-confirmation window). */
+  var firstSeenDetection: Long,
   var lastVisualFrame: Long,
   var lastMatchedDetection: Long,
+  /** Detection cycles since the last primary or co-match. Reset on match. */
+  var missedDetections: Int,
   var frameWidth: Int,
   var frameHeight: Int,
   var sourceCode: String?,
+  /** Display-space velocity from the most recent motion frame, used to
+   *  extrapolate position between camera frames on the render thread. */
+  var velocityX: Float,
+  var velocityY: Float,
 )
 
 private data class LiveRenderGroup(
@@ -139,9 +178,28 @@ class LiveOcrEngine(
   private var frameId: Long = 0L
   private var detectionId: Long = 0L
   private var lastDetectionNs: Long = 0L
+
+  /** Timestamp of the most recent motion update (System.nanoTime). Used as the
+   *  reference instant for the velocities stored on each track. */
+  private var lastMotionTimestampNs: Long = 0L
+
+  /** Per-track velocities are derived from `delta / dt` where `dt` is the
+   *  interval between motion updates. We clamp to this floor so a coincidental
+   *  short interval doesn't produce a wildly inflated velocity. */
+  private const val MIN_MOTION_DT_NS: Long = 16_000_000L
+
+  /** Above this gap we treat the next motion update as fresh (zero velocity).
+   *  Avoids overshoot when frames pause (e.g. app backgrounded) and resume. */
+  private const val MAX_MOTION_DT_NS: Long = 100_000_000L
   private var lastCropRect: NativeRect? = null
   private var activeSourceCode: String? = null
   private var activeTargetCode: String? = null
+
+  /** Latest global motion validity. While false (user moving hard, motion
+   *  estimate failed), we hide overlays: the tracks haven't moved with the
+   *  scene this frame and showing them at their stale positions is worse
+   *  than briefly blanking. */
+  private var lastGlobalMotionValid: Boolean = true
 
   /** Bumped by clear() to invalidate all in-flight rec workers wholesale. */
   private var globalGeneration: Long = 0L
@@ -257,6 +315,7 @@ class LiveOcrEngine(
         pendingGroupTranslations.clear()
         lastCropRect = null
         lastDetectionNs = 0L
+        lastMotionTimestampNs = 0L
         activeSourceCode = null
         activeTargetCode = null
         globalGeneration++
@@ -325,6 +384,11 @@ class LiveOcrEngine(
         Log.w(TAG, "motion tracking failed", e)
         null
       }
+    // Reset frames carry no motion (no previous image to compare against),
+    // so treat them as "valid" — they don't indicate user motion. Anything
+    // else: trust the tracker's own validity flag.
+    val motionValidThisFrame =
+      motionUpdate?.global?.let { it.valid || it.reset } ?: false
 
     val nowNs = System.nanoTime()
     val currentFrame: Long
@@ -334,12 +398,14 @@ class LiveOcrEngine(
       currentFrame = frameId
       activeSourceCode = if (pending.isAutoSource) null else pending.from.code
       activeTargetCode = pending.to.code
+      lastGlobalMotionValid = motionValidThisFrame
       if (cropChanged) {
         tracks.clear()
+        lastMotionTimestampNs = 0L
       } else {
-        applyMotionLocked(motionUpdate, trackSnapshot, displayW, displayH)
+        applyMotionLocked(motionUpdate, trackSnapshot, displayW, displayH, nowNs)
       }
-      pruneTracksLocked(currentFrame)
+      lastMotionTimestampNs = nowNs
       publishOverlaysLocked()
       val hasRenderableTrack = tracks.any { isRenderableTrack(it) }
       val hasPendingTrack = tracks.any { it.recognitionPending }
@@ -368,7 +434,6 @@ class LiveOcrEngine(
 
     val toRecognize = mutableListOf<DetectedTextBox>()
     val toRecognizeIds = mutableListOf<Long>()
-    val posTolPx = cropW.toFloat() * POS_TOL_FRAC
     val correctionAlpha =
       if (motionUpdate?.global?.valid == true) DETECTOR_CORRECTION_ALPHA else DETECTOR_CORRECTION_ALPHA_UNTRACKED
 
@@ -377,57 +442,167 @@ class LiveOcrEngine(
         detectionId++
         val currentDetection = detectionId
 
-        val claimed = HashSet<Long>()
-        for (box in detected) {
-          val fullBox = offsetDetectedBox(box, cropLeft, cropTop)
-          val match = bestTrackMatch(fullBox, claimed, posTolPx)
-          if (match != null) {
-            claimed.add(match.id)
-            correctTrackGeometry(match, fullBox, correctionAlpha, displayW, displayH)
-            match.lastVisualFrame = currentFrame
-            match.lastMatchedDetection = currentDetection
-            match.detectorHits += 1
-            match.detectorScore = fullBox.score
-            match.frameWidth = displayW
-            match.frameHeight = displayH
-            if (
-              !match.recognitionPending &&
-              match.recognitionAttempts < REC_MAX_ATTEMPTS &&
-              (match.sourceText == null || match.recognitionConfidence < REC_FREEZE_CONFIDENCE)
-            ) {
-              match.recognitionPending = true
-              toRecognize.add(box)
-              toRecognizeIds.add(match.id)
+        // Build (detIdx, trackId, iou) for every overlap above the match
+        // threshold. Sort by IoU descending so greedy primary assignment
+        // picks the strongest overlap first.
+        data class Pairing(val detIdx: Int, val trackId: Long, val iou: Float)
+        val fullBoxes = detected.map { offsetDetectedBox(it, cropLeft, cropTop) }
+        val pairings = mutableListOf<Pairing>()
+        for ((detIdx, det) in fullBoxes.withIndex()) {
+          for (track in tracks) {
+            val iou = rectIou(det.rect, track.rect)
+            if (iou >= IOU_MATCH_THRESHOLD) pairings += Pairing(detIdx, track.id, iou)
+          }
+        }
+        pairings.sortByDescending { it.iou }
+
+        // Greedy primary assignment. Each detection picks one primary track;
+        // each track is primary for at most one detection. Overflow goes into
+        // `coMatched`, which marks tracks that overlapped *some* detection
+        // but didn't get to be primary — these don't get a geometry update
+        // but they also don't get a miss counted against them (the detector
+        // saw them; another detection just claimed them harder).
+        val primaryByDet = HashMap<Int, Pair<Long, Float>>()
+        val primaryByTrack = HashMap<Long, Int>()
+        val coMatched = HashSet<Long>()
+        for (p in pairings) {
+          if (primaryByDet.containsKey(p.detIdx)) {
+            coMatched.add(p.trackId)
+            continue
+          }
+          if (primaryByTrack.containsKey(p.trackId)) {
+            // This detection overlaps a track already primary for someone
+            // else; treat as co-match so the other track doesn't count
+            // a miss either.
+            coMatched.add(p.trackId)
+            continue
+          }
+          primaryByDet[p.detIdx] = p.trackId to p.iou
+          primaryByTrack[p.trackId] = p.detIdx
+        }
+
+        val tracksById = tracks.associateBy { it.id }
+        for ((detIdx, det) in fullBoxes.withIndex()) {
+          val primary = primaryByDet[detIdx]
+          if (primary == null) {
+            // Before spawning: if the detection is mostly contained inside
+            // a visible track (e.g. detector returned a partial sub-word of
+            // a line the track already covers), suppress the new track and
+            // credit the container as co-matched so it doesn't miss a cycle.
+            val container =
+              tracks.firstOrNull { existing ->
+                existing.lifecycle != TrackLifecycle.Tentative &&
+                  containmentRatio(det.rect, existing.rect) >= CONTAINMENT_SUPPRESS_RATIO
+              }
+            if (container != null) {
+              coMatched.add(container.id)
+              continue
             }
-          } else {
+            // No existing track overlaps this detection enough — spawn
+            // tentative. Tentatives don't recognise and don't render until
+            // they graduate, so a one-cycle phantom detection dies quietly.
             val newId = nextId++
-            val entry =
+            tracks.add(
               TrackEntry(
                 id = newId,
-                rect = fullBox.rect,
-                orientedBox = fullBox.orientedBox,
-                tightBox = fullBox.tightBox,
+                lifecycle = TrackLifecycle.Tentative,
+                rect = det.rect,
+                orientedBox = det.orientedBox,
+                tightBox = det.tightBox,
                 sourceText = null,
                 recognitionConfidence = 0f,
                 recognitionAttempts = 0,
-                detectorScore = fullBox.score,
-                recognitionPending = true,
+                detectorScore = det.score,
+                recognitionPending = false,
                 detectorHits = 1,
+                confirmDetections = 1,
+                firstSeenDetection = currentDetection,
                 lastVisualFrame = currentFrame,
                 lastMatchedDetection = currentDetection,
+                missedDetections = 0,
                 frameWidth = displayW,
                 frameHeight = displayH,
                 sourceCode = if (pending.isAutoSource) null else pending.from.code,
-              )
-            tracks.add(entry)
-            toRecognize.add(box)
-            toRecognizeIds.add(newId)
+                velocityX = 0f,
+                velocityY = 0f,
+              ),
+            )
+            continue
+          }
+          val (trackId, iou) = primary
+          val track = tracksById[trackId] ?: continue
+          track.lastVisualFrame = currentFrame
+          track.lastMatchedDetection = currentDetection
+          track.missedDetections = 0
+          track.detectorHits += 1
+          track.detectorScore = det.score
+          track.frameWidth = displayW
+          track.frameHeight = displayH
+          // Graduate lifecycle state if applicable.
+          when (track.lifecycle) {
+            TrackLifecycle.Tentative -> {
+              track.confirmDetections += 1
+              if (track.confirmDetections >= TENTATIVE_CONFIRM_HITS) {
+                track.lifecycle = TrackLifecycle.Confirmed
+              }
+            }
+            TrackLifecycle.Dormant -> {
+              track.lifecycle = TrackLifecycle.Confirmed
+            }
+            TrackLifecycle.Confirmed -> Unit
+          }
+          // Only update geometry from observations we trust strongly —
+          // weak-overlap "co-survives" don't get to reshape the track.
+          if (iou >= IOU_GEOMETRY_THRESHOLD) {
+            correctTrackGeometry(track, det, correctionAlpha, displayW, displayH)
+          }
+          // Schedule recognition only for tracks the user will actually see.
+          if (
+            track.lifecycle != TrackLifecycle.Tentative &&
+            !track.recognitionPending &&
+            track.recognitionAttempts < REC_MAX_ATTEMPTS &&
+            (track.sourceText == null || track.recognitionConfidence < REC_FREEZE_CONFIDENCE)
+          ) {
+            track.recognitionPending = true
+            toRecognize.add(detected[detIdx])
+            toRecognizeIds.add(track.id)
           }
         }
 
-        tracks.removeAll {
-          currentDetection - it.lastMatchedDetection > MAX_DETECTOR_MISSES
+        // Tracks that weren't primary-matched and weren't co-matched lose a
+        // detection cycle. Lifecycle transitions follow.
+        for (track in tracks) {
+          if (primaryByTrack.containsKey(track.id) || track.id in coMatched) continue
+          track.missedDetections += 1
         }
+        val toRemove = mutableListOf<Long>()
+        for (track in tracks) {
+          when (track.lifecycle) {
+            TrackLifecycle.Tentative -> {
+              val age = currentDetection - track.firstSeenDetection
+              if (age >= TENTATIVE_CONFIRM_WINDOW &&
+                track.confirmDetections < TENTATIVE_CONFIRM_HITS
+              ) {
+                toRemove.add(track.id)
+              }
+            }
+            TrackLifecycle.Confirmed -> {
+              if (track.missedDetections >= CONFIRMED_TO_DORMANT_MISSES) {
+                track.lifecycle = TrackLifecycle.Dormant
+              }
+            }
+            TrackLifecycle.Dormant -> {
+              if (track.missedDetections >= CONFIRMED_TO_DORMANT_MISSES + DORMANT_FORGET_MISSES) {
+                toRemove.add(track.id)
+              }
+            }
+          }
+        }
+        if (toRemove.isNotEmpty()) {
+          val removeSet = toRemove.toHashSet()
+          tracks.removeAll { it.id in removeSet }
+        }
+
         publishOverlaysLocked()
 
         stats.record(
@@ -526,58 +701,44 @@ class LiveOcrEngine(
     }
   }
 
-  /** Mutex must be held. */
-  private fun bestTrackMatch(
-    box: DetectedTextBox,
-    claimed: Set<Long>,
-    posTolPx: Float,
-  ): TrackEntry? {
-    val boxCx = (box.rect.left.toFloat() + box.rect.right.toFloat()) * 0.5f
-    val boxCy = (box.rect.top.toFloat() + box.rect.bottom.toFloat()) * 0.5f
-    val boxW = (box.rect.right.toFloat() - box.rect.left.toFloat()).coerceAtLeast(1f)
-    val boxH = (box.rect.bottom.toFloat() - box.rect.top.toFloat()).coerceAtLeast(1f)
-    var best: TrackEntry? = null
-    var bestDist = Float.MAX_VALUE
-    for (entry in tracks) {
-      if (entry.id in claimed) continue
-      if (abs(entry.orientedBox.angleRadians - box.orientedBox.angleRadians) > ANGLE_TOL_RAD) continue
-      val entryCx = (entry.rect.left.toFloat() + entry.rect.right.toFloat()) * 0.5f
-      val entryCy = (entry.rect.top.toFloat() + entry.rect.bottom.toFloat()) * 0.5f
-      val dx = abs(entryCx - boxCx)
-      val dy = abs(entryCy - boxCy)
-      if (dx > posTolPx || dy > posTolPx) continue
-      val entryW = (entry.rect.right.toFloat() - entry.rect.left.toFloat()).coerceAtLeast(1f)
-      val entryH = (entry.rect.bottom.toFloat() - entry.rect.top.toFloat()).coerceAtLeast(1f)
-      if (abs(entryW - boxW) / max(entryW, boxW) > SIZE_TOL_FRAC) continue
-      if (abs(entryH - boxH) / max(entryH, boxH) > SIZE_TOL_FRAC) continue
-      val dist = dx + dy
-      if (dist < bestDist) {
-        bestDist = dist
-        best = entry
-      }
-    }
-    return best
-  }
-
   /** Mutex must be held. Applies per-track similarity from the regional motion
-   *  estimator when valid; falls back to the global translation otherwise. */
+   *  estimator when valid; falls back to the global translation otherwise.
+   *  Also computes each track's display-space velocity from the position delta
+   *  divided by the inter-motion-update interval, so the render thread can
+   *  extrapolate between camera frames. */
   private fun applyMotionLocked(
     update: uniffi.bindings.LiveMotionUpdate?,
     trackSnapshot: List<Pair<Long, NativeRect>>,
     frameWidth: Int,
     frameHeight: Int,
+    nowNs: Long,
   ) {
     if (update == null) return
     val global = update.global
-    if (!global.valid) return
+    if (!global.valid) {
+      // Motion failed: stale velocity from a previous valid frame would mislead
+      // the render-thread extrapolator into pushing overlays toward where the
+      // scene used to be heading. Drop it.
+      for (track in tracks) {
+        track.velocityX = 0f
+        track.velocityY = 0f
+      }
+      return
+    }
     val regionByTrackId: Map<Long, uniffi.bindings.LiveRegionMotion> =
       trackSnapshot
         .mapIndexedNotNull { idx, (id, _) ->
           val region = update.regions.getOrNull(idx) ?: return@mapIndexedNotNull null
           if (region.valid) id to region else null
         }.toMap()
+    val rawDt = if (lastMotionTimestampNs == 0L) 0L else (nowNs - lastMotionTimestampNs)
+    val dtNs = rawDt.coerceIn(MIN_MOTION_DT_NS, MAX_MOTION_DT_NS)
+    val canExtrapolate = rawDt in MIN_MOTION_DT_NS..MAX_MOTION_DT_NS
+    val invDtSec: Float = if (canExtrapolate) 1e9f / dtNs.toFloat() else 0f
 
     for (track in tracks) {
+      val prevCx = track.orientedBox.cx
+      val prevCy = track.orientedBox.cy
       val region = regionByTrackId[track.id]
       if (region != null) {
         track.orientedBox = applyAffineToOrientedRect(track.orientedBox, region)
@@ -590,15 +751,10 @@ class LiveOcrEngine(
       }
       track.frameWidth = frameWidth
       track.frameHeight = frameHeight
-    }
-  }
-
-  /** Mutex must be held. */
-  private fun pruneTracksLocked(currentFrame: Long) {
-    tracks.removeAll {
-      it.sourceText == null &&
-        !it.recognitionPending &&
-        currentFrame - it.lastVisualFrame > MAX_UNTRACKED_FRAMES
+      val deltaCx = track.orientedBox.cx - prevCx
+      val deltaCy = track.orientedBox.cy - prevCy
+      track.velocityX = deltaCx * invDtSec
+      track.velocityY = deltaCy * invDtSec
     }
   }
 
@@ -692,12 +848,49 @@ class LiveOcrEngine(
       stats.dedupEvictions += victims.size
       tracks.removeAll(victims)
     }
+
+    // Substring + box-containment dedup. If our recognised text contains
+    // another track's text AND that other track's box sits inside ours, the
+    // other track is almost certainly a partial-word detection of the same
+    // line — evict it. Also handles the mirror case: if our text is itself
+    // contained in a wider track whose box contains ours, we are the
+    // partial-word duplicate and should be evicted.
+    val widerVictims =
+      tracks.filter { other ->
+        if (other.id == entry.id) return@filter false
+        val otherSource = other.sourceText ?: return@filter false
+        val otherNorm = normaliseForDedup(otherSource)
+        if (otherNorm.isEmpty() || otherNorm == normalisedNew) return@filter false
+        if (!normalisedNew.contains(otherNorm)) return@filter false
+        containmentRatio(other.rect, entry.rect) >= CONTAINMENT_SUPPRESS_RATIO
+      }
+    if (widerVictims.isNotEmpty()) {
+      stats.dedupEvictions += widerVictims.size
+      tracks.removeAll(widerVictims)
+    }
+    val supersedingTrack =
+      tracks.firstOrNull { other ->
+        if (other.id == entry.id) return@firstOrNull false
+        val otherSource = other.sourceText ?: return@firstOrNull false
+        val otherNorm = normaliseForDedup(otherSource)
+        if (otherNorm.isEmpty() || otherNorm == normalisedNew) return@firstOrNull false
+        if (!otherNorm.contains(normalisedNew)) return@firstOrNull false
+        containmentRatio(entry.rect, other.rect) >= CONTAINMENT_SUPPRESS_RATIO
+      }
+    if (supersedingTrack != null) {
+      stats.dedupEvictions += 1
+      tracks.remove(entry)
+    }
   }
 
   /** Mutex must be held. */
   private fun publishOverlaysLocked() {
     val toCode = activeTargetCode
     if (toCode == null) {
+      _overlays.value = emptyList()
+      return
+    }
+    if (!lastGlobalMotionValid) {
       _overlays.value = emptyList()
       return
     }
@@ -718,6 +911,9 @@ class LiveOcrEngine(
             groupText = translated,
             frameWidth = entry.frameWidth,
             frameHeight = entry.frameHeight,
+            velocityX = entry.velocityX,
+            velocityY = entry.velocityY,
+            baseTimestampNs = lastMotionTimestampNs,
           )
       }
     }
@@ -840,8 +1036,52 @@ private val WHITESPACE = Regex("\\s+")
 private fun normaliseForDedup(text: String): String = text.lowercase().replace(WHITESPACE, " ").trim()
 
 private fun isRenderableTrack(track: TrackEntry): Boolean {
+  if (track.lifecycle != TrackLifecycle.Confirmed) return false
   val source = track.sourceText.orEmpty().trim()
   return source.isNotBlank()
+}
+
+/** Fraction of `inner` that lies inside `outer`. 1.0 ⇒ fully contained. Used to
+ *  detect partial-word detections that should be folded into a wider track. */
+private fun containmentRatio(
+  inner: NativeRect,
+  outer: NativeRect,
+): Float {
+  val ix0 = max(inner.left.toFloat(), outer.left.toFloat())
+  val iy0 = max(inner.top.toFloat(), outer.top.toFloat())
+  val ix1 = kotlin.math.min(inner.right.toFloat(), outer.right.toFloat())
+  val iy1 = kotlin.math.min(inner.bottom.toFloat(), outer.bottom.toFloat())
+  if (ix1 <= ix0 || iy1 <= iy0) return 0f
+  val intersect = (ix1 - ix0) * (iy1 - iy0)
+  val area =
+    (inner.right.toFloat() - inner.left.toFloat()) *
+      (inner.bottom.toFloat() - inner.top.toFloat())
+  return if (area > 0f) intersect / area else 0f
+}
+
+private fun rectIou(
+  a: NativeRect,
+  b: NativeRect,
+): Float {
+  val ax0 = a.left.toFloat()
+  val ay0 = a.top.toFloat()
+  val ax1 = a.right.toFloat()
+  val ay1 = a.bottom.toFloat()
+  val bx0 = b.left.toFloat()
+  val by0 = b.top.toFloat()
+  val bx1 = b.right.toFloat()
+  val by1 = b.bottom.toFloat()
+  if (ax1 <= ax0 || ay1 <= ay0 || bx1 <= bx0 || by1 <= by0) return 0f
+  val ix0 = max(ax0, bx0)
+  val iy0 = max(ay0, by0)
+  val ix1 = kotlin.math.min(ax1, bx1)
+  val iy1 = kotlin.math.min(ay1, by1)
+  if (ix1 <= ix0 || iy1 <= iy0) return 0f
+  val intersect = (ix1 - ix0) * (iy1 - iy0)
+  val areaA = (ax1 - ax0) * (ay1 - ay0)
+  val areaB = (bx1 - bx0) * (by1 - by0)
+  val union = areaA + areaB - intersect
+  return if (union > 0f) intersect / union else 0f
 }
 
 private fun translatedOrientedRect(
