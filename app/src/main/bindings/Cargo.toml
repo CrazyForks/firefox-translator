@@ -9,7 +9,7 @@ name = "bindings"
 path = "src/lib.rs"
 
 [features]
-default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "transliterate", "image-render", "pdf-image-translate", "doc-align", "ppocr"]
+default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "transliterate", "image-render", "pdf-image-translate", "doc-align", "ppocr", "planar-tracker"]
 dictionary = ["translator/dictionary"]
 mucab = ["translator/mucab"]
 tesseract = ["translator/tesseract"]
@@ -21,6 +21,7 @@ image-render = ["translator/image-render"]
 pdf-image-translate = ["translator/pdf-image-translate"]
 doc-align = ["translator/doc-align"]
 ppocr = ["translator/ppocr"]
+planar-tracker = ["translator/planar-tracker"]
 
 [dependencies]
 adblock = { version = "0.12.2", default-features = false, features = ["full-regex-handling", "embedded-domain-resolver"] }
@@ -41,6 +42,15 @@ default-features = false
 # git = "https://github.com/DavidVentura/translator-rs.git"
 path = "/home/david/git/translator-rs"
 features = ["uniffi", "html"]
+# NOTE: gradle's `buildBindingsAarch64` task fingerprints files inside
+# `app/src/main/bindings/` only — it does NOT track this path dependency.
+# If you edit translator-rs/src/*.rs and run `./gradlew :app:assembleDebug`,
+# gradle will report UP-TO-DATE and the old libbindings.so ships. Force a
+# rebuild via:
+#     touch app/src/main/bindings/src/uniffi_catalog.rs && \
+#     ./gradlew :app:buildBindingsAarch64 --rerun-tasks
+# or any edit inside `app/src/main/bindings/src/` (it's the bindings src
+# dir that's part of the fingerprint).
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = { version = "0.14", default-features = false }
@@ -56,11 +66,10 @@ android_logger = { version = "0.14", default-features = false }
 
 # cache-buster: bump this comment after editing translator-rs to force a rebuild
 # (gradle's inputs.dir only watches bindings/src, not the path = ".." translator crate).
-# rev: 4
+# rev: 8
 
 [profile.release]
 lto = "thin"
 codegen-units = 2
 debug = false
 strip = "debuginfo"
-#

@@ -69,7 +69,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -80,21 +79,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -105,17 +96,14 @@ import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityState
 import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LiveFrameJni
-import dev.davidv.translator.LiveOcrEngine
-import dev.davidv.translator.LiveOverlayItem
+import dev.davidv.translator.LivePlanarOcrEngine
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.cameraIntrinsicsFromCameraX
 import dev.davidv.translator.ui.components.LanguageSelector
 import java.io.File
 import java.util.concurrent.Executor
-import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 import android.util.Size as AndroidSize
 
 private const val TAG = "LiveCameraScreen"
@@ -138,7 +126,12 @@ private const val DEBUG_DRAW_DETECTOR_CONTOUR: Boolean = true
 /** Suppress the live-overlay layer (labelled tracker boxes / translated text)
  *  while diagnosing other overlays. Lets the cyan detector contour show
  *  through without clutter. */
-private const val DEBUG_HIDE_TRACKER_OVERLAY: Boolean = true
+private const val DEBUG_HIDE_TRACKER_OVERLAY: Boolean = false
+
+/** Show a small overlay pill in the corner reporting tracker state
+ *  (Idle/Acquiring/Locked/Lost + inliers + last acquire's det/rec
+ *  counts). Useful while tuning, off in production. */
+private const val DEBUG_SHOW_TRACKER_STATUS: Boolean = true
 
 private data class FrameInfo(
   val displayWidth: Int,
@@ -358,10 +351,8 @@ private fun CameraSurface(
   var latestFrameInfo by remember { mutableStateOf<FrameInfo?>(null) }
 
   val workerScope = androidx.compose.runtime.rememberCoroutineScope()
-  val liveOcrEngine: LiveOcrEngine? =
-    remember(catalog) { catalog?.let { LiveOcrEngine(it, workerScope, imuService) } }
-  val liveOverlays by (liveOcrEngine?.overlays ?: remember { kotlinx.coroutines.flow.MutableStateFlow(emptyList()) })
-    .collectAsState()
+  val liveOcrEngine: LivePlanarOcrEngine? =
+    remember(catalog) { catalog?.let { LivePlanarOcrEngine(it, workerScope, imuService) } }
   val debugContours by (liveOcrEngine?.debugContours ?: remember { kotlinx.coroutines.flow.MutableStateFlow<DebugContourFrame?>(null) })
     .collectAsState()
   var previewSizePx by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
@@ -563,12 +554,30 @@ private fun CameraSurface(
       modifier = Modifier.fillMaxSize(),
     )
 
-    LiveOverlayLayer(
-      overlays = if (liveOverlayOn && !DEBUG_HIDE_TRACKER_OVERLAY) liveOverlays else emptyList(),
-      previewSizePx = previewSizePx,
-      imuService = imuService,
-      intrinsics = cameraIntrinsics,
-    )
+    // Phase 4 of FUTURE_BITMAP_OVERLAY.md: only the bitmap-overlay
+    // path. The previous Compose `LiveOverlayLayer` was per-overlay
+    // Compose layout (~30 boxes × 30fps → main thread saturation);
+    // it's gone. This single AndroidView warps the canonical bitmap
+    // via Matrix.setPolyToPoly — one draw per frame, no Compose
+    // recomposition.
+    if (liveOverlayOn) {
+      val bitmapFrame by
+        (liveOcrEngine?.bitmapOverlay ?: remember { kotlinx.coroutines.flow.MutableStateFlow(null) })
+          .collectAsState()
+      AndroidView(
+        factory = { ctx ->
+          dev.davidv.translator.ui.components.PlanarBitmapOverlayView(ctx).apply {
+            // Phase 5: per-render-frame IMU extrapolation. View
+            // queries `currentRotation()` on each vsync and predicts
+            // the new H from the camera-frame H + IMU delta. Smooths
+            // overlay motion between 30 Hz camera frames.
+            setImuService(imuService)
+          }
+        },
+        modifier = Modifier.fillMaxSize(),
+        update = { view -> view.update(bitmapFrame) },
+      )
+    }
 
     if (DEBUG_IMU_CROSSHAIR) {
       ImuCrosshairOverlay(
@@ -584,6 +593,11 @@ private fun CameraSurface(
         frame = debugContours,
         previewSizePx = previewSizePx,
       )
+    }
+
+    if (DEBUG_SHOW_TRACKER_STATUS && liveOcrEngine != null) {
+      val status by liveOcrEngine.trackerStatus.collectAsState()
+      TrackerStatusPill(status)
     }
 
     val indicatorSizeDp = 72.dp
@@ -816,284 +830,6 @@ private fun BottomControls(
   }
 }
 
-@Composable
-private fun LiveOverlayLayer(
-  overlays: List<LiveOverlayItem>,
-  previewSizePx: androidx.compose.ui.unit.IntSize,
-  imuService: ImuService?,
-  intrinsics: CameraIntrinsicsRaw?,
-) {
-  if (overlays.isEmpty() || previewSizePx.width == 0 || previewSizePx.height == 0) return
-  val density = LocalDensity.current
-  val textMeasurer = rememberTextMeasurer()
-  val stableLayouts = remember { mutableStateMapOf<String, StableLayout>() }
-  // Display-refresh-rate ticker. Read inside `offset { ... }` lambdas so each
-  // overlay's position is re-evaluated during the layout phase on every frame
-  // (60-120Hz) — Compose runs the offset lambda when its state reads change,
-  // without retriggering composition or text-fitting work.
-  val renderTimeNs = remember { mutableLongStateOf(System.nanoTime()) }
-  LaunchedEffect(Unit) {
-    while (true) {
-      androidx.compose.runtime.withFrameNanos { ts ->
-        renderTimeNs.longValue = ts
-      }
-    }
-  }
-  val placements =
-    overlays.map { item ->
-      // FILL_CENTER scale from full-frame pixels to PreviewView pixels.
-      val scale =
-        maxOf(
-          previewSizePx.width.toFloat() / item.frameWidth.toFloat(),
-          previewSizePx.height.toFloat() / item.frameHeight.toFloat(),
-        )
-      val displayedW = item.frameWidth * scale
-      val displayedH = item.frameHeight * scale
-      val offX = (displayedW - previewSizePx.width) / 2f
-      val offY = (displayedH - previewSizePx.height) / 2f
-      val cxPx = item.cx * scale - offX
-      val cyPx = item.cy * scale - offY
-      val widthPx = (item.width * scale).coerceAtLeast(1f)
-      val heightPx = (item.height * scale).coerceAtLeast(1f)
-      val widthDp = with(density) { widthPx.toDp() }
-      val heightDp = with(density) { heightPx.toDp() }
-      // graphicsLayer rotates around the box centre; we offset by (cx - w/2, cy - h/2).
-      val leftPx = (cxPx - widthPx / 2f).toInt()
-      val topPx = (cyPx - heightPx / 2f).toInt()
-      val angleDeg = item.angleRadians * 180f / kotlin.math.PI.toFloat()
-      val imuExtrap =
-        buildImuExtrap(
-          item = item,
-          intrinsics = intrinsics,
-          previewScale = scale,
-          previewOffX = offX,
-          previewOffY = offY,
-        )
-      Placement(
-        groupId = item.groupId,
-        groupText = item.groupText,
-        text = item.translatedText,
-        left = leftPx,
-        top = topPx,
-        widthPx = widthPx,
-        heightPx = heightPx,
-        widthDp = widthDp,
-        heightDp = heightDp,
-        angleDeg = angleDeg,
-        imuExtrap = imuExtrap,
-      )
-    }
-  val groupedPlacements = placements.groupBy { it.groupId }
-  stableLayouts.keys.retainAll(groupedPlacementsStableKeys(groupedPlacements))
-  val fittedGroups =
-    groupedPlacements.mapValues { (groupId, groupPlacements) ->
-      val stableKey = stableLayoutKey(groupId, groupPlacements.firstOrNull()?.groupText.orEmpty())
-      val previous = stableLayouts[stableKey]
-      val fitted =
-        fitLiveOverlayGroup(
-          placements = groupPlacements,
-          textMeasurer = textMeasurer,
-          density = density,
-          baseStyle = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-          previous = previous,
-        )
-      stableLayouts[stableKey] = fitted.stable
-      fitted
-    }
-  val fittedByPlacement =
-    fittedGroups.values
-      .flatMap { it.items }
-      .associateBy { it.placement }
-  val blockGroups = fittedGroups.values.mapNotNull { it.block }
-  val perLinePlacements = placements.filter { fittedGroups[it.groupId]?.block == null }
-
-  // Background pass: draw opaque rounded rects inside an offscreen layer composited at
-  // alpha=0.7 — overlapping shapes merge into a single union instead of stacking the dim.
-  Box(
-    modifier =
-      Modifier
-        .fillMaxSize()
-        .graphicsLayer {
-          alpha = 0.7f
-          compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
-        },
-  ) {
-    for (p in perLinePlacements) {
-      Box(
-        modifier =
-          Modifier
-            .offset {
-              renderTimeNs.longValue
-              renderOffset(p.left, p.top, p.imuExtrap, imuService)
-            }
-            .size(p.widthDp, p.heightDp)
-            .graphicsLayer {
-              renderTimeNs.longValue
-              rotationZ = renderAngleDeg(p.angleDeg, p.imuExtrap, imuService)
-            }
-            .background(Color.Black, RoundedCornerShape(4.dp)),
-      )
-    }
-    for (block in blockGroups) {
-      Box(
-        modifier =
-          Modifier
-            .offset {
-              renderTimeNs.longValue
-              renderOffset(block.left, block.top, block.imuExtrap, imuService)
-            }
-            .size(block.widthDp, block.heightDp)
-            .background(Color.Black, RoundedCornerShape(4.dp)),
-      )
-    }
-  }
-  // Text pass: always on top of every background.
-  for (block in blockGroups) {
-    Box(
-      modifier =
-        Modifier
-          .offset {
-            renderTimeNs.longValue
-            renderOffset(block.left, block.top, block.imuExtrap, imuService)
-          }
-          .size(block.widthDp, block.heightDp)
-          .padding(horizontal = 3.dp, vertical = 2.dp),
-      contentAlignment = Alignment.Center,
-    ) {
-      Text(
-        text = block.text,
-        color = Color.White,
-        style =
-          androidx.compose.material3.MaterialTheme.typography.bodySmall.copy(
-            fontSize = block.fontSize,
-            lineHeight = block.lineHeight,
-            textAlign = TextAlign.Center,
-          ),
-        maxLines = block.maxLines,
-        softWrap = true,
-        textAlign = TextAlign.Center,
-      )
-    }
-  }
-  for (p in perLinePlacements) {
-    Box(
-      modifier =
-        Modifier
-          .offset {
-            renderTimeNs.longValue
-            renderOffset(p.left, p.top, p.imuExtrap, imuService)
-          }
-          .size(p.widthDp, p.heightDp)
-          .graphicsLayer {
-            renderTimeNs.longValue
-            rotationZ = renderAngleDeg(p.angleDeg, p.imuExtrap, imuService)
-          }
-          .padding(horizontal = 2.dp),
-      contentAlignment = Alignment.Center,
-    ) {
-      Text(
-        text = fittedByPlacement[p]?.text ?: p.text,
-        color = Color.White,
-        style =
-          androidx.compose.material3.MaterialTheme.typography.bodySmall.copy(
-            fontSize = fittedGroups[p.groupId]?.fontSize ?: androidx.compose.material3.MaterialTheme.typography.bodySmall.fontSize,
-          ),
-        maxLines = 1,
-        softWrap = false,
-      )
-    }
-  }
-}
-
-private fun buildImuExtrap(
-  item: LiveOverlayItem,
-  intrinsics: CameraIntrinsicsRaw?,
-  previewScale: Float,
-  previewOffX: Float,
-  previewOffY: Float,
-): ImuExtrapState? {
-  val base = item.baseRotation ?: return null
-  val intr = intrinsics ?: return null
-  val px = intr.pixelIntrinsics(item.frameWidth, item.frameHeight, item.rotationDegrees)
-  val rx = (item.cx - px.cx) / px.fx
-  val ry = (item.cy - px.cy) / px.fy
-  val rz = 1f
-  val invLen = 1f / kotlin.math.sqrt(rx * rx + ry * ry + rz * rz)
-  return ImuExtrapState(
-    baseRayCamX = rx * invLen,
-    baseRayCamY = ry * invLen,
-    baseRayCamZ = rz * invLen,
-    baseRotation = base,
-    fx = px.fx,
-    fy = px.fy,
-    cx = px.cx,
-    cy = px.cy,
-    previewScale = previewScale,
-    previewOffX = previewOffX,
-    previewOffY = previewOffY,
-    baseUEng = item.cx,
-    baseVEng = item.cy,
-  )
-}
-
-private fun aggregateImuExtrapForBlock(
-  placements: List<Placement>,
-  blockCenterUView: Float,
-  blockCenterVView: Float,
-): ImuExtrapState? {
-  val sample = placements.firstOrNull()?.imuExtrap ?: return null
-  val uEng = (blockCenterUView + sample.previewOffX) / sample.previewScale
-  val vEng = (blockCenterVView + sample.previewOffY) / sample.previewScale
-  val rx = (uEng - sample.cx) / sample.fx
-  val ry = (vEng - sample.cy) / sample.fy
-  val rz = 1f
-  val invLen = 1f / kotlin.math.sqrt(rx * rx + ry * ry + rz * rz)
-  return sample.copy(
-    baseRayCamX = rx * invLen,
-    baseRayCamY = ry * invLen,
-    baseRayCamZ = rz * invLen,
-    baseUEng = uEng,
-    baseVEng = vEng,
-  )
-}
-
-private fun renderOffset(
-  baseLeftPx: Int,
-  baseTopPx: Int,
-  imuExtrap: ImuExtrapState?,
-  imuService: ImuService?,
-): IntOffset {
-  val dCam = computeImuDeltaCam(imuExtrap, imuService)
-  if (dCam != null && imuExtrap != null) {
-    val bx = imuExtrap.baseRayCamX
-    val by = imuExtrap.baseRayCamY
-    val bz = imuExtrap.baseRayCamZ
-    val rx = dCam[0] * bx + dCam[1] * by + dCam[2] * bz
-    val ry = dCam[3] * bx + dCam[4] * by + dCam[5] * bz
-    val rz = dCam[6] * bx + dCam[7] * by + dCam[8] * bz
-    if (rz > 1e-3f) {
-      val uEng = imuExtrap.fx * rx / rz + imuExtrap.cx
-      val vEng = imuExtrap.fy * ry / rz + imuExtrap.cy
-      val dxView = (uEng - imuExtrap.baseUEng) * imuExtrap.previewScale
-      val dyView = (vEng - imuExtrap.baseVEng) * imuExtrap.previewScale
-      return IntOffset(
-        (baseLeftPx + dxView).toInt(),
-        (baseTopPx + dyView).toInt(),
-      )
-    }
-  }
-  return IntOffset(baseLeftPx, baseTopPx)
-}
-
-private fun renderAngleDeg(
-  baseAngleDeg: Float,
-  imuExtrap: ImuExtrapState?,
-  imuService: ImuService?,
-): Float {
-  val dCam = computeImuDeltaCam(imuExtrap, imuService) ?: return baseAngleDeg
-  return baseAngleDeg + extractRollDegrees(dCam)
-}
-
 private fun mul3x3TransposeLeft(
   a: FloatArray,
   b: FloatArray,
@@ -1109,31 +845,7 @@ private fun mul3x3TransposeLeft(
   return out
 }
 
-/** Roll component (rotation around the camera's optical Z axis) of a 3x3
- *  rotation matrix in camera frame, in degrees. Used to extrapolate a
- *  rotated overlay's on-screen angle between camera-frame updates. */
-private fun extractRollDegrees(rCam: FloatArray): Float {
-  return kotlin.math.atan2(rCam[3], rCam[0]) * (180f / kotlin.math.PI.toFloat())
-}
-
 private const val RENDER_IMU_LEAD_NS: Long = 12_000_000L
-
-private fun computeImuDeltaCam(
-  imuExtrap: ImuExtrapState?,
-  imuService: ImuService?,
-): FloatArray? {
-  if (imuExtrap == null || imuService == null) return null
-  val currentRot = imuService.currentRotation(RENDER_IMU_LEAD_NS)
-  val d = mul3x3TransposeLeft(currentRot, imuExtrap.baseRotation)
-  val dCam = FloatArray(9)
-  for (i in 0..2) {
-    for (j in 0..2) {
-      val sign = (if (i == 0) 1 else -1) * (if (j == 0) 1 else -1)
-      dCam[i * 3 + j] = sign * d[i * 3 + j]
-    }
-  }
-  return dCam
-}
 
 @Composable
 private fun ImuCrosshairOverlay(
@@ -1284,514 +996,45 @@ private fun rotate(
   )
 }
 
-private data class Placement(
-  val groupId: String,
-  val groupText: String,
-  val text: String,
-  val left: Int,
-  val top: Int,
-  val widthPx: Float,
-  val heightPx: Float,
-  val widthDp: androidx.compose.ui.unit.Dp,
-  val heightDp: androidx.compose.ui.unit.Dp,
-  val angleDeg: Float,
-  val imuExtrap: ImuExtrapState?,
-)
-
-private data class FittedOverlayGroup(
-  val fontSize: TextUnit,
-  val items: List<FittedPlacement>,
-  val block: FittedBlock?,
-  val stable: StableLayout,
-)
-
-private data class FittedPlacement(
-  val placement: Placement,
-  val text: String,
-)
-
-private data class FittedBlock(
-  val text: String,
-  val left: Int,
-  val top: Int,
-  val widthDp: androidx.compose.ui.unit.Dp,
-  val heightDp: androidx.compose.ui.unit.Dp,
-  val fontSize: TextUnit,
-  val lineHeight: TextUnit,
-  val maxLines: Int,
-  val imuExtrap: ImuExtrapState?,
-)
-
-private data class ImuExtrapState(
-  val baseRayCamX: Float,
-  val baseRayCamY: Float,
-  val baseRayCamZ: Float,
-  val baseRotation: FloatArray,
-  val fx: Float,
-  val fy: Float,
-  val cx: Float,
-  val cy: Float,
-  val previewScale: Float,
-  val previewOffX: Float,
-  val previewOffY: Float,
-  val baseUEng: Float,
-  val baseVEng: Float,
-)
-
-private enum class OverlayLayoutMode {
-  PerLine,
-  Block,
-}
-
-private data class StableLayout(
-  val mode: OverlayLayoutMode,
-  val fontSizePx: Float,
-  val lineCount: Int,
-  val geometry: GroupGeometry,
-  val slices: List<String> = emptyList(),
-)
-
-private data class GroupGeometry(
-  val left: Float,
-  val top: Float,
-  val right: Float,
-  val bottom: Float,
-  val linearWidth: Float,
-) {
-  val width: Float get() = (right - left).coerceAtLeast(1f)
-  val height: Float get() = (bottom - top).coerceAtLeast(1f)
-}
-
-private fun fitLiveOverlayGroup(
-  placements: List<Placement>,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-  previous: StableLayout?,
-): FittedOverlayGroup {
-  val ordered = placements.sortedWith(compareBy<Placement> { it.top }.thenBy { it.left })
-  val text = ordered.firstOrNull()?.groupText.orEmpty()
-  val geometry = groupGeometry(ordered, with(density) { 4.dp.toPx() })
-  if (ordered.isEmpty() || text.isBlank()) {
-    return FittedOverlayGroup(
-      fontSize = baseStyle.fontSize,
-      items = emptyList(),
-      block = null,
-      stable = StableLayout(OverlayLayoutMode.PerLine, textUnitToPx(baseStyle.fontSize, density), 0, geometry),
-    )
-  }
-
-  val horizontalPaddingPx = with(density) { 4.dp.toPx() }
-  val availableLinearPx =
-    ordered.sumOf { max(1.0, (it.widthPx - horizontalPaddingPx).toDouble()) }.toFloat()
-  val heights = ordered.map { it.heightPx }.sorted()
-  val medianHeightPx = heights[heights.size / 2].coerceAtLeast(1f)
-  val maxFontPx = (medianHeightPx * 0.62f).coerceIn(with(density) { 10.sp.toPx() }, with(density) { 30.sp.toPx() })
-  val minFontPx = min(maxFontPx, with(density) { 8.sp.toPx() })
-  val fittedFontPx =
-    shrinkFontToLinearFit(
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.TrackerStatusPill(status: dev.davidv.translator.TrackerStatus) {
+  val (color, label) =
+    when (status.state) {
+      uniffi.bindings.PlanarTrackerState.IDLE ->
+        androidx.compose.ui.graphics.Color(0xCC444444) to "IDLE"
+      uniffi.bindings.PlanarTrackerState.ACQUIRING ->
+        androidx.compose.ui.graphics.Color(0xCCB58900) to "ACQUIRING"
+      uniffi.bindings.PlanarTrackerState.LOCKED ->
+        androidx.compose.ui.graphics.Color(0xCC2AA198) to "LOCKED"
+      uniffi.bindings.PlanarTrackerState.LOST ->
+        androidx.compose.ui.graphics.Color(0xCCDC322F) to "LOST"
+    }
+  // Format: STATE | anchor#N inliers | det=D rec_ok=K rec_empty=M pending=P
+  val detPart =
+    if (status.lastAcquireDet < 0) {
+      ""
+    } else {
+      " | det=${status.lastAcquireDet} rec_ok=${status.lastAcquireRecOk} rec_empty=${status.lastAcquireRecEmpty} pending=${status.lastAcquirePending}"
+    }
+  val anchorPart =
+    if (status.anchorId == 0L) {
+      ""
+    } else {
+      " | a#${status.anchorId} inl=${status.inliers}"
+    }
+  val text = "$label$anchorPart$detPart"
+  androidx.compose.foundation.layout.Box(
+    modifier =
+      androidx.compose.ui.Modifier
+        .align(androidx.compose.ui.Alignment.TopStart)
+        .padding(top = 56.dp, start = 8.dp)
+        .background(color, shape = androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+        .padding(horizontal = 8.dp, vertical = 4.dp),
+  ) {
+    androidx.compose.material3.Text(
       text = text,
-      availablePx = availableLinearPx,
-      startPx = maxFontPx,
-      minPx = minFontPx,
-      textMeasurer = textMeasurer,
-      density = density,
-      baseStyle = baseStyle,
+      color = androidx.compose.ui.graphics.Color.White,
+      style = androidx.compose.material3.MaterialTheme.typography.labelSmall,
     )
-  val previousPerLine =
-    previous?.takeIf {
-      it.mode == OverlayLayoutMode.PerLine &&
-        geometry.isCloseTo(it.geometry) &&
-        previousPerLineStillFits(it.slices, ordered, horizontalPaddingPx, it.fontSizePx, textMeasurer, density, baseStyle)
-    }
-  val blockCandidate = shouldUseBlockMode(ordered, text, fittedFontPx, minFontPx, textMeasurer, density, baseStyle, availableLinearPx)
-  val previousBlock =
-    previous?.takeIf {
-      it.mode == OverlayLayoutMode.Block &&
-        geometry.isCloseTo(it.geometry)
-    }
-  val useBlock =
-    if (previousPerLine != null) {
-      false
-    } else if (previousBlock != null) {
-      blockCandidate || !oneLineFitsWithSpare(text, availableLinearPx, minFontPx, textMeasurer, density, baseStyle)
-    } else {
-      blockCandidate
-    }
-  if (useBlock) {
-    return fitLiveOverlayBlock(ordered, text, textMeasurer, density, baseStyle, minFontPx, previous, geometry)
-  }
-  val fontPx = previousPerLine?.fontSizePx ?: fittedFontPx
-  val fontSize = with(density) { fontPx.toSp() }
-  val style = baseStyle.copy(fontSize = fontSize)
-  val capacities = ordered.map { (it.widthPx - horizontalPaddingPx).coerceAtLeast(1f) }
-  val slices = previousPerLine?.slices ?: splitTextAcrossCapacities(text, capacities, textMeasurer, style)
-  val lineCount = slices.count { it.isNotBlank() }.coerceAtLeast(1)
-  return FittedOverlayGroup(
-    fontSize = fontSize,
-    items = ordered.mapIndexed { index, placement -> FittedPlacement(placement, slices.getOrElse(index) { "" }) },
-    block = null,
-    stable = StableLayout(OverlayLayoutMode.PerLine, fontPx, lineCount, geometry, slices),
-  )
-}
-
-private fun shouldUseBlockMode(
-  placements: List<Placement>,
-  text: String,
-  fittedFontPx: Float,
-  minFontPx: Float,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-  availableLinearPx: Float,
-): Boolean {
-  if (placements.size < 2) return false
-  if (placementsHaveInflatedOverlap(placements, inflatePx = with(density) { 2.dp.toPx() })) return true
-  if (perLineTextWouldOverlap(placements, fittedFontPx)) return true
-  val minStyle = baseStyle.copy(fontSize = with(density) { minFontPx.toSp() })
-  val fitsAtMinimum = measureOneLineWidth(text, textMeasurer, minStyle) <= availableLinearPx
-  if (!fitsAtMinimum || fittedFontPx <= minFontPx + 0.25f) return true
-  return false
-}
-
-private fun perLineTextWouldOverlap(
-  placements: List<Placement>,
-  fontSizePx: Float,
-): Boolean {
-  val ordered = placements.sortedBy { it.top + it.heightPx * 0.5f }
-  val minCenterGap = fontSizePx * 1.18f
-  for (i in 0 until ordered.lastIndex) {
-    val a = ordered[i]
-    val b = ordered[i + 1]
-    val acy = a.top + a.heightPx * 0.5f
-    val bcy = b.top + b.heightPx * 0.5f
-    val horizontalOverlap = min(a.left + a.widthPx, b.left + b.widthPx) > max(a.left.toFloat(), b.left.toFloat())
-    if (horizontalOverlap && abs(bcy - acy) < minCenterGap) return true
-  }
-  return false
-}
-
-private fun groupedPlacementsStableKeys(grouped: Map<String, List<Placement>>): Set<String> =
-  grouped.map { (groupId, placements) ->
-    stableLayoutKey(groupId, placements.firstOrNull()?.groupText.orEmpty())
-  }.toSet()
-
-private fun stableLayoutKey(
-  groupId: String,
-  text: String,
-): String = "$groupId\u0000$text"
-
-private fun groupGeometry(
-  placements: List<Placement>,
-  horizontalPaddingPx: Float,
-): GroupGeometry {
-  if (placements.isEmpty()) {
-    return GroupGeometry(0f, 0f, 1f, 1f, 1f)
-  }
-  return GroupGeometry(
-    left = placements.minOf { it.left }.toFloat(),
-    top = placements.minOf { it.top }.toFloat(),
-    right = placements.maxOf { it.left + it.widthPx },
-    bottom = placements.maxOf { it.top + it.heightPx },
-    linearWidth = placements.sumOf { max(1.0, (it.widthPx - horizontalPaddingPx).toDouble()) }.toFloat(),
-  )
-}
-
-private fun GroupGeometry.isCloseTo(previous: GroupGeometry): Boolean {
-  fun ratioDelta(
-    a: Float,
-    b: Float,
-  ): Float = abs(a - b) / max(max(a, b), 1f)
-  val centerX = (left + right) * 0.5f
-  val centerY = (top + bottom) * 0.5f
-  val previousCenterX = (previous.left + previous.right) * 0.5f
-  val previousCenterY = (previous.top + previous.bottom) * 0.5f
-  val centerMove =
-    max(abs(centerX - previousCenterX) / max(width, previous.width), abs(centerY - previousCenterY) / max(height, previous.height))
-  return centerMove <= 0.15f &&
-    ratioDelta(width, previous.width) <= 0.18f &&
-    ratioDelta(height, previous.height) <= 0.18f &&
-    ratioDelta(linearWidth, previous.linearWidth) <= 0.18f
-}
-
-private fun previousPerLineStillFits(
-  slices: List<String>,
-  placements: List<Placement>,
-  horizontalPaddingPx: Float,
-  fontSizePx: Float,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-): Boolean {
-  if (slices.size != placements.size || slices.isEmpty()) return false
-  val style = baseStyle.copy(fontSize = with(density) { fontSizePx.toSp() })
-  return slices.zip(placements).all { (slice, placement) ->
-    if (slice.isBlank()) {
-      true
-    } else {
-      val capacity = (placement.widthPx - horizontalPaddingPx).coerceAtLeast(1f)
-      measureOneLineWidth(slice, textMeasurer, style) <= capacity * 1.08f
-    }
   }
 }
-
-private fun previousBlockStillFits(
-  text: String,
-  widthPx: Float,
-  heightPx: Float,
-  fontSizePx: Float,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-): Boolean {
-  val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, fontSizePx), widthPx)
-  return layout.size.height <= heightPx * 1.08f
-}
-
-private fun oneLineFitsWithSpare(
-  text: String,
-  availableLinearPx: Float,
-  minFontPx: Float,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-): Boolean {
-  val width = measureOneLineWidth(text, textMeasurer, baseStyle.copy(fontSize = with(density) { minFontPx.toSp() }))
-  return width <= availableLinearPx * 0.85f
-}
-
-private fun liveOverlayTextStyle(
-  baseStyle: TextStyle,
-  density: androidx.compose.ui.unit.Density,
-  fontPx: Float,
-  textAlign: TextAlign = TextAlign.Unspecified,
-): TextStyle {
-  return baseStyle.copy(
-    fontSize = with(density) { fontPx.toSp() },
-    lineHeight = with(density) { (fontPx * 1.12f).toSp() },
-    textAlign = textAlign,
-  )
-}
-
-private fun textUnitToPx(
-  value: TextUnit,
-  density: androidx.compose.ui.unit.Density,
-): Float =
-  if (value.isSp) {
-    with(density) { value.toPx() }
-  } else {
-    with(density) { 14.sp.toPx() }
-  }
-
-private fun placementsHaveInflatedOverlap(
-  placements: List<Placement>,
-  inflatePx: Float,
-): Boolean {
-  for (i in placements.indices) {
-    for (j in i + 1 until placements.size) {
-      if (rectsOverlap(placements[i], placements[j], inflatePx)) return true
-    }
-  }
-  return false
-}
-
-private fun rectsOverlap(
-  a: Placement,
-  b: Placement,
-  inflatePx: Float,
-): Boolean {
-  val aLeft = a.left - inflatePx
-  val aTop = a.top - inflatePx
-  val aRight = a.left + a.widthPx + inflatePx
-  val aBottom = a.top + a.heightPx + inflatePx
-  val bLeft = b.left - inflatePx
-  val bTop = b.top - inflatePx
-  val bRight = b.left + b.widthPx + inflatePx
-  val bBottom = b.top + b.heightPx + inflatePx
-  return aLeft < bRight && aRight > bLeft && aTop < bBottom && aBottom > bTop
-}
-
-private fun fitLiveOverlayBlock(
-  placements: List<Placement>,
-  text: String,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-  minFontPx: Float,
-  previous: StableLayout?,
-  geometry: GroupGeometry,
-): FittedOverlayGroup {
-  val padPx = with(density) { 3.dp.toPx() }
-  val leftPx = placements.minOf { it.left }.toFloat() - padPx
-  val topPx = placements.minOf { it.top }.toFloat() - padPx
-  val rightPx = placements.maxOf { it.left + it.widthPx } + padPx
-  val bottomPx = placements.maxOf { it.top + it.heightPx } + padPx
-  val widthPx = (rightPx - leftPx).coerceAtLeast(1f)
-  val heightPx = (bottomPx - topPx).coerceAtLeast(1f)
-  val contentWidthPx = (widthPx - padPx * 2f).coerceAtLeast(1f)
-  val contentHeightPx = (heightPx - padPx * 2f).coerceAtLeast(1f)
-  val blockMinFontPx = min(minFontPx, with(density) { 6.sp.toPx() })
-  val heights = placements.map { it.heightPx }.sorted()
-  val sourceFontCapPx =
-    (heights[heights.size / 2].coerceAtLeast(1f) * 0.62f)
-      .coerceIn(blockMinFontPx, with(density) { 30.sp.toPx() })
-  val startFontPx =
-    (contentHeightPx / max(1, estimateLineCount(text, contentWidthPx, textMeasurer, baseStyle, with(density) { minFontPx.toSp() })))
-      .coerceIn(blockMinFontPx, sourceFontCapPx)
-  val fittedFontPx =
-    shrinkFontToBlockFit(
-      text = text,
-      widthPx = contentWidthPx,
-      heightPx = contentHeightPx,
-      startPx = startFontPx,
-      minPx = blockMinFontPx,
-      textMeasurer = textMeasurer,
-      density = density,
-      baseStyle = baseStyle,
-    )
-  val previousBlock =
-    previous?.takeIf {
-      it.mode == OverlayLayoutMode.Block &&
-        geometry.isCloseTo(it.geometry) &&
-        previousBlockStillFits(text, contentWidthPx, contentHeightPx, it.fontSizePx, textMeasurer, density, baseStyle)
-    }
-  val fontPx = previousBlock?.fontSizePx ?: fittedFontPx
-  val fontSize = with(density) { fontPx.toSp() }
-  val lineHeight = with(density) { (fontPx * 1.12f).toSp() }
-  val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, fontPx, TextAlign.Center), contentWidthPx)
-  val fittedHeightPx = max(heightPx, layout.size.height + padPx * 2f)
-  val fittedTopPx = (((topPx + bottomPx) * 0.5f) - fittedHeightPx * 0.5f).coerceAtLeast(0f)
-  val blockCenterUView = leftPx + widthPx * 0.5f
-  val blockCenterVView = fittedTopPx + fittedHeightPx * 0.5f
-  val blockImuExtrap = aggregateImuExtrapForBlock(placements, blockCenterUView, blockCenterVView)
-  return FittedOverlayGroup(
-    fontSize = fontSize,
-    items = emptyList(),
-    block =
-      FittedBlock(
-        text = text,
-        left = leftPx.toInt(),
-        top = fittedTopPx.toInt(),
-        widthDp = with(density) { widthPx.toDp() },
-        heightDp = with(density) { fittedHeightPx.toDp() },
-        fontSize = fontSize,
-        lineHeight = lineHeight,
-        maxLines = max(1, layout.lineCount),
-        imuExtrap = blockImuExtrap,
-      ),
-    stable = StableLayout(OverlayLayoutMode.Block, fontPx, max(1, layout.lineCount), geometry),
-  )
-}
-
-private fun shrinkFontToLinearFit(
-  text: String,
-  availablePx: Float,
-  startPx: Float,
-  minPx: Float,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-): Float {
-  if (text.isBlank()) return startPx
-  var lo = minPx
-  var hi = startPx
-  repeat(8) {
-    val mid = (lo + hi) * 0.5f
-    val width = measureOneLineWidth(text, textMeasurer, baseStyle.copy(fontSize = with(density) { mid.toSp() }))
-    if (width <= availablePx) {
-      lo = mid
-    } else {
-      hi = mid
-    }
-  }
-  return lo
-}
-
-private fun shrinkFontToBlockFit(
-  text: String,
-  widthPx: Float,
-  heightPx: Float,
-  startPx: Float,
-  minPx: Float,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  density: androidx.compose.ui.unit.Density,
-  baseStyle: TextStyle,
-): Float {
-  if (text.isBlank()) return startPx
-  var lo = minPx
-  var hi = startPx.coerceAtLeast(minPx)
-  repeat(8) {
-    val mid = (lo + hi) * 0.5f
-    val layout = measureWrappedText(text, textMeasurer, liveOverlayTextStyle(baseStyle, density, mid), widthPx)
-    if (layout.size.height <= heightPx) {
-      lo = mid
-    } else {
-      hi = mid
-    }
-  }
-  return lo
-}
-
-private fun estimateLineCount(
-  text: String,
-  widthPx: Float,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  baseStyle: TextStyle,
-  fontSize: TextUnit,
-): Int = measureWrappedText(text, textMeasurer, baseStyle.copy(fontSize = fontSize), widthPx).lineCount
-
-private fun splitTextAcrossCapacities(
-  text: String,
-  capacitiesPx: List<Float>,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  style: TextStyle,
-): List<String> {
-  if (capacitiesPx.isEmpty()) return emptyList()
-  val output = MutableList(capacitiesPx.size) { "" }
-  val tokens = text.trim().split(Regex("\\s+")).filter { it.isNotBlank() }.toMutableList()
-  if (tokens.isEmpty()) return output
-
-  var tokenIndex = 0
-  for (slot in capacitiesPx.indices) {
-    if (tokenIndex >= tokens.size) break
-    if (slot == capacitiesPx.lastIndex) {
-      output[slot] = tokens.drop(tokenIndex).joinToString(" ")
-      break
-    }
-    var candidate = ""
-    while (tokenIndex < tokens.size) {
-      val next = if (candidate.isEmpty()) tokens[tokenIndex] else "$candidate ${tokens[tokenIndex]}"
-      if (measureOneLineWidth(next, textMeasurer, style) > capacitiesPx[slot] && candidate.isNotEmpty()) break
-      candidate = next
-      tokenIndex++
-      if (measureOneLineWidth(candidate, textMeasurer, style) > capacitiesPx[slot]) break
-    }
-    output[slot] = candidate
-  }
-  return output
-}
-
-private fun measureWrappedText(
-  text: String,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  style: TextStyle,
-  widthPx: Float,
-): androidx.compose.ui.text.TextLayoutResult =
-  textMeasurer.measure(
-    text = AnnotatedString(text),
-    style = style,
-    softWrap = true,
-    constraints = Constraints(maxWidth = widthPx.toInt().coerceAtLeast(1)),
-  )
-
-private fun measureOneLineWidth(
-  text: String,
-  textMeasurer: androidx.compose.ui.text.TextMeasurer,
-  style: TextStyle,
-): Int =
-  textMeasurer.measure(
-    text = AnnotatedString(text),
-    style = style,
-    maxLines = 1,
-    softWrap = false,
-  ).size.width

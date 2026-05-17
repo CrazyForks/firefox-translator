@@ -85,7 +85,10 @@ class ImuService(
     val ok = sensorManager.registerListener(this, sensor, GYRO_SAMPLE_PERIOD_US)
     if (!ok) Log.w(TAG, "registerListener returned false for gyroscope")
     synchronized(lock) {
-      qw = 1f; qx = 0f; qy = 0f; qz = 0f
+      qw = 1f
+      qx = 0f
+      qy = 0f
+      qz = 0f
       baselineSet = true
     }
   }
@@ -95,8 +98,13 @@ class ImuService(
     synchronized(lock) {
       lastSampleNs = 0L
       baselineSet = false
-      qw = 1f; qx = 0f; qy = 0f; qz = 0f
-      lastOmegaX = 0f; lastOmegaY = 0f; lastOmegaZ = 0f
+      qw = 1f
+      qx = 0f
+      qy = 0f
+      qz = 0f
+      lastOmegaX = 0f
+      lastOmegaY = 0f
+      lastOmegaZ = 0f
     }
   }
 
@@ -105,7 +113,10 @@ class ImuService(
    *  [currentRotation] queries return the drift since this call. */
   fun lockBaseline() {
     synchronized(lock) {
-      qw = 1f; qx = 0f; qy = 0f; qz = 0f
+      qw = 1f
+      qx = 0f
+      qy = 0f
+      qz = 0f
       baselineSet = true
     }
   }
@@ -155,7 +166,9 @@ class ImuService(
       val wx = event.values[0]
       val wy = event.values[1]
       val wz = event.values[2]
-      lastOmegaX = wx; lastOmegaY = wy; lastOmegaZ = wz
+      lastOmegaX = wx
+      lastOmegaY = wy
+      lastOmegaZ = wz
       val omega = sqrt(wx * wx + wy * wy + wz * wz)
       if (omega < 1e-6f) return
 
@@ -175,7 +188,10 @@ class ImuService(
       val n = sqrt(nw * nw + nx * nx + ny * ny + nz * nz)
       if (n > 0f) {
         val inv = 1f / n
-        qw = nw * inv; qx = nx * inv; qy = ny * inv; qz = nz * inv
+        qw = nw * inv
+        qx = nx * inv
+        qy = ny * inv
+        qz = nz * inv
       }
     }
   }

@@ -65,67 +65,6 @@ pub enum DocumentProgressEvent {
     Writing,
 }
 
-#[derive(Debug, Clone, Copy, uniffi::Record)]
-pub struct LiveMotionEstimate {
-    pub valid: bool,
-    pub dx: f32,
-    pub dy: f32,
-    pub confidence: f32,
-    pub matches: u32,
-    pub inliers: u32,
-    pub reset: bool,
-}
-
-/// Per-region similarity transform from the previous frame to the current one
-/// (display-coord 2x3 affine: new_x = a*x + b*y + c, new_y = d*x + e*y + f).
-/// When `valid` is false, the caller should apply the global motion estimate
-/// to the corresponding track instead.
-#[derive(Debug, Clone, Copy, uniffi::Record)]
-pub struct LiveRegionMotion {
-    pub valid: bool,
-    pub a: f32,
-    pub b: f32,
-    pub c: f32,
-    pub d: f32,
-    pub e: f32,
-    pub f: f32,
-    pub g: f32,
-    pub h: f32,
-    pub i: f32,
-    pub inliers: u32,
-    pub matches: u32,
-}
-
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct LiveMotionUpdate {
-    pub global: LiveMotionEstimate,
-    pub regions: Vec<LiveRegionMotion>,
-}
-
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct LiveRegionPrior {
-    pub dx: f32,
-    pub dy: f32,
-    /// Optional pre-selected SAD sample positions in *display* coords, flat
-    /// `[x0, y0, x1, y1, ...]`. Empty means fall back to the 5x5 grid.
-    /// Used by the contour-anchor path: positions are sampled along each
-    /// track's detected contour at confirmation time and reprojected from
-    /// track-local coords each frame.
-    pub feature_positions: Vec<f32>,
-}
-
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct LiveTextLineInput {
-    pub track_id: u64,
-    pub rect: translator::Rect,
-    pub oriented_box: translator::ocr::OrientedRect,
-    pub tight_box: translator::ocr::OrientedRect,
-}
-
-#[derive(Debug, Clone, uniffi::Record)]
-pub struct LiveTextGroup {
-    pub track_ids: Vec<u64>,
-}
 
 #[uniffi::export(with_foreign)]
 pub trait DocumentProgressSink: Send + Sync {
@@ -1279,217 +1218,9 @@ impl FrameHandle {
     }
 }
 
-#[cfg(feature = "ppocr")]
-#[uniffi::export]
-impl FrameHandle {
-    /// Sample a normalized grayscale patch from the area covered by an
-    /// oriented rect (display coords). Used by live-OCR tracks to take a
-    /// content fingerprint at confirmation time and re-sample each frame to
-    /// detect drift: if the rect slides off its original content, a fresh
-    /// patch will NCC-mismatch the stored one and the track gets retired.
-    fn sample_oriented_gray_patch(
-        &self,
-        rect_cx: f32,
-        rect_cy: f32,
-        rect_width: f32,
-        rect_height: f32,
-        rect_angle_radians: f32,
-        patch_w: u32,
-        patch_h: u32,
-    ) -> Result<Vec<u8>, CatalogError> {
-        let state = self.state.lock().map_err(|_| poisoned())?;
-        translator::live_tracking::sample_oriented_gray_patch(
-            &state.rgba,
-            state.width,
-            state.height,
-            state.rotation_degrees,
-            rect_cx,
-            rect_cy,
-            rect_width,
-            rect_height,
-            rect_angle_radians,
-            patch_w,
-            patch_h,
-        )
-        .map_err(CatalogError::from)
-    }
-}
 
-/// Normalized cross-correlation in [-1, 1] between two equal-length grayscale
-/// patches. Brightness/contrast invariant. Companion to
-/// `FrameHandle::sample_oriented_gray_patch` for live-OCR drift detection.
-#[cfg(feature = "ppocr")]
-#[uniffi::export]
-pub fn ncc_gray_patches(a: Vec<u8>, b: Vec<u8>) -> f32 {
-    translator::live_tracking::ncc_gray(&a, &b)
-}
 
-#[cfg(feature = "ppocr")]
-#[derive(uniffi::Object)]
-pub struct LiveMotionTracker {
-    state: std::sync::Mutex<translator::live_tracking::LiveFrameTracker>,
-}
 
-#[cfg(feature = "ppocr")]
-#[uniffi::export]
-impl LiveMotionTracker {
-    #[uniffi::constructor]
-    fn new() -> Arc<Self> {
-        Arc::new(Self {
-            state: std::sync::Mutex::new(translator::live_tracking::LiveFrameTracker::new()),
-        })
-    }
-
-    fn reset(&self) {
-        if let Ok(mut state) = self.state.lock() {
-            state.reset();
-        }
-    }
-
-    fn update(
-        &self,
-        frame: Arc<FrameHandle>,
-        crop: translator::Rect,
-    ) -> Result<LiveMotionEstimate, CatalogError> {
-        let frame_state = frame.state.lock().map_err(|_| poisoned())?;
-        let mut tracker = self.state.lock().map_err(|_| CatalogError::Other {
-            reason: "motion tracker mutex poisoned".to_string(),
-        })?;
-        let estimate = tracker
-            .update(
-                &frame_state.rgba,
-                frame_state.width,
-                frame_state.height,
-                frame_state.rotation_degrees,
-                crop,
-            )
-            .map_err(CatalogError::from)?;
-        Ok(LiveMotionEstimate {
-            valid: estimate.valid,
-            dx: estimate.dx,
-            dy: estimate.dy,
-            confidence: estimate.confidence,
-            matches: estimate.matches,
-            inliers: estimate.inliers,
-            reset: estimate.reset,
-        })
-    }
-
-    /// Like `update`, but also fits a per-track similarity for each region rect.
-    /// Returned `regions` is aligned 1:1 with `track_rects`; invalid entries mean
-    /// the caller should fall back to applying the `global` translation.
-    /// `track_priors_display` may be empty (use carry-over prior) or aligned 1:1
-    /// with `track_rects` (gyro-derived per-region prior translations in
-    /// display-pixel space).
-    fn update_with_regions(
-        &self,
-        frame: Arc<FrameHandle>,
-        crop: translator::Rect,
-        track_rects: Vec<translator::Rect>,
-        track_priors_display: Vec<LiveRegionPrior>,
-    ) -> Result<LiveMotionUpdate, CatalogError> {
-        let frame_state = frame.state.lock().map_err(|_| poisoned())?;
-        let mut tracker = self.state.lock().map_err(|_| CatalogError::Other {
-            reason: "motion tracker mutex poisoned".to_string(),
-        })?;
-        let priors_internal: Vec<(f32, f32)> = track_priors_display
-            .iter()
-            .map(|p| (p.dx, p.dy))
-            .collect();
-        let features_internal: Vec<Vec<(f32, f32)>> = track_priors_display
-            .iter()
-            .map(|p| {
-                let n = p.feature_positions.len() / 2;
-                (0..n)
-                    .map(|i| (p.feature_positions[i * 2], p.feature_positions[i * 2 + 1]))
-                    .collect()
-            })
-            .collect();
-        let (estimate, regions) = tracker
-            .update_with_regions(
-                &frame_state.rgba,
-                frame_state.width,
-                frame_state.height,
-                frame_state.rotation_degrees,
-                crop,
-                translator::live_tracking::default_target_pixels(),
-                &track_rects,
-                &priors_internal,
-                &features_internal,
-            )
-            .map_err(CatalogError::from)?;
-        Ok(LiveMotionUpdate {
-            global: LiveMotionEstimate {
-                valid: estimate.valid,
-                dx: estimate.dx,
-                dy: estimate.dy,
-                confidence: estimate.confidence,
-                matches: estimate.matches,
-                inliers: estimate.inliers,
-                reset: estimate.reset,
-            },
-            regions: regions
-                .into_iter()
-                .map(|r| LiveRegionMotion {
-                    valid: r.valid,
-                    a: r.a,
-                    b: r.b,
-                    c: r.c,
-                    d: r.d,
-                    e: r.e,
-                    f: r.f,
-                    g: r.g,
-                    h: r.h,
-                    i: r.i,
-                    inliers: r.inliers,
-                    matches: r.matches,
-                })
-                .collect(),
-        })
-    }
-}
-
-#[cfg(feature = "ppocr")]
-#[uniffi::export]
-pub fn group_live_text_lines(lines: Vec<LiveTextLineInput>) -> Vec<LiveTextGroup> {
-    if lines.is_empty() {
-        return Vec::new();
-    }
-
-    let text_lines: Vec<translator::ocr::TextLine> = lines
-        .iter()
-        .map(|line| translator::ocr::TextLine {
-            text: format!("track{}", line.track_id),
-            bounding_box: line.rect,
-            oriented_box: line.oriented_box,
-            tight_box: line.tight_box,
-            word_rects: vec![line.rect],
-        })
-        .collect();
-
-    translator::ocr::group_live_lines_into_blocks(text_lines)
-        .into_iter()
-        .filter_map(|block| {
-            let mut ids = Vec::new();
-            for line in block.lines {
-                for token in line.text.split_whitespace() {
-                    if let Some(raw_id) = token.strip_prefix("track") {
-                        if let Ok(id) = raw_id.parse::<u64>() {
-                            ids.push(id);
-                        }
-                    } else if let Ok(id) = token.parse::<u64>() {
-                        ids.push(id);
-                    }
-                }
-            }
-            if ids.is_empty() {
-                None
-            } else {
-                Some(LiveTextGroup { track_ids: ids })
-            }
-        })
-        .collect()
-}
 
 #[cfg(feature = "ppocr")]
 fn ensure_oriented_locked(
@@ -1566,6 +1297,361 @@ fn scale_detected_box(
         contour,
         score: b.score,
     }
+}
+
+// =========================================================================
+// Planar-surface tracker (Phase D wiring of FUTURE_PLANAR_TRACKER.md).
+// Lives alongside the legacy LiveMotionTracker for incremental rollout; the
+// Kotlin engine picks which to use behind a feature flag.
+// =========================================================================
+
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Enum)]
+pub enum PlanarTrackerState {
+    Idle,
+    Acquiring,
+    Locked,
+    Lost,
+}
+
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Record)]
+pub struct PlanarFrameResult {
+    pub state: PlanarTrackerState,
+    /// Active anchor id when state is Locked or last-known anchor when Lost.
+    /// 0 when state is Idle or Acquiring.
+    pub anchor_id: u64,
+    /// 9-element row-major homography. Empty unless state is Locked.
+    pub homography: Vec<f32>,
+    /// True the first frame after a brand-new acquisition (Kotlin should
+    /// run detect + recognise + translate). False on subsequent frames or
+    /// when re-locking onto a cached anchor (skip OCR).
+    pub is_new: bool,
+    /// Inlier count for the locked fit; 0 otherwise.
+    pub inliers: u32,
+}
+
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Record, Clone)]
+pub struct PlanarOverlayInput {
+    pub id: u64,
+    /// 8 floats = 4 corners (x,y) in canonical-frame coords:
+    /// [tlx, tly, trx, try, brx, bry, blx, bly].
+    pub quad: Vec<f32>,
+    pub payload: String,
+}
+
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Record)]
+pub struct PlanarTextRenderItem {
+    pub id: u64,
+    /// 8 floats = 4 corners (x,y), canonical-frame coords, TL/TR/BR/BL.
+    pub quad: Vec<f32>,
+    pub translated_text: String,
+    pub source_text: String,
+    /// BCP-47 of the target language (font-fallback hint).
+    pub language: String,
+    pub bg_argb: u32,
+    pub fg_argb: u32,
+    pub suggested_font_px: f32,
+}
+
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Object)]
+pub struct LivePlanarTracker {
+    state: std::sync::Mutex<translator::planar_engine::LivePlanarEngine>,
+    /// Output buffer prepared by `prepare_text_overlay_render` (uniffi)
+    /// and consumed by `Java_..._PlanarRenderJni_renderInto` (JNI).
+    /// This split exists to avoid the uniffi `Vec<u8>` marshalling cost
+    /// for multi-MB bitmap returns: items go in via uniffi (small
+    /// payload, cheap), the rendered RGBA comes out via JNI memcpy
+    /// straight into a Kotlin-owned DirectByteBuffer.
+    pending_bitmap: std::sync::Mutex<Option<Vec<u8>>>,
+}
+
+#[cfg(feature = "planar-tracker")]
+#[uniffi::export]
+impl LivePlanarTracker {
+    #[uniffi::constructor]
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            state: std::sync::Mutex::new(translator::planar_engine::LivePlanarEngine::new(
+                translator::planar_engine::EngineConfig::default(),
+            )),
+            pending_bitmap: std::sync::Mutex::new(None),
+        })
+    }
+
+    /// Return this tracker's address on the Rust heap as a `u64`. Pair
+    /// with [`PlanarRenderJni.renderInto`] — Kotlin passes this back as
+    /// a `jlong`, the JNI shim casts it to `&LivePlanarTracker` and
+    /// reads `pending_bitmap`. The `Arc` keeps the address stable as
+    /// long as Kotlin holds the wrapper.
+    fn raw_address_for_jni(&self) -> u64 {
+        self as *const LivePlanarTracker as u64
+    }
+
+    /// Render the text-overlay bitmap and store it for retrieval by the
+    /// JNI fast-path. Pair with `PlanarRenderJni.renderInto` — that
+    /// reads `pending_bitmap` and memcpys it into a Kotlin-owned
+    /// DirectByteBuffer, skipping the uniffi `Vec<u8>` marshalling +
+    /// JVM ByteArray allocation we'd otherwise pay 3–4 times per
+    /// acquire (each bitmap is ~800 KB – 1.2 MB).
+    ///
+    /// Returns the byte length of the rendered bitmap, or 0 on failure
+    /// (zero dims, font provider exhausted). Caller must size its
+    /// destination buffer to `width * height * 4`.
+    fn prepare_text_overlay_render(
+        &self,
+        frame_width: u32,
+        frame_height: u32,
+        items: Vec<PlanarTextRenderItem>,
+    ) -> u32 {
+        let engine_items: Vec<translator::planar_engine::TextRenderItem> = items
+            .into_iter()
+            .filter_map(|it| {
+                if it.quad.len() != 8 {
+                    return None;
+                }
+                Some(translator::planar_engine::TextRenderItem {
+                    id: it.id,
+                    quad: [
+                        (it.quad[0], it.quad[1]),
+                        (it.quad[2], it.quad[3]),
+                        (it.quad[4], it.quad[5]),
+                        (it.quad[6], it.quad[7]),
+                    ],
+                    translated_text: it.translated_text,
+                    source_text: it.source_text,
+                    language: it.language,
+                    bg_argb: it.bg_argb,
+                    fg_argb: it.fg_argb,
+                    suggested_font_px: it.suggested_font_px,
+                })
+            })
+            .collect();
+        let bytes = {
+            let guard = match self.state.lock() {
+                Ok(g) => g,
+                Err(_) => return 0,
+            };
+            match guard.render_text_overlay_bitmap(
+                frame_width,
+                frame_height,
+                &engine_items,
+                &crate::android_font_provider::AndroidFontProvider,
+            ) {
+                Some(b) => b,
+                None => return 0,
+            }
+        };
+        let len = bytes.len() as u32;
+        if let Ok(mut slot) = self.pending_bitmap.lock() {
+            *slot = Some(bytes);
+        }
+        len
+    }
+
+    /// Exposes the pending-bitmap slot to the JNI shim (same crate).
+    /// Not part of the uniffi-visible surface — uniffi can't see
+    /// `pub(crate)`.
+    pub(crate) fn take_pending_bitmap(&self) -> Option<Vec<u8>> {
+        self.pending_bitmap.lock().ok().and_then(|mut s| s.take())
+    }
+
+    /// Feed one camera frame through the state machine. The current
+    /// `display_crop` is what the engine should treat as the working
+    /// region — we use its cached grayscale.
+    fn process_frame(
+        &self,
+        frame: Arc<FrameHandle>,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+        imu_stable: bool,
+        timestamp_ns: u64,
+    ) -> Result<PlanarFrameResult, CatalogError> {
+        let mut state = frame.state.lock().map_err(|_| poisoned())?;
+        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
+        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
+        let mut engine = self.state.lock().map_err(|_| poisoned())?;
+        let cmd = engine.process_frame(&oriented.gray, imu_stable, timestamp_ns);
+        Ok(cmd_to_result(cmd))
+    }
+
+    /// Like `process_frame` but seeds RANSAC with an IMU-derived
+    /// homography prior. `imu_rotation_dev` is the 9-element row-major
+    /// device-frame rotation matrix at this camera frame (the Android
+    /// gyro fusion output, e.g. from
+    /// `ImuService.currentRotation`). `intrinsics` are the camera's
+    /// fx/fy/cx/cy in the same pixel space as the analyser frame
+    /// (after rotation to display orientation). Pass empty
+    /// `imu_rotation_dev` (length != 9) to disable the prior for that
+    /// frame.
+    fn process_frame_with_imu(
+        &self,
+        frame: Arc<FrameHandle>,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+        imu_stable: bool,
+        timestamp_ns: u64,
+        imu_rotation_dev: Vec<f32>,
+        intrinsics_fx: f32,
+        intrinsics_fy: f32,
+        intrinsics_cx: f32,
+        intrinsics_cy: f32,
+    ) -> Result<PlanarFrameResult, CatalogError> {
+        let mut state = frame.state.lock().map_err(|_| poisoned())?;
+        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
+        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
+        let mut engine = self.state.lock().map_err(|_| poisoned())?;
+        let cmd = if imu_rotation_dev.len() == 9 {
+            let mut rot = [0.0f32; 9];
+            rot.copy_from_slice(&imu_rotation_dev[..9]);
+            let intr = translator::imu_prior::CameraIntrinsics {
+                fx: intrinsics_fx,
+                fy: intrinsics_fy,
+                cx: intrinsics_cx,
+                cy: intrinsics_cy,
+            };
+            engine.process_frame_with_imu(&oriented.gray, imu_stable, timestamp_ns, &rot, &intr)
+        } else {
+            engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
+        };
+        Ok(cmd_to_result(cmd))
+    }
+
+    /// Force a fresh acquisition from the current frame's grayscale.
+    /// Returns the new anchor id, or 0 if no anchor could be built (the
+    /// cooldown blocked it or the frame had no usable features).
+    fn acquire_now(
+        &self,
+        frame: Arc<FrameHandle>,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+        timestamp_ns: u64,
+    ) -> Result<u64, CatalogError> {
+        let mut state = frame.state.lock().map_err(|_| poisoned())?;
+        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
+        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
+        let mut engine = self.state.lock().map_err(|_| poisoned())?;
+        Ok(engine.acquire_now(&oriented.gray, timestamp_ns).unwrap_or(0))
+    }
+
+    /// Like `acquire_now` but limits anchor features to those inside any
+    /// of the given axis-aligned regions (full-crop coords; same space
+    /// as detected text boxes scaled up via `detect_text_in_frame`).
+    /// Padded by `pad_px` on each side so the anchor includes a small
+    /// border around each region.
+    fn acquire_now_in_regions(
+        &self,
+        frame: Arc<FrameHandle>,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+        regions: Vec<translator::Rect>,
+        pad_px: u32,
+        timestamp_ns: u64,
+    ) -> Result<u64, CatalogError> {
+        let mut state = frame.state.lock().map_err(|_| poisoned())?;
+        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
+        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
+        let tuples: Vec<(u32, u32, u32, u32)> = regions
+            .iter()
+            .map(|r| (r.left, r.top, r.right, r.bottom))
+            .collect();
+        let mut engine = self.state.lock().map_err(|_| poisoned())?;
+        Ok(engine
+            .acquire_now_in_regions(&oriented.gray, &tuples, pad_px, timestamp_ns)
+            .unwrap_or(0))
+    }
+
+    /// Attach the canonical-frame overlays for an anchor (one call per
+    /// OCR pass). Returns false if `anchor_id` is no longer in the LRU
+    /// cache.
+    fn set_overlays(&self, anchor_id: u64, overlays: Vec<PlanarOverlayInput>) -> bool {
+        let mut engine = match self.state.lock() {
+            Ok(g) => g,
+            Err(_) => return false,
+        };
+        let converted: Vec<translator::planar_engine::CanonicalOverlay> = overlays
+            .into_iter()
+            .filter_map(overlay_input_to_canonical)
+            .collect();
+        engine.set_overlays(anchor_id, converted)
+    }
+
+
+
+    fn current_anchor(&self) -> u64 {
+        match self.state.lock() {
+            Ok(g) => g.current_anchor().unwrap_or(0),
+            Err(_) => 0,
+        }
+    }
+
+    fn clear(&self) {
+        if let Ok(mut g) = self.state.lock() {
+            g.clear();
+        }
+    }
+}
+
+#[cfg(feature = "planar-tracker")]
+fn cmd_to_result(cmd: translator::planar_engine::TrackerCommand) -> PlanarFrameResult {
+    use translator::planar_engine::TrackerCommand as C;
+    match cmd {
+        C::Idle => PlanarFrameResult {
+            state: PlanarTrackerState::Idle,
+            anchor_id: 0,
+            homography: Vec::new(),
+            is_new: false,
+            inliers: 0,
+        },
+        C::Acquiring => PlanarFrameResult {
+            state: PlanarTrackerState::Acquiring,
+            anchor_id: 0,
+            homography: Vec::new(),
+            is_new: false,
+            inliers: 0,
+        },
+        C::Locked {
+            anchor_id,
+            homography,
+            is_new,
+            inliers,
+        } => PlanarFrameResult {
+            state: PlanarTrackerState::Locked,
+            anchor_id,
+            homography: homography.to_vec(),
+            is_new,
+            inliers: inliers as u32,
+        },
+        C::Lost { last_anchor_id } => PlanarFrameResult {
+            state: PlanarTrackerState::Lost,
+            anchor_id: last_anchor_id,
+            homography: Vec::new(),
+            is_new: false,
+            inliers: 0,
+        },
+    }
+}
+
+#[cfg(feature = "planar-tracker")]
+fn overlay_input_to_canonical(
+    o: PlanarOverlayInput,
+) -> Option<translator::planar_engine::CanonicalOverlay> {
+    if o.quad.len() != 8 {
+        return None;
+    }
+    Some(translator::planar_engine::CanonicalOverlay {
+        id: o.id,
+        quad: [
+            (o.quad[0], o.quad[1]),
+            (o.quad[2], o.quad[3]),
+            (o.quad[4], o.quad[5]),
+            (o.quad[6], o.quad[7]),
+        ],
+        payload: o.payload,
+    })
 }
 
 #[cfg(all(test, feature = "ppocr"))]
