@@ -2,15 +2,24 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::{fs, path::Path};
 
-/// Log threshold for mutex wait/hold times in the live pipeline. We
-/// emit a single info line when either the wait or the hold exceeds
-/// this, so steady-state runs stay quiet but a stall surfaces with the
-/// label of the contending call site.
+/// Diagnostic logging for the live pipeline. Flip to `true` while
+/// investigating contention or per-stage costs in the planar
+/// acquire/composite path; otherwise leave off — the lock timing +
+/// raster body lines are noisy in normal use.
+#[cfg(feature = "planar-tracker")]
+const LIVE_PIPELINE_DIAG: bool = false;
+
+/// Threshold in ms below which we suppress lock-timing logs even when
+/// `LIVE_PIPELINE_DIAG` is on — keeps the diagnostic mode focused on
+/// actually-slow operations.
 #[cfg(feature = "planar-tracker")]
 const LOCK_LOG_THRESHOLD_MS: f64 = 3.0;
 
 #[cfg(feature = "planar-tracker")]
 fn log_lock_timing(label: &str, wait: std::time::Duration, hold: std::time::Duration) {
+    if !LIVE_PIPELINE_DIAG {
+        return;
+    }
     let wait_ms = wait.as_secs_f64() * 1_000.0;
     let hold_ms = hold.as_secs_f64() * 1_000.0;
     if wait_ms > LOCK_LOG_THRESHOLD_MS || hold_ms > LOCK_LOG_THRESHOLD_MS {
@@ -1192,8 +1201,8 @@ impl FrameHandle {
         }
     }
 
-    /// Exposes the inner state mutex to the JNI shim (same crate). Not part of
-    /// the uniffi-visible surface.
+    /// Exposes the inner state mutex to JNI shims (same crate). Not
+    /// part of the uniffi-visible surface.
     pub(crate) fn state(&self) -> &std::sync::Mutex<FrameState> {
         &self.state
     }
@@ -1353,16 +1362,6 @@ pub struct PlanarFrameResult {
 }
 
 #[cfg(feature = "planar-tracker")]
-#[derive(uniffi::Record, Clone)]
-pub struct PlanarOverlayInput {
-    pub id: u64,
-    /// 8 floats = 4 corners (x,y) in canonical-frame coords:
-    /// [tlx, tly, trx, try, brx, bry, blx, bly].
-    pub quad: Vec<f32>,
-    pub payload: String,
-}
-
-#[cfg(feature = "planar-tracker")]
 #[derive(uniffi::Record)]
 pub struct PlanarTextRenderItem {
     pub id: u64,
@@ -1403,13 +1402,8 @@ struct CurrentOverlayItem {
 #[derive(uniffi::Object)]
 pub struct LivePlanarTracker {
     state: std::sync::Mutex<translator::planar_engine::LivePlanarEngine>,
-    /// Legacy slot for `prepare_text_overlay_render` →
-    /// `PlanarRenderJni.renderInto`. Still used by the old bitmap-
-    /// overlay path while the composite-in-Rust refactor migrates.
-    /// Kept for compatibility; will retire with task #6.
-    pending_bitmap: std::sync::Mutex<Option<Vec<u8>>>,
     /// Per-item resident rasterized overlays for the composite
-    /// pipeline. Each item is keyed by its stable id; `upsert_overlay_item`
+    /// pipeline. Each item is keyed by its stable id; `upsert_overlay_block`
     /// adds or replaces, `retain_overlay_items` drops anything outside
     /// a set. Persisted across many composite calls so dense pages only
     /// re-rasterize the handful of items whose text changed in the
@@ -1419,19 +1413,17 @@ pub struct LivePlanarTracker {
     /// In-flight acquire pipelines pass the generation they captured at
     /// launch as a parameter; before each potentially-slow step
     /// (detect, recognize, translate) the pipeline checks whether the
-    /// generation has moved on and bails if so. Eliminates the
-    /// Kotlin-side `globalGeneration` + per-step generation check
-    /// scaffolding.
+    /// generation has moved on and bails if so.
     generation: std::sync::atomic::AtomicU64,
-    /// Per-entry id source for items shipped to `upsert_overlay_item`.
-    /// We keep stable ids across rec batches so each item's rasterized
+    /// Per-block id source for items shipped to `upsert_overlay_block`.
+    /// We keep stable ids across rec batches so each block's rasterized
     /// bitmap is reused unchanged when only its translation is added.
     next_entry_id: std::sync::atomic::AtomicU64,
     /// Output buffer produced by `composite_frame` (uniffi) and
     /// consumed by `Java_..._PlanarRenderJni_compositeInto` (JNI).
     /// Holds the fully-composited camera + overlay RGBA at display
-    /// resolution. Same Vec<u8>-via-JNI-memcpy trick as `pending_bitmap`
-    /// to skip uniffi marshalling of an 8 MB buffer per frame.
+    /// resolution. Vec<u8>-via-JNI-memcpy avoids uniffi marshalling for
+    /// an 8 MB buffer per frame.
     pending_display: std::sync::Mutex<Option<Vec<u8>>>,
 }
 
@@ -1444,7 +1436,6 @@ impl LivePlanarTracker {
             state: std::sync::Mutex::new(translator::planar_engine::LivePlanarEngine::new(
                 translator::planar_engine::EngineConfig::default(),
             )),
-            pending_bitmap: std::sync::Mutex::new(None),
             current_overlay_items: std::sync::Mutex::new(Vec::new()),
             generation: std::sync::atomic::AtomicU64::new(0),
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
@@ -1459,70 +1450,6 @@ impl LivePlanarTracker {
     /// long as Kotlin holds the wrapper.
     fn raw_address_for_jni(&self) -> u64 {
         self as *const LivePlanarTracker as u64
-    }
-
-    /// Render the text-overlay bitmap and store it for retrieval by the
-    /// JNI fast-path. Pair with `PlanarRenderJni.renderInto` — that
-    /// reads `pending_bitmap` and memcpys it into a Kotlin-owned
-    /// DirectByteBuffer, skipping the uniffi `Vec<u8>` marshalling +
-    /// JVM ByteArray allocation we'd otherwise pay 3–4 times per
-    /// acquire (each bitmap is ~800 KB – 1.2 MB).
-    ///
-    /// Returns the byte length of the rendered bitmap, or 0 on failure
-    /// (zero dims, font provider exhausted). Caller must size its
-    /// destination buffer to `width * height * 4`.
-    fn prepare_text_overlay_render(
-        &self,
-        frame_width: u32,
-        frame_height: u32,
-        items: Vec<PlanarTextRenderItem>,
-    ) -> u32 {
-        let engine_items: Vec<translator::planar_engine::TextRenderItem> = items
-            .into_iter()
-            .filter_map(|it| {
-                if it.quad.len() != 8 {
-                    return None;
-                }
-                Some(translator::planar_engine::TextRenderItem {
-                    id: it.id,
-                    quad: [
-                        (it.quad[0], it.quad[1]),
-                        (it.quad[2], it.quad[3]),
-                        (it.quad[4], it.quad[5]),
-                        (it.quad[6], it.quad[7]),
-                    ],
-                    translated_text: it.translated_text,
-                    source_text: it.source_text,
-                    language: it.language,
-                    bg_argb: it.bg_argb,
-                    fg_argb: it.fg_argb,
-                    suggested_font_px: it.suggested_font_px,
-                })
-            })
-            .collect();
-        // Rasterize without locking the engine — see the matching
-        // comment in `prepare_overlay_for_composite` for why.
-        let bytes = match translator::planar_engine::render_text_overlay_bitmap(
-            frame_width,
-            frame_height,
-            &engine_items,
-            &crate::android_font_provider::AndroidFontProvider,
-        ) {
-            Some(b) => b,
-            None => return 0,
-        };
-        let len = bytes.len() as u32;
-        if let Ok(mut slot) = self.pending_bitmap.lock() {
-            *slot = Some(bytes);
-        }
-        len
-    }
-
-    /// Exposes the pending-bitmap slot to the JNI shim (same crate).
-    /// Not part of the uniffi-visible surface — uniffi can't see
-    /// `pub(crate)`.
-    pub(crate) fn take_pending_bitmap(&self) -> Option<Vec<u8>> {
-        self.pending_bitmap.lock().ok().and_then(|mut s| s.take())
     }
 
     /// Upsert the resident overlay item with id `id`. If the content
@@ -1589,15 +1516,17 @@ impl LivePlanarTracker {
                 items.push(new_item);
             }
         }
-        let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
-        if raster_ms > LOCK_LOG_THRESHOLD_MS {
-            log::info!(
-                "[work] block raster: id={} {:.1}ms strips={} text={:?}",
-                id,
-                raster_ms,
-                strips.len(),
-                display_text,
-            );
+        if LIVE_PIPELINE_DIAG {
+            let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
+            if raster_ms > LOCK_LOG_THRESHOLD_MS {
+                log::info!(
+                    "[work] block raster: id={} {:.1}ms strips={} text={:?}",
+                    id,
+                    raster_ms,
+                    strips.len(),
+                    display_text,
+                );
+            }
         }
     }
 
@@ -2158,15 +2087,17 @@ impl LivePlanarTracker {
             overlay_acquired - overlay_wait,
             overlay_released - overlay_acquired,
         );
-        let composite_ms = (composite_end - composite_start).as_secs_f64() * 1_000.0;
-        if composite_ms > LOCK_LOG_THRESHOLD_MS {
-            log::info!(
-                "[work] composite_frame body: {:.1}ms ({}x{}, items={})",
-                composite_ms,
-                display_width,
-                display_height,
-                items_count,
-            );
+        if LIVE_PIPELINE_DIAG {
+            let composite_ms = (composite_end - composite_start).as_secs_f64() * 1_000.0;
+            if composite_ms > LOCK_LOG_THRESHOLD_MS {
+                log::info!(
+                    "[work] composite_frame body: {:.1}ms ({}x{}, items={})",
+                    composite_ms,
+                    display_width,
+                    display_height,
+                    items_count,
+                );
+            }
         }
         if result.is_err() {
             return 0;
@@ -2307,21 +2238,6 @@ impl LivePlanarTracker {
         Ok(result)
     }
 
-    /// Attach the canonical-frame overlays for an anchor (one call per
-    /// OCR pass). Returns false if `anchor_id` is no longer in the LRU
-    /// cache.
-    fn set_overlays(&self, anchor_id: u64, overlays: Vec<PlanarOverlayInput>) -> bool {
-        let mut engine = match self.state.lock() {
-            Ok(g) => g,
-            Err(_) => return false,
-        };
-        let converted: Vec<translator::planar_engine::CanonicalOverlay> = overlays
-            .into_iter()
-            .filter_map(overlay_input_to_canonical)
-            .collect();
-        engine.set_overlays(anchor_id, converted)
-    }
-
 
 
     fn current_anchor(&self) -> u64 {
@@ -2376,25 +2292,6 @@ fn cmd_to_result(cmd: translator::planar_engine::TrackerCommand) -> PlanarFrameR
             inliers: 0,
         },
     }
-}
-
-#[cfg(feature = "planar-tracker")]
-fn overlay_input_to_canonical(
-    o: PlanarOverlayInput,
-) -> Option<translator::planar_engine::CanonicalOverlay> {
-    if o.quad.len() != 8 {
-        return None;
-    }
-    Some(translator::planar_engine::CanonicalOverlay {
-        id: o.id,
-        quad: [
-            (o.quad[0], o.quad[1]),
-            (o.quad[2], o.quad[3]),
-            (o.quad[4], o.quad[5]),
-            (o.quad[6], o.quad[7]),
-        ],
-        payload: o.payload,
-    })
 }
 
 /// Outcome reported by `run_acquire_pipeline`. The pipeline either ran
@@ -2812,42 +2709,3 @@ fn oriented_corners(o: &translator::ocr::OrientedRect) -> [(f32, f32); 4] {
     out
 }
 
-#[cfg(all(test, feature = "ppocr"))]
-mod live_grouping_tests {
-    use super::*;
-
-    fn line(track_id: u64, left: u32, top: u32, right: u32, bottom: u32) -> LiveTextLineInput {
-        let rect = translator::Rect {
-            left,
-            top,
-            right,
-            bottom,
-        };
-        let oriented = translator::ocr::OrientedRect::axis_aligned(rect);
-        let tight = translator::ocr::OrientedRect {
-            cx: oriented.cx,
-            cy: oriented.cy,
-            width: oriented.width,
-            height: (oriented.height * 0.55).max(1.0),
-            angle_radians: oriented.angle_radians,
-        };
-        LiveTextLineInput {
-            track_id,
-            rect,
-            oriented_box: oriented,
-            tight_box: tight,
-        }
-    }
-
-    #[test]
-    fn live_grouping_keeps_three_stacked_label_lines_in_one_group() {
-        let groups = group_live_text_lines(vec![
-            line(10, 100, 100, 260, 126),
-            line(11, 101, 132, 258, 158),
-            line(12, 99, 164, 255, 190),
-        ]);
-
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].track_ids, vec![10, 11, 12]);
-    }
-}

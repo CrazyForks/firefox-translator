@@ -1,13 +1,11 @@
-//! JNI fast-path for the planar tracker's overlay bitmap.
+//! JNI fast-path for the planar tracker's composited display frame.
 //!
-//! Companion to `prepare_text_overlay_render` (uniffi method on
-//! `LivePlanarTracker`). The uniffi side runs the rasterizer and parks
-//! the RGBA bytes in `LivePlanarTracker::pending_bitmap`; this shim
-//! takes them out and memcpys them into a Kotlin-owned
-//! `DirectByteBuffer`. The buffer's backing memory belongs to the
-//! caller (preallocated for the canonical-frame size), so there's no
-//! allocation per render — and crucially, no uniffi `Vec<u8>`
-//! marshalling + JVM `ByteArray` round-trip on the multi-MB return.
+//! Companion to `LivePlanarTracker::composite_frame` (uniffi). The
+//! uniffi side composites camera + overlay into a Vec<u8> and parks it
+//! in `pending_display`; this shim memcpys those bytes into a
+//! Kotlin-owned `DirectByteBuffer` (the live-translate SurfaceView's
+//! backing buffer). Bypasses uniffi's `Vec<u8>` marshalling, which
+//! would cost a JVM ByteArray allocation + copy per frame.
 //!
 //! Safety boundary: Kotlin must hold the `Arc<LivePlanarTracker>` for
 //! the duration of this call, otherwise `tracker_ptr` is dangling. The
@@ -21,33 +19,6 @@ use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 
 use crate::uniffi_catalog::LivePlanarTracker;
-
-/// Pop the pending bitmap from `tracker_ptr` and memcpy it into `dst`
-/// (a `DirectByteBuffer` with capacity ≥ length of the pending bytes).
-/// Returns the number of bytes written, or 0 on any failure (no pending
-/// bitmap, null buffer, insufficient capacity, poisoned mutex).
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_davidv_translator_PlanarRenderJni_renderInto(
-    env: JNIEnv,
-    _class: JClass,
-    tracker_ptr: jlong,
-    dst: JByteBuffer,
-) -> jint {
-    if tracker_ptr == 0 {
-        return 0;
-    }
-    // SAFETY: Kotlin holds the wrapper class while this call is in
-    // flight; the address came from `raw_address_for_jni` and is
-    // properly aligned.
-    let tracker = unsafe { &*(tracker_ptr as *const LivePlanarTracker) };
-
-    let bytes = match tracker.take_pending_bitmap() {
-        Some(b) => b,
-        None => return 0,
-    };
-
-    copy_into_direct_buffer(env, &dst, &bytes)
-}
 
 /// Pop the pending composited display frame and memcpy it into `dst`.
 /// Pair with `LivePlanarTracker.composite_frame` (uniffi). Same

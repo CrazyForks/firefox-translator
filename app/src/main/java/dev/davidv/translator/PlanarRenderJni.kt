@@ -37,20 +37,9 @@ internal object PlanarRenderJni {
   init {
     // uniffi loads the .so via JNA, which does NOT process JNI symbols.
     // We need an explicit System.loadLibrary so our `external fun`
-    // below can resolve `Java_..._PlanarRenderJni_renderInto`.
+    // below can resolve `Java_..._PlanarRenderJni_compositeInto`.
     System.loadLibrary("bindings")
   }
-
-  /** Copy the pending overlay bitmap (parked in the tracker by the
-   *  most recent `prepareTextOverlayRender` call) into `dst`. Returns
-   *  the number of bytes written, or 0 on any failure. The destination
-   *  buffer must have capacity ≥ pendingBitmapByteLen.
-   */
-  @JvmStatic
-  external fun renderInto(
-    trackerPtr: Long,
-    dst: ByteBuffer,
-  ): Int
 
   /** Copy the pending composited camera+overlay frame (parked by the
    *  most recent [LivePlanarTracker.compositeFrame] call) into `dst`.
