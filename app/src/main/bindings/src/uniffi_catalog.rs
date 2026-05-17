@@ -23,7 +23,7 @@ fn log_lock_timing(label: &str, wait: std::time::Duration, hold: std::time::Dura
     let wait_ms = wait.as_secs_f64() * 1_000.0;
     let hold_ms = hold.as_secs_f64() * 1_000.0;
     if wait_ms > LOCK_LOG_THRESHOLD_MS || hold_ms > LOCK_LOG_THRESHOLD_MS {
-        log::info!(
+        log::debug!(
             "[lock] {label}: wait={:.1}ms hold={:.1}ms",
             wait_ms,
             hold_ms,
@@ -1527,7 +1527,7 @@ impl LivePlanarTracker {
         if LIVE_PIPELINE_DIAG {
             let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
             if raster_ms > LOCK_LOG_THRESHOLD_MS {
-                log::info!(
+                log::debug!(
                     "[work] block raster: id={} {:.1}ms strips={} text={:?}",
                     id,
                     raster_ms,
@@ -1642,11 +1642,19 @@ impl LivePlanarTracker {
                 .collect()
         };
         let detect_ms = t_detect.elapsed().as_secs_f64() * 1_000.0;
-        log::info!(
+        log::debug!(
             "[acquire] detect: {:.1}ms found={}",
             detect_ms,
             detected.len()
         );
+
+        if is_auto_source {
+            log::info!(
+                "auto mode triggered, {} detections, running PULC script classifier (target={})",
+                detected.len(),
+                to_lang_code,
+            );
+        }
 
         if !gen_check() {
             return AcquirePipelineOutcome::canceled();
@@ -1687,7 +1695,7 @@ impl LivePlanarTracker {
                 .unwrap_or(0)
         };
         let acquire_ms = t_acquire.elapsed().as_secs_f64() * 1_000.0;
-        log::info!("[acquire] acquire_now: {:.1}ms id={}", acquire_ms, anchor_id);
+        log::debug!("[acquire] acquire_now: {:.1}ms id={}", acquire_ms, anchor_id);
 
         if anchor_id == 0 {
             return AcquirePipelineOutcome::error("acquire_now returned 0");
@@ -1754,7 +1762,7 @@ impl LivePlanarTracker {
         let block_ids: Vec<u64> = (0..block_strip_indices.len())
             .map(|_| self.next_entry_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
             .collect();
-        log::info!(
+        log::debug!(
             "[acquire] group: {:.1}ms strips={} → blocks={}",
             t_group.elapsed().as_secs_f64() * 1_000.0,
             total,
@@ -1831,7 +1839,16 @@ impl LivePlanarTracker {
                 ) {
                     Ok(l) => l,
                     Err(e) => {
-                        log::warn!("recognize failed: {e:?}");
+                        if is_auto_source {
+                            log::info!(
+                                "auto mode: recognize failed (batch start={}, size={}): {:?}",
+                                start,
+                                end - start,
+                                e,
+                            );
+                        } else {
+                            log::warn!("recognize failed: {e:?}");
+                        }
                         break;
                     }
                 }
@@ -1903,7 +1920,7 @@ impl LivePlanarTracker {
                         &available_codes,
                     );
                     let tr_ms = t_tr.elapsed().as_secs_f64() * 1_000.0;
-                    log::info!(
+                    log::debug!(
                         "[acquire] block translate {:.1}ms blocks={}",
                         tr_ms,
                         kept.len(),
@@ -1954,7 +1971,7 @@ impl LivePlanarTracker {
 
             let batch_ms = t_batch.elapsed().as_secs_f64() * 1_000.0;
             let recd_ok = lines.iter().filter(|l| !l.text.trim().is_empty()).count();
-            log::info!(
+            log::debug!(
                 "[acquire] batch {}/{}: {:.1}ms rec_ok={}/{}",
                 start / REC_BATCH_SIZE + 1,
                 (total + REC_BATCH_SIZE - 1) / REC_BATCH_SIZE,
@@ -1983,6 +2000,32 @@ impl LivePlanarTracker {
             .iter()
             .filter(|e| e.rec_attempted && e.source_text.is_empty())
             .count();
+
+        if is_auto_source {
+            let mut by_code: std::collections::BTreeMap<&str, usize> =
+                std::collections::BTreeMap::new();
+            for e in &entries {
+                if e.rec_attempted && !e.source_text.is_empty() {
+                    *by_code.entry(e.source_code.as_str()).or_default() += 1;
+                }
+            }
+            let codes = if by_code.is_empty() {
+                "<none>".to_string()
+            } else {
+                by_code
+                    .iter()
+                    .map(|(c, n)| format!("{}={}", c, n))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
+            log::info!(
+                "auto mode result: {} detections, rec_ok={} rec_empty={}, chose codes: {}",
+                total,
+                rec_ok,
+                rec_empty,
+                codes,
+            );
+        }
 
         // If nothing recognised, the tracker locked onto garbage. Clear
         // so the next stable frame re-acquires somewhere useful.
@@ -2184,7 +2227,7 @@ impl LivePlanarTracker {
         if LIVE_PIPELINE_DIAG {
             let composite_ms = (composite_end - composite_start).as_secs_f64() * 1_000.0;
             if composite_ms > LOCK_LOG_THRESHOLD_MS {
-                log::info!(
+                log::debug!(
                     "[work] composite_frame body: {:.1}ms ({}x{}, items={})",
                     composite_ms,
                     display_width,

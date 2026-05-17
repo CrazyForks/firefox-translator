@@ -469,7 +469,7 @@ class LivePlanarOcrEngine(
     framesSinceLog++
     val stateName = result.state.name
     if (stateName != lastLoggedState || framesSinceLog >= 30) {
-      Log.i(
+      Log.d(
         TAG_PLANAR,
         "frame state=$stateName anchor=${result.anchorId} inliers=${result.inliers}",
       )
@@ -559,7 +559,7 @@ class LivePlanarOcrEngine(
           Log.w(TAG_PLANAR, "runAcquirePipeline crashed", e)
           return
         }
-      Log.i(
+      Log.d(
         TAG_PLANAR,
         "acquire pipeline: anchor=${outcome.anchorId} det=${outcome.detectedCount} " +
           "rec_ok=${outcome.recOkCount} rec_empty=${outcome.recEmptyCount} " +
