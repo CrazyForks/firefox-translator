@@ -1,5 +1,26 @@
 use std::sync::Arc;
+use std::time::Instant;
 use std::{fs, path::Path};
+
+/// Log threshold for mutex wait/hold times in the live pipeline. We
+/// emit a single info line when either the wait or the hold exceeds
+/// this, so steady-state runs stay quiet but a stall surfaces with the
+/// label of the contending call site.
+#[cfg(feature = "planar-tracker")]
+const LOCK_LOG_THRESHOLD_MS: f64 = 3.0;
+
+#[cfg(feature = "planar-tracker")]
+fn log_lock_timing(label: &str, wait: std::time::Duration, hold: std::time::Duration) {
+    let wait_ms = wait.as_secs_f64() * 1_000.0;
+    let hold_ms = hold.as_secs_f64() * 1_000.0;
+    if wait_ms > LOCK_LOG_THRESHOLD_MS || hold_ms > LOCK_LOG_THRESHOLD_MS {
+        log::info!(
+            "[lock] {label}: wait={:.1}ms hold={:.1}ms",
+            wait_ms,
+            hold_ms,
+        );
+    }
+}
 
 use thiserror::Error;
 use translator::{
@@ -1356,17 +1377,40 @@ pub struct PlanarTextRenderItem {
     pub suggested_font_px: f32,
 }
 
+/// The rasterized overlay bitmap kept resident in the tracker so the
+/// per-camera-frame `composite_frame` call can warp it without
+/// re-rasterizing. Refreshed by `prepare_overlay_for_composite` and
+/// cleared on tracking loss / anchor switch via `clear_overlay`.
+#[cfg(feature = "planar-tracker")]
+struct CurrentOverlay {
+    bitmap: Vec<u8>,
+    width: u32,
+    height: u32,
+    surface_origin_x: f32,
+    surface_origin_y: f32,
+}
+
 #[cfg(feature = "planar-tracker")]
 #[derive(uniffi::Object)]
 pub struct LivePlanarTracker {
     state: std::sync::Mutex<translator::planar_engine::LivePlanarEngine>,
-    /// Output buffer prepared by `prepare_text_overlay_render` (uniffi)
-    /// and consumed by `Java_..._PlanarRenderJni_renderInto` (JNI).
-    /// This split exists to avoid the uniffi `Vec<u8>` marshalling cost
-    /// for multi-MB bitmap returns: items go in via uniffi (small
-    /// payload, cheap), the rendered RGBA comes out via JNI memcpy
-    /// straight into a Kotlin-owned DirectByteBuffer.
+    /// Legacy slot for `prepare_text_overlay_render` →
+    /// `PlanarRenderJni.renderInto`. Still used by the old bitmap-
+    /// overlay path while the composite-in-Rust refactor migrates.
+    /// Kept for compatibility; will retire with task #6.
     pending_bitmap: std::sync::Mutex<Option<Vec<u8>>>,
+    /// Resident rasterized overlay for the composite pipeline. Set by
+    /// `prepare_overlay_for_composite`, consumed each frame by
+    /// `composite_frame`, dropped on `clear_overlay`. Persisted across
+    /// many composite calls so we only re-rasterize when content
+    /// changes, not every camera frame.
+    current_overlay: std::sync::Mutex<Option<CurrentOverlay>>,
+    /// Output buffer produced by `composite_frame` (uniffi) and
+    /// consumed by `Java_..._PlanarRenderJni_compositeInto` (JNI).
+    /// Holds the fully-composited camera + overlay RGBA at display
+    /// resolution. Same Vec<u8>-via-JNI-memcpy trick as `pending_bitmap`
+    /// to skip uniffi marshalling of an 8 MB buffer per frame.
+    pending_display: std::sync::Mutex<Option<Vec<u8>>>,
 }
 
 #[cfg(feature = "planar-tracker")]
@@ -1379,6 +1423,8 @@ impl LivePlanarTracker {
                 translator::planar_engine::EngineConfig::default(),
             )),
             pending_bitmap: std::sync::Mutex::new(None),
+            current_overlay: std::sync::Mutex::new(None),
+            pending_display: std::sync::Mutex::new(None),
         })
     }
 
@@ -1430,20 +1476,16 @@ impl LivePlanarTracker {
                 })
             })
             .collect();
-        let bytes = {
-            let guard = match self.state.lock() {
-                Ok(g) => g,
-                Err(_) => return 0,
-            };
-            match guard.render_text_overlay_bitmap(
-                frame_width,
-                frame_height,
-                &engine_items,
-                &crate::android_font_provider::AndroidFontProvider,
-            ) {
-                Some(b) => b,
-                None => return 0,
-            }
+        // Rasterize without locking the engine — see the matching
+        // comment in `prepare_overlay_for_composite` for why.
+        let bytes = match translator::planar_engine::render_text_overlay_bitmap(
+            frame_width,
+            frame_height,
+            &engine_items,
+            &crate::android_font_provider::AndroidFontProvider,
+        ) {
+            Some(b) => b,
+            None => return 0,
         };
         let len = bytes.len() as u32;
         if let Ok(mut slot) = self.pending_bitmap.lock() {
@@ -1457,6 +1499,223 @@ impl LivePlanarTracker {
     /// `pub(crate)`.
     pub(crate) fn take_pending_bitmap(&self) -> Option<Vec<u8>> {
         self.pending_bitmap.lock().ok().and_then(|mut s| s.take())
+    }
+
+    /// Rasterize a text-overlay bitmap and stash it as the resident
+    /// overlay for subsequent `composite_frame` calls. Differs from
+    /// `prepare_text_overlay_render` in two ways: (1) we keep the
+    /// rasterized bytes alive so we don't re-rasterize per camera
+    /// frame, (2) we carry the surface-coord origin of the bitmap so
+    /// the compositor can position it correctly when warping through
+    /// `h_surface_to_viewport`.
+    ///
+    /// Returns the byte length of the rasterized bitmap (0 on failure).
+    fn prepare_overlay_for_composite(
+        &self,
+        frame_width: u32,
+        frame_height: u32,
+        items: Vec<PlanarTextRenderItem>,
+        surface_origin_x: f32,
+        surface_origin_y: f32,
+    ) -> u32 {
+        let engine_items: Vec<translator::planar_engine::TextRenderItem> = items
+            .into_iter()
+            .filter_map(|it| {
+                if it.quad.len() != 8 {
+                    return None;
+                }
+                Some(translator::planar_engine::TextRenderItem {
+                    id: it.id,
+                    quad: [
+                        (it.quad[0], it.quad[1]),
+                        (it.quad[2], it.quad[3]),
+                        (it.quad[4], it.quad[5]),
+                        (it.quad[6], it.quad[7]),
+                    ],
+                    translated_text: it.translated_text,
+                    source_text: it.source_text,
+                    language: it.language,
+                    bg_argb: it.bg_argb,
+                    fg_argb: it.fg_argb,
+                    suggested_font_px: it.suggested_font_px,
+                })
+            })
+            .collect();
+        // Important: rasterize WITHOUT holding the engine mutex. The
+        // raster doesn't need engine state (it's pure on items +
+        // fonts) and on a dense page it takes 50-100 ms; if we held
+        // `self.state` for that duration, the detector thread would
+        // block on `process_frame_with_imu` and the SurfaceView would
+        // only refresh at the rec-batch rate instead of the camera
+        // rate.
+        let raster_start = Instant::now();
+        let bytes = match translator::planar_engine::render_text_overlay_bitmap(
+            frame_width,
+            frame_height,
+            &engine_items,
+            &crate::android_font_provider::AndroidFontProvider,
+        ) {
+            Some(b) => b,
+            None => return 0,
+        };
+        let raster_end = Instant::now();
+        let len = bytes.len() as u32;
+        let overlay_wait = Instant::now();
+        if let Ok(mut slot) = self.current_overlay.lock() {
+            let overlay_acquired = Instant::now();
+            *slot = Some(CurrentOverlay {
+                bitmap: bytes,
+                width: frame_width,
+                height: frame_height,
+                surface_origin_x,
+                surface_origin_y,
+            });
+            let overlay_released = Instant::now();
+            log_lock_timing(
+                "current_overlay/prepare_overlay",
+                overlay_acquired - overlay_wait,
+                overlay_released - overlay_acquired,
+            );
+        }
+        let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
+        if raster_ms > LOCK_LOG_THRESHOLD_MS {
+            log::info!(
+                "[work] overlay raster body: {:.1}ms ({}x{}, items={})",
+                raster_ms,
+                frame_width,
+                frame_height,
+                engine_items.len(),
+            );
+        }
+        len
+    }
+
+    /// Drop the resident overlay. Subsequent `composite_frame` calls
+    /// will only blit the camera frame, with no overlay drawn on top.
+    /// Call this on track loss, anchor switch, or whenever the
+    /// previously-rasterized content is no longer valid.
+    fn clear_overlay(&self) {
+        if let Ok(mut slot) = self.current_overlay.lock() {
+            *slot = None;
+        }
+    }
+
+    /// Build a per-frame composited display image from the camera RGBA
+    /// (in the FrameHandle) plus the resident overlay, warped by
+    /// `h_surface_to_viewport`. Writes the result into the
+    /// `pending_display` slot; pair with
+    /// `PlanarRenderJni.compositeInto` for a JNI memcpy into a
+    /// Kotlin-owned DirectByteBuffer.
+    ///
+    /// `display_width`/`display_height` are the target display-orient
+    /// pixel dimensions — must equal the sensor's W/H swapped per the
+    /// rotation reported in the FrameHandle. Caller's destination
+    /// buffer must be sized `display_width * display_height * 4`.
+    ///
+    /// `h_surface_to_viewport` is a 9-element row-major homography; an
+    /// empty slice (or length != 9) is treated as "no overlay this
+    /// frame, just blit the camera".
+    ///
+    /// Returns the byte length of the composited buffer (0 on failure).
+    fn composite_frame(
+        &self,
+        frame: Arc<FrameHandle>,
+        display_width: u32,
+        display_height: u32,
+        h_surface_to_viewport: Vec<f32>,
+    ) -> u32 {
+        let frame_state_wait = Instant::now();
+        let state = match frame.state.lock() {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
+        let frame_state_acquired = Instant::now();
+        let sensor_w = state.width;
+        let sensor_h = state.height;
+        let rotation = state.rotation_degrees;
+        if sensor_w == 0 || sensor_h == 0 {
+            return 0;
+        }
+        let expected_src = (sensor_w as usize) * (sensor_h as usize) * 4;
+        if state.rgba.len() != expected_src {
+            return 0;
+        }
+        let dst_bytes = (display_width as usize) * (display_height as usize) * 4;
+        let mut dst = vec![0u8; dst_bytes];
+        let overlay_wait = Instant::now();
+        let overlay_guard = self.current_overlay.lock().ok();
+        let overlay_acquired = Instant::now();
+        let overlay_ref = overlay_guard.as_ref().and_then(|g| g.as_ref());
+        let mut items_vec: Vec<translator::live_compositor::OverlayItem<'_>> = Vec::new();
+        let h_arr: Option<[f32; 9]> = if h_surface_to_viewport.len() == 9 {
+            let mut a = [0.0f32; 9];
+            a.copy_from_slice(&h_surface_to_viewport[..9]);
+            Some(a)
+        } else {
+            None
+        };
+        if let (Some(ov), Some(_)) = (overlay_ref, h_arr.as_ref()) {
+            items_vec.push(translator::live_compositor::OverlayItem {
+                bitmap_rgba: &ov.bitmap,
+                bitmap_width: ov.width,
+                bitmap_height: ov.height,
+                bitmap_origin_surface_x: ov.surface_origin_x,
+                bitmap_origin_surface_y: ov.surface_origin_y,
+            });
+        }
+        let h_for_call = h_arr.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+        let composite_start = Instant::now();
+        let result = translator::live_compositor::composite_frame_into(
+            &mut dst,
+            display_width,
+            display_height,
+            &state.rgba,
+            sensor_w,
+            sensor_h,
+            rotation,
+            &h_for_call,
+            &items_vec,
+        );
+        let composite_end = Instant::now();
+        // Drop borrows of `overlay_guard` (items_vec holds &ov.bitmap)
+        // before dropping the guard itself.
+        let items_count = items_vec.len();
+        drop(items_vec);
+        drop(overlay_guard);
+        let overlay_released = Instant::now();
+        log_lock_timing(
+            "frame.state/composite_frame",
+            frame_state_acquired - frame_state_wait,
+            composite_end - frame_state_acquired,
+        );
+        log_lock_timing(
+            "current_overlay/composite_frame",
+            overlay_acquired - overlay_wait,
+            overlay_released - overlay_acquired,
+        );
+        let composite_ms = (composite_end - composite_start).as_secs_f64() * 1_000.0;
+        if composite_ms > LOCK_LOG_THRESHOLD_MS {
+            log::info!(
+                "[work] composite_frame body: {:.1}ms ({}x{}, items={})",
+                composite_ms,
+                display_width,
+                display_height,
+                items_count,
+            );
+        }
+        if result.is_err() {
+            return 0;
+        }
+        let len = dst.len() as u32;
+        if let Ok(mut slot) = self.pending_display.lock() {
+            *slot = Some(dst);
+        }
+        len
+    }
+
+    /// Exposes the pending-display slot to the JNI shim (same crate).
+    pub(crate) fn take_pending_display(&self) -> Option<Vec<u8>> {
+        self.pending_display.lock().ok().and_then(|mut s| s.take())
     }
 
     /// Feed one camera frame through the state machine. The current
@@ -1503,7 +1762,9 @@ impl LivePlanarTracker {
         let mut state = frame.state.lock().map_err(|_| poisoned())?;
         ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
         let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
+        let engine_wait_start = Instant::now();
         let mut engine = self.state.lock().map_err(|_| poisoned())?;
+        let engine_acquired = Instant::now();
         let cmd = if imu_rotation_dev.len() == 9 {
             let mut rot = [0.0f32; 9];
             rot.copy_from_slice(&imu_rotation_dev[..9]);
@@ -1517,6 +1778,13 @@ impl LivePlanarTracker {
         } else {
             engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
         };
+        let engine_released = Instant::now();
+        drop(engine);
+        log_lock_timing(
+            "engine/process_frame_with_imu",
+            engine_acquired - engine_wait_start,
+            engine_released - engine_acquired,
+        );
         Ok(cmd_to_result(cmd))
     }
 
@@ -1558,10 +1826,20 @@ impl LivePlanarTracker {
             .iter()
             .map(|r| (r.left, r.top, r.right, r.bottom))
             .collect();
+        let engine_wait_start = Instant::now();
         let mut engine = self.state.lock().map_err(|_| poisoned())?;
-        Ok(engine
+        let engine_acquired = Instant::now();
+        let result = engine
             .acquire_now_in_regions(&oriented.gray, &tuples, pad_px, timestamp_ns)
-            .unwrap_or(0))
+            .unwrap_or(0);
+        let engine_released = Instant::now();
+        drop(engine);
+        log_lock_timing(
+            "engine/acquire_now_in_regions",
+            engine_acquired - engine_wait_start,
+            engine_released - engine_acquired,
+        );
+        Ok(result)
     }
 
     /// Attach the canonical-frame overlays for an anchor (one call per

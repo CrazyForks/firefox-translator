@@ -51,4 +51,16 @@ internal object PlanarRenderJni {
     trackerPtr: Long,
     dst: ByteBuffer,
   ): Int
+
+  /** Copy the pending composited camera+overlay frame (parked by the
+   *  most recent [LivePlanarTracker.compositeFrame] call) into `dst`.
+   *  Returns the number of bytes written, or 0 on any failure. The
+   *  destination buffer must have capacity ≥
+   *  `displayWidth × displayHeight × 4`.
+   */
+  @JvmStatic
+  external fun compositeInto(
+    trackerPtr: Long,
+    dst: ByteBuffer,
+  ): Int
 }

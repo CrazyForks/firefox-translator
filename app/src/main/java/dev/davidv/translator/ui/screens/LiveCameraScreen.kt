@@ -34,11 +34,10 @@ import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -68,7 +67,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -101,6 +99,7 @@ import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.cameraIntrinsicsFromCameraX
 import dev.davidv.translator.ui.components.LanguageSelector
+import dev.davidv.translator.ui.components.LiveTranslatorSurfaceView
 import java.io.File
 import java.util.concurrent.Executor
 import kotlin.math.max
@@ -109,13 +108,6 @@ import android.util.Size as AndroidSize
 private const val TAG = "LiveCameraScreen"
 private val TARGET_RESOLUTION = AndroidSize(1080, 1920)
 private val ANALYZER_RESOLUTION = AndroidSize(1080, 1920)
-
-/** Phase 1 IMU smoke-test toggle. When true, locks the gyro baseline at first
- *  composition and renders a crosshair at the projected position of the
- *  initially-screen-center world point. If the gyro integration and intrinsics
- *  are right, the crosshair stays glued to that world point under pure
- *  rotation. Flip and rebuild — no UI toggle. */
-private const val DEBUG_IMU_CROSSHAIR: Boolean = true
 
 /** Debug overlay that draws the raw detector contour polygons (PaddleOCR DB
  *  mask output) as cyan outlines, updated each detection cycle (~5 Hz).
@@ -132,12 +124,6 @@ private const val DEBUG_HIDE_TRACKER_OVERLAY: Boolean = false
  *  (Idle/Acquiring/Locked/Lost + inliers + last acquire's det/rec
  *  counts). Useful while tuning, off in production. */
 private const val DEBUG_SHOW_TRACKER_STATUS: Boolean = true
-
-private data class FrameInfo(
-  val displayWidth: Int,
-  val displayHeight: Int,
-  val rotationDegrees: Int,
-)
 
 @Composable
 fun LiveCameraScreen(
@@ -348,7 +334,6 @@ private fun CameraSurface(
     onDispose { imuService.stop() }
   }
   var cameraIntrinsics by remember { mutableStateOf<CameraIntrinsicsRaw?>(null) }
-  var latestFrameInfo by remember { mutableStateOf<FrameInfo?>(null) }
 
   val workerScope = androidx.compose.runtime.rememberCoroutineScope()
   val liveOcrEngine: LivePlanarOcrEngine? =
@@ -423,11 +408,6 @@ private fun CameraSurface(
           engine.releaseFrameHandle(handle)
           return@setAnalyzer
         }
-        if (DEBUG_IMU_CROSSHAIR) {
-          val dispW = if (rotation == 90 || rotation == 270) height else width
-          val dispH = if (rotation == 90 || rotation == 270) width else height
-          latestFrameInfo = FrameInfo(dispW, dispH, rotation)
-        }
         // Sample R_prev at the camera's actual capture timestamp (same
         // clock as SensorEvent.timestamp) rather than at this analyzer
         // callback. Without this we'd miss the gyro rotation that
@@ -452,18 +432,10 @@ private fun CameraSurface(
     }
   }
 
-  val previewView =
-    remember {
-      PreviewView(context).apply {
-        scaleType = PreviewView.ScaleType.FILL_CENTER
-        // PERFORMANCE = SurfaceView under the hood, one fewer buffer hop
-        // than COMPATIBLE (TextureView). Lower preview latency so the
-        // IMU-extrapolated overlay doesn't lead the pixels.
-        implementationMode = PreviewView.ImplementationMode.PERFORMANCE
-      }
-    }
+  val liveSurfaceView =
+    remember { LiveTranslatorSurfaceView(context) }
 
-  DisposableEffect(previewView) {
+  DisposableEffect(liveSurfaceView) {
     val scaleDetector =
       ScaleGestureDetector(
         context,
@@ -485,15 +457,21 @@ private fun CameraSurface(
         object : GestureDetector.SimpleOnGestureListener() {
           override fun onSingleTapUp(e: MotionEvent): Boolean {
             focusPoint = Offset(e.x, e.y)
-            val viewW = previewView.width.toFloat().coerceAtLeast(1f)
-            val viewH = previewView.height.toFloat().coerceAtLeast(1f)
+            val viewW = liveSurfaceView.width.toFloat().coerceAtLeast(1f)
+            val viewH = liveSurfaceView.height.toFloat().coerceAtLeast(1f)
             cropFocusNormalized =
               Offset(
                 (e.x / viewW).coerceIn(0f, 1f),
                 (e.y / viewH).coerceIn(0f, 1f),
               )
             val cam = camera ?: return true
-            val point = previewView.meteringPointFactory.createPoint(e.x, e.y)
+            // Without a PreviewView there's no built-in
+            // MeteringPointFactory, so we hand-build one against the
+            // surface dimensions. Normalised coords are in [0, 1] over
+            // (viewW × viewH); the factory maps that to the camera's
+            // active sensor region under the hood.
+            val factory = SurfaceOrientedMeteringPointFactory(viewW, viewH)
+            val point = factory.createPoint(e.x, e.y)
             val action =
               FocusMeteringAction
                 .Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
@@ -504,40 +482,29 @@ private fun CameraSurface(
           }
         },
       )
-    previewView.setOnTouchListener { _, event ->
+    liveSurfaceView.setOnTouchListener { _, event ->
       scaleDetector.onTouchEvent(event)
       tapDetector.onTouchEvent(event)
       true
     }
-    onDispose { previewView.setOnTouchListener(null) }
+    onDispose { liveSurfaceView.setOnTouchListener(null) }
   }
 
   DisposableEffect(lifecycleOwner) {
     val providerFuture = ProcessCameraProvider.getInstance(context)
     providerFuture.addListener({
       val provider = providerFuture.get()
-      val resolutionSelector =
-        ResolutionSelector.Builder()
-          .setResolutionStrategy(
-            ResolutionStrategy(
-              TARGET_RESOLUTION,
-              ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
-            ),
-          )
-          .build()
-      val preview =
-        Preview.Builder()
-          .setResolutionSelector(resolutionSelector)
-          .build()
-          .also { it.setSurfaceProvider(previewView.surfaceProvider) }
-
       try {
         provider.unbindAll()
+        // No `Preview` UseCase — the analyzer stream is our single
+        // source of pixels. `LiveTranslatorSurfaceView` draws the
+        // composited result (camera + overlay) produced by the engine
+        // per analyzer frame. This eliminates the preview-vs-overlay
+        // timing mismatch that the old two-surface architecture had.
         val boundCamera =
           provider.bindToLifecycle(
             lifecycleOwner,
             CameraSelector.DEFAULT_BACK_CAMERA,
-            preview,
             imageCapture,
             imageAnalysis,
           )
@@ -565,44 +532,19 @@ private fun CameraSurface(
         .fillMaxSize()
         .onSizeChanged { previewSizePx = it },
   ) {
+    // Single surface for both camera pixels and overlay. The engine
+    // composites them in Rust per analyzer frame and we blit the
+    // result; no two-surface drift possible. If the live overlay is
+    // toggled off the engine is cleared and we just keep the last
+    // composited frame on screen.
+    val composited by
+      (liveOcrEngine?.compositedFrame ?: remember { kotlinx.coroutines.flow.MutableStateFlow(null) })
+        .collectAsState()
     AndroidView(
-      factory = { previewView },
+      factory = { liveSurfaceView },
       modifier = Modifier.fillMaxSize(),
+      update = { view -> view.update(composited) },
     )
-
-    // Phase 4 of FUTURE_BITMAP_OVERLAY.md: only the bitmap-overlay
-    // path. The previous Compose `LiveOverlayLayer` was per-overlay
-    // Compose layout (~30 boxes × 30fps → main thread saturation);
-    // it's gone. This single AndroidView warps the canonical bitmap
-    // via Matrix.setPolyToPoly — one draw per frame, no Compose
-    // recomposition.
-    if (liveOverlayOn) {
-      val bitmapFrame by
-        (liveOcrEngine?.bitmapOverlay ?: remember { kotlinx.coroutines.flow.MutableStateFlow(null) })
-          .collectAsState()
-      AndroidView(
-        factory = { ctx ->
-          dev.davidv.translator.ui.components.PlanarBitmapOverlayView(ctx).apply {
-            // Phase 5: per-render-frame IMU extrapolation. View
-            // queries `currentRotation()` on each vsync and predicts
-            // the new H from the camera-frame H + IMU delta. Smooths
-            // overlay motion between 30 Hz camera frames.
-            setImuService(imuService)
-          }
-        },
-        modifier = Modifier.fillMaxSize(),
-        update = { view -> view.update(bitmapFrame) },
-      )
-    }
-
-    if (DEBUG_IMU_CROSSHAIR) {
-      ImuCrosshairOverlay(
-        imuService = imuService,
-        intrinsics = cameraIntrinsics,
-        frameInfo = latestFrameInfo,
-        previewSizePx = previewSizePx,
-      )
-    }
 
     if (DEBUG_DRAW_DETECTOR_CONTOUR) {
       DebugContourOverlay(
@@ -846,123 +788,6 @@ private fun BottomControls(
   }
 }
 
-private fun mul3x3TransposeLeft(
-  a: FloatArray,
-  b: FloatArray,
-): FloatArray {
-  val out = FloatArray(9)
-  for (i in 0..2) {
-    for (j in 0..2) {
-      var s = 0f
-      for (k in 0..2) s += a[k * 3 + i] * b[k * 3 + j]
-      out[i * 3 + j] = s
-    }
-  }
-  return out
-}
-
-private const val RENDER_IMU_LEAD_NS: Long = 12_000_000L
-
-@Composable
-private fun ImuCrosshairOverlay(
-  imuService: ImuService?,
-  intrinsics: CameraIntrinsicsRaw?,
-  frameInfo: FrameInfo?,
-  previewSizePx: androidx.compose.ui.unit.IntSize,
-) {
-  if (imuService == null || intrinsics == null || frameInfo == null) return
-  if (previewSizePx.width == 0 || previewSizePx.height == 0) return
-  val baselineRay = remember { floatArrayOf(0f, 0f, 1f) }
-  var baseRotation by remember { mutableStateOf<FloatArray?>(null) }
-  LaunchedEffect(imuService) {
-    baseRotation = imuService.currentRotation()
-  }
-  val baseRot = baseRotation ?: return
-
-  val renderTimeNs = remember { mutableLongStateOf(System.nanoTime()) }
-  LaunchedEffect(Unit) {
-    while (true) {
-      androidx.compose.runtime.withFrameNanos { ts ->
-        renderTimeNs.longValue = ts
-      }
-    }
-  }
-
-  val frameW = frameInfo.displayWidth
-  val frameH = frameInfo.displayHeight
-  val pixI = intrinsics.pixelIntrinsics(frameW, frameH, frameInfo.rotationDegrees)
-  val previewScale =
-    max(
-      previewSizePx.width.toFloat() / frameW.toFloat(),
-      previewSizePx.height.toFloat() / frameH.toFloat(),
-    )
-  val displayedW = frameW * previewScale
-  val displayedH = frameH * previewScale
-  val offX = (displayedW - previewSizePx.width) / 2f
-  val offY = (displayedH - previewSizePx.height) / 2f
-
-  val crosshairSizeDp = 28.dp
-  val density = LocalDensity.current
-  val crosshairRadiusPx = with(density) { (crosshairSizeDp / 2).toPx() }
-
-  var lastLogNs by remember { mutableLongStateOf(0L) }
-
-  Box(modifier = Modifier.fillMaxSize()) {
-    Box(
-      modifier =
-        Modifier
-          .offset {
-            val nowNs = renderTimeNs.longValue
-            val rotDev = imuService.currentRotation(RENDER_IMU_LEAD_NS)
-            val dDev = mul3x3TransposeLeft(rotDev, baseRot)
-            val dCam = deviceToCameraSandwich(dDev)
-            val rNow = rotate(dCam, baselineRay)
-            if (nowNs - lastLogNs > 500_000_000L) {
-              lastLogNs = nowNs
-              Log.d(
-                TAG,
-                "imu rDev=[${rotDev.joinToString(",") { "%.3f".format(it) }}] " +
-                  "rayCam=[${"%.3f".format(rNow[0])},${"%.3f".format(rNow[1])},${"%.3f".format(rNow[2])}] " +
-                  "fx=${"%.1f".format(pixI.fx)} fy=${"%.1f".format(pixI.fy)} " +
-                  "frame=${frameW}x$frameH rot=${frameInfo.rotationDegrees}",
-              )
-            }
-            if (rNow[2] <= 0.01f) {
-              return@offset IntOffset(-9999, -9999)
-            }
-            val uImg = pixI.fx * rNow[0] / rNow[2] + pixI.cx
-            val vImg = pixI.fy * rNow[1] / rNow[2] + pixI.cy
-            val uView = uImg * previewScale - offX
-            val vView = vImg * previewScale - offY
-            IntOffset(
-              (uView - crosshairRadiusPx).toInt(),
-              (vView - crosshairRadiusPx).toInt(),
-            )
-          }
-          .size(crosshairSizeDp)
-          .border(2.dp, Color.Red, CircleShape),
-    )
-  }
-}
-
-/** Rotation conversion device-frame → camera-frame. Device frame: +X right,
- *  +Y up, +Z out of screen (toward user). Camera frame (back camera, OpenCV
- *  convention): +X right, +Y down, +Z into scene. Mapping matrix
- *  `M = diag(1, -1, -1)`; for rotations `R_cam = M * R_dev * M` (M is its
- *  own inverse). Valid when the phone is in natural portrait orientation
- *  and the back camera is selected — sufficient for the Phase 1 smoke test. */
-private fun deviceToCameraSandwich(rDev: FloatArray): FloatArray {
-  // M * R * M with M = diag(1, -1, -1): flip signs on rows/columns 1 and 2.
-  val r = FloatArray(9)
-  for (i in 0..2) {
-    for (j in 0..2) {
-      val sign = (if (i == 0) 1 else -1) * (if (j == 0) 1 else -1)
-      r[i * 3 + j] = sign * rDev[i * 3 + j]
-    }
-  }
-  return r
-}
-
 @Composable
 private fun DebugContourOverlay(
   frame: DebugContourFrame?,
@@ -999,17 +824,6 @@ private fun DebugContourOverlay(
       )
     }
   }
-}
-
-private fun rotate(
-  r: FloatArray,
-  v: FloatArray,
-): FloatArray {
-  return floatArrayOf(
-    r[0] * v[0] + r[1] * v[1] + r[2] * v[2],
-    r[3] * v[0] + r[4] * v[1] + r[5] * v[2],
-    r[6] * v[0] + r[7] * v[1] + r[8] * v[2],
-  )
 }
 
 @Composable

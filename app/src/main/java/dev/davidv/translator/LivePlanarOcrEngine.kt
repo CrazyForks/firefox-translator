@@ -112,7 +112,7 @@ private const val MAX_TRANSLATION_CACHE_PLANAR = 256
 
 /** Show source text + bounding boxes instead of waiting on translations.
  *  Mirrors the legacy engine's diagnostic flag. */
-private const val DEBUG_TRACKER_VIEW_PLANAR: Boolean = true
+private const val DEBUG_TRACKER_VIEW_PLANAR: Boolean = false
 
 /** Carries one camera frame through the engine. */
 private data class PendingPlanarFrame(
@@ -169,47 +169,19 @@ data class DebugContourFrame(
  *  motion at refresh rate. */
 data class FrameIntrinsics(val fx: Float, val fy: Float, val cx: Float, val cy: Float)
 
-data class BitmapOverlayFrame(
+/** One per-camera-frame composited display image: camera pixels in
+ *  display orientation with the current overlay warped + alpha-blended
+ *  on top. Produced by Rust's `composite_frame` and delivered via JNI
+ *  memcpy into [bitmap]. The view blits this 1:1 (with FILL_CENTER
+ *  letterboxing) to a SurfaceView — no further compositing on the
+ *  Kotlin side. Replaces the old [BitmapOverlayFrame] split, which
+ *  drew the camera and overlay on separate surfaces and could drift
+ *  apart under motion. */
+data class CompositedFrame(
   val bitmap: android.graphics.Bitmap,
-  /** Bitmap dimensions. Smaller than the canonical frame: only the
-   *  union of overlay quads + pad. Cuts raster + draw cost ~3× on
-   *  typical pages where text occupies a fraction of the frame. */
-  val frameWidth: Int,
-  val frameHeight: Int,
-  /** Where bitmap pixel (0, 0) sits in canonical-frame coordinates.
-   *  The view uses this to project the bitmap's *canonical* corners
-   *  through the per-frame homography, not the bitmap's pixel
-   *  corners (which would assume bitmap covers the whole frame). */
-  val bitmapOriginCanonicalX: Float,
-  val bitmapOriginCanonicalY: Float,
-  /** 9-element row-major homography mapping canonical-frame pixels to
-   *  current-frame (crop-local) pixels. */
-  val homography: FloatArray,
-  val cropLeft: Int,
-  val cropTop: Int,
-  val displayWidth: Int,
-  val displayHeight: Int,
-  /** Device-frame IMU rotation matrix at the camera frame this `H`
-   *  corresponds to. Null when IMU isn't available; in that case the
-   *  view falls back to the stored `homography` without extrapolation. */
-  val imuRotationAtFrame: FloatArray?,
-  /** Pixel intrinsics for `displayWidth × displayHeight`. Null when
-   *  intrinsics aren't available; view falls back to no extrapolation. */
-  val intrinsics: FrameIntrinsics?,
-) {
-  override fun equals(other: Any?): Boolean =
-    other is BitmapOverlayFrame &&
-      bitmap === other.bitmap &&
-      homography.contentEquals(other.homography) &&
-      frameWidth == other.frameWidth &&
-      frameHeight == other.frameHeight &&
-      bitmapOriginCanonicalX == other.bitmapOriginCanonicalX &&
-      bitmapOriginCanonicalY == other.bitmapOriginCanonicalY &&
-      cropLeft == other.cropLeft &&
-      cropTop == other.cropTop
-
-  override fun hashCode(): Int = bitmap.hashCode() * 31 + homography.contentHashCode()
-}
+  val width: Int,
+  val height: Int,
+)
 
 private data class CanonicalEntry(
   val anchorId: ULong,
@@ -233,9 +205,13 @@ private data class AnchorState(
   val displayHeight: Int,
   val rotationDegrees: Int,
   val entries: MutableList<CanonicalEntry>,
-  /** Bitmap rasterized at acquire / rec-batch / translate completion.
-   *  Null if rasterization failed (treated as "no overlay this anchor"). */
-  var bitmap: android.graphics.Bitmap? = null,
+  /** True once `prepareOverlayForComposite` has been called and the
+   *  Rust-side resident overlay is in sync with these entries. False
+   *  before the first rasterization, or after a failed rasterization
+   *  (treated as "no overlay this anchor"). The composite pipeline
+   *  reads the resident bytes from Rust each frame, so we don't keep
+   *  a Kotlin Bitmap mirror. */
+  var overlayPrepared: Boolean = false,
   /** Bitmap dimensions in pixels — sized to the *union of overlay
    *  quads + pad*, not the whole canonical frame. */
   var bitmapWidth: Int = 0,
@@ -292,6 +268,15 @@ class LivePlanarOcrEngine(
   private var globalGeneration: Long = 0L
   private var latestImuSnapshot: FloatArray? = null
 
+  /** True while a `runAcquireStage` coroutine is running. We launch
+   *  acquire async so the detector thread doesn't block for the
+   *  ~100-150 ms of detection + initial bitmap raster (which would
+   *  drop ~3 analyzer frames worth of display updates). Subsequent
+   *  ACQUIRING-state frames are skipped while this is set so we don't
+   *  fan out N concurrent acquires; the next `Idle → Acquiring`
+   *  transition fires a fresh one. */
+  private val acquireInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+
   /** Pixel intrinsics from the most recent frame. Set by `runFrame`,
    *  carried through to `publishBitmapOverlay` so the view can
    *  IMU-extrapolate at refresh rate. */
@@ -315,13 +300,30 @@ class LivePlanarOcrEngine(
   private val _debugContours = MutableStateFlow<DebugContourFrame?>(null)
   val debugContours: StateFlow<DebugContourFrame?> = _debugContours.asStateFlow()
 
-  /** Phase 1 of the bitmap-overlay path. After each acquire we
-   *  rasterize a debug bitmap in canonical-frame coords (see Rust
-   *  `render_debug_overlay_bitmap`); per camera frame we publish the
-   *  current homography. The view layer applies a `Matrix.setPolyToPoly`
-   *  to draw the bitmap warped to the current frame. */
-  private val _bitmapOverlay = MutableStateFlow<BitmapOverlayFrame?>(null)
-  val bitmapOverlay: StateFlow<BitmapOverlayFrame?> = _bitmapOverlay.asStateFlow()
+  /** Per-camera-frame composited display image (camera in display
+   *  orient + overlay warped on top) emitted to the [SurfaceView]
+   *  layer. Always emits on each processed analyzer frame regardless
+   *  of tracker state — Idle/Lost frames emit camera-only frames so
+   *  the view doesn't go black between locks. */
+  private val _compositedFrame = MutableStateFlow<CompositedFrame?>(null)
+  val compositedFrame: StateFlow<CompositedFrame?> = _compositedFrame.asStateFlow()
+
+  /** Double-buffer of display-orient RGBA8888 bitmaps. The engine writes
+   *  one while the view holds the other; we swap after each composite
+   *  to avoid GC churn (an 8 MB allocation per 30 Hz frame is ~240
+   *  MB/s of garbage). */
+  private val displayBitmaps = arrayOfNulls<android.graphics.Bitmap>(2)
+  private var displayBitmapIndex: Int = 0
+
+  /** Direct buffer used to memcpy from Rust into the active display
+   *  bitmap. Sized to the current display dims; grows on first use. */
+  private var displayBuffer: java.nio.ByteBuffer? = null
+
+  /** Display dims the engine is currently producing. We rebuild the
+   *  bitmaps + buffer when these change (rare — only on rotation or
+   *  camera reselection). */
+  private var displayBufferWidth: Int = 0
+  private var displayBufferHeight: Int = 0
 
   /** Per-frame tracker state for the debug status pill. Updated on
    *  every `processFrame` (cheap) and refined on each rec batch. */
@@ -421,7 +423,7 @@ class LivePlanarOcrEngine(
         lastFocusY = Float.NaN
         globalGeneration++
         _debugContours.value = null
-        _bitmapOverlay.value = null
+        _compositedFrame.value = null
       }
     }
   }
@@ -433,6 +435,11 @@ class LivePlanarOcrEngine(
       val h = handlePool.pollFirst() ?: break
       h.close()
     }
+    for (i in 0..1) {
+      displayBitmaps[i]?.recycle()
+      displayBitmaps[i] = null
+    }
+    displayBuffer = null
   }
 
   private suspend fun runFrame(pending: PendingPlanarFrame) {
@@ -491,7 +498,10 @@ class LivePlanarOcrEngine(
         smoothedHomography = null
         smoothedAnchorId = 0uL
         globalGeneration++
-        _bitmapOverlay.value = null
+      }
+      try {
+        tracker.clearOverlay()
+      } catch (_: Throwable) {
       }
     }
     lastCropRect = cropRect
@@ -568,54 +578,89 @@ class LivePlanarOcrEngine(
         anchorId = result.anchorId.toLong(),
         inliers = result.inliers.toInt(),
       )
+    // Decide what H this frame's composite should use (null = no
+    // overlay; the compositor will draw camera pixels only).
+    var compositeH: FloatArray? = null
     when (result.state) {
       PlanarTrackerState.IDLE -> {
-        // True Idle (no anchor) — drop any stale overlay we'd been
-        // holding from a previous lock.
         consecutiveLostFrames = 0
-        if (_bitmapOverlay.value != null) _bitmapOverlay.value = null
-        releaseFrameHandle(pending.handle)
+        try {
+          tracker.clearOverlay()
+        } catch (_: Throwable) {
+        }
       }
       PlanarTrackerState.ACQUIRING -> {
         consecutiveLostFrames = 0
-        runAcquireStage(
-          pending,
-          cropRect,
-          cropLeft,
-          cropTop,
-          displayW,
-          displayH,
-          nowNs,
-        )
+        // No overlay yet for this frame; acquire runs async below and
+        // will refresh the resident overlay in time for the next frame.
       }
       PlanarTrackerState.LOCKED -> {
         consecutiveLostFrames = 0
         val anchorId = result.anchorId
         val displayed = smoothHomography(anchorId, result.homography, displayW, displayH)
-        // Bitmap path (Phase 4): single per-frame publish; the view
-        // layer does the Matrix.setPolyToPoly warp.
         val anchorState = mutex.withLock { anchors[anchorId] }
-        if (anchorState != null && anchorState.bitmap != null) {
-          publishBitmapOverlay(anchorState, displayed)
+        if (anchorState != null && anchorState.overlayPrepared) {
+          compositeH = FloatArray(9).also { for (i in 0..8) it[i] = displayed[i] }
         }
-        releaseFrameHandle(pending.handle)
       }
       PlanarTrackerState.LOST -> {
-        // Distinguish "losing" (transient blur / missed frame —
-        // keep showing last good overlay so it doesn't flicker) from
-        // "lost" (sustained — hide). The Rust engine already
-        // smoothly transitions Locked → internal-Lost after
-        // lost_after_frames, but it still reports state=LOST for
-        // those transitional frames. We hide explicitly after a
-        // shorter Kotlin-side grace.
+        // Transient loss: keep using the last good H so a single-frame
+        // blur doesn't flicker. Sustained loss: drop the overlay.
         consecutiveLostFrames++
-        if (consecutiveLostFrames >= LOSS_HIDE_AFTER_FRAMES &&
-          _bitmapOverlay.value != null
-        ) {
-          _bitmapOverlay.value = null
+        val anchorId = result.anchorId
+        if (consecutiveLostFrames < LOSS_HIDE_AFTER_FRAMES) {
+          val anchorState = mutex.withLock { anchors[anchorId] }
+          val cachedH = smoothedHomography?.takeIf { smoothedAnchorId == anchorId }
+          if (anchorState != null && anchorState.overlayPrepared && cachedH != null) {
+            compositeH = cachedH.copyOf()
+          }
+        } else {
+          try {
+            tracker.clearOverlay()
+          } catch (_: Throwable) {
+          }
         }
+      }
+    }
+    // Composite + emit BEFORE the (potentially long) acquire stage,
+    // so the user sees a fresh camera frame promptly even when we're
+    // about to spend ~100-150 ms in detection.
+    compositeAndEmit(pending.handle, displayW, displayH, compositeH)
+    // For ACQUIRING, kick off the acquire stage on a separate worker
+    // coroutine so this detector thread is free to keep processing
+    // analyzer frames (composite + emit). Without this, every acquire
+    // stalls the display for 3-5 frames; with it, the SurfaceView
+    // keeps refreshing at full rate while detection runs in parallel.
+    // Dedupe via `acquireInFlight` so we don't fan out one acquire per
+    // ACQUIRING-state frame.
+    if (result.state == PlanarTrackerState.ACQUIRING) {
+      if (acquireInFlight.compareAndSet(false, true)) {
+        val capturedPending = pending
+        workerScope.launch(Dispatchers.Default) {
+          try {
+            runAcquireStage(
+              capturedPending,
+              cropRect,
+              cropLeft,
+              cropTop,
+              displayW,
+              displayH,
+              nowNs,
+            )
+          } catch (e: Throwable) {
+            Log.w(TAG_PLANAR, "acquire stage crashed", e)
+            releaseFrameHandle(capturedPending.handle)
+          } finally {
+            acquireInFlight.set(false)
+          }
+        }
+      } else {
+        // Another acquire is in flight; nothing to do with this
+        // frame's handle — release it.
         releaseFrameHandle(pending.handle)
       }
+    } else {
+      releaseFrameHandle(pending.handle)
     }
   }
 
@@ -791,7 +836,6 @@ class LivePlanarOcrEngine(
           displayHeight = displayH,
           rotationDegrees = pending.rotationDegrees,
           entries = canonicalEntries,
-          bitmap = null,
           canonicalWidth = canonicalW,
           canonicalHeight = canonicalH,
         )
@@ -805,8 +849,9 @@ class LivePlanarOcrEngine(
       val initialBitmap = renderTextBitmapForAnchor(anchorState, pending.to.code)
       if (initialBitmap != null) {
         applyRenderedBitmap(anchorState, initialBitmap)
-        publishBitmapOverlay(anchorState, IDENTITY_H)
       }
+      // The next analyzer frame will compositeAndEmit with the new
+      // resident overlay; no explicit publish needed here.
       val totalAcquireMs = (System.nanoTime() - stageStartNs) / 1_000_000.0
       Log.i(
         TAG_PLANAR,
@@ -953,13 +998,9 @@ class LivePlanarOcrEngine(
             val rerendered = renderTextBitmapForAnchor(freshAnchor, pending.to.code)
             if (rerendered != null) {
               applyRenderedBitmap(freshAnchor, rerendered)
-              val latestH =
-                smoothedHomography
-                  ?.takeIf { smoothedAnchorId == anchorId }
-                  ?.toList()
-                  ?: IDENTITY_H
-              publishBitmapOverlay(freshAnchor, latestH)
             }
+            // The next analyzer frame composites against the refreshed
+            // resident overlay; we don't publish per rec batch anymore.
           }
           if (translationsToFire.isNotEmpty()) {
             translateRequests(translationsToFire, pending.from, pending.to)
@@ -983,7 +1024,10 @@ class LivePlanarOcrEngine(
             anchors.clear()
             smoothedHomography = null
             smoothedAnchorId = 0uL
-            _bitmapOverlay.value = null
+          }
+          try {
+            tracker.clearOverlay()
+          } catch (_: Throwable) {
           }
         }
       } finally {
@@ -998,10 +1042,12 @@ class LivePlanarOcrEngine(
    *  `image_render::render_overlay`; items pending recognition just
    *  appear as a cyan outline so the user sees the tracker's hit-set
    *  before text arrives.
-   * Result of [renderTextBitmapForAnchor]: the bitmap plus where its
-   *  pixel (0, 0) sits in canonical-frame coordinates. */
+   * Result of [renderTextBitmapForAnchor]: dimensions of the
+   *  rasterized overlay and where its pixel (0, 0) sits in canonical
+   *  coords. The bitmap bytes themselves live in Rust (the tracker's
+   *  resident-overlay slot); the per-frame composite reads them from
+   *  there directly. */
   private data class RenderedBitmap(
-    val bitmap: android.graphics.Bitmap,
     val width: Int,
     val height: Int,
     val canonicalOriginX: Float,
@@ -1078,55 +1124,112 @@ class LivePlanarOcrEngine(
     val expected = width * height * 4
     val produced =
       try {
-        tracker.prepareTextOverlayRender(width.toUInt(), height.toUInt(), items).toInt()
+        tracker.prepareOverlayForComposite(
+          width.toUInt(),
+          height.toUInt(),
+          items,
+          originX,
+          originY,
+        ).toInt()
       } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "prepareTextOverlayRender failed", e)
+        Log.w(TAG_PLANAR, "prepareOverlayForComposite failed", e)
         return null
       }
     if (produced != expected) {
       Log.w(TAG_PLANAR, "bitmap byte size mismatch: got $produced, expected $expected")
       return null
     }
-    val buffer = ensureRenderBuffer(expected)
+    val ms = (System.nanoTime() - tStart) / 1_000_000.0
+    Log.i(
+      TAG_PLANAR,
+      "overlay raster: ${width}x$height (canonical ${canonicalW}x$canonicalH, origin=${originX.toInt()},${originY.toInt()}) items=${items.size} in ${"%.1f".format(
+        ms,
+      )}ms",
+    )
+    return RenderedBitmap(width, height, originX, originY)
+  }
+
+  private fun applyRenderedBitmap(
+    anchorState: AnchorState,
+    rendered: RenderedBitmap,
+  ) {
+    anchorState.overlayPrepared = true
+    anchorState.bitmapWidth = rendered.width
+    anchorState.bitmapHeight = rendered.height
+    anchorState.bitmapOriginCanonicalX = rendered.canonicalOriginX
+    anchorState.bitmapOriginCanonicalY = rendered.canonicalOriginY
+  }
+
+  /** Build the per-camera-frame composited display image: camera RGBA
+   *  rotated to display orient, with the resident overlay (if any)
+   *  warped on top by [hSurfaceToViewport]. Emits via
+   *  [_compositedFrame]; the [SurfaceView] subscribes and blits.
+   *  Null `hSurfaceToViewport` → camera-only (no overlay this frame).
+   *
+   *  Reuses a 2-slot bitmap pool to avoid 8 MB allocations at 30 Hz. */
+  private fun compositeAndEmit(
+    handle: FrameHandle,
+    displayWidth: Int,
+    displayHeight: Int,
+    hSurfaceToViewport: FloatArray?,
+  ) {
+    if (displayWidth <= 0 || displayHeight <= 0) return
+    val expected = displayWidth * displayHeight * 4
+    val buffer = ensureDisplayBuffer(expected, displayWidth, displayHeight)
+    val bitmap = ensureDisplayBitmap(displayWidth, displayHeight) ?: return
+    val hList: List<Float> =
+      hSurfaceToViewport?.takeIf { it.size == 9 }?.toList() ?: emptyList()
+    val produced =
+      try {
+        tracker.compositeFrame(
+          handle,
+          displayWidth.toUInt(),
+          displayHeight.toUInt(),
+          hList,
+        ).toInt()
+      } catch (e: Throwable) {
+        Log.w(TAG_PLANAR, "compositeFrame failed", e)
+        return
+      }
+    if (produced != expected) {
+      Log.w(TAG_PLANAR, "composite byte size mismatch: got $produced, expected $expected")
+      return
+    }
     val trackerPtr =
       try {
         tracker.rawAddressForJni().toLong()
       } catch (e: Throwable) {
         Log.w(TAG_PLANAR, "rawAddressForJni failed", e)
-        return null
+        return
       }
     val written =
       try {
-        PlanarRenderJni.renderInto(trackerPtr, buffer)
+        PlanarRenderJni.compositeInto(trackerPtr, buffer)
       } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "PlanarRenderJni.renderInto failed", e)
-        return null
+        Log.w(TAG_PLANAR, "PlanarRenderJni.compositeInto failed", e)
+        return
       }
     if (written != expected) {
-      Log.w(TAG_PLANAR, "JNI wrote $written, expected $expected")
-      return null
+      Log.w(TAG_PLANAR, "JNI composite wrote $written, expected $expected")
+      return
     }
     buffer.rewind()
-    val bmp = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-    bmp.copyPixelsFromBuffer(buffer)
-    val ms = (System.nanoTime() - tStart) / 1_000_000.0
-    Log.i(
-      TAG_PLANAR,
-      "bitmap render (JNI): ${width}x$height (canonical ${canonicalW}x$canonicalH, origin=${originX.toInt()},${originY.toInt()}) items=${items.size} in ${"%.1f".format(
-        ms,
-      )}ms",
-    )
-    return RenderedBitmap(bmp, width, height, originX, originY)
+    bitmap.copyPixelsFromBuffer(buffer)
+    _compositedFrame.value =
+      CompositedFrame(bitmap = bitmap, width = displayWidth, height = displayHeight)
+    // Ping-pong: next composite writes into the other slot so the view
+    // can keep drawing the bitmap we just emitted without racing.
+    displayBitmapIndex = 1 - displayBitmapIndex
   }
 
-  /** DirectByteBuffer reused across renders. Grows to the largest
-   *  required size, never shrinks — the canonical frame is constant for
-   *  the life of the camera session. */
-  private var renderBuffer: java.nio.ByteBuffer? = null
-
-  private fun ensureRenderBuffer(minBytes: Int): java.nio.ByteBuffer {
-    val existing = renderBuffer
-    if (existing != null && existing.capacity() >= minBytes) {
+  private fun ensureDisplayBuffer(
+    minBytes: Int,
+    width: Int,
+    height: Int,
+  ): java.nio.ByteBuffer {
+    val existing = displayBuffer
+    val widthChanged = width != displayBufferWidth || height != displayBufferHeight
+    if (existing != null && existing.capacity() >= minBytes && !widthChanged) {
       existing.clear()
       return existing
     }
@@ -1134,44 +1237,38 @@ class LivePlanarOcrEngine(
       java.nio.ByteBuffer
         .allocateDirect(minBytes)
         .order(java.nio.ByteOrder.nativeOrder())
-    renderBuffer = fresh
+    displayBuffer = fresh
+    displayBufferWidth = width
+    displayBufferHeight = height
+    // Dims changed → existing bitmaps no longer match; drop them so
+    // they get reallocated.
+    for (i in 0..1) {
+      displayBitmaps[i]?.recycle()
+      displayBitmaps[i] = null
+    }
+    displayBitmapIndex = 0
     return fresh
   }
 
-  private fun applyRenderedBitmap(
-    anchorState: AnchorState,
-    rendered: RenderedBitmap,
-  ) {
-    anchorState.bitmap = rendered.bitmap
-    anchorState.bitmapWidth = rendered.width
-    anchorState.bitmapHeight = rendered.height
-    anchorState.bitmapOriginCanonicalX = rendered.canonicalOriginX
-    anchorState.bitmapOriginCanonicalY = rendered.canonicalOriginY
-  }
-
-  private fun publishBitmapOverlay(
-    anchorState: AnchorState,
-    homography: List<Float>,
-  ) {
-    val bitmap = anchorState.bitmap ?: return
-    if (homography.size != 9) return
-    val hArr = FloatArray(9)
-    for (i in 0..8) hArr[i] = homography[i]
-    _bitmapOverlay.value =
-      BitmapOverlayFrame(
-        bitmap = bitmap,
-        frameWidth = anchorState.bitmapWidth,
-        frameHeight = anchorState.bitmapHeight,
-        bitmapOriginCanonicalX = anchorState.bitmapOriginCanonicalX,
-        bitmapOriginCanonicalY = anchorState.bitmapOriginCanonicalY,
-        homography = hArr,
-        cropLeft = anchorState.cropLeft,
-        cropTop = anchorState.cropTop,
-        displayWidth = anchorState.displayWidth,
-        displayHeight = anchorState.displayHeight,
-        imuRotationAtFrame = latestImuSnapshot?.copyOf(),
-        intrinsics = latestPixelIntrinsics,
-      )
+  private fun ensureDisplayBitmap(
+    width: Int,
+    height: Int,
+  ): android.graphics.Bitmap? {
+    val slot = displayBitmapIndex
+    val existing = displayBitmaps[slot]
+    if (existing != null && existing.width == width && existing.height == height && !existing.isRecycled) {
+      return existing
+    }
+    existing?.recycle()
+    val fresh =
+      try {
+        android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+      } catch (e: Throwable) {
+        Log.w(TAG_PLANAR, "createBitmap ${width}x$height failed", e)
+        return null
+      }
+    displayBitmaps[slot] = fresh
+    return fresh
   }
 
   private fun translateRequests(
@@ -1217,13 +1314,9 @@ class LivePlanarOcrEngine(
               val rerendered = renderTextBitmapForAnchor(freshAnchor, to.code)
               if (rerendered != null) {
                 applyRenderedBitmap(freshAnchor, rerendered)
-                val latestH =
-                  smoothedHomography
-                    ?.takeIf { smoothedAnchorId == anchorId }
-                    ?.toList()
-                    ?: IDENTITY_H
-                publishBitmapOverlay(freshAnchor, latestH)
               }
+              // No publish here — next analyzer frame's compositeAndEmit
+              // picks up the refreshed resident overlay.
             }
           }
         }
