@@ -1419,6 +1419,13 @@ pub struct LivePlanarTracker {
     /// We keep stable ids across rec batches so each block's rasterized
     /// bitmap is reused unchanged when only its translation is added.
     next_entry_id: std::sync::atomic::AtomicU64,
+    /// EMA-smoothed homography state, kept across consecutive
+    /// `process_and_composite` calls. Holds the last smoothed H + the
+    /// anchor it belongs to + the streak of LOST frames since the
+    /// previous Locked. Lives in Rust so the per-frame call can do
+    /// `tracker step → smooth → composite` in one trip instead of
+    /// pinging back to Kotlin for the H math.
+    smoothed_h: std::sync::Mutex<SmoothedHomography>,
     /// Output buffer produced by `composite_frame` (uniffi) and
     /// consumed by `Java_..._PlanarRenderJni_compositeInto` (JNI).
     /// Holds the fully-composited camera + overlay RGBA at display
@@ -1437,6 +1444,7 @@ impl LivePlanarTracker {
                 translator::planar_engine::EngineConfig::default(),
             )),
             current_overlay_items: std::sync::Mutex::new(Vec::new()),
+            smoothed_h: std::sync::Mutex::new(SmoothedHomography::default()),
             generation: std::sync::atomic::AtomicU64::new(0),
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
             pending_display: std::sync::Mutex::new(None),
@@ -1558,6 +1566,9 @@ impl LivePlanarTracker {
             engine.clear();
         }
         self.clear_overlay();
+        if let Ok(mut sm) = self.smoothed_h.lock() {
+            *sm = SmoothedHomography::default();
+        }
     }
 
     /// Read the current generation. Callers about to launch
@@ -2003,8 +2014,91 @@ impl LivePlanarTracker {
     /// `display_width`/`display_height` are the target display-orient
     /// pixel dimensions — must equal the sensor's W/H swapped per the
     /// rotation reported in the FrameHandle. Caller's destination
-    /// buffer must be sized `display_width * display_height * 4`.
+    /// One-shot per-frame entry point: tracker step → smooth H →
+    /// composite. Replaces the old
+    /// `process_frame_with_imu` + `composite_frame` pair, which paid
+    /// two uniffi roundtrips and a Kotlin-side H-smoothing detour per
+    /// camera frame. Now: single call in, single JNI memcpy out.
     ///
+    /// Internal H selection mirrors what Kotlin used to do:
+    /// - `Locked` → EMA-smooth the new H against the cached one;
+    ///   use the smoothed value; reset the LOST streak.
+    /// - `Lost` with streak < `LOSS_HIDE_AFTER_FRAMES` → reuse the
+    ///   last good smoothed H, so a single-frame tracker loss doesn't
+    ///   flicker the overlay off.
+    /// - `Lost` with sustained loss → no H → overlay omitted.
+    /// - `Idle` / `Acquiring` → no H → overlay omitted.
+    ///
+    /// All overlay decisions land at the per-frame H. Block content
+    /// (`current_overlay_items`) is updated separately by
+    /// `run_acquire_pipeline` and consumed here as-is.
+    fn process_and_composite(
+        &self,
+        frame: Arc<FrameHandle>,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+        imu_stable: bool,
+        timestamp_ns: u64,
+        imu_rotation_dev: Vec<f32>,
+        intrinsics_fx: f32,
+        intrinsics_fy: f32,
+        intrinsics_cx: f32,
+        intrinsics_cy: f32,
+        display_width: u32,
+        display_height: u32,
+    ) -> Result<PlanarComposeResult, CatalogError> {
+        // 1. Tracker step. We need to lock the frame state for
+        // `ensure_oriented_locked` to populate the cached grayscale,
+        // then engine state to run the tracker. The composite call
+        // below re-locks frame state to read the camera RGBA — that's
+        // a brief re-acquire (the mutex is uncontended in steady
+        // state) and lets us keep composite_frame as a self-contained
+        // method we can call directly.
+        let cmd = {
+            let mut state = frame.state.lock().map_err(|_| poisoned())?;
+            ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
+            let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
+            let mut engine = self.state.lock().map_err(|_| poisoned())?;
+            if imu_rotation_dev.len() == 9 {
+                let mut rot = [0.0f32; 9];
+                rot.copy_from_slice(&imu_rotation_dev[..9]);
+                let intr = translator::imu_prior::CameraIntrinsics {
+                    fx: intrinsics_fx,
+                    fy: intrinsics_fy,
+                    cx: intrinsics_cx,
+                    cy: intrinsics_cy,
+                };
+                engine.process_frame_with_imu(&oriented.gray, imu_stable, timestamp_ns, &rot, &intr)
+            } else {
+                engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
+            }
+        };
+        let result = cmd_to_result(cmd);
+
+        // 2. Decide which H to use for compositing, updating the
+        // smoothed-H state along the way.
+        let h_for_compose = self.select_compose_h(
+            &result,
+            display_width as f32,
+            display_height as f32,
+        );
+
+        // 3. Composite. An empty `h` means "skip the overlay warp" —
+        // we still want the camera frame on screen, so call composite
+        // unconditionally and just hand it the appropriate H (or none).
+        let h_vec: Vec<f32> = h_for_compose
+            .map(|h| h.to_vec())
+            .unwrap_or_default();
+        let bytes = self.composite_frame(frame, display_width, display_height, h_vec);
+
+        Ok(PlanarComposeResult {
+            state: result.state,
+            anchor_id: result.anchor_id,
+            inliers: result.inliers,
+            composite_byte_size: bytes,
+        })
+    }
+
     /// `h_surface_to_viewport` is a 9-element row-major homography; an
     /// empty slice (or length != 9) is treated as "no overlay this
     /// frame, just blit the camera".
@@ -2292,6 +2386,182 @@ fn cmd_to_result(cmd: translator::planar_engine::TrackerCommand) -> PlanarFrameR
             inliers: 0,
         },
     }
+}
+
+/// Tuning for the per-frame H smoother. Same values that lived in
+/// Kotlin's `LivePlanarOcrEngine` before this got moved into Rust.
+///
+/// `LOW`/`HIGH` are corner-delta thresholds in pixels (projected
+/// through the new vs previously-smoothed H at the canonical frame's
+/// four corners). Below `LOW` we treat the per-frame change as RANSAC
+/// noise and average heavily; above `HIGH` we treat it as real motion
+/// and snap. Linear blend in between.
+#[cfg(feature = "planar-tracker")]
+const SMOOTH_LOW_PX: f32 = 3.0;
+#[cfg(feature = "planar-tracker")]
+const SMOOTH_HIGH_PX: f32 = 9.0;
+#[cfg(feature = "planar-tracker")]
+const SMOOTH_MIN_ALPHA: f32 = 0.35;
+
+/// Frames of sustained tracker LOST before we hide the overlay (vs
+/// keep showing the last good H so a single missed frame doesn't
+/// flicker). ~270 ms @ 30 fps.
+#[cfg(feature = "planar-tracker")]
+const LOSS_HIDE_AFTER_FRAMES: u32 = 8;
+
+/// Bypass the EMA H smoother and use the tracker's raw per-frame H
+/// directly. The smoother was designed for the old two-surface
+/// architecture (preview + overlay) where preview-vs-H timing
+/// mismatch under motion contributed to perceived wobble. With the
+/// new same-frame composite, that source is gone — only intrinsic
+/// RANSAC jitter remains. Toggle to A/B whether smoothing still earns
+/// its keep on static dense pages vs the lag it adds during slow pans.
+#[cfg(feature = "planar-tracker")]
+const DISABLE_SMOOTH_H: bool = false;
+
+/// Smoothed-homography state held across `process_and_composite`
+/// calls. `h == None` means "no smoothed H yet for the current
+/// anchor" — reset on anchor switch, on `reset()`, and at start.
+#[cfg(feature = "planar-tracker")]
+#[derive(Default)]
+struct SmoothedHomography {
+    h: Option<[f32; 9]>,
+    anchor_id: u64,
+    consecutive_lost: u32,
+}
+
+/// Non-uniffi helpers on `LivePlanarTracker`. Kept out of the
+/// `#[uniffi::export] impl` block because their signatures use
+/// `[f32; 9]` and `&PlanarFrameResult` shapes that uniffi can't
+/// introspect.
+#[cfg(feature = "planar-tracker")]
+impl LivePlanarTracker {
+    /// Decide which H to feed into the compositor for one frame,
+    /// updating the smoothed-H state in the process. Returns `None`
+    /// when we should skip the overlay warp entirely (Idle,
+    /// Acquiring, sustained Lost).
+    fn select_compose_h(
+        &self,
+        result: &PlanarFrameResult,
+        frame_w: f32,
+        frame_h: f32,
+    ) -> Option<[f32; 9]> {
+        let mut sm = match self.smoothed_h.lock() {
+            Ok(s) => s,
+            Err(_) => return None,
+        };
+        match result.state {
+            PlanarTrackerState::Locked => {
+                sm.consecutive_lost = 0;
+                if result.homography.len() != 9 {
+                    return None;
+                }
+                let mut incoming = [0f32; 9];
+                incoming.copy_from_slice(&result.homography[..9]);
+                if DISABLE_SMOOTH_H {
+                    sm.h = Some(incoming);
+                    sm.anchor_id = result.anchor_id;
+                    Some(incoming)
+                } else {
+                    let smoothed = smooth_homography(
+                        &mut sm,
+                        result.anchor_id,
+                        &incoming,
+                        frame_w,
+                        frame_h,
+                    );
+                    Some(smoothed)
+                }
+            }
+            PlanarTrackerState::Lost => {
+                sm.consecutive_lost = sm.consecutive_lost.saturating_add(1);
+                if sm.consecutive_lost < LOSS_HIDE_AFTER_FRAMES {
+                    sm.h
+                } else {
+                    None
+                }
+            }
+            PlanarTrackerState::Idle | PlanarTrackerState::Acquiring => {
+                sm.consecutive_lost = 0;
+                None
+            }
+        }
+    }
+}
+
+/// EMA-smooth an incoming homography against the previously-smoothed
+/// one. The blend factor scales with how far the four canonical-frame
+/// corners have moved between the two Hs: tiny corner deltas (RANSAC
+/// jitter) get heavy smoothing, large deltas (real camera motion)
+/// snap immediately. Mirrors what the old Kotlin `smoothHomography`
+/// did; consolidated here so the per-frame call stays in Rust.
+#[cfg(feature = "planar-tracker")]
+fn smooth_homography(
+    sm: &mut SmoothedHomography,
+    anchor_id: u64,
+    incoming: &[f32; 9],
+    frame_w: f32,
+    frame_h: f32,
+) -> [f32; 9] {
+    // Anchor switch (or first frame on this anchor) → reset.
+    if sm.anchor_id != anchor_id || sm.h.is_none() {
+        sm.h = Some(*incoming);
+        sm.anchor_id = anchor_id;
+        return *incoming;
+    }
+    let prev = sm.h.expect("checked above");
+    let corners = [
+        (0.0_f32, 0.0_f32),
+        (frame_w, 0.0),
+        (frame_w, frame_h),
+        (0.0, frame_h),
+    ];
+    let mut max_delta = 0.0_f32;
+    for &(cx, cy) in &corners {
+        let pn = translator::homography::project(incoming, cx, cy);
+        let pp = translator::homography::project(&prev, cx, cy);
+        if let (Some(pn), Some(pp)) = (pn, pp) {
+            let dx = pn.0 - pp.0;
+            let dy = pn.1 - pp.1;
+            let d = (dx * dx + dy * dy).sqrt();
+            if d > max_delta {
+                max_delta = d;
+            }
+        }
+    }
+    let alpha = if max_delta <= SMOOTH_LOW_PX {
+        SMOOTH_MIN_ALPHA
+    } else if max_delta >= SMOOTH_HIGH_PX {
+        1.0
+    } else {
+        let t = (max_delta - SMOOTH_LOW_PX) / (SMOOTH_HIGH_PX - SMOOTH_LOW_PX);
+        SMOOTH_MIN_ALPHA + t * (1.0 - SMOOTH_MIN_ALPHA)
+    };
+    let mut out = [0.0_f32; 9];
+    for i in 0..9 {
+        out[i] = alpha * incoming[i] + (1.0 - alpha) * prev[i];
+    }
+    sm.h = Some(out);
+    sm.anchor_id = anchor_id;
+    out
+}
+
+/// Result of one `process_and_composite` call. Same shape as the
+/// old `PlanarFrameResult` minus `homography` and `is_new` (the H is
+/// internal now; `is_new` was unused on the Kotlin side), plus a
+/// `composite_byte_size` so the caller knows the JNI memcpy size to
+/// expect.
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Record)]
+pub struct PlanarComposeResult {
+    pub state: PlanarTrackerState,
+    pub anchor_id: u64,
+    pub inliers: u32,
+    /// Number of bytes the compositor wrote to `pending_display`.
+    /// `0` means no composite happened this frame (display dims
+    /// zero, frame buffer empty, etc.); Kotlin should skip the JNI
+    /// memcpy.
+    pub composite_byte_size: u32,
 }
 
 /// Outcome reported by `run_acquire_pipeline`. The pipeline either ran

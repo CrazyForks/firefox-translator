@@ -34,7 +34,6 @@ import uniffi.bindings.PlanarTrackerState
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.hypot
 import uniffi.translator.Rect as NativeRect
 
 private const val FRAME_BUFFER_CAPACITY_BYTES_PLANAR: Int = 8 * 1024 * 1024
@@ -437,32 +436,32 @@ class LivePlanarOcrEngine(
     // Also cache the latest pixel intrinsics for render-thread
     // extrapolation downstream.
     latestPixelIntrinsics = pxIntr
+    // One-shot: tracker step → smooth H → composite, all in Rust.
+    // Avoids the per-frame Kotlin↔Rust ping-pong (two uniffi calls +
+    // a Kotlin-side H-math detour) that the old split did.
+    val imuRotList = if (rot != null && rot.size == 9) rot.toList() else emptyList()
+    val fx = pxIntr?.fx ?: 0f
+    val fy = pxIntr?.fy ?: 0f
+    val cx = pxIntr?.cx ?: 0f
+    val cy = pxIntr?.cy ?: 0f
     val result =
       try {
-        if (rot != null && rot.size == 9 && pxIntr != null) {
-          tracker.processFrameWithImu(
-            pending.handle,
-            cropRect,
-            DETECTOR_TARGET_PIXELS_PLANAR_UINT,
-            imuStable,
-            nowNs,
-            rot.toList(),
-            pxIntr.fx,
-            pxIntr.fy,
-            pxIntr.cx,
-            pxIntr.cy,
-          )
-        } else {
-          tracker.processFrame(
-            pending.handle,
-            cropRect,
-            DETECTOR_TARGET_PIXELS_PLANAR_UINT,
-            imuStable,
-            nowNs,
-          )
-        }
+        tracker.processAndComposite(
+          pending.handle,
+          cropRect,
+          DETECTOR_TARGET_PIXELS_PLANAR_UINT,
+          imuStable,
+          nowNs,
+          imuRotList,
+          fx,
+          fy,
+          cx,
+          cy,
+          displayW.toUInt(),
+          displayH.toUInt(),
+        )
       } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "planar processFrame failed", e)
+        Log.w(TAG_PLANAR, "processAndComposite failed", e)
         releaseFrameHandle(pending.handle)
         return
       }
@@ -477,64 +476,18 @@ class LivePlanarOcrEngine(
       lastLoggedState = stateName
       framesSinceLog = 0
     }
-    // Update the debug status pill on every frame. Cheap copy; the
-    // pill renders only when DEBUG_SHOW_TRACKER_STATUS is true.
-    val prev = _trackerStatus.value
     _trackerStatus.value =
-      prev.copy(
+      _trackerStatus.value.copy(
         state = result.state,
         anchorId = result.anchorId.toLong(),
         inliers = result.inliers.toInt(),
       )
-    // Decide what H this frame's composite should use (null = no
-    // overlay; the compositor will draw camera pixels only).
-    var compositeH: FloatArray? = null
-    when (result.state) {
-      PlanarTrackerState.IDLE -> {
-        consecutiveLostFrames = 0
-        try {
-          tracker.clearOverlay()
-        } catch (_: Throwable) {
-        }
-      }
-      PlanarTrackerState.ACQUIRING -> {
-        consecutiveLostFrames = 0
-        // No overlay yet for this frame; acquire runs async below and
-        // will refresh the resident overlay in time for the next frame.
-      }
-      PlanarTrackerState.LOCKED -> {
-        consecutiveLostFrames = 0
-        val anchorId = result.anchorId
-        val displayed = smoothHomography(anchorId, result.homography, displayW, displayH)
-        // Always pass H when Locked — Rust's composite_frame iterates
-        // whatever resident overlay items exist (zero during the
-        // brief window between acquire-now and the first rec batch's
-        // first upsert, then growing as batches complete). No need
-        // for a Kotlin-side overlayPrepared flag.
-        compositeH = FloatArray(9).also { for (i in 0..8) it[i] = displayed[i] }
-      }
-      PlanarTrackerState.LOST -> {
-        // Transient loss: keep using the last good H so a single-frame
-        // blur doesn't flicker. Sustained loss: drop the overlay.
-        consecutiveLostFrames++
-        val anchorId = result.anchorId
-        if (consecutiveLostFrames < LOSS_HIDE_AFTER_FRAMES) {
-          val cachedH = smoothedHomography?.takeIf { smoothedAnchorId == anchorId }
-          if (cachedH != null) {
-            compositeH = cachedH.copyOf()
-          }
-        } else {
-          try {
-            tracker.clearOverlay()
-          } catch (_: Throwable) {
-          }
-        }
-      }
+    // Rust already produced the composited bytes into its
+    // `pending_display` slot. `compositeAndEmit` is now just the JNI
+    // memcpy + Bitmap copy + StateFlow emit.
+    if (result.compositeByteSize > 0u) {
+      compositeAndEmit(displayW, displayH, result.compositeByteSize.toInt())
     }
-    // Composite + emit BEFORE the (potentially long) acquire stage,
-    // so the user sees a fresh camera frame promptly even when we're
-    // about to spend ~100-150 ms in detection.
-    compositeAndEmit(pending.handle, displayW, displayH, compositeH)
     // For ACQUIRING, kick off the acquire stage on a separate worker
     // coroutine so this detector thread is free to keep processing
     // analyzer frames (composite + emit). Without this, every acquire
@@ -567,79 +520,6 @@ class LivePlanarOcrEngine(
 
   private var lastLoggedState: String = ""
   private var framesSinceLog: Int = 0
-
-  /** How many consecutive LOST frames since the last LOCKED. We hide
-   *  the overlay only after a short grace period (LOSS_HIDE_AFTER_FRAMES)
-   *  so a single missed frame doesn't flicker, but a sustained loss
-   *  promptly clears the screen instead of leaving stale overlays
-   *  floating in space. */
-  private var consecutiveLostFrames: Int = 0
-
-  /** Per-frame EMA on the homography to kill sub-pixel feature noise.
-   *  We compute the max corner delta between the new and last-smoothed
-   *  homography (projecting the four image corners through each) and
-   *  pick an EMA `α`:
-   *    - δ ≤ SMOOTH_LOW_PX  → α = SMOOTH_MIN_ALPHA  (heavy smoothing)
-   *    - δ ≥ SMOOTH_HIGH_PX → α = 1.0               (snap; real motion)
-   *    - in between → linear blend
-   *  Real-world panning/tilting exceeds SMOOTH_HIGH_PX so it doesn't
-   *  feel laggy; static-scene noise stays under SMOOTH_LOW_PX so it
-   *  gets averaged out.
-   *  Reset on anchor switch (cached pose may be far from current). */
-  private fun smoothHomography(
-    anchorId: ULong,
-    incoming: List<Float>,
-    frameWidth: Int,
-    frameHeight: Int,
-  ): List<Float> {
-    if (incoming.size != 9) return incoming
-    val newArr = FloatArray(9)
-    for (i in 0..8) newArr[i] = incoming[i]
-    val prev = smoothedHomography
-    if (prev == null || smoothedAnchorId != anchorId) {
-      smoothedHomography = newArr
-      smoothedAnchorId = anchorId
-      return incoming
-    }
-    val w = frameWidth.toFloat()
-    val h = frameHeight.toFloat()
-    val corners = arrayOf(0f to 0f, w to 0f, w to h, 0f to h)
-    var maxDelta = 0f
-    for ((cx, cy) in corners) {
-      val pn = projectPoint(newArr, cx, cy) ?: continue
-      val pp = projectPoint(prev, cx, cy) ?: continue
-      val dx = pn.first - pp.first
-      val dy = pn.second - pp.second
-      val d = kotlin.math.hypot(dx, dy)
-      if (d > maxDelta) maxDelta = d
-    }
-    val alpha =
-      when {
-        maxDelta <= SMOOTH_LOW_PX -> SMOOTH_MIN_ALPHA
-        maxDelta >= SMOOTH_HIGH_PX -> 1f
-        else -> {
-          val t = (maxDelta - SMOOTH_LOW_PX) / (SMOOTH_HIGH_PX - SMOOTH_LOW_PX)
-          SMOOTH_MIN_ALPHA + t * (1f - SMOOTH_MIN_ALPHA)
-        }
-      }
-    val out = FloatArray(9)
-    for (i in 0..8) out[i] = alpha * newArr[i] + (1f - alpha) * prev[i]
-    smoothedHomography = out
-    smoothedAnchorId = anchorId
-    return out.toList()
-  }
-
-  private fun projectPoint(
-    h: FloatArray,
-    x: Float,
-    y: Float,
-  ): Pair<Float, Float>? {
-    val qx = h[0] * x + h[1] * y + h[2]
-    val qy = h[3] * x + h[4] * y + h[5]
-    val qw = h[6] * x + h[7] * y + h[8]
-    if (qw == 0f || !qw.isFinite()) return null
-    return (qx / qw) to (qy / qw)
-  }
 
   /** Thin Kotlin shim around `tracker.runAcquirePipeline`. The whole
    *  acquire stage (detect → acquire → rec batches → batched translate
@@ -717,35 +597,20 @@ class LivePlanarOcrEngine(
    *  [_compositedFrame]; the [SurfaceView] subscribes and blits.
    *  Null `hSurfaceToViewport` → camera-only (no overlay this frame).
    *
-   *  Reuses a 2-slot bitmap pool to avoid 8 MB allocations at 30 Hz. */
+   *  Reuses a 2-slot bitmap pool to avoid 8 MB allocations at 30 Hz. *
+
+   * JNI memcpy + Bitmap copy + StateFlow emit. The actual composite
+   *  (camera rotate + per-block warps) happened inside Rust during
+   *  the preceding `processAndComposite` call; we only need to drain
+   *  the `pending_display` slot here. */
   private fun compositeAndEmit(
-    handle: FrameHandle,
     displayWidth: Int,
     displayHeight: Int,
-    hSurfaceToViewport: FloatArray?,
+    expected: Int,
   ) {
     if (displayWidth <= 0 || displayHeight <= 0) return
-    val expected = displayWidth * displayHeight * 4
     val buffer = ensureDisplayBuffer(expected, displayWidth, displayHeight)
     val bitmap = ensureDisplayBitmap(displayWidth, displayHeight) ?: return
-    val hList: List<Float> =
-      hSurfaceToViewport?.takeIf { it.size == 9 }?.toList() ?: emptyList()
-    val produced =
-      try {
-        tracker.compositeFrame(
-          handle,
-          displayWidth.toUInt(),
-          displayHeight.toUInt(),
-          hList,
-        ).toInt()
-      } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "compositeFrame failed", e)
-        return
-      }
-    if (produced != expected) {
-      Log.w(TAG_PLANAR, "composite byte size mismatch: got $produced, expected $expected")
-      return
-    }
     val trackerPtr =
       try {
         tracker.rawAddressForJni().toLong()
