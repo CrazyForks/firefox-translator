@@ -30,16 +30,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import uniffi.bindings.FrameHandle
-import uniffi.bindings.PlanarOverlayInput
 import uniffi.bindings.PlanarTrackerState
-import uniffi.translator.OcrSourceSelection
-import uniffi.translator.OrientedRect
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.math.cos
 import kotlin.math.hypot
-import kotlin.math.sin
 import uniffi.translator.Rect as NativeRect
 
 private const val FRAME_BUFFER_CAPACITY_BYTES_PLANAR: Int = 8 * 1024 * 1024
@@ -58,31 +53,6 @@ private const val DETECTOR_TARGET_PIXELS_PLANAR_INT: Int = 650_000
  *  (e.g. the glyph stems' inverse pixels, page edges, borders) which
  *  helps homography fit when the text itself is sparse. */
 private const val ANCHOR_REGION_PAD_PX_UINT: UInt = 60u
-
-/** Pad around the union of overlay quads when sizing the bitmap. Gives
- *  the renderer headroom to draw bg rects without clipping at the edge
- *  and absorbs small intra-page H jitter without bitmap-edge tearing. */
-private const val BITMAP_BBOX_PAD_PX: Float = 32f
-
-/** Vertical inflation around the detector's tight (ink-extent) box to
- *  make room for ascenders/descenders and small DB-mask under-coverage
- *  at glyph tops. `tight` matches the inked pixels of the contour, so
- *  for a line of all-caps the height is exactly the cap height — any
- *  descender in the rendered overlay would clip without this slack.
- *  `oriented` adds the same pad to width AND height (~25 px each side
- *  for typical 200×30 lines), which made the box 2-3× taller than the
- *  text; we want the vertical extension without the horizontal one. */
-private const val TIGHT_VERTICAL_INFLATE: Float = 2.4f
-
-/** Horizontal padding (canonical pixels) added to each side of the
- *  tight bbox when building the visual box. Keeps the rendered text
- *  from sitting flush against the rounded-rect background edge. */
-private const val HORIZONTAL_PAD_PX: Float = 8f
-
-/** Number of detected text boxes to recognise per batch. The first
- *  batch's overlays light up after one batch's recognise cost (~30ms
- *  × batch size), not after the whole page (~450ms for 15 boxes). */
-private const val RECOGNIZE_BATCH_SIZE: Int = 4
 
 /** Frames of sustained LOST before we *hide* the overlay (vs just
  *  keep the last good one). 8 frames ≈ 270 ms at 30 fps — short enough
@@ -107,12 +77,6 @@ private const val SMOOTH_MIN_ALPHA: Float = 0.35f
  *  small enough to ignore tracking noise but big enough to catch a
  *  real tap-to-focus elsewhere on screen. */
 private const val FOCUS_RESET_THRESHOLD: Float = 0.05f
-
-private const val MAX_TRANSLATION_CACHE_PLANAR = 256
-
-/** Show source text + bounding boxes instead of waiting on translations.
- *  Mirrors the legacy engine's diagnostic flag. */
-private const val DEBUG_TRACKER_VIEW_PLANAR: Boolean = false
 
 /** Carries one camera frame through the engine. */
 private data class PendingPlanarFrame(
@@ -183,59 +147,12 @@ data class CompositedFrame(
   val height: Int,
 )
 
-private data class CanonicalEntry(
-  val anchorId: ULong,
-  val entryId: ULong,
-  val oriented: OrientedRect,
-  val tight: OrientedRect,
-  val sourceText: String,
-  val sourceCode: String,
-  val groupId: String,
-  /** Has the recognizer been run on this box at least once? Distinguishes
-   *  "detected, waiting for rec" (render a placeholder box so the user
-   *  sees we've spotted something) from "detected, rec returned empty"
-   *  (drop it — we'd be drawing a permanent meaningless box). */
-  val recAttempted: Boolean = false,
-)
-
-private data class AnchorState(
-  val cropLeft: Int,
-  val cropTop: Int,
-  val displayWidth: Int,
-  val displayHeight: Int,
-  val rotationDegrees: Int,
-  val entries: MutableList<CanonicalEntry>,
-  /** True once `prepareOverlayForComposite` has been called and the
-   *  Rust-side resident overlay is in sync with these entries. False
-   *  before the first rasterization, or after a failed rasterization
-   *  (treated as "no overlay this anchor"). The composite pipeline
-   *  reads the resident bytes from Rust each frame, so we don't keep
-   *  a Kotlin Bitmap mirror. */
-  var overlayPrepared: Boolean = false,
-  /** Bitmap dimensions in pixels — sized to the *union of overlay
-   *  quads + pad*, not the whole canonical frame. */
-  var bitmapWidth: Int = 0,
-  var bitmapHeight: Int = 0,
-  /** Where bitmap pixel (0, 0) sits in canonical-frame coords. */
-  var bitmapOriginCanonicalX: Float = 0f,
-  var bitmapOriginCanonicalY: Float = 0f,
-  /** Full canonical frame dims (kept around for sanity-checks and
-   *  fallbacks). */
-  var canonicalWidth: Int = 0,
-  var canonicalHeight: Int = 0,
-)
-
-/** Drop-in replacement for [LiveOcrEngine] that drives a single
- *  per-surface homography (Rust-side `LivePlanarTracker`) instead of
- *  per-region SAD tracking. Same public API so [LiveCameraScreen] just
- *  swaps the constructor.
- *
- *  Architecturally:
- *    - process_frame → `Acquiring`: run detect + recognise + translate,
- *      then `acquire_now` + `set_overlays`, then emit overlays as-is.
- *    - process_frame → `Locked`: project cached canonical overlays
- *      through the recovered homography, emit.
- *    - process_frame → `Lost` / `Idle`: clear overlays.
+/** Thin Kotlin wrapper around `LivePlanarTracker`. Owns the camera
+ *  frame pool, the display bitmap pool, the IMU service, and the
+ *  per-frame state machine that dispatches the Rust acquire pipeline.
+ *  Per-item overlay state, recognition, translation, content hashing,
+ *  bitmap raster — all in Rust now. Kotlin's only domain here is
+ *  Android lifecycle + display surface.
  */
 class LivePlanarOcrEngine(
   private val catalog: LanguageCatalog,
@@ -246,7 +163,6 @@ class LivePlanarOcrEngine(
   private var cameraIntrinsics: CameraIntrinsicsRaw? = null
   private val mutex = Mutex()
   private val tracker = uniffi.bindings.LivePlanarTracker()
-  private val anchors: MutableMap<ULong, AnchorState> = mutableMapOf()
   private var lastCropRect: NativeRect? = null
 
   /** EMA-smoothed homography for the currently-locked anchor. Reset on
@@ -262,10 +178,6 @@ class LivePlanarOcrEngine(
    *  intentionally pointing at something else. */
   private var lastFocusX: Float = Float.NaN
   private var lastFocusY: Float = Float.NaN
-  private val translationCache = HashMap<TranslationKeyP, String>()
-  private val pendingTranslations = HashSet<TranslationKeyP>()
-  private var nextEntryId: ULong = 1uL
-  private var globalGeneration: Long = 0L
   private var latestImuSnapshot: FloatArray? = null
 
   /** True while a `runAcquireStage` coroutine is running. We launch
@@ -281,8 +193,6 @@ class LivePlanarOcrEngine(
    *  carried through to `publishBitmapOverlay` so the view can
    *  IMU-extrapolate at refresh rate. */
   private var latestPixelIntrinsics: FrameIntrinsics? = null
-
-  data class TranslationKeyP(val sourceCode: String, val targetCode: String, val text: String)
 
   private val pendingFrame = java.util.concurrent.atomic.AtomicReference<PendingPlanarFrame?>(null)
   private val frameSignal = Channel<Unit>(Channel.CONFLATED)
@@ -410,18 +320,20 @@ class LivePlanarOcrEngine(
   }
 
   fun clear() {
+    // `reset()` clears engine state + overlay items + bumps Rust's
+    // generation so any in-flight acquire pipeline bails. `clear()` is
+    // additionally needed because `reset()` keeps the cache LRU
+    // intact; `clear()` wipes that too (called on language change /
+    // session teardown, not the per-tap reset path).
+    tracker.reset()
     tracker.clear()
     workerScope.launch {
       mutex.withLock {
-        anchors.clear()
-        pendingTranslations.clear()
-        translationCache.clear()
         lastCropRect = null
         smoothedHomography = null
         smoothedAnchorId = 0uL
         lastFocusX = Float.NaN
         lastFocusY = Float.NaN
-        globalGeneration++
         _debugContours.value = null
         _compositedFrame.value = null
       }
@@ -489,19 +401,15 @@ class LivePlanarOcrEngine(
     if (cropChanged || focusJumped) {
       Log.i(TAG_PLANAR, "fresh-start trigger (cropChanged=$cropChanged focusJumped=$focusJumped) → resetting tracker")
       try {
-        tracker.clear()
+        // Bumps Rust's generation → any in-flight acquire pipeline
+        // bails at its next gen-check. Also clears engine state +
+        // resident overlay items.
+        tracker.reset()
       } catch (_: Throwable) {
       }
       mutex.withLock {
-        anchors.clear()
-        pendingTranslations.clear()
         smoothedHomography = null
         smoothedAnchorId = 0uL
-        globalGeneration++
-      }
-      try {
-        tracker.clearOverlay()
-      } catch (_: Throwable) {
       }
     }
     lastCropRect = cropRect
@@ -564,7 +472,7 @@ class LivePlanarOcrEngine(
     if (stateName != lastLoggedState || framesSinceLog >= 30) {
       Log.i(
         TAG_PLANAR,
-        "frame state=$stateName anchor=${result.anchorId} inliers=${result.inliers} entries=${anchors[result.anchorId]?.entries?.size ?: 0}",
+        "frame state=$stateName anchor=${result.anchorId} inliers=${result.inliers}",
       )
       lastLoggedState = stateName
       framesSinceLog = 0
@@ -598,10 +506,12 @@ class LivePlanarOcrEngine(
         consecutiveLostFrames = 0
         val anchorId = result.anchorId
         val displayed = smoothHomography(anchorId, result.homography, displayW, displayH)
-        val anchorState = mutex.withLock { anchors[anchorId] }
-        if (anchorState != null && anchorState.overlayPrepared) {
-          compositeH = FloatArray(9).also { for (i in 0..8) it[i] = displayed[i] }
-        }
+        // Always pass H when Locked — Rust's composite_frame iterates
+        // whatever resident overlay items exist (zero during the
+        // brief window between acquire-now and the first rec batch's
+        // first upsert, then growing as batches complete). No need
+        // for a Kotlin-side overlayPrepared flag.
+        compositeH = FloatArray(9).also { for (i in 0..8) it[i] = displayed[i] }
       }
       PlanarTrackerState.LOST -> {
         // Transient loss: keep using the last good H so a single-frame
@@ -609,9 +519,8 @@ class LivePlanarOcrEngine(
         consecutiveLostFrames++
         val anchorId = result.anchorId
         if (consecutiveLostFrames < LOSS_HIDE_AFTER_FRAMES) {
-          val anchorState = mutex.withLock { anchors[anchorId] }
           val cachedH = smoothedHomography?.takeIf { smoothedAnchorId == anchorId }
-          if (anchorState != null && anchorState.overlayPrepared && cachedH != null) {
+          if (cachedH != null) {
             compositeH = cachedH.copyOf()
           }
         } else {
@@ -638,15 +547,7 @@ class LivePlanarOcrEngine(
         val capturedPending = pending
         workerScope.launch(Dispatchers.Default) {
           try {
-            runAcquireStage(
-              capturedPending,
-              cropRect,
-              cropLeft,
-              cropTop,
-              displayW,
-              displayH,
-              nowNs,
-            )
+            runAcquireStage(capturedPending, cropRect)
           } catch (e: Throwable) {
             Log.w(TAG_PLANAR, "acquire stage crashed", e)
             releaseFrameHandle(capturedPending.handle)
@@ -740,427 +641,77 @@ class LivePlanarOcrEngine(
     return (qx / qw) to (qy / qw)
   }
 
+  /** Thin Kotlin shim around `tracker.runAcquirePipeline`. The whole
+   *  acquire stage (detect → acquire → rec batches → batched translate
+   *  → progressive overlay upserts) runs inside Rust. We just snapshot
+   *  the generation for cancellation, suspend until done, and forward
+   *  the resulting summary into the debug status pill. The frame
+   *  handle stays alive via Kotlin's caller; we release it in the
+   *  `finally`. */
   private suspend fun runAcquireStage(
     pending: PendingPlanarFrame,
     cropRect: NativeRect,
-    cropLeft: Int,
-    cropTop: Int,
-    displayW: Int,
-    displayH: Int,
-    nowNs: ULong,
   ) {
     val handle = pending.handle
-    val myGeneration = globalGeneration
-    val stageStartNs = System.nanoTime()
-    var handleStillOwned = true
+    val gen =
+      try {
+        tracker.currentGeneration()
+      } catch (e: Throwable) {
+        Log.w(TAG_PLANAR, "currentGeneration failed", e)
+        return
+      }
     try {
-      val tDetect = System.nanoTime()
-      val detected =
+      val outcome =
         try {
-          catalog.detectTextInFrame(handle, cropRect, DETECTOR_TARGET_PIXELS_PLANAR_INT)
-        } catch (e: Throwable) {
-          Log.w(TAG_PLANAR, "detect failed", e)
-          return
-        }
-      val detectMs = (System.nanoTime() - tDetect) / 1_000_000.0
-
-      Log.i(TAG_PLANAR, "acquire: detected=${detected.size}")
-      if (detected.isEmpty()) return
-
-      // Acquire the anchor on the same frame we just detected on. Do
-      // this BEFORE recognise so the user sees the tracked boxes the
-      // instant detection completes — recognise streams in afterwards.
-      val regionRects = detected.map { it.rect }
-      val anchorId =
-        try {
-          tracker.acquireNowInRegions(
+          tracker.runAcquirePipeline(
+            catalog.planarHandle(),
             handle,
             cropRect,
             DETECTOR_TARGET_PIXELS_PLANAR_UINT,
-            regionRects,
             ANCHOR_REGION_PAD_PX_UINT,
-            nowNs,
+            System.nanoTime().toULong(),
+            pending.from.code,
+            pending.to.code,
+            pending.isAutoSource,
+            gen,
           )
         } catch (e: Throwable) {
-          Log.w(TAG_PLANAR, "acquire_now_in_regions failed", e)
+          Log.w(TAG_PLANAR, "runAcquirePipeline crashed", e)
           return
         }
-      Log.i(TAG_PLANAR, "acquire: anchorId=$anchorId")
-      if (anchorId == 0uL) {
-        Log.w(TAG_PLANAR, "acquire_now returned 0 — no features or cooldown blocked")
-        return
-      }
-
-      // Seed canonical entries with placeholder text — recognition fills
-      // them in over the next few frames in batches of N (so a dense
-      // page of 15 lines doesn't block the detector thread for 450ms).
-      val defaultSourceCode = pending.from.code
-      val canonicalEntries = ArrayList<CanonicalEntry>(detected.size)
-      val overlayInputs = ArrayList<PlanarOverlayInput>(detected.size)
-      for (det in detected) {
-        val entryId = nextEntryId++
-        canonicalEntries +=
-          CanonicalEntry(
-            anchorId = anchorId,
-            entryId = entryId,
-            oriented = det.orientedBox,
-            tight = det.tightBox,
-            sourceText = "",
-            sourceCode = defaultSourceCode,
-            groupId = entryId.toString(),
-          )
-        overlayInputs +=
-          PlanarOverlayInput(
-            id = entryId,
-            quad = orientedCornersFlat(det.orientedBox),
-            payload = "$entryId|$defaultSourceCode",
-          )
-      }
-
-      try {
-        tracker.setOverlays(anchorId, overlayInputs)
-      } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "set_overlays failed", e)
-        return
-      }
-
-      // Canonical frame dims = the OrientedImage.gray we just acquired
-      // against. crop width/height in display orientation.
-      val canonicalW = (cropRect.right.toInt() - cropRect.left.toInt()).coerceAtLeast(1)
-      val canonicalH = (cropRect.bottom.toInt() - cropRect.top.toInt()).coerceAtLeast(1)
-      val anchorState =
-        AnchorState(
-          cropLeft = cropLeft,
-          cropTop = cropTop,
-          displayWidth = displayW,
-          displayHeight = displayH,
-          rotationDegrees = pending.rotationDegrees,
-          entries = canonicalEntries,
-          canonicalWidth = canonicalW,
-          canonicalHeight = canonicalH,
-        )
-      mutex.withLock {
-        if (myGeneration != globalGeneration) return
-        anchors[anchorId] = anchorState
-      }
-      // Render the initial bitmap with cyan outlines for all detected
-      // boxes (no text yet — recognise streams in below). Re-render
-      // after each rec batch completes.
-      val initialBitmap = renderTextBitmapForAnchor(anchorState, pending.to.code)
-      if (initialBitmap != null) {
-        applyRenderedBitmap(anchorState, initialBitmap)
-      }
-      // The next analyzer frame will compositeAndEmit with the new
-      // resident overlay; no explicit publish needed here.
-      val totalAcquireMs = (System.nanoTime() - stageStartNs) / 1_000_000.0
       Log.i(
         TAG_PLANAR,
-        "acquire timings ms: detect=${"%.1f".format(
-          detectMs,
-        )} anchor=${"%.1f".format(totalAcquireMs - detectMs)} total=${"%.1f".format(totalAcquireMs)} (boxes=${detected.size})",
+        "acquire pipeline: anchor=${outcome.anchorId} det=${outcome.detectedCount} " +
+          "rec_ok=${outcome.recOkCount} rec_empty=${outcome.recEmptyCount} " +
+          "total=${"%.1f".format(outcome.totalMs)}ms canceled=${outcome.canceled}" +
+          (outcome.error?.let { " error=$it" } ?: ""),
       )
-
-      // Stream recognise + translate on the rec worker thread. Owns the
-      // handle until done; we relinquish the `finally` close below.
-      handleStillOwned = false
-      runStreamingRecognize(
-        handle = handle,
-        cropRect = cropRect,
-        anchorId = anchorId,
-        detected = detected,
-        canonicalEntries = canonicalEntries,
-        generationAtStart = myGeneration,
-        pending = pending,
-      )
-    } finally {
-      if (handleStillOwned) {
-        releaseFrameHandle(handle)
-      }
-    }
-  }
-
-  /** Recognise the detected boxes in batches of [RECOGNIZE_BATCH_SIZE] so
-   *  the first batch's text appears in ~100ms even on a dense page.
-   *  Each batch updates the corresponding canonical entries and
-   *  republishes the projection. Translations are queued per batch so
-   *  they don't pile up at the end. */
-  private fun runStreamingRecognize(
-    handle: FrameHandle,
-    cropRect: NativeRect,
-    anchorId: ULong,
-    detected: List<uniffi.translator.DetectedTextBox>,
-    canonicalEntries: List<CanonicalEntry>,
-    generationAtStart: Long,
-    pending: PendingPlanarFrame,
-  ) {
-    workerScope.launch(Dispatchers.Default) {
-      try {
-        val sourceSelection =
-          if (pending.isAutoSource) {
-            OcrSourceSelection.Auto
-          } else {
-            OcrSourceSelection.Specific(uniffi.translator.LanguageCode(pending.from.code))
-          }
-        val total = detected.size
-        var startIdx = 0
-        while (startIdx < total) {
-          if (generationAtStart != globalGeneration) {
-            Log.i(TAG_PLANAR, "streaming rec aborted: generation changed")
-            return@launch
-          }
-          val endIdx = (startIdx + RECOGNIZE_BATCH_SIZE).coerceAtMost(total)
-          val batchBoxes = detected.subList(startIdx, endIdx)
-          val tBatch = System.nanoTime()
-          val recognised =
-            try {
-              catalog.recognizeInFrame(handle, cropRect, batchBoxes, sourceSelection)
-            } catch (e: Throwable) {
-              Log.w(TAG_PLANAR, "recognize batch failed", e)
-              return@launch
-            }
-          val batchMs = (System.nanoTime() - tBatch) / 1_000_000.0
-          val translationsToFire = mutableListOf<TranslationKeyP>()
-          mutex.withLock {
-            if (generationAtStart != globalGeneration) return@launch
-            val toCode = pending.to.code
-            for ((local, rec) in recognised.withIndex()) {
-              val canonicalIdx = startIdx + local
-              if (canonicalIdx >= canonicalEntries.size) continue
-              val raw = rec.text.trim()
-              if (raw.isEmpty()) {
-                // Mark rec as attempted so the placeholder box gets
-                // dropped from future publishes — but don't continue
-                // before that flag is set, otherwise the empty box
-                // would linger as "pending" forever.
-                val anchorStateInner = anchors[anchorId] ?: return@withLock
-                val storedIdx =
-                  anchorStateInner.entries.indexOfFirst {
-                    it.entryId == canonicalEntries[canonicalIdx].entryId
-                  }
-                if (storedIdx >= 0) {
-                  anchorStateInner.entries[storedIdx] =
-                    anchorStateInner.entries[storedIdx].copy(recAttempted = true)
-                }
-                continue
-              }
-              val text = raw
-              val srcCode =
-                if (pending.isAutoSource) (rec.sourceCode ?: pending.from.code) else pending.from.code
-              val newEntry =
-                canonicalEntries[canonicalIdx].copy(
-                  sourceText = text,
-                  sourceCode = srcCode,
-                  recAttempted = true,
-                )
-              // Mutate the anchor's entries in place. The list inside
-              // AnchorState is a MutableList — safe because we own the
-              // mutex.
-              val anchorState = anchors[anchorId] ?: return@withLock
-              // Find and replace the entry by id (the stored list may
-              // have been reused across acquires).
-              val storedIdx = anchorState.entries.indexOfFirst { it.entryId == newEntry.entryId }
-              if (storedIdx >= 0) {
-                anchorState.entries[storedIdx] = newEntry
-              }
-              if (!DEBUG_TRACKER_VIEW_PLANAR) {
-                val key = TranslationKeyP(srcCode, toCode, text)
-                if (!translationCache.containsKey(key) && key !in pendingTranslations) {
-                  pendingTranslations += key
-                  translationsToFire += key
-                }
-              }
-            }
-          }
-          // Per-batch + cumulative summary so we can see at a glance
-          // where boxes are dropping: detected (det), recognised
-          // non-empty (rec_ok), recognised empty / will be discarded
-          // (rec_empty), still waiting on a later batch (pending).
-          val freshAnchor = mutex.withLock { anchors[anchorId] }
-          val recOk = freshAnchor?.entries?.count { it.recAttempted && it.sourceText.isNotEmpty() } ?: 0
-          val recEmpty = freshAnchor?.entries?.count { it.recAttempted && it.sourceText.isEmpty() } ?: 0
-          val recPending = freshAnchor?.entries?.count { !it.recAttempted } ?: 0
-          Log.i(
-            TAG_PLANAR,
-            "rec batch ${startIdx / RECOGNIZE_BATCH_SIZE + 1}/${(total + RECOGNIZE_BATCH_SIZE - 1) / RECOGNIZE_BATCH_SIZE}: " +
-              "${batchBoxes.size} in ${"%.1f".format(batchMs)}ms | " +
-              "det=$total rec_ok=$recOk rec_empty=$recEmpty pending=$recPending",
-          )
-          // Feed the debug pill with the latest acquire-stage counts.
-          val prevStatus = _trackerStatus.value
-          _trackerStatus.value =
-            prevStatus.copy(
-              lastAcquireDet = total,
-              lastAcquireRecOk = recOk,
-              lastAcquireRecEmpty = recEmpty,
-              lastAcquirePending = recPending,
-            )
-          if (freshAnchor != null) {
-            val rerendered = renderTextBitmapForAnchor(freshAnchor, pending.to.code)
-            if (rerendered != null) {
-              applyRenderedBitmap(freshAnchor, rerendered)
-            }
-            // The next analyzer frame composites against the refreshed
-            // resident overlay; we don't publish per rec batch anymore.
-          }
-          if (translationsToFire.isNotEmpty()) {
-            translateRequests(translationsToFire, pending.from, pending.to)
-          }
-          startIdx = endIdx
-        }
-        // After all batches: if recogniser produced zero usable text,
-        // the anchor is locked to garbage (button cluster / texture /
-        // unreadable text). Tracking it wastes per-frame work and the
-        // LRU keeps re-locking onto it. Force a clear so the next
-        // stable frame re-acquires somewhere useful.
-        val finalAnchor = mutex.withLock { anchors[anchorId] }
-        val finalOk = finalAnchor?.entries?.count { it.recAttempted && it.sourceText.isNotEmpty() } ?: 0
-        if (finalAnchor != null && finalOk == 0) {
-          Log.i(TAG_PLANAR, "anchor #$anchorId has 0 readable text after all batches → clearing")
-          try {
-            tracker.clear()
-          } catch (_: Throwable) {
-          }
-          mutex.withLock {
-            anchors.clear()
-            smoothedHomography = null
-            smoothedAnchorId = 0uL
-          }
-          try {
-            tracker.clearOverlay()
-          } catch (_: Throwable) {
-          }
-        }
-      } finally {
-        releaseFrameHandle(handle)
-      }
-    }
-  }
-
-  /* Phase 2: build a text overlay bitmap from the anchor's current
-   *  canonical entries. Items with non-empty `sourceText` (DEBUG) or
-   *  with a cached translation (production) get rendered as text via
-   *  `image_render::render_overlay`; items pending recognition just
-   *  appear as a cyan outline so the user sees the tracker's hit-set
-   *  before text arrives.
-   * Result of [renderTextBitmapForAnchor]: dimensions of the
-   *  rasterized overlay and where its pixel (0, 0) sits in canonical
-   *  coords. The bitmap bytes themselves live in Rust (the tracker's
-   *  resident-overlay slot); the per-frame composite reads them from
-   *  there directly. */
-  private data class RenderedBitmap(
-    val width: Int,
-    val height: Int,
-    val canonicalOriginX: Float,
-    val canonicalOriginY: Float,
-  )
-
-  private fun renderTextBitmapForAnchor(
-    anchorState: AnchorState,
-    languageCode: String,
-  ): RenderedBitmap? {
-    val canonicalW = anchorState.canonicalWidth
-    val canonicalH = anchorState.canonicalHeight
-    if (canonicalW <= 0 || canonicalH <= 0) return null
-
-    // Filter rec-failed entries up front so they don't influence the
-    // union bbox calculation either.
-    val renderable = anchorState.entries.filter { !(it.sourceText.isEmpty() && it.recAttempted) }
-    if (renderable.isEmpty()) return null
-
-    // Union bbox of all canonical quads + pad. Bitmap is sized to this
-    // — typically a fraction of the canonical frame, dramatically
-    // cheaper to rasterize and warp.
-    var minX = Float.POSITIVE_INFINITY
-    var minY = Float.POSITIVE_INFINITY
-    var maxX = Float.NEGATIVE_INFINITY
-    var maxY = Float.NEGATIVE_INFINITY
-    for (entry in renderable) {
-      val q = orientedCornersFlat(visualBoxFor(entry))
-      for (i in 0 until 4) {
-        val x = q[i * 2]
-        val y = q[i * 2 + 1]
-        if (x < minX) minX = x
-        if (y < minY) minY = y
-        if (x > maxX) maxX = x
-        if (y > maxY) maxY = y
-      }
-    }
-    val pad = BITMAP_BBOX_PAD_PX
-    val originX = (minX - pad).coerceAtLeast(0f)
-    val originY = (minY - pad).coerceAtLeast(0f)
-    val width = ((maxX + pad).coerceAtMost(canonicalW.toFloat()) - originX).toInt().coerceAtLeast(1)
-    val height = ((maxY + pad).coerceAtMost(canonicalH.toFloat()) - originY).toInt().coerceAtLeast(1)
-
-    val items =
-      renderable.map { entry ->
-        val text =
-          when {
-            entry.sourceText.isEmpty() -> ""
-            DEBUG_TRACKER_VIEW_PLANAR -> entry.sourceText
-            else -> translationCache[TranslationKeyP(entry.sourceCode, languageCode, entry.sourceText)] ?: ""
-          }
-        val visual = visualBoxFor(entry)
-        val cornersCanonical = orientedCornersFlat(visual)
-        val cornersLocal = FloatArray(8)
-        for (i in 0 until 4) {
-          cornersLocal[i * 2] = cornersCanonical[i * 2] - originX
-          cornersLocal[i * 2 + 1] = cornersCanonical[i * 2 + 1] - originY
-        }
-        uniffi.bindings.PlanarTextRenderItem(
-          id = entry.entryId,
-          quad = cornersLocal.toList(),
-          translatedText = text,
-          sourceText = entry.sourceText,
-          language = languageCode,
-          // semi-transparent dark
-          bgArgb = 0xC8101010.toInt().toUInt(),
-          // white
-          fgArgb = 0xFFFFFFFFu.toInt().toUInt(),
-          suggestedFontPx = visual.height.coerceIn(10f, 120f),
+      _trackerStatus.value =
+        _trackerStatus.value.copy(
+          lastAcquireDet = outcome.detectedCount.toInt(),
+          lastAcquireRecOk = outcome.recOkCount.toInt(),
+          lastAcquireRecEmpty = outcome.recEmptyCount.toInt(),
+          lastAcquirePending = (outcome.detectedCount - outcome.recOkCount - outcome.recEmptyCount).toInt(),
         )
-      }
-
-    val tStart = System.nanoTime()
-    val expected = width * height * 4
-    val produced =
-      try {
-        tracker.prepareOverlayForComposite(
-          width.toUInt(),
-          height.toUInt(),
-          items,
-          originX,
-          originY,
-        ).toInt()
-      } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "prepareOverlayForComposite failed", e)
-        return null
-      }
-    if (produced != expected) {
-      Log.w(TAG_PLANAR, "bitmap byte size mismatch: got $produced, expected $expected")
-      return null
+    } finally {
+      releaseFrameHandle(handle)
     }
-    val ms = (System.nanoTime() - tStart) / 1_000_000.0
-    Log.i(
-      TAG_PLANAR,
-      "overlay raster: ${width}x$height (canonical ${canonicalW}x$canonicalH, origin=${originX.toInt()},${originY.toInt()}) items=${items.size} in ${"%.1f".format(
-        ms,
-      )}ms",
-    )
-    return RenderedBitmap(width, height, originX, originY)
   }
 
-  private fun applyRenderedBitmap(
-    anchorState: AnchorState,
-    rendered: RenderedBitmap,
-  ) {
-    anchorState.overlayPrepared = true
-    anchorState.bitmapWidth = rendered.width
-    anchorState.bitmapHeight = rendered.height
-    anchorState.bitmapOriginCanonicalX = rendered.canonicalOriginX
-    anchorState.bitmapOriginCanonicalY = rendered.canonicalOriginY
-  }
+  /** Push the current set of renderable entries to Rust as
+   *  per-item overlay updates. Each entry becomes one
+   *  `upsertOverlayItem` call; Rust hashes the content (tight box +
+   *  texts + language) and skips re-rastering items whose content
+   *  hasn't changed since the last upsert. After upserting, we
+   *  `retainOverlayItems` to drop anything that's no longer
+   *  renderable (e.g. rec returned empty for a previously-pending
+   *  box).
+   *
+   *  This replaces the old "render one big union bitmap" path which
+   *  re-rasterized every item on every batch update — on a dense
+   *  page that was 130 ms × 25 batches of pointless work.
 
-  /** Build the per-camera-frame composited display image: camera RGBA
+   * Build the per-camera-frame composited display image: camera RGBA
    *  rotated to display orient, with the resident overlay (if any)
    *  warped on top by [hSurfaceToViewport]. Emits via
    *  [_compositedFrame]; the [SurfaceView] subscribes and blits.
@@ -1270,95 +821,4 @@ class LivePlanarOcrEngine(
     displayBitmaps[slot] = fresh
     return fresh
   }
-
-  private fun translateRequests(
-    keys: List<TranslationKeyP>,
-    from: Language,
-    to: Language,
-  ) {
-    workerScope.launch(Dispatchers.Default) {
-      var any = false
-      for (key in keys) {
-        val translated =
-          try {
-            catalog.translateText(from, to, key.text)
-          } catch (e: Throwable) {
-            Log.w(TAG_PLANAR, "translate failed for '${key.text}'", e)
-            null
-          }
-        mutex.withLock {
-          pendingTranslations.remove(key)
-          if (!translated.isNullOrBlank()) {
-            if (translationCache.size >= MAX_TRANSLATION_CACHE_PLANAR) {
-              translationCache.keys.firstOrNull()?.let(translationCache::remove)
-            }
-            translationCache[key] = translated
-            any = true
-          }
-        }
-      }
-      if (any) {
-        val anchorId =
-          try {
-            tracker.currentAnchor()
-          } catch (_: Throwable) {
-            0uL
-          }
-        if (anchorId != 0uL) {
-          // Translation completion changes the per-entry text → the
-          // bitmap needs a re-render (production mode only; in debug
-          // we already drew the source text at acquire time).
-          if (!DEBUG_TRACKER_VIEW_PLANAR) {
-            val freshAnchor = mutex.withLock { anchors[anchorId] }
-            if (freshAnchor != null) {
-              val rerendered = renderTextBitmapForAnchor(freshAnchor, to.code)
-              if (rerendered != null) {
-                applyRenderedBitmap(freshAnchor, rerendered)
-              }
-              // No publish here — next analyzer frame's compositeAndEmit
-              // picks up the refreshed resident overlay.
-            }
-          }
-        }
-      }
-    }
-  }
-
-  companion object {
-    private val IDENTITY_H: List<Float> =
-      listOf(1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f)
-  }
-}
-
-private fun visualBoxFor(entry: CanonicalEntry): OrientedRect =
-  OrientedRect(
-    cx = entry.tight.cx,
-    cy = entry.tight.cy,
-    width = entry.tight.width + 2f * HORIZONTAL_PAD_PX,
-    height = entry.tight.height * TIGHT_VERTICAL_INFLATE,
-    angleRadians = entry.tight.angleRadians,
-  )
-
-/** Compute 4 corner positions (TL, TR, BR, BL) of an oriented rect, flat
- *  `[tlx, tly, trx, try, brx, bry, blx, bly]`. */
-private fun orientedCornersFlat(o: OrientedRect): List<Float> {
-  val c = cos(o.angleRadians)
-  val s = sin(o.angleRadians)
-  val hw = o.width / 2f
-  val hh = o.height / 2f
-  val locals =
-    listOf(
-      -hw to -hh,
-      hw to -hh,
-      hw to hh,
-      -hw to hh,
-    )
-  val out = ArrayList<Float>(8)
-  for ((lx, ly) in locals) {
-    val rx = c * lx - s * ly
-    val ry = s * lx + c * ly
-    out += o.cx + rx
-    out += o.cy + ry
-  }
-  return out
 }

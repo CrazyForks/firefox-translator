@@ -410,6 +410,13 @@ class LanguageCatalog private constructor(
    *  to be filled later via JNI memcpy or `resetViaUniffi`. */
   fun makeFrameBuffer(capacity: Int): uniffi.bindings.FrameHandle = handle.makeFrameBuffer(capacity.toUInt())
 
+  /** Internal accessor for the raw uniffi `CatalogHandle`. Needed by
+   *  the live-overlay pipeline, which passes the handle into the Rust
+   *  `run_acquire_pipeline` so the Rust side can invoke session
+   *  methods (detect / recognize / translate_mixed_texts) directly,
+   *  without per-call uniffi roundtrips. */
+  internal fun planarHandle(): CatalogHandle = handle
+
   @Throws(CatalogException::class)
   fun detectTextInFrame(
     frame: uniffi.bindings.FrameHandle,

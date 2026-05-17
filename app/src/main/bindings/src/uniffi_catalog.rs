@@ -1377,17 +1377,26 @@ pub struct PlanarTextRenderItem {
     pub suggested_font_px: f32,
 }
 
-/// The rasterized overlay bitmap kept resident in the tracker so the
-/// per-camera-frame `composite_frame` call can warp it without
-/// re-rasterizing. Refreshed by `prepare_overlay_for_composite` and
-/// cleared on tracking loss / anchor switch via `clear_overlay`.
+/// One per-item rasterized bitmap kept resident in the tracker. Each
+/// item carries its own small RGBA region (sized to the item's visual
+/// quad + a small AA pad) plus its surface-frame origin and a hash of
+/// the content that produced the bitmap. `composite_frame` iterates
+/// over the list and warps each item through `h_surface_to_viewport`.
+///
+/// Per-item storage replaces the previous one-big-union-bitmap design:
+/// a dense page with 98 items wasted ~96 % of every raster (each
+/// rec-batch update changed only 4 items but we re-rastered all 98).
+/// Now `upsert_overlay_item` only re-rasters items whose content hash
+/// changed; everything else stays resident.
 #[cfg(feature = "planar-tracker")]
-struct CurrentOverlay {
+struct CurrentOverlayItem {
+    id: u64,
     bitmap: Vec<u8>,
     width: u32,
     height: u32,
     surface_origin_x: f32,
     surface_origin_y: f32,
+    content_hash: u64,
 }
 
 #[cfg(feature = "planar-tracker")]
@@ -1399,12 +1408,25 @@ pub struct LivePlanarTracker {
     /// overlay path while the composite-in-Rust refactor migrates.
     /// Kept for compatibility; will retire with task #6.
     pending_bitmap: std::sync::Mutex<Option<Vec<u8>>>,
-    /// Resident rasterized overlay for the composite pipeline. Set by
-    /// `prepare_overlay_for_composite`, consumed each frame by
-    /// `composite_frame`, dropped on `clear_overlay`. Persisted across
-    /// many composite calls so we only re-rasterize when content
-    /// changes, not every camera frame.
-    current_overlay: std::sync::Mutex<Option<CurrentOverlay>>,
+    /// Per-item resident rasterized overlays for the composite
+    /// pipeline. Each item is keyed by its stable id; `upsert_overlay_item`
+    /// adds or replaces, `retain_overlay_items` drops anything outside
+    /// a set. Persisted across many composite calls so dense pages only
+    /// re-rasterize the handful of items whose text changed in the
+    /// latest rec batch, not the whole set.
+    current_overlay_items: std::sync::Mutex<Vec<CurrentOverlayItem>>,
+    /// Bumped on every `reset()` (tap-to-focus, language change, etc.).
+    /// In-flight acquire pipelines pass the generation they captured at
+    /// launch as a parameter; before each potentially-slow step
+    /// (detect, recognize, translate) the pipeline checks whether the
+    /// generation has moved on and bails if so. Eliminates the
+    /// Kotlin-side `globalGeneration` + per-step generation check
+    /// scaffolding.
+    generation: std::sync::atomic::AtomicU64,
+    /// Per-entry id source for items shipped to `upsert_overlay_item`.
+    /// We keep stable ids across rec batches so each item's rasterized
+    /// bitmap is reused unchanged when only its translation is added.
+    next_entry_id: std::sync::atomic::AtomicU64,
     /// Output buffer produced by `composite_frame` (uniffi) and
     /// consumed by `Java_..._PlanarRenderJni_compositeInto` (JNI).
     /// Holds the fully-composited camera + overlay RGBA at display
@@ -1423,7 +1445,9 @@ impl LivePlanarTracker {
                 translator::planar_engine::EngineConfig::default(),
             )),
             pending_bitmap: std::sync::Mutex::new(None),
-            current_overlay: std::sync::Mutex::new(None),
+            current_overlay_items: std::sync::Mutex::new(Vec::new()),
+            generation: std::sync::atomic::AtomicU64::new(0),
+            next_entry_id: std::sync::atomic::AtomicU64::new(1),
             pending_display: std::sync::Mutex::new(None),
         })
     }
@@ -1501,102 +1525,416 @@ impl LivePlanarTracker {
         self.pending_bitmap.lock().ok().and_then(|mut s| s.take())
     }
 
-    /// Rasterize a text-overlay bitmap and stash it as the resident
-    /// overlay for subsequent `composite_frame` calls. Differs from
-    /// `prepare_text_overlay_render` in two ways: (1) we keep the
-    /// rasterized bytes alive so we don't re-rasterize per camera
-    /// frame, (2) we carry the surface-coord origin of the bitmap so
-    /// the compositor can position it correctly when warping through
-    /// `h_surface_to_viewport`.
+    /// Upsert the resident overlay item with id `id`. If the content
+    /// (tight box + texts + language) matches what was already
+    /// rasterized for this id, this is a no-op — we keep the cached
+    /// bitmap. Otherwise we recompute the visual box, raster a fresh
+    /// bitmap, and replace the slot.
     ///
-    /// Returns the byte length of the rasterized bitmap (0 on failure).
-    fn prepare_overlay_for_composite(
+    /// Kotlin's job is to call this whenever a new detection /
+    /// recognition / translation result arrives. Kotlin does *not*
+    /// know about visual-box inflation, font sizing, bitmap bounds,
+    /// or hashing — Rust owns all of that.
+    fn upsert_overlay_item(
         &self,
-        frame_width: u32,
-        frame_height: u32,
-        items: Vec<PlanarTextRenderItem>,
-        surface_origin_x: f32,
-        surface_origin_y: f32,
-    ) -> u32 {
-        let engine_items: Vec<translator::planar_engine::TextRenderItem> = items
-            .into_iter()
-            .filter_map(|it| {
-                if it.quad.len() != 8 {
-                    return None;
+        id: u64,
+        tight: translator::ocr::OrientedRect,
+        source_text: String,
+        translated_text: String,
+        language: String,
+    ) {
+        let display_text = pick_display_text(&source_text, &translated_text);
+        let hash = item_content_hash(&tight, &display_text, &language);
+        // Fast path: same content as last time → keep the bitmap.
+        {
+            if let Ok(items) = self.current_overlay_items.lock() {
+                if let Some(existing) = items.iter().find(|it| it.id == id) {
+                    if existing.content_hash == hash {
+                        return;
+                    }
                 }
-                Some(translator::planar_engine::TextRenderItem {
-                    id: it.id,
-                    quad: [
-                        (it.quad[0], it.quad[1]),
-                        (it.quad[2], it.quad[3]),
-                        (it.quad[4], it.quad[5]),
-                        (it.quad[6], it.quad[7]),
-                    ],
-                    translated_text: it.translated_text,
-                    source_text: it.source_text,
-                    language: it.language,
-                    bg_argb: it.bg_argb,
-                    fg_argb: it.fg_argb,
-                    suggested_font_px: it.suggested_font_px,
-                })
-            })
-            .collect();
-        // Important: rasterize WITHOUT holding the engine mutex. The
-        // raster doesn't need engine state (it's pure on items +
-        // fonts) and on a dense page it takes 50-100 ms; if we held
-        // `self.state` for that duration, the detector thread would
-        // block on `process_frame_with_imu` and the SurfaceView would
-        // only refresh at the rec-batch rate instead of the camera
-        // rate.
+            }
+        }
         let raster_start = Instant::now();
-        let bytes = match translator::planar_engine::render_text_overlay_bitmap(
-            frame_width,
-            frame_height,
-            &engine_items,
-            &crate::android_font_provider::AndroidFontProvider,
-        ) {
-            Some(b) => b,
-            None => return 0,
+        let raster = match render_one_item_bitmap(&tight, &display_text, &language) {
+            Some(r) => r,
+            None => return,
         };
         let raster_end = Instant::now();
-        let len = bytes.len() as u32;
-        let overlay_wait = Instant::now();
-        if let Ok(mut slot) = self.current_overlay.lock() {
-            let overlay_acquired = Instant::now();
-            *slot = Some(CurrentOverlay {
-                bitmap: bytes,
-                width: frame_width,
-                height: frame_height,
-                surface_origin_x,
-                surface_origin_y,
-            });
-            let overlay_released = Instant::now();
-            log_lock_timing(
-                "current_overlay/prepare_overlay",
-                overlay_acquired - overlay_wait,
-                overlay_released - overlay_acquired,
-            );
+        if let Ok(mut items) = self.current_overlay_items.lock() {
+            let new_item = CurrentOverlayItem {
+                id,
+                bitmap: raster.bitmap,
+                width: raster.width,
+                height: raster.height,
+                surface_origin_x: raster.surface_origin_x,
+                surface_origin_y: raster.surface_origin_y,
+                content_hash: hash,
+            };
+            if let Some(slot) = items.iter_mut().find(|it| it.id == id) {
+                *slot = new_item;
+            } else {
+                items.push(new_item);
+            }
         }
         let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
         if raster_ms > LOCK_LOG_THRESHOLD_MS {
             log::info!(
-                "[work] overlay raster body: {:.1}ms ({}x{}, items={})",
+                "[work] item raster: id={} {:.1}ms text={:?}",
+                id,
                 raster_ms,
-                frame_width,
-                frame_height,
-                engine_items.len(),
+                display_text,
             );
         }
-        len
     }
 
-    /// Drop the resident overlay. Subsequent `composite_frame` calls
-    /// will only blit the camera frame, with no overlay drawn on top.
-    /// Call this on track loss, anchor switch, or whenever the
-    /// previously-rasterized content is no longer valid.
+    /// Drop any resident overlay item whose id is not in `ids`. Used
+    /// when an anchor finishes acquire (final list of ids known) or
+    /// when an anchor switches.
+    fn retain_overlay_items(&self, ids: Vec<u64>) {
+        let keep: std::collections::HashSet<u64> = ids.into_iter().collect();
+        if let Ok(mut items) = self.current_overlay_items.lock() {
+            items.retain(|it| keep.contains(&it.id));
+        }
+    }
+
+    /// Drop every resident overlay item. Compositor will draw a
+    /// camera-only frame after this.
     fn clear_overlay(&self) {
-        if let Ok(mut slot) = self.current_overlay.lock() {
-            *slot = None;
+        if let Ok(mut items) = self.current_overlay_items.lock() {
+            items.clear();
+        }
+    }
+
+    /// Bump the generation counter, clear the engine state, drop all
+    /// resident overlay items. Any in-flight `run_acquire_pipeline`
+    /// will notice the generation move and bail out at its next
+    /// check. Use this on tap-to-focus, language change, anchor reset.
+    fn reset(&self) {
+        self.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if let Ok(mut engine) = self.state.lock() {
+            engine.clear();
+        }
+        self.clear_overlay();
+    }
+
+    /// Read the current generation. Callers about to launch
+    /// `run_acquire_pipeline` snapshot this value and pass it back; the
+    /// pipeline aborts if the value has moved on by then.
+    fn current_generation(&self) -> u64 {
+        self.generation.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Whole acquire pipeline: detect text in the frame → acquire an
+    /// anchor in the tracker engine → run recognition in batches of
+    /// `REC_BATCH_SIZE` → translate each batch via
+    /// `translate_mixed_texts` (one FFI-free Rust call, not N
+    /// per-text calls) → upsert per-item overlays. Runs synchronously
+    /// on the caller's thread (typically a Kotlin coroutine worker).
+    ///
+    /// At every potentially-slow boundary we check
+    /// `self.generation == generation`; if not, we abort with
+    /// `canceled = true`. That replaces the Kotlin
+    /// `globalGeneration++` cancellation scaffolding.
+    fn run_acquire_pipeline(
+        &self,
+        catalog: Arc<CatalogHandle>,
+        frame: Arc<FrameHandle>,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+        anchor_padding_px: u32,
+        timestamp_ns: u64,
+        from_lang_code: String,
+        to_lang_code: String,
+        is_auto_source: bool,
+        generation: u64,
+    ) -> AcquirePipelineOutcome {
+        let gen_check =
+            || -> bool { self.generation.load(std::sync::atomic::Ordering::SeqCst) == generation };
+        if !gen_check() {
+            return AcquirePipelineOutcome::canceled();
+        }
+
+        let t_overall = Instant::now();
+
+        // ---- Detect ----
+        let t_detect = Instant::now();
+        let detected: Vec<translator::DetectedTextBox> = {
+            let mut state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            if ensure_oriented_locked(&mut state, display_crop, det_max_pixels).is_err() {
+                return AcquirePipelineOutcome::error("ensure_oriented failed");
+            }
+            let oriented = state
+                .cached
+                .as_ref()
+                .expect("ensure_oriented filled cache");
+            let raw = match catalog
+                .session
+                .detect_text_in_oriented_image(oriented)
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!("detect failed: {e:?}");
+                    return AcquirePipelineOutcome::error("detect failed");
+                }
+            };
+            let scale = oriented.det_to_full_scale;
+            let max_w = oriented.rgb.width();
+            let max_h = oriented.rgb.height();
+            raw.into_iter()
+                .map(|b| scale_detected_box(b, scale, max_w, max_h))
+                .collect()
+        };
+        let detect_ms = t_detect.elapsed().as_secs_f64() * 1_000.0;
+        log::info!(
+            "[acquire] detect: {:.1}ms found={}",
+            detect_ms,
+            detected.len()
+        );
+
+        if !gen_check() {
+            return AcquirePipelineOutcome::canceled();
+        }
+        if detected.is_empty() {
+            return AcquirePipelineOutcome {
+                anchor_id: 0,
+                detected_count: 0,
+                rec_ok_count: 0,
+                rec_empty_count: 0,
+                total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
+                canceled: false,
+                error: None,
+            };
+        }
+
+        // ---- Acquire anchor ----
+        let t_acquire = Instant::now();
+        let anchor_id = {
+            let state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            let oriented = state
+                .cached
+                .as_ref()
+                .expect("oriented still cached");
+            let regions: Vec<(u32, u32, u32, u32)> = detected
+                .iter()
+                .map(|d| (d.rect.left, d.rect.top, d.rect.right, d.rect.bottom))
+                .collect();
+            let mut engine = match self.state.lock() {
+                Ok(g) => g,
+                Err(_) => return AcquirePipelineOutcome::error("engine.state poisoned"),
+            };
+            engine
+                .acquire_now_in_regions(&oriented.gray, &regions, anchor_padding_px, timestamp_ns)
+                .unwrap_or(0)
+        };
+        let acquire_ms = t_acquire.elapsed().as_secs_f64() * 1_000.0;
+        log::info!("[acquire] acquire_now: {:.1}ms id={}", acquire_ms, anchor_id);
+
+        if anchor_id == 0 {
+            return AcquirePipelineOutcome::error("acquire_now returned 0");
+        }
+        if !gen_check() {
+            return AcquirePipelineOutcome::canceled();
+        }
+
+        // Build per-entry state — local to this pipeline call. Pushed
+        // to the Rust overlay slot via `upsert_overlay_item` after each
+        // batch so the user sees text light up progressively. (Type
+        // defined at module scope so the `AcquireEntryView` impl is
+        // visible to `push_entries_to_overlay`.)
+        let mut entries: Vec<AcquireEntry> = detected
+            .into_iter()
+            .map(|d| AcquireEntry {
+                id: self
+                    .next_entry_id
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                tight: d.tight_box.clone(),
+                source_text: String::new(),
+                source_code: from_lang_code.clone(),
+                translated_text: String::new(),
+                rec_attempted: false,
+                rec_box: d,
+            })
+            .collect();
+        let total = entries.len();
+
+        let source_selection = if is_auto_source {
+            translator::OcrSourceSelection::Auto
+        } else {
+            translator::OcrSourceSelection::Specific {
+                language_code: translator::LanguageCode::from(from_lang_code.as_str()),
+            }
+        };
+
+        // Pre-compute the catalog's installed language codes for
+        // `translate_mixed_texts`. Only used when forced_source_code
+        // is None (auto-detect); ignored otherwise. We pass it
+        // unconditionally so the auto-source path doesn't need a
+        // separate branch.
+        let available_codes: Vec<translator::LanguageCode> = catalog
+            .session
+            .language_rows()
+            .into_iter()
+            .map(|row| translator::LanguageCode::from(row.language.code.as_str()))
+            .collect();
+
+        // ---- Rec + translate batches ----
+        const REC_BATCH_SIZE: usize = 4;
+        let mut start = 0;
+        while start < total {
+            if !gen_check() {
+                return AcquirePipelineOutcome::canceled();
+            }
+            let end = (start + REC_BATCH_SIZE).min(total);
+            let t_batch = Instant::now();
+
+            // 1. Recognize this batch.
+            let batch_boxes: Vec<translator::DetectedTextBox> =
+                entries[start..end].iter().map(|e| e.rec_box.clone()).collect();
+            let lines: Vec<translator::ocr::RecognizedTextLine> = {
+                let state = match frame.state.lock() {
+                    Ok(s) => s,
+                    Err(_) => break,
+                };
+                let oriented = match state
+                    .cached
+                    .as_ref()
+                    .filter(|oi| oi.display_crop == display_crop)
+                {
+                    Some(o) => o,
+                    None => break,
+                };
+                match catalog.session.recognize_in_oriented_image(
+                    oriented,
+                    &batch_boxes,
+                    source_selection.clone(),
+                ) {
+                    Ok(l) => l,
+                    Err(e) => {
+                        log::warn!("recognize failed: {e:?}");
+                        break;
+                    }
+                }
+            };
+
+            for (i, line) in lines.iter().enumerate() {
+                let idx = start + i;
+                if idx >= entries.len() {
+                    break;
+                }
+                entries[idx].source_text = line.text.trim().to_string();
+                entries[idx].rec_attempted = true;
+                if is_auto_source {
+                    if let Some(code) = &line.source_code {
+                        entries[idx].source_code = code.clone();
+                    }
+                }
+            }
+
+            if !gen_check() {
+                return AcquirePipelineOutcome::canceled();
+            }
+
+            // 2. Translate the batch in one shot (slimt batches
+            // internally; one call is dramatically faster than N
+            // sequential calls).
+            let texts_to_translate: Vec<String> = entries[start..end]
+                .iter()
+                .filter(|e| !e.source_text.is_empty())
+                .map(|e| e.source_text.clone())
+                .collect();
+            if !texts_to_translate.is_empty() {
+                let t_tr = Instant::now();
+                let forced = if is_auto_source {
+                    None
+                } else {
+                    Some(from_lang_code.as_str())
+                };
+                let result = catalog.session.translate_mixed_texts(
+                    &texts_to_translate,
+                    forced,
+                    &to_lang_code,
+                    &available_codes,
+                );
+                let tr_ms = t_tr.elapsed().as_secs_f64() * 1_000.0;
+                match result {
+                    Ok(res) => {
+                        let by_src: std::collections::HashMap<String, String> = res
+                            .translations
+                            .into_iter()
+                            .map(|t| (t.source_text, t.translated_text))
+                            .collect();
+                        for entry in entries[start..end].iter_mut() {
+                            if entry.source_text.is_empty() {
+                                continue;
+                            }
+                            if let Some(translated) = by_src.get(&entry.source_text) {
+                                entry.translated_text = translated.clone();
+                            }
+                        }
+                        log::info!(
+                            "[acquire] batch translate {:.1}ms in_count={}",
+                            tr_ms,
+                            texts_to_translate.len(),
+                        );
+                    }
+                    Err(e) => {
+                        log::warn!("translate batch failed: {e:?}");
+                    }
+                }
+            }
+
+            // 3. Push the batch's freshly-known items to the overlay
+            // slot. We upsert all renderable items (idempotent for
+            // ones whose content hash hasn't changed) and retain the
+            // union of all entry ids.
+            push_entries_to_overlay(self, &entries, &to_lang_code);
+
+            let batch_ms = t_batch.elapsed().as_secs_f64() * 1_000.0;
+            let recd_ok = lines.iter().filter(|l| !l.text.trim().is_empty()).count();
+            log::info!(
+                "[acquire] batch {}/{}: {:.1}ms rec_ok={}/{}",
+                start / REC_BATCH_SIZE + 1,
+                (total + REC_BATCH_SIZE - 1) / REC_BATCH_SIZE,
+                batch_ms,
+                recd_ok,
+                end - start,
+            );
+            start = end;
+        }
+
+        let rec_ok = entries
+            .iter()
+            .filter(|e| e.rec_attempted && !e.source_text.is_empty())
+            .count();
+        let rec_empty = entries
+            .iter()
+            .filter(|e| e.rec_attempted && e.source_text.is_empty())
+            .count();
+
+        // If nothing recognised, the tracker locked onto garbage. Clear
+        // so the next stable frame re-acquires somewhere useful.
+        if rec_ok == 0 && rec_empty + rec_ok == total {
+            if let Ok(mut engine) = self.state.lock() {
+                engine.clear();
+            }
+            self.clear_overlay();
+        }
+
+        AcquirePipelineOutcome {
+            anchor_id,
+            detected_count: total as u32,
+            rec_ok_count: rec_ok as u32,
+            rec_empty_count: rec_empty as u32,
+            total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
+            canceled: false,
+            error: None,
         }
     }
 
@@ -1643,10 +1981,8 @@ impl LivePlanarTracker {
         let dst_bytes = (display_width as usize) * (display_height as usize) * 4;
         let mut dst = vec![0u8; dst_bytes];
         let overlay_wait = Instant::now();
-        let overlay_guard = self.current_overlay.lock().ok();
+        let overlay_guard = self.current_overlay_items.lock().ok();
         let overlay_acquired = Instant::now();
-        let overlay_ref = overlay_guard.as_ref().and_then(|g| g.as_ref());
-        let mut items_vec: Vec<translator::live_compositor::OverlayItem<'_>> = Vec::new();
         let h_arr: Option<[f32; 9]> = if h_surface_to_viewport.len() == 9 {
             let mut a = [0.0f32; 9];
             a.copy_from_slice(&h_surface_to_viewport[..9]);
@@ -1654,15 +1990,20 @@ impl LivePlanarTracker {
         } else {
             None
         };
-        if let (Some(ov), Some(_)) = (overlay_ref, h_arr.as_ref()) {
-            items_vec.push(translator::live_compositor::OverlayItem {
-                bitmap_rgba: &ov.bitmap,
-                bitmap_width: ov.width,
-                bitmap_height: ov.height,
-                bitmap_origin_surface_x: ov.surface_origin_x,
-                bitmap_origin_surface_y: ov.surface_origin_y,
-            });
-        }
+        let items_vec: Vec<translator::live_compositor::OverlayItem<'_>> =
+            match (&overlay_guard, &h_arr) {
+                (Some(items), Some(_)) => items
+                    .iter()
+                    .map(|it| translator::live_compositor::OverlayItem {
+                        bitmap_rgba: &it.bitmap,
+                        bitmap_width: it.width,
+                        bitmap_height: it.height,
+                        bitmap_origin_surface_x: it.surface_origin_x,
+                        bitmap_origin_surface_y: it.surface_origin_y,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
         let h_for_call = h_arr.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
         let composite_start = Instant::now();
         let result = translator::live_compositor::composite_frame_into(
@@ -1677,8 +2018,6 @@ impl LivePlanarTracker {
             &items_vec,
         );
         let composite_end = Instant::now();
-        // Drop borrows of `overlay_guard` (items_vec holds &ov.bitmap)
-        // before dropping the guard itself.
         let items_count = items_vec.len();
         drop(items_vec);
         drop(overlay_guard);
@@ -1689,7 +2028,7 @@ impl LivePlanarTracker {
             composite_end - frame_state_acquired,
         );
         log_lock_timing(
-            "current_overlay/composite_frame",
+            "current_overlay_items/composite_frame",
             overlay_acquired - overlay_wait,
             overlay_released - overlay_acquired,
         );
@@ -1930,6 +2269,288 @@ fn overlay_input_to_canonical(
         ],
         payload: o.payload,
     })
+}
+
+/// Outcome reported by `run_acquire_pipeline`. The pipeline either ran
+/// to completion (`canceled = false`, `error = None`), bailed out
+/// because the tracker's generation moved on while it was running
+/// (`canceled = true`), or hit a fatal error during one of its stages
+/// (`error = Some(...)`). Kotlin uses this for the debug pill +
+/// post-acquire decisions ("anchor produced zero usable text, hide
+/// the overlay" lives inside the pipeline now, so Kotlin's only job
+/// is to log the outcome).
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Record)]
+pub struct AcquirePipelineOutcome {
+    pub anchor_id: u64,
+    pub detected_count: u32,
+    pub rec_ok_count: u32,
+    pub rec_empty_count: u32,
+    pub total_ms: f64,
+    pub canceled: bool,
+    pub error: Option<String>,
+}
+
+#[cfg(feature = "planar-tracker")]
+impl AcquirePipelineOutcome {
+    fn canceled() -> Self {
+        Self {
+            anchor_id: 0,
+            detected_count: 0,
+            rec_ok_count: 0,
+            rec_empty_count: 0,
+            total_ms: 0.0,
+            canceled: true,
+            error: None,
+        }
+    }
+    fn error(reason: &str) -> Self {
+        Self {
+            anchor_id: 0,
+            detected_count: 0,
+            rec_ok_count: 0,
+            rec_empty_count: 0,
+            total_ms: 0.0,
+            canceled: false,
+            error: Some(reason.to_string()),
+        }
+    }
+}
+
+/// Push the current entry state to the resident overlay slot. Used by
+/// `run_acquire_pipeline` after each rec/translate batch so the user
+/// sees text light up progressively.
+#[cfg(feature = "planar-tracker")]
+fn push_entries_to_overlay<E>(tracker: &LivePlanarTracker, entries: &[E], language: &str)
+where
+    E: AcquireEntryView,
+{
+    let mut retained: Vec<u64> = Vec::with_capacity(entries.len());
+    for entry in entries {
+        if entry.source_text().is_empty() && entry.rec_attempted() {
+            // Empty rec result — drop from the renderable set.
+            continue;
+        }
+        retained.push(entry.id());
+        tracker.upsert_overlay_item(
+            entry.id(),
+            entry.tight().clone(),
+            entry.source_text().to_string(),
+            entry.translated_text().to_string(),
+            language.to_string(),
+        );
+    }
+    tracker.retain_overlay_items(retained);
+}
+
+/// Trait-of-fields so `push_entries_to_overlay` doesn't depend on the
+/// pipeline's concrete entry layout — keeps the helper testable.
+#[cfg(feature = "planar-tracker")]
+trait AcquireEntryView {
+    fn id(&self) -> u64;
+    fn tight(&self) -> &translator::ocr::OrientedRect;
+    fn source_text(&self) -> &str;
+    fn translated_text(&self) -> &str;
+    fn rec_attempted(&self) -> bool;
+}
+
+/// Local per-detection state owned by `run_acquire_pipeline`. Holds
+/// the detector output plus the rec/translate progress so we can push
+/// progressive overlay updates after each batch without losing the
+/// per-entry ids (which would invalidate the per-item raster cache).
+#[cfg(feature = "planar-tracker")]
+struct AcquireEntry {
+    id: u64,
+    tight: translator::ocr::OrientedRect,
+    source_text: String,
+    /// Set to the per-line detected source from rec when running in
+    /// auto-source mode; otherwise stays as the caller's
+    /// `from_lang_code`. Unused right now but kept so a future content
+    /// map can record mixed-language detections per item.
+    #[allow(dead_code)]
+    source_code: String,
+    translated_text: String,
+    rec_attempted: bool,
+    /// The full detector record (rect, contour, score, oriented
+    /// boxes). Needed for the recognize call, which works in the
+    /// detector's full-crop coord space.
+    rec_box: translator::DetectedTextBox,
+}
+
+#[cfg(feature = "planar-tracker")]
+impl AcquireEntryView for AcquireEntry {
+    fn id(&self) -> u64 {
+        self.id
+    }
+    fn tight(&self) -> &translator::ocr::OrientedRect {
+        &self.tight
+    }
+    fn source_text(&self) -> &str {
+        &self.source_text
+    }
+    fn translated_text(&self) -> &str {
+        &self.translated_text
+    }
+    fn rec_attempted(&self) -> bool {
+        self.rec_attempted
+    }
+}
+
+/// Visual-box tuning: the detector's `tight` rect covers ink-only
+/// extent. We inflate it vertically to leave room for ascenders /
+/// descenders and add a small horizontal pad so the rendered text
+/// doesn't sit flush against the rounded-rect bg edge. Matches what
+/// Kotlin used to do client-side (`TIGHT_VERTICAL_INFLATE` +
+/// `HORIZONTAL_PAD_PX`); centralised here now that Rust owns
+/// rendering.
+#[cfg(feature = "planar-tracker")]
+const TIGHT_VERTICAL_INFLATE: f32 = 2.4;
+#[cfg(feature = "planar-tracker")]
+const HORIZONTAL_PAD_PX: f32 = 8.0;
+/// Pad around each item's visual quad when sizing the bitmap. Gives
+/// the rounded-corner AA + alpha edges a couple of pixels of buffer
+/// so we don't clip during the warp.
+#[cfg(feature = "planar-tracker")]
+const ITEM_BITMAP_PAD_PX: f32 = 4.0;
+/// Debug toggle: render the source text instead of waiting on
+/// translation. Matches the old Kotlin `DEBUG_TRACKER_VIEW_PLANAR`.
+#[cfg(feature = "planar-tracker")]
+const RENDER_SOURCE_AS_FALLBACK: bool = false;
+
+/// Pick the string to render for a given item. Translation wins when
+/// available; otherwise we render source text (handy for diagnosing
+/// detection / recognition without waiting for translation).
+#[cfg(feature = "planar-tracker")]
+fn pick_display_text(source_text: &str, translated_text: &str) -> String {
+    if !translated_text.trim().is_empty() {
+        translated_text.to_string()
+    } else if RENDER_SOURCE_AS_FALLBACK {
+        source_text.to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// Content hash for `upsert_overlay_item` change detection. Same
+/// hash → same rasterized bitmap, no need to re-render.
+#[cfg(feature = "planar-tracker")]
+fn item_content_hash(
+    tight: &translator::ocr::OrientedRect,
+    display_text: &str,
+    language: &str,
+) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    tight.cx.to_bits().hash(&mut h);
+    tight.cy.to_bits().hash(&mut h);
+    tight.width.to_bits().hash(&mut h);
+    tight.height.to_bits().hash(&mut h);
+    tight.angle_radians.to_bits().hash(&mut h);
+    display_text.hash(&mut h);
+    language.hash(&mut h);
+    h.finish()
+}
+
+/// Per-item raster result: an RGBA bitmap with bounded dimensions
+/// plus the surface-coord position of its top-left pixel.
+#[cfg(feature = "planar-tracker")]
+struct ItemRaster {
+    bitmap: Vec<u8>,
+    width: u32,
+    height: u32,
+    surface_origin_x: f32,
+    surface_origin_y: f32,
+}
+
+/// Inflate the detector's tight box into a visual box and rasterize a
+/// single item's overlay onto its own small bitmap. Returns `None`
+/// when the visual box is degenerate or `render_text_overlay_bitmap`
+/// fails.
+#[cfg(feature = "planar-tracker")]
+fn render_one_item_bitmap(
+    tight: &translator::ocr::OrientedRect,
+    display_text: &str,
+    language: &str,
+) -> Option<ItemRaster> {
+    let visual = translator::ocr::OrientedRect {
+        cx: tight.cx,
+        cy: tight.cy,
+        width: tight.width + 2.0 * HORIZONTAL_PAD_PX,
+        height: tight.height * TIGHT_VERTICAL_INFLATE,
+        angle_radians: tight.angle_radians,
+    };
+    if visual.width <= 0.0 || visual.height <= 0.0 {
+        return None;
+    }
+    let corners = oriented_corners(&visual);
+    let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
+    let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
+    for (x, y) in &corners {
+        if *x < min_x { min_x = *x; }
+        if *y < min_y { min_y = *y; }
+        if *x > max_x { max_x = *x; }
+        if *y > max_y { max_y = *y; }
+    }
+    let pad = ITEM_BITMAP_PAD_PX;
+    let origin_x = (min_x - pad).max(0.0);
+    let origin_y = (min_y - pad).max(0.0);
+    let bitmap_w = ((max_x + pad - origin_x).ceil() as i32).max(1) as u32;
+    let bitmap_h = ((max_y + pad - origin_y).ceil() as i32).max(1) as u32;
+
+    // Translate the visual quad into bitmap-local coords for the
+    // rasterizer.
+    let mut local_quad = [0.0f32; 8];
+    for (i, (x, y)) in corners.iter().enumerate() {
+        local_quad[i * 2] = x - origin_x;
+        local_quad[i * 2 + 1] = y - origin_y;
+    }
+    let suggested_font_px = visual.height.clamp(10.0, 120.0);
+    let item = translator::planar_engine::TextRenderItem {
+        id: 0,
+        quad: [
+            (local_quad[0], local_quad[1]),
+            (local_quad[2], local_quad[3]),
+            (local_quad[4], local_quad[5]),
+            (local_quad[6], local_quad[7]),
+        ],
+        translated_text: display_text.to_string(),
+        source_text: String::new(),
+        language: language.to_string(),
+        bg_argb: 0xC8101010,
+        fg_argb: 0xFFFF_FFFF,
+        suggested_font_px,
+    };
+    let bytes = translator::planar_engine::render_text_overlay_bitmap(
+        bitmap_w,
+        bitmap_h,
+        std::slice::from_ref(&item),
+        &crate::android_font_provider::AndroidFontProvider,
+    )?;
+    Some(ItemRaster {
+        bitmap: bytes,
+        width: bitmap_w,
+        height: bitmap_h,
+        surface_origin_x: origin_x,
+        surface_origin_y: origin_y,
+    })
+}
+
+/// Compute the four (TL, TR, BR, BL) corners of an OrientedRect in
+/// surface coords. Mirrors the Kotlin `orientedCornersFlat`.
+#[cfg(feature = "planar-tracker")]
+fn oriented_corners(o: &translator::ocr::OrientedRect) -> [(f32, f32); 4] {
+    let c = o.angle_radians.cos();
+    let s = o.angle_radians.sin();
+    let hw = o.width * 0.5;
+    let hh = o.height * 0.5;
+    let mut out = [(0.0, 0.0); 4];
+    let locals = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)];
+    for (i, &(lx, ly)) in locals.iter().enumerate() {
+        let rx = c * lx - s * ly;
+        let ry = s * lx + c * ly;
+        out[i] = (o.cx + rx, o.cy + ry);
+    }
+    out
 }
 
 #[cfg(all(test, feature = "ppocr"))]
