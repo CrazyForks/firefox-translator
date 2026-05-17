@@ -1535,17 +1535,29 @@ impl LivePlanarTracker {
     /// recognition / translation result arrives. Kotlin does *not*
     /// know about visual-box inflation, font sizing, bitmap bounds,
     /// or hashing — Rust owns all of that.
-    fn upsert_overlay_item(
+    /// Upsert one translation block: a set of strips (each an oriented
+    /// rect in surface coords) plus its source + translated text. The
+    /// block is the universal overlay unit — a single-line label is a
+    /// 1-strip block, a paragraph is N strips. The rasterizer reflows
+    /// `translated_text` across the strips in reading order.
+    ///
+    /// Content-hashed on (strips + texts + language). If a previous
+    /// upsert for the same `id` produced the same hash, this is a
+    /// no-op — no re-raster, no slot write.
+    fn upsert_overlay_block(
         &self,
         id: u64,
-        tight: translator::ocr::OrientedRect,
+        strips: Vec<translator::ocr::OrientedRect>,
         source_text: String,
         translated_text: String,
         language: String,
     ) {
+        if strips.is_empty() {
+            return;
+        }
         let display_text = pick_display_text(&source_text, &translated_text);
-        let hash = item_content_hash(&tight, &display_text, &language);
-        // Fast path: same content as last time → keep the bitmap.
+        let hash = block_content_hash(&strips, &display_text, &language);
+        // Fast path: same content → keep the cached bitmap.
         {
             if let Ok(items) = self.current_overlay_items.lock() {
                 if let Some(existing) = items.iter().find(|it| it.id == id) {
@@ -1556,7 +1568,7 @@ impl LivePlanarTracker {
             }
         }
         let raster_start = Instant::now();
-        let raster = match render_one_item_bitmap(&tight, &display_text, &language) {
+        let raster = match render_block_bitmap(&strips, &display_text, &language) {
             Some(r) => r,
             None => return,
         };
@@ -1580,9 +1592,10 @@ impl LivePlanarTracker {
         let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
         if raster_ms > LOCK_LOG_THRESHOLD_MS {
             log::info!(
-                "[work] item raster: id={} {:.1}ms text={:?}",
+                "[work] block raster: id={} {:.1}ms strips={} text={:?}",
                 id,
                 raster_ms,
+                strips.len(),
                 display_text,
             );
         }
@@ -1743,21 +1756,16 @@ impl LivePlanarTracker {
             return AcquirePipelineOutcome::canceled();
         }
 
-        // Build per-entry state — local to this pipeline call. Pushed
-        // to the Rust overlay slot via `upsert_overlay_item` after each
-        // batch so the user sees text light up progressively. (Type
-        // defined at module scope so the `AcquireEntryView` impl is
-        // visible to `push_entries_to_overlay`.)
+        // Build per-strip state local to this pipeline call. Each
+        // entry tracks one detected line's rec progress; blocks group
+        // these entries (by index) once `group_entries_into_blocks`
+        // runs below.
         let mut entries: Vec<AcquireEntry> = detected
             .into_iter()
             .map(|d| AcquireEntry {
-                id: self
-                    .next_entry_id
-                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-                tight: d.tight_box.clone(),
+                tight: d.tight_box,
                 source_text: String::new(),
                 source_code: from_lang_code.clone(),
-                translated_text: String::new(),
                 rec_attempted: false,
                 rec_box: d,
             })
@@ -1784,8 +1792,75 @@ impl LivePlanarTracker {
             .map(|row| translator::LanguageCode::from(row.language.code.as_str()))
             .collect();
 
-        // ---- Rec + translate batches ----
+        // ---- Group strips into translation blocks ----
+        //
+        // The block is the unit of overlay state: a 1-line label is a
+        // 1-strip block, a paragraph is N strips. Translation happens
+        // per block (one merged source text → one translation), and
+        // the renderer reflows that translation across the strips so
+        // the visual reads as the original text shape.
+        //
+        // Grouping runs on the surface-coord tight rects right after
+        // detect, before rec, so we can immediately upsert per-block
+        // pending placeholders. Stable coords → grouping is invariant
+        // to camera motion; recognising the same anchor later (cache
+        // hit) reuses the same blocks.
+        let t_group = Instant::now();
+        let block_strip_indices: Vec<Vec<usize>> = group_entries_into_blocks(&entries);
+        let block_strips: Vec<Vec<translator::ocr::OrientedRect>> = block_strip_indices
+            .iter()
+            .map(|idxs| idxs.iter().map(|&i| entries[i].tight.clone()).collect())
+            .collect();
+        let block_ids: Vec<u64> = (0..block_strip_indices.len())
+            .map(|_| self.next_entry_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+            .collect();
+        log::info!(
+            "[acquire] group: {:.1}ms strips={} → blocks={}",
+            t_group.elapsed().as_secs_f64() * 1_000.0,
+            total,
+            block_ids.len(),
+        );
+
+        // Pending placeholders: per-strip bg rects, no text. Visible
+        // immediately so the user sees "we detected text here" while
+        // rec+translate run. retain_overlay_items drops any leftover
+        // items from a prior anchor.
+        for (i, &id) in block_ids.iter().enumerate() {
+            self.upsert_overlay_block(
+                id,
+                block_strips[i].clone(),
+                String::new(),
+                String::new(),
+                to_lang_code.clone(),
+            );
+        }
+        self.retain_overlay_items(block_ids.clone());
+
+        if !gen_check() {
+            return AcquirePipelineOutcome::canceled();
+        }
+
+        // ---- Recognise strips in batches ----
+        //
+        // We rec all strips in detection order (batches of 4) and
+        // track per-block completion. As soon as every strip of a
+        // block is rec'd, the block is "ready" — we translate (with
+        // any other blocks ready in the same wave) and upsert with
+        // the final text. The pending placeholder stays visible until
+        // its block's final translation lands.
         const REC_BATCH_SIZE: usize = 4;
+        let mut block_of_entry = vec![0usize; total];
+        for (bi, idxs) in block_strip_indices.iter().enumerate() {
+            for &ei in idxs {
+                block_of_entry[ei] = bi;
+            }
+        }
+        let mut block_rec_remaining: Vec<usize> = block_strip_indices
+            .iter()
+            .map(|idxs| idxs.len())
+            .collect();
+        let mut block_translated = vec![false; block_ids.len()];
+
         let mut start = 0;
         while start < total {
             if !gen_check() {
@@ -1794,7 +1869,6 @@ impl LivePlanarTracker {
             let end = (start + REC_BATCH_SIZE).min(total);
             let t_batch = Instant::now();
 
-            // 1. Recognize this batch.
             let batch_boxes: Vec<translator::DetectedTextBox> =
                 entries[start..end].iter().map(|e| e.rec_box.clone()).collect();
             let lines: Vec<translator::ocr::RecognizedTextLine> = {
@@ -1835,66 +1909,108 @@ impl LivePlanarTracker {
                         entries[idx].source_code = code.clone();
                     }
                 }
+                let bi = block_of_entry[idx];
+                if block_rec_remaining[bi] > 0 {
+                    block_rec_remaining[bi] -= 1;
+                }
             }
 
             if !gen_check() {
                 return AcquirePipelineOutcome::canceled();
             }
 
-            // 2. Translate the batch in one shot (slimt batches
-            // internally; one call is dramatically faster than N
-            // sequential calls).
-            let texts_to_translate: Vec<String> = entries[start..end]
-                .iter()
-                .filter(|e| !e.source_text.is_empty())
-                .map(|e| e.source_text.clone())
+            // Which blocks just finished rec'ing all their strips?
+            let mut ready_blocks: Vec<usize> = (0..block_ids.len())
+                .filter(|&bi| block_rec_remaining[bi] == 0 && !block_translated[bi])
                 .collect();
-            if !texts_to_translate.is_empty() {
-                let t_tr = Instant::now();
-                let forced = if is_auto_source {
-                    None
-                } else {
-                    Some(from_lang_code.as_str())
-                };
-                let result = catalog.session.translate_mixed_texts(
-                    &texts_to_translate,
-                    forced,
-                    &to_lang_code,
-                    &available_codes,
-                );
-                let tr_ms = t_tr.elapsed().as_secs_f64() * 1_000.0;
-                match result {
-                    Ok(res) => {
-                        let by_src: std::collections::HashMap<String, String> = res
+
+            if !ready_blocks.is_empty() {
+                // Build each ready block's source text by joining its
+                // strips' rec'd texts. Newline join keeps reading
+                // order; the translator treats each line as a sentence.
+                let block_sources: Vec<String> = ready_blocks
+                    .iter()
+                    .map(|&bi| {
+                        block_strip_indices[bi]
+                            .iter()
+                            .map(|&i| entries[i].source_text.as_str())
+                            .filter(|t| !t.is_empty())
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    })
+                    .collect();
+                // Drop blocks whose entire concat is empty (every
+                // strip's rec failed). They stay as pending; we'll
+                // skip them at the very end by not upserting.
+                let kept: Vec<(usize, String)> = ready_blocks
+                    .drain(..)
+                    .zip(block_sources)
+                    .filter(|(_, s)| !s.trim().is_empty())
+                    .collect();
+                if !kept.is_empty() {
+                    let inputs: Vec<String> =
+                        kept.iter().map(|(_, s)| s.clone()).collect();
+                    let t_tr = Instant::now();
+                    let forced = if is_auto_source {
+                        None
+                    } else {
+                        Some(from_lang_code.as_str())
+                    };
+                    let result = catalog.session.translate_mixed_texts(
+                        &inputs,
+                        forced,
+                        &to_lang_code,
+                        &available_codes,
+                    );
+                    let tr_ms = t_tr.elapsed().as_secs_f64() * 1_000.0;
+                    log::info!(
+                        "[acquire] block translate {:.1}ms blocks={}",
+                        tr_ms,
+                        kept.len(),
+                    );
+                    let by_src: std::collections::HashMap<String, String> = match result {
+                        Ok(res) => res
                             .translations
                             .into_iter()
                             .map(|t| (t.source_text, t.translated_text))
-                            .collect();
-                        for entry in entries[start..end].iter_mut() {
-                            if entry.source_text.is_empty() {
-                                continue;
-                            }
-                            if let Some(translated) = by_src.get(&entry.source_text) {
-                                entry.translated_text = translated.clone();
-                            }
+                            .collect(),
+                        Err(e) => {
+                            log::warn!("translate batch failed: {e:?}");
+                            std::collections::HashMap::new()
                         }
-                        log::info!(
-                            "[acquire] batch translate {:.1}ms in_count={}",
-                            tr_ms,
-                            texts_to_translate.len(),
+                    };
+                    for (bi, src) in kept {
+                        if !gen_check() {
+                            return AcquirePipelineOutcome::canceled();
+                        }
+                        let translated = by_src.get(&src).cloned().unwrap_or_default();
+                        // Only keep strips that actually rec'd
+                        // something. Otherwise rec-failed strips
+                        // still display as empty bg rects inside the
+                        // block (visible as orange/teal placeholders
+                        // floating where no text could be read). The
+                        // renderer reflows the translation across the
+                        // surviving strips only.
+                        let kept_strips: Vec<translator::ocr::OrientedRect> =
+                            block_strip_indices[bi]
+                                .iter()
+                                .filter(|&&i| !entries[i].source_text.is_empty())
+                                .map(|&i| entries[i].tight.clone())
+                                .collect();
+                        if kept_strips.is_empty() {
+                            continue;
+                        }
+                        self.upsert_overlay_block(
+                            block_ids[bi],
+                            kept_strips,
+                            src,
+                            translated,
+                            to_lang_code.clone(),
                         );
-                    }
-                    Err(e) => {
-                        log::warn!("translate batch failed: {e:?}");
+                        block_translated[bi] = true;
                     }
                 }
             }
-
-            // 3. Push the batch's freshly-known items to the overlay
-            // slot. We upsert all renderable items (idempotent for
-            // ones whose content hash hasn't changed) and retain the
-            // union of all entry ids.
-            push_entries_to_overlay(self, &entries, &to_lang_code);
 
             let batch_ms = t_batch.elapsed().as_secs_f64() * 1_000.0;
             let recd_ok = lines.iter().filter(|l| !l.text.trim().is_empty()).count();
@@ -1908,6 +2024,16 @@ impl LivePlanarTracker {
             );
             start = end;
         }
+
+        // Drop any block whose final source text was entirely empty
+        // (every strip's rec failed). Those still have a pending
+        // placeholder on screen; remove them.
+        let surviving_ids: Vec<u64> = block_ids
+            .iter()
+            .enumerate()
+            .filter_map(|(bi, &id)| if block_translated[bi] { Some(id) } else { None })
+            .collect();
+        self.retain_overlay_items(surviving_ids);
 
         let rec_ok = entries
             .iter()
@@ -2317,83 +2443,28 @@ impl AcquirePipelineOutcome {
     }
 }
 
-/// Push the current entry state to the resident overlay slot. Used by
-/// `run_acquire_pipeline` after each rec/translate batch so the user
-/// sees text light up progressively.
-#[cfg(feature = "planar-tracker")]
-fn push_entries_to_overlay<E>(tracker: &LivePlanarTracker, entries: &[E], language: &str)
-where
-    E: AcquireEntryView,
-{
-    let mut retained: Vec<u64> = Vec::with_capacity(entries.len());
-    for entry in entries {
-        if entry.source_text().is_empty() && entry.rec_attempted() {
-            // Empty rec result — drop from the renderable set.
-            continue;
-        }
-        retained.push(entry.id());
-        tracker.upsert_overlay_item(
-            entry.id(),
-            entry.tight().clone(),
-            entry.source_text().to_string(),
-            entry.translated_text().to_string(),
-            language.to_string(),
-        );
-    }
-    tracker.retain_overlay_items(retained);
-}
-
-/// Trait-of-fields so `push_entries_to_overlay` doesn't depend on the
-/// pipeline's concrete entry layout — keeps the helper testable.
-#[cfg(feature = "planar-tracker")]
-trait AcquireEntryView {
-    fn id(&self) -> u64;
-    fn tight(&self) -> &translator::ocr::OrientedRect;
-    fn source_text(&self) -> &str;
-    fn translated_text(&self) -> &str;
-    fn rec_attempted(&self) -> bool;
-}
-
-/// Local per-detection state owned by `run_acquire_pipeline`. Holds
-/// the detector output plus the rec/translate progress so we can push
-/// progressive overlay updates after each batch without losing the
-/// per-entry ids (which would invalidate the per-item raster cache).
+/// Local per-detection state owned by `run_acquire_pipeline`. One
+/// `AcquireEntry` per detected line: stores the tight rect (the
+/// strip), the source text once rec lands, the detected source code
+/// (auto-source mode), and the original `DetectedTextBox` we need to
+/// hand back to `recognize_in_oriented_image` (it works in the
+/// detector's full-crop coord space).
+///
+/// Blocks group multiple `AcquireEntry`s by index — the `id` field
+/// here is no longer the overlay-block id (those are minted later in
+/// the pipeline, one per block, not one per entry).
 #[cfg(feature = "planar-tracker")]
 struct AcquireEntry {
-    id: u64,
     tight: translator::ocr::OrientedRect,
     source_text: String,
     /// Set to the per-line detected source from rec when running in
     /// auto-source mode; otherwise stays as the caller's
-    /// `from_lang_code`. Unused right now but kept so a future content
-    /// map can record mixed-language detections per item.
+    /// `from_lang_code`. Unused right now but kept so a future
+    /// content map can record mixed-language detections per strip.
     #[allow(dead_code)]
     source_code: String,
-    translated_text: String,
     rec_attempted: bool,
-    /// The full detector record (rect, contour, score, oriented
-    /// boxes). Needed for the recognize call, which works in the
-    /// detector's full-crop coord space.
     rec_box: translator::DetectedTextBox,
-}
-
-#[cfg(feature = "planar-tracker")]
-impl AcquireEntryView for AcquireEntry {
-    fn id(&self) -> u64 {
-        self.id
-    }
-    fn tight(&self) -> &translator::ocr::OrientedRect {
-        &self.tight
-    }
-    fn source_text(&self) -> &str {
-        &self.source_text
-    }
-    fn translated_text(&self) -> &str {
-        &self.translated_text
-    }
-    fn rec_attempted(&self) -> bool {
-        self.rec_attempted
-    }
 }
 
 /// Visual-box tuning: the detector's `tight` rect covers ink-only
@@ -2431,21 +2502,26 @@ fn pick_display_text(source_text: &str, translated_text: &str) -> String {
     }
 }
 
-/// Content hash for `upsert_overlay_item` change detection. Same
-/// hash → same rasterized bitmap, no need to re-render.
+/// Content hash for `upsert_overlay_block` change detection. Same
+/// hash → same rasterized bitmap, no need to re-render. Hashes the
+/// strip list verbatim so any change in strip geometry, count, or
+/// order forces a re-raster.
 #[cfg(feature = "planar-tracker")]
-fn item_content_hash(
-    tight: &translator::ocr::OrientedRect,
+fn block_content_hash(
+    strips: &[translator::ocr::OrientedRect],
     display_text: &str,
     language: &str,
 ) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    tight.cx.to_bits().hash(&mut h);
-    tight.cy.to_bits().hash(&mut h);
-    tight.width.to_bits().hash(&mut h);
-    tight.height.to_bits().hash(&mut h);
-    tight.angle_radians.to_bits().hash(&mut h);
+    (strips.len() as u64).hash(&mut h);
+    for s in strips {
+        s.cx.to_bits().hash(&mut h);
+        s.cy.to_bits().hash(&mut h);
+        s.width.to_bits().hash(&mut h);
+        s.height.to_bits().hash(&mut h);
+        s.angle_radians.to_bits().hash(&mut h);
+    }
     display_text.hash(&mut h);
     language.hash(&mut h);
     h.finish()
@@ -2467,29 +2543,68 @@ struct ItemRaster {
 /// when the visual box is degenerate or `render_text_overlay_bitmap`
 /// fails.
 #[cfg(feature = "planar-tracker")]
-fn render_one_item_bitmap(
-    tight: &translator::ocr::OrientedRect,
+/// Rasterize a *block*: N per-line strips share one bitmap, one
+/// `translated_text`, and one set of background fills (one per strip).
+/// The text gets reflowed across the strips by `image_render` using
+/// the strips' widths as target line widths — so a paragraph that
+/// translates to fewer/more words than the source still reads as a
+/// paragraph, just using more or fewer of the available line slots.
+///
+/// `strips` must be ordered top-to-bottom (the natural reading
+/// order — the renderer assigns words to slots in that order).
+/// Single-strip blocks are not special-cased; pass a 1-element vec.
+///
+/// `display_text` is the translation; when empty, the block renders
+/// as a "pending" placeholder (per-strip bg fills, no glyphs).
+fn render_block_bitmap(
+    strips: &[translator::ocr::OrientedRect],
     display_text: &str,
     language: &str,
 ) -> Option<ItemRaster> {
-    let visual = translator::ocr::OrientedRect {
-        cx: tight.cx,
-        cy: tight.cy,
-        width: tight.width + 2.0 * HORIZONTAL_PAD_PX,
-        height: tight.height * TIGHT_VERTICAL_INFLATE,
-        angle_radians: tight.angle_radians,
+    use translator::ocr::{
+        OrientedRect, OverlayLayoutHints, OverlayLayoutMode, PreparedImageOverlay,
+        PreparedTextBlock, PreparedTextLine, Rect,
     };
-    if visual.width <= 0.0 || visual.height <= 0.0 {
+    if strips.is_empty() {
         return None;
     }
-    let corners = oriented_corners(&visual);
+
+    // 1. Inflate each strip into a "visual" box (vertical extra for
+    //    ascenders/descenders, horizontal pad so glyphs don't kiss
+    //    the rounded bg edge). Mirrors the old single-strip logic.
+    let visuals: Vec<OrientedRect> = strips
+        .iter()
+        .filter_map(|s| {
+            let v = OrientedRect {
+                cx: s.cx,
+                cy: s.cy,
+                width: s.width + 2.0 * HORIZONTAL_PAD_PX,
+                height: s.height * TIGHT_VERTICAL_INFLATE,
+                angle_radians: s.angle_radians,
+            };
+            if v.width <= 0.0 || v.height <= 0.0 {
+                None
+            } else {
+                Some(v)
+            }
+        })
+        .collect();
+    if visuals.is_empty() {
+        return None;
+    }
+
+    // 2. Bitmap dims = AABB of all visual strips + small pad for the
+    //    rounded-corner AA. The bitmap origin in surface coords is
+    //    what the compositor uses to warp onto the camera frame.
     let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
     let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
-    for (x, y) in &corners {
-        if *x < min_x { min_x = *x; }
-        if *y < min_y { min_y = *y; }
-        if *x > max_x { max_x = *x; }
-        if *y > max_y { max_y = *y; }
+    for v in &visuals {
+        for (x, y) in oriented_corners(v) {
+            min_x = min_x.min(x);
+            min_y = min_y.min(y);
+            max_x = max_x.max(x);
+            max_y = max_y.max(y);
+        }
     }
     let pad = ITEM_BITMAP_PAD_PX;
     let origin_x = (min_x - pad).max(0.0);
@@ -2497,42 +2612,186 @@ fn render_one_item_bitmap(
     let bitmap_w = ((max_x + pad - origin_x).ceil() as i32).max(1) as u32;
     let bitmap_h = ((max_y + pad - origin_y).ceil() as i32).max(1) as u32;
 
-    // Translate the visual quad into bitmap-local coords for the
-    // rasterizer.
-    let mut local_quad = [0.0f32; 8];
-    for (i, (x, y)) in corners.iter().enumerate() {
-        local_quad[i * 2] = x - origin_x;
-        local_quad[i * 2 + 1] = y - origin_y;
+    // 3. Start the canvas + paint per-strip bg fills. The bg fill is
+    //    the same colour for every strip in the block; only their
+    //    positions differ. This gives the per-strip "label box" look,
+    //    where each detected line gets its own rounded rect — even
+    //    when they all share one translation.
+    let pixels = (bitmap_w as usize) * (bitmap_h as usize);
+    let mut rgba = vec![0u8; pixels * 4];
+    let bg_color = [0x10, 0x10, 0x10, 0xC8];
+    let visuals_local: Vec<OrientedRect> = visuals
+        .iter()
+        .map(|v| OrientedRect {
+            cx: v.cx - origin_x,
+            cy: v.cy - origin_y,
+            width: v.width,
+            height: v.height,
+            angle_radians: v.angle_radians,
+        })
+        .collect();
+    for v in &visuals_local {
+        translator::planar_engine::fill_oriented_rect_blended(
+            &mut rgba, bitmap_w, bitmap_h, v, bg_color,
+        );
     }
-    let suggested_font_px = visual.height.clamp(10.0, 120.0);
-    let item = translator::planar_engine::TextRenderItem {
-        id: 0,
-        quad: [
-            (local_quad[0], local_quad[1]),
-            (local_quad[2], local_quad[3]),
-            (local_quad[4], local_quad[5]),
-            (local_quad[6], local_quad[7]),
-        ],
-        translated_text: display_text.to_string(),
-        source_text: String::new(),
-        language: language.to_string(),
-        bg_argb: 0xC8101010,
-        fg_argb: 0xFFFF_FFFF,
-        suggested_font_px,
+
+    // 4. If no text yet (pending placeholder), we're done — return the
+    //    bitmap with just the bg fills painted.
+    if display_text.trim().is_empty() {
+        return Some(ItemRaster {
+            bitmap: rgba,
+            width: bitmap_w,
+            height: bitmap_h,
+            surface_origin_x: origin_x,
+            surface_origin_y: origin_y,
+        });
+    }
+
+    // 5. Build a `PreparedTextBlock` with one `PreparedTextLine` per
+    //    strip. `OverlayLayoutMode::PerLine` will reflow the block's
+    //    `translated_text` across these slots, word by word, using
+    //    each line's `oriented_box.width` as the slot's target width.
+    //    Horizontally inset the text box (not the bg) so the text
+    //    doesn't sit flush against the rounded edge.
+    let lines: Vec<PreparedTextLine> = visuals_local
+        .iter()
+        .map(|v| {
+            let text_box = OrientedRect {
+                cx: v.cx,
+                cy: v.cy,
+                width: (v.width - 2.0 * translator::planar_engine::OVERLAY_TEXT_HORIZONTAL_INSET_PX).max(1.0),
+                height: v.height,
+                angle_radians: v.angle_radians,
+            };
+            let aabb = text_box.to_aabb();
+            let bbox = Rect {
+                left: aabb.left.min(bitmap_w.saturating_sub(1)),
+                top: aabb.top.min(bitmap_h.saturating_sub(1)),
+                right: aabb.right.min(bitmap_w),
+                bottom: aabb.bottom.min(bitmap_h),
+            };
+            PreparedTextLine {
+                // Per-line text is unused — the block's `translated_text`
+                // is what `render_per_line` reflows across slots.
+                text: String::new(),
+                bounding_box: bbox.clone(),
+                oriented_box: text_box,
+                word_rects: vec![bbox],
+                background_argb: 0,
+                foreground_argb: 0xFFFF_FFFF,
+            }
+        })
+        .collect();
+    // Suggested font size: derive from the dominant strip height so
+    // long paragraphs (where strips agree) get a stable size, and
+    // mixed-height detections (rare; headings + body in one block)
+    // settle on the larger one.
+    let suggested_font_px = visuals
+        .iter()
+        .map(|v| v.height)
+        .fold(0.0_f32, f32::max)
+        .clamp(10.0, 120.0);
+    let block_bbox = Rect {
+        left: 0,
+        top: 0,
+        right: bitmap_w,
+        bottom: bitmap_h,
     };
-    let bytes = translator::planar_engine::render_text_overlay_bitmap(
-        bitmap_w,
-        bitmap_h,
-        std::slice::from_ref(&item),
+    let block = PreparedTextBlock {
+        source_text: String::new(),
+        translated_text: display_text.to_string(),
+        bounding_box: block_bbox,
+        lines,
+        layout_hints: OverlayLayoutHints {
+            layout_mode: OverlayLayoutMode::PerLine,
+            suggested_font_size_px: suggested_font_px,
+        },
+        background_argb: bg_argb_u32(),
+        foreground_argb: 0xFFFF_FFFF,
+    };
+
+    // 6. Run the shared `image_render::render_overlay` rasterizer.
+    //    Its `PerLine` mode treats the block's translated text as one
+    //    string and greedy-breaks it across our line slots.
+    let prepared = PreparedImageOverlay {
+        rgba_bytes: rgba,
+        width: bitmap_w,
+        height: bitmap_h,
+        extracted_text: String::new(),
+        translated_text: String::new(),
+        blocks: vec![block],
+    };
+    let opts = translator::image_render::RenderOptions {
+        language: language.to_string(),
+        min_font_size_px: 6.0,
+    };
+    let final_bytes = translator::image_render::render_overlay(
+        &prepared,
         &crate::android_font_provider::AndroidFontProvider,
-    )?;
+        &opts,
+    )
+    .ok()?;
     Some(ItemRaster {
-        bitmap: bytes,
+        bitmap: final_bytes,
         width: bitmap_w,
         height: bitmap_h,
         surface_origin_x: origin_x,
         surface_origin_y: origin_y,
     })
+}
+
+#[cfg(feature = "planar-tracker")]
+fn bg_argb_u32() -> u32 {
+    0xC810_1010
+}
+
+/// Group detected entries (one per line) into translation blocks
+/// (paragraphs / labels). Returns `Vec<Vec<usize>>` where each inner
+/// vec is a block's entry indices in reading order (top → bottom).
+///
+/// We feed empty `text` to `ocr::group_live_lines_into_blocks` because
+/// rec hasn't happened yet — grouping is pure geometry (baseline,
+/// vertical adjacency, horizontal alignment). The `is_live_measurement_token`
+/// special-case inside the grouper short-circuits on empty text, so we
+/// just lose the "don't merge mg/g/kg into the body" guard. That's
+/// acceptable for the live-camera UX; if it becomes an issue we can
+/// regroup after rec.
+///
+/// Output ordering: blocks in top → bottom order, strips within a
+/// block also top → bottom. Stable across acquires on the same
+/// anchor (surface coords don't change).
+#[cfg(feature = "planar-tracker")]
+fn group_entries_into_blocks(entries: &[AcquireEntry]) -> Vec<Vec<usize>> {
+    use translator::ocr::TextLine;
+    if entries.is_empty() {
+        return Vec::new();
+    }
+    let lines: Vec<TextLine> = entries
+        .iter()
+        .map(|e| TextLine {
+            text: String::new(),
+            bounding_box: e.rec_box.rect,
+            oriented_box: e.rec_box.oriented_box,
+            tight_box: e.tight,
+            word_rects: Vec::new(),
+        })
+        .collect();
+    let blocks = translator::ocr::group_live_lines_into_blocks(lines);
+    blocks
+        .into_iter()
+        .map(|b| {
+            // Map back to indices in `entries` by tight_box equality.
+            // Each detected box has a unique cx/cy so equality is
+            // exact. If a line doesn't match (shouldn't happen), drop
+            // it from the block rather than panic.
+            b.lines
+                .iter()
+                .filter_map(|l| entries.iter().position(|e| e.tight == l.tight_box))
+                .collect()
+        })
+        .filter(|v: &Vec<usize>| !v.is_empty())
+        .collect()
 }
 
 /// Compute the four (TL, TR, BR, BL) corners of an OrientedRect in
