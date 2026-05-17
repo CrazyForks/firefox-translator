@@ -22,7 +22,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.os.SystemClock
 import android.util.Log
 import kotlin.math.cos
 import kotlin.math.sin
@@ -39,6 +38,12 @@ private const val GYRO_SAMPLE_PERIOD_US: Int = 5_000
  *  (sensor stalled, app backgrounded, etc.) we fall back to the un-predicted
  *  quaternion rather than extrapolating into uncertainty. */
 private const val MAX_PREDICT_SECONDS: Float = 0.1f
+
+/** Number of (timestamp, quaternion) samples retained for past-time
+ *  rotation lookup. 256 × 5 ms ≈ 1.28 s — comfortably more than any
+ *  realistic camera-pipeline latency (capture → analyzer callback is
+ *  typically 30–60 ms). Power of two so the modulo is cheap. */
+private const val HISTORY_CAPACITY: Int = 256
 
 /** Tracks orientation drift since [lockBaseline] by integrating gyroscope
  *  samples in the device body frame. Output is a unit quaternion `q` such
@@ -74,6 +79,20 @@ class ImuService(
   private var lastOmegaY: Float = 0f
   private var lastOmegaZ: Float = 0f
 
+  /** Ring buffer of recently integrated samples — timestamps and the
+   *  quaternion state at each. Sized to cover the worst-case analyzer
+   *  pipeline latency (frame capture → callback) with a safety margin.
+   *  At 200 Hz a 256-slot ring holds ~1.28 s of history; analyzer
+   *  latency is usually 30–60 ms so we'll typically read from the
+   *  newest few entries. */
+  private val historyTs = LongArray(HISTORY_CAPACITY)
+  private val historyQw = FloatArray(HISTORY_CAPACITY)
+  private val historyQx = FloatArray(HISTORY_CAPACITY)
+  private val historyQy = FloatArray(HISTORY_CAPACITY)
+  private val historyQz = FloatArray(HISTORY_CAPACITY)
+  private var historyHead: Int = 0
+  private var historySize: Int = 0
+
   fun hasGyro(): Boolean = gyroSensor != null
 
   fun start() {
@@ -90,6 +109,8 @@ class ImuService(
       qy = 0f
       qz = 0f
       baselineSet = true
+      historyHead = 0
+      historySize = 0
     }
   }
 
@@ -105,6 +126,8 @@ class ImuService(
       lastOmegaX = 0f
       lastOmegaY = 0f
       lastOmegaZ = 0f
+      historyHead = 0
+      historySize = 0
     }
   }
 
@@ -118,22 +141,34 @@ class ImuService(
       qy = 0f
       qz = 0f
       baselineSet = true
+      historyHead = 0
+      historySize = 0
     }
   }
 
   /** Latest integrated rotation as a row-major 3x3 matrix in body frame,
-   *  forward-predicted from the most recent sample's timestamp to
-   *  `now + leadNs` using the last known angular velocity (assumed constant
-   *  over the short prediction horizon). Identity until [lockBaseline] has
-   *  been called and the next gyro sample has arrived. Returns a fresh
-   *  array. `leadNs` is a positive lead time used by render-thread callers
-   *  to predict to the *display* moment (~vsync), not just sensor-read
-   *  moment. Snapshot callers (engine solver prior) pass 0. */
+   *  optionally forward-predicted by `leadNs` past the most recent
+   *  sample using the last known angular velocity. Identity until
+   *  [lockBaseline] has been called and the next gyro sample has
+   *  arrived. Returns a fresh array.
+   *
+   *  Important: `leadNs == 0` means *no* forward extrapolation — the
+   *  returned matrix is the integrated state at `lastSampleNs`, *not*
+   *  at wall-clock now. The previous behaviour silently predicted by
+   *  `now − lastSampleNs` (up to one sample period, ~5 ms at 200 Hz)
+   *  which caused visible overshoot on impulse motion: a flick lands a
+   *  high-ω sample mid-impulse, and `currentRotation()` would
+   *  extrapolate that spike forward for those 5 ms even after the
+   *  physical motion had already decayed. Callers that actually want a
+   *  display-time lead pass an explicit positive `leadNs`.
+   *
+   *  `leadNs` is capped at [MAX_PREDICT_SECONDS] worth of nanoseconds;
+   *  beyond that we ignore it and return the un-predicted state. */
   fun currentRotation(leadNs: Long = 0L): FloatArray =
     synchronized(lock) {
       if (!baselineSet || lastSampleNs == 0L) return@synchronized quatToMat3(qw, qx, qy, qz)
-      val targetNs = SystemClock.elapsedRealtimeNanos() + leadNs
-      val dt = ((targetNs - lastSampleNs).coerceAtLeast(0L)) / 1e9f
+      if (leadNs <= 0L) return@synchronized quatToMat3(qw, qx, qy, qz)
+      val dt = (leadNs.coerceAtLeast(0L)) / 1e9f
       if (dt <= 0f || dt > MAX_PREDICT_SECONDS) return@synchronized quatToMat3(qw, qx, qy, qz)
       val omega = sqrt(lastOmegaX * lastOmegaX + lastOmegaY * lastOmegaY + lastOmegaZ * lastOmegaZ)
       if (omega < 1e-6f) return@synchronized quatToMat3(qw, qx, qy, qz)
@@ -193,14 +228,166 @@ class ImuService(
         qy = ny * inv
         qz = nz * inv
       }
+      pushHistory(ts, qw, qx, qy, qz)
     }
   }
+
+  /** Append a sample to the ring (assumes [lock] is held). Overwrites
+   *  the oldest entry once we're at capacity. */
+  private fun pushHistory(
+    ts: Long,
+    w: Float,
+    x: Float,
+    y: Float,
+    z: Float,
+  ) {
+    val slot = (historyHead + historySize) % HISTORY_CAPACITY
+    historyTs[slot] = ts
+    historyQw[slot] = w
+    historyQx[slot] = x
+    historyQy[slot] = y
+    historyQz[slot] = z
+    if (historySize < HISTORY_CAPACITY) {
+      historySize++
+    } else {
+      historyHead = (historyHead + 1) % HISTORY_CAPACITY
+    }
+  }
+
+  /** Integrated rotation at wall time [targetNs] (same clock as
+   *  `SensorEvent.timestamp` and `ImageProxy.imageInfo.timestamp` —
+   *  `SystemClock.elapsedRealtimeNanos`). Slerps between the two
+   *  bracketing gyro samples. Returns null when:
+   *    - the service hasn't been started or no samples have arrived
+   *    - [targetNs] is older than the oldest retained sample (history
+   *      has aged out)
+   *    - [targetNs] is more than [MAX_PREDICT_SECONDS] in the future
+   *      relative to the newest sample (would require extrapolating
+   *      into uncertainty — caller should fall back to
+   *      [currentRotation]).
+   *
+   *  Use this for the camera-frame R_prev so the IMU delta covers the
+   *  exact `capture → render` interval rather than `analyzer-callback
+   *  → render` (which misses the analyzer pipeline latency). */
+  fun rotationAt(targetNs: Long): FloatArray? =
+    synchronized(lock) {
+      if (historySize == 0) return@synchronized null
+      val oldestSlot = historyHead
+      val newestSlot = (historyHead + historySize - 1) % HISTORY_CAPACITY
+      val oldestTs = historyTs[oldestSlot]
+      val newestTs = historyTs[newestSlot]
+      if (targetNs < oldestTs) return@synchronized null
+      if (targetNs > newestTs) {
+        val gapNs = targetNs - newestTs
+        if ((gapNs / 1e9f) > MAX_PREDICT_SECONDS) return@synchronized null
+        // Snap forward to the newest sample. The render-time caller
+        // already covers the post-newest gap via currentRotation()'s
+        // own extrapolation when leadNs > 0; here we just return the
+        // most recent integrated state.
+        return@synchronized quatToMat3(
+          historyQw[newestSlot],
+          historyQx[newestSlot],
+          historyQy[newestSlot],
+          historyQz[newestSlot],
+        )
+      }
+      // Binary-search the bracketing samples. Ring indices wrap around
+      // historyHead, so work in logical [0..historySize) and translate
+      // at access time.
+      var lo = 0
+      var hi = historySize - 1
+      while (lo < hi) {
+        val mid = (lo + hi) ushr 1
+        val slot = (historyHead + mid) % HISTORY_CAPACITY
+        if (historyTs[slot] < targetNs) {
+          lo = mid + 1
+        } else {
+          hi = mid
+        }
+      }
+      val upperSlot = (historyHead + lo) % HISTORY_CAPACITY
+      val upperTs = historyTs[upperSlot]
+      if (upperTs == targetNs || lo == 0) {
+        return@synchronized quatToMat3(
+          historyQw[upperSlot],
+          historyQx[upperSlot],
+          historyQy[upperSlot],
+          historyQz[upperSlot],
+        )
+      }
+      val lowerSlot = (historyHead + lo - 1) % HISTORY_CAPACITY
+      val lowerTs = historyTs[lowerSlot]
+      val span = (upperTs - lowerTs).toFloat()
+      val t = if (span > 0f) ((targetNs - lowerTs).toFloat() / span).coerceIn(0f, 1f) else 0f
+      val (sw, sx, sy, sz) =
+        slerp(
+          historyQw[lowerSlot],
+          historyQx[lowerSlot],
+          historyQy[lowerSlot],
+          historyQz[lowerSlot],
+          historyQw[upperSlot],
+          historyQx[upperSlot],
+          historyQy[upperSlot],
+          historyQz[upperSlot],
+          t,
+        )
+      quatToMat3(sw, sx, sy, sz)
+    }
 
   override fun onAccuracyChanged(
     sensor: Sensor?,
     accuracy: Int,
   ) {
   }
+}
+
+private data class Quat(val w: Float, val x: Float, val y: Float, val z: Float)
+
+/** Shortest-arc spherical linear interpolation between two unit
+ *  quaternions. Falls back to nlerp when the inputs are nearly
+ *  collinear (sin θ → 0) to avoid the division blowing up. */
+@Suppress("LongParameterList")
+private fun slerp(
+  aw: Float,
+  ax: Float,
+  ay: Float,
+  az: Float,
+  bw: Float,
+  bx: Float,
+  by: Float,
+  bz: Float,
+  t: Float,
+): Quat {
+  var dot = aw * bw + ax * bx + ay * by + az * bz
+  var cbw = bw
+  var cbx = bx
+  var cby = by
+  var cbz = bz
+  if (dot < 0f) {
+    cbw = -cbw
+    cbx = -cbx
+    cby = -cby
+    cbz = -cbz
+    dot = -dot
+  }
+  if (dot > 0.9995f) {
+    val rw = aw + t * (cbw - aw)
+    val rx = ax + t * (cbx - ax)
+    val ry = ay + t * (cby - ay)
+    val rz = az + t * (cbz - az)
+    val n = sqrt(rw * rw + rx * rx + ry * ry + rz * rz)
+    return if (n > 0f) Quat(rw / n, rx / n, ry / n, rz / n) else Quat(1f, 0f, 0f, 0f)
+  }
+  val theta = kotlin.math.acos(dot.coerceIn(-1f, 1f))
+  val sinTheta = sin(theta)
+  val wa = sin((1f - t) * theta) / sinTheta
+  val wb = sin(t * theta) / sinTheta
+  return Quat(
+    wa * aw + wb * cbw,
+    wa * ax + wb * cbx,
+    wa * ay + wb * cby,
+    wa * az + wb * cbz,
+  )
 }
 
 private fun quatToMat3(

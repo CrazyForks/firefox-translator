@@ -384,6 +384,11 @@ private fun CameraSurface(
         val width = proxy.width
         val height = proxy.height
         val rotation = proxy.imageInfo.rotationDegrees
+        // Capture the sensor exposure timestamp BEFORE proxy.close()
+        // since accessing imageInfo on a closed proxy isn't guaranteed.
+        // Same clock as SensorEvent.timestamp (elapsedRealtimeNanos), so
+        // it composes with imuService.rotationAt() below.
+        val captureTs = proxy.imageInfo.timestamp
         val length = width * pixelStride * height
         val ok =
           if (rowStride == width * pixelStride) {
@@ -423,7 +428,15 @@ private fun CameraSurface(
           val dispH = if (rotation == 90 || rotation == 270) width else height
           latestFrameInfo = FrameInfo(dispW, dispH, rotation)
         }
-        val imuSnap = imuService.currentRotation()
+        // Sample R_prev at the camera's actual capture timestamp (same
+        // clock as SensorEvent.timestamp) rather than at this analyzer
+        // callback. Without this we'd miss the gyro rotation that
+        // happened between sensor exposure and our callback firing —
+        // typically 30-60 ms of pipeline latency — which under sustained
+        // pan shows up as a constant overlay offset proportional to ω.
+        // Falls back to the un-timestamped "now" snapshot when history
+        // doesn't yet cover that moment (first few frames).
+        val imuSnap = imuService.rotationAt(captureTs) ?: imuService.currentRotation()
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
         engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, isAutoSource, convertMs, imuSnap)
@@ -443,7 +456,10 @@ private fun CameraSurface(
     remember {
       PreviewView(context).apply {
         scaleType = PreviewView.ScaleType.FILL_CENTER
-        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+        // PERFORMANCE = SurfaceView under the hood, one fewer buffer hop
+        // than COMPATIBLE (TextureView). Lower preview latency so the
+        // IMU-extrapolated overlay doesn't lead the pixels.
+        implementationMode = PreviewView.ImplementationMode.PERFORMANCE
       }
     }
 

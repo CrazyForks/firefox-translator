@@ -106,7 +106,7 @@ class PlanarBitmapOverlayView(context: Context) : View(context) {
 
     // Decide which H to project through. Prefer the IMU-extrapolated
     // one if we have everything we need; otherwise fall back to the
-    // stored camera-frame H (Phase 4 behaviour).
+    // stored camera-frame H.
     val h = extrapolatedHomography(f) ?: f.homography
 
     val bw = f.frameWidth.toFloat()
@@ -169,9 +169,18 @@ class PlanarBitmapOverlayView(context: Context) : View(context) {
       }
     if (rotCurr.size != 9) return null
 
-    // R_delta_dev = R_curr · R_prev^T
-    val rPrevT = transpose3(rotPrev)
-    val rDeltaDev = mat3Mul(rotCurr, rPrevT)
+    // Body-frame Tcap → Tnow transform for a world-fixed vector:
+    //   v_body(Tnow) = R_curr^T · R_prev · v_body(Tcap)
+    // (Derivation: v_world = R_prev · v_body(Tcap) = R_curr · v_body(Tnow),
+    //  rearrange.) This matches the `ImuCrosshairOverlay` smoke-test
+    //  formula (via `mul3x3TransposeLeft`), which is known to track a
+    //  world-fixed point correctly under pure rotation. The previous
+    //  `R_curr · R_prev^T` is the *inverse* for the single-axis case,
+    //  so the IMU contribution was flipping the overlay opposite to
+    //  the scene — visible as the overlay shooting away during fast
+    //  pans while the tracker H tried to pull it back.
+    val rCurrT = transpose3(rotCurr)
+    val rDeltaDev = mat3Mul(rCurrT, rotPrev)
     // Sandwich into camera frame: M · R · M^T, M = diag(1, -1, -1).
     val rDeltaCam = FloatArray(9)
     for (i in 0..2) {
