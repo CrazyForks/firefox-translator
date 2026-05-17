@@ -512,6 +512,17 @@ private fun CameraSurface(
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
         cameraIntrinsics = cameraIntrinsicsFromCameraX(boundCamera.cameraInfo)
         liveOcrEngine?.setCameraIntrinsics(cameraIntrinsics)
+        // Bias auto-exposure toward shorter exposure / lower ISO. The
+        // camera's AE algorithm sees this as "user wants ~2/3 stop
+        // darker" and tends to shorten shutter (less motion blur on
+        // handheld pans) without us going full manual. -2 here is in
+        // device step units, usually 1/3 EV per step. If a device's
+        // range doesn't include -2 the API clamps silently.
+        try {
+          boundCamera.cameraControl.setExposureCompensationIndex(-2)
+        } catch (e: Exception) {
+          Log.w(TAG, "exposure compensation not supported", e)
+        }
       } catch (e: Exception) {
         Log.e(TAG, "Failed to bind camera", e)
       }
