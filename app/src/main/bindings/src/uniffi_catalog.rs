@@ -1755,55 +1755,46 @@ impl LivePlanarTracker {
         let mut unchanged_lines_count = 0usize;
         let mut cache_hits = 0usize;
         {
-            use translator::surface_map::{AddResult, SurfaceLineObservation};
-            if let Ok(mut map) = self.session.surface_map.lock() {
-                for e in entries.iter_mut() {
-                    let obs = SurfaceLineObservation {
-                        bbox: e.tight.clone(),
-                        source_text: String::new(),
-                        translated_text: String::new(),
-                        source_language: from_lang_code.clone(),
-                    };
-                    let res = map.add_or_merge(obs);
-                    e.line_id = res.id();
-                    match res {
-                        AddResult::Created(_) => new_lines_count += 1,
-                        AddResult::MergedAndExtended(_) => extended_lines_count += 1,
-                        AddResult::MergedUnchanged(_) => unchanged_lines_count += 1,
-                    }
-                    // Rec-cache hit: only short-circuit rec when the
-                    // line was unchanged (the user is looking at the
-                    // same view) AND we already have text for it.
-                    // `MergedAndExtended` means the user panned to
-                    // reveal more of the line past where we last
-                    // rec'd — those glyphs haven't been seen by the
-                    // recognizer yet, so we MUST re-rec.
-                    if !res.needs_rec() {
-                        if let Some(line) = map.get(e.line_id) {
-                            if !line.source_text.is_empty() {
-                                e.source_text = line.source_text.clone();
-                                e.source_code = if line.source_language.is_empty() {
-                                    from_lang_code.clone()
-                                } else {
-                                    line.source_language.clone()
-                                };
-                                e.rec_attempted = true;
-                                cache_hits += 1;
-                            }
-                        }
-                    }
+            use translator::live_session::AddResultKind;
+            let bboxes: Vec<translator::ocr::OrientedRect> =
+                entries.iter().map(|e| e.tight.clone()).collect();
+            let outcomes = self.session.observe_detections(&bboxes, &from_lang_code);
+            for (e, outcome) in entries.iter_mut().zip(outcomes.iter()) {
+                e.line_id = outcome.line_id;
+                match outcome.kind {
+                    AddResultKind::Created => new_lines_count += 1,
+                    AddResultKind::MergedAndExtended => extended_lines_count += 1,
+                    AddResultKind::MergedUnchanged => unchanged_lines_count += 1,
                 }
-                log::debug!(
-                    "[acquire] surface_map anchor={} +new={} extended={} unchanged={} \
-                     cache_hits={} total_lines={}",
-                    anchor_id,
-                    new_lines_count,
-                    extended_lines_count,
-                    unchanged_lines_count,
-                    cache_hits,
-                    map.len()
-                );
+                // Cache hit: pre-fill the entry so the rec batch loop
+                // skips it. `observe_detections` only populates
+                // `cached_*` when needs_rec is false AND the line
+                // already had text — both conditions for safe reuse.
+                if !outcome.needs_rec && !outcome.cached_source_text.is_empty() {
+                    e.source_text = outcome.cached_source_text.clone();
+                    e.source_code = if outcome.cached_source_language.is_empty() {
+                        from_lang_code.clone()
+                    } else {
+                        outcome.cached_source_language.clone()
+                    };
+                    e.rec_attempted = true;
+                    cache_hits += 1;
+                }
             }
+            log::debug!(
+                "[acquire] surface_map anchor={} +new={} extended={} unchanged={} \
+                 cache_hits={} total_lines={}",
+                anchor_id,
+                new_lines_count,
+                extended_lines_count,
+                unchanged_lines_count,
+                cache_hits,
+                self.session
+                    .surface_map
+                    .lock()
+                    .map(|m| m.len())
+                    .unwrap_or(0)
+            );
         }
 
         let source_selection = if is_auto_source {
@@ -1861,7 +1852,7 @@ impl LivePlanarTracker {
                     .collect(),
                 Err(_) => Vec::new(),
             };
-            let groups = group_surface_lines_into_blocks(&snapshot_lines);
+            let groups = translator::live_session::group_surface_lines_into_blocks(&snapshot_lines);
             block_strip_indices = groups
                 .iter()
                 .map(|g| {
@@ -1901,7 +1892,7 @@ impl LivePlanarTracker {
                     let mut ids: Vec<translator::surface_map::SurfaceLineId> =
                         idxs.iter().map(|&i| entries[i].line_id).collect();
                     ids.sort_unstable();
-                    stable_block_id(&ids)
+                    translator::live_session::stable_block_id(&ids)
                 })
                 .collect();
         }
@@ -2035,17 +2026,13 @@ impl LivePlanarTracker {
                     block_rec_remaining[bi] -= 1;
                 }
                 // Push rec result back into the surface map and
-                // snapshot the current bbox extent as "rec just saw
-                // up to here." Future observations that extend the
-                // bbox past this snapshot by ≥ ½ height will be
-                // flagged `MergedAndExtended` and re-OCR'd.
-                if let Ok(mut map) = self.session.surface_map.lock() {
-                    if let Some(line_ref) = map.get_mut(entries[idx].line_id) {
-                        line_ref.source_text = entries[idx].source_text.clone();
-                        line_ref.source_language = entries[idx].source_code.clone();
-                        line_ref.record_rec_extent();
-                    }
-                }
+                // snapshot the current bbox extent. Future
+                // observations extending past it trigger re-OCR.
+                self.session.ingest_rec(
+                    entries[idx].line_id,
+                    &entries[idx].source_text,
+                    &entries[idx].source_code,
+                );
             }
 
             if !gen_check() {
@@ -2145,13 +2132,9 @@ impl LivePlanarTracker {
                         // for each line in this block. Next acquire's
                         // cache hit will reuse this without re-running
                         // translate either.
-                        if let Ok(mut map) = self.session.surface_map.lock() {
-                            for &i in &kept_indices {
-                                if let Some(line_ref) = map.get_mut(entries[i].line_id) {
-                                    line_ref.translated_text = translated.clone();
-                                }
-                            }
-                        }
+                        let line_ids: Vec<translator::surface_map::SurfaceLineId> =
+                            kept_indices.iter().map(|&i| entries[i].line_id).collect();
+                        self.session.ingest_translation(&line_ids, &translated);
                         self.upsert_overlay_block_with_mats_impl(
                             block_ids[bi],
                             kept_strips,
@@ -2622,8 +2605,13 @@ impl LivePlanarTracker {
             }
         }
         let raster_start = Instant::now();
-        let raster = match render_block_bitmap(&strips, &matted_strips, &display_text, &language)
-        {
+        let raster = match translator::live_session::render_block_bitmap(
+            &strips,
+            &matted_strips,
+            &display_text,
+            &language,
+            &crate::android_font_provider::AndroidFontProvider,
+        ) {
             Some(r) => r,
             None => return,
         };
@@ -2953,22 +2941,6 @@ struct AcquireEntry {
     line_id: translator::surface_map::SurfaceLineId,
 }
 
-/// Visual-box tuning: the detector's `tight` rect covers ink-only
-/// extent. We inflate it vertically to leave room for ascenders /
-/// descenders and add a small horizontal pad so the rendered text
-/// doesn't sit flush against the rounded-rect bg edge. Matches what
-/// Kotlin used to do client-side (`TIGHT_VERTICAL_INFLATE` +
-/// `HORIZONTAL_PAD_PX`); centralised here now that Rust owns
-/// rendering.
-#[cfg(feature = "planar-tracker")]
-const TIGHT_VERTICAL_INFLATE: f32 = 2.4;
-#[cfg(feature = "planar-tracker")]
-const HORIZONTAL_PAD_PX: f32 = 8.0;
-/// Pad around each item's visual quad when sizing the bitmap. Gives
-/// the rounded-corner AA + alpha edges a couple of pixels of buffer
-/// so we don't clip during the warp.
-#[cfg(feature = "planar-tracker")]
-const ITEM_BITMAP_PAD_PX: f32 = 4.0;
 /// Debug toggle: render the source text instead of waiting on
 /// translation. Matches the old Kotlin `DEBUG_TRACKER_VIEW_PLANAR`.
 #[cfg(feature = "planar-tracker")]
@@ -3043,448 +3015,4 @@ fn block_content_hash(
     h.finish()
 }
 
-/// Per-item raster result: an RGBA bitmap with bounded dimensions
-/// plus the surface-coord position of its top-left pixel.
-#[cfg(feature = "planar-tracker")]
-struct ItemRaster {
-    bitmap: Vec<u8>,
-    width: u32,
-    height: u32,
-    surface_origin_x: f32,
-    surface_origin_y: f32,
-}
-
-/// Inflate the detector's tight box into a visual box and rasterize a
-/// single item's overlay onto its own small bitmap. Returns `None`
-/// when the visual box is degenerate or `render_text_overlay_bitmap`
-/// fails.
-#[cfg(feature = "planar-tracker")]
-/// Rasterize a *block*: N per-line strips share one bitmap, one
-/// `translated_text`, and one set of background fills (one per strip).
-/// The text gets reflowed across the strips by `image_render` using
-/// the strips' widths as target line widths — so a paragraph that
-/// translates to fewer/more words than the source still reads as a
-/// paragraph, just using more or fewer of the available line slots.
-///
-/// `strips` must be ordered top-to-bottom (the natural reading
-/// order — the renderer assigns words to slots in that order).
-/// Single-strip blocks are not special-cased; pass a 1-element vec.
-///
-/// `display_text` is the translation; when empty, the block renders
-/// as a "pending" placeholder (per-strip bg fills, no glyphs).
-fn render_block_bitmap(
-    strips: &[translator::ocr::OrientedRect],
-    matted_strips: &[Option<translator::color_matting::MattedStrip>],
-    display_text: &str,
-    language: &str,
-) -> Option<ItemRaster> {
-    use translator::ocr::{
-        OrientedRect, OverlayLayoutHints, OverlayLayoutMode, PreparedImageOverlay,
-        PreparedTextBlock, PreparedTextLine, Rect,
-    };
-    if strips.is_empty() {
-        return None;
-    }
-
-    // 1. Inflate each strip into a "visual" box using the legacy pad
-    //    rules. We deliberately do *not* use the matted strip's
-    //    canonical footprint (which has its own ascender/descender
-    //    padding for the inpaint walk) so the overlay's geometric
-    //    extent stays stable regardless of whether matting succeeded —
-    //    only the *colour* of the pill changes. `visuals[i]` parallels
-    //    `strips[i]` and `matted_strips[i]`.
-    let mut visuals: Vec<OrientedRect> = strips
-        .iter()
-        .filter_map(|s| {
-            let v = OrientedRect {
-                cx: s.cx,
-                cy: s.cy,
-                width: s.width + 2.0 * HORIZONTAL_PAD_PX,
-                height: s.height * TIGHT_VERTICAL_INFLATE,
-                angle_radians: s.angle_radians,
-            };
-            if v.width <= 0.0 || v.height <= 0.0 {
-                None
-            } else {
-                Some(v)
-            }
-        })
-        .collect();
-    if visuals.is_empty() {
-        return None;
-    }
-    normalize_block_visuals_rotated_basis(&mut visuals);
-
-    // 2. Bitmap dims = AABB of all visual strips + small pad for the
-    //    rounded-corner AA. The bitmap origin in surface coords is
-    //    what the compositor uses to warp onto the camera frame.
-    let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
-    let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
-    for v in &visuals {
-        for (x, y) in oriented_corners(v) {
-            min_x = min_x.min(x);
-            min_y = min_y.min(y);
-            max_x = max_x.max(x);
-            max_y = max_y.max(y);
-        }
-    }
-    let pad = ITEM_BITMAP_PAD_PX;
-    let origin_x = (min_x - pad).max(0.0);
-    let origin_y = (min_y - pad).max(0.0);
-    let bitmap_w = ((max_x + pad - origin_x).ceil() as i32).max(1) as u32;
-    let bitmap_h = ((max_y + pad - origin_y).ceil() as i32).max(1) as u32;
-
-    // 3. Start the canvas. Per-strip background colour comes from the
-    //    matted strip's `bg_uniform_argb` when matting found a single
-    //    dominant peak in the ring samples (i.e. the surrounding bg is
-    //    one colour with sensor noise). Otherwise fall back to the
-    //    neutral dark pill — gradients/shadows where no single colour
-    //    matches the bg cleanly stay readable on a dark pill rather
-    //    than mismatching at the strip edge.
-    let pixels = (bitmap_w as usize) * (bitmap_h as usize);
-    let mut rgba = vec![0u8; pixels * 4];
-    let default_bg = [0x10, 0x10, 0x10, 0xC8];
-    let visuals_local: Vec<OrientedRect> = visuals
-        .iter()
-        .map(|v| OrientedRect {
-            cx: v.cx - origin_x,
-            cy: v.cy - origin_y,
-            width: v.width,
-            height: v.height,
-            angle_radians: v.angle_radians,
-        })
-        .collect();
-    for (i, v) in visuals_local.iter().enumerate() {
-        let strip_color = matted_strips
-            .get(i)
-            .and_then(|m| m.as_ref())
-            .and_then(|m| m.bg_uniform_argb)
-            .map(argb_to_rgba_bytes)
-            .unwrap_or(default_bg);
-        translator::planar_engine::fill_oriented_rect_blended(
-            &mut rgba, bitmap_w, bitmap_h, v, strip_color,
-        );
-    }
-    // Pick the text colour from the first matting result we have:
-    // ink_is_dark = bg was light → text should be dark, vice versa.
-    // Default to white for the all-fallback case.
-    let foreground_argb: u32 = matted_strips
-        .iter()
-        .find_map(|m| m.as_ref().map(|s| s.ink_is_dark))
-        .map(|dark| if dark { 0xFF10_1010 } else { 0xFFFF_FFFF })
-        .unwrap_or(0xFFFF_FFFF);
-
-    // 4. If no text yet (pending placeholder), we're done — return the
-    //    bitmap with just the bg fills painted.
-    if display_text.trim().is_empty() {
-        return Some(ItemRaster {
-            bitmap: rgba,
-            width: bitmap_w,
-            height: bitmap_h,
-            surface_origin_x: origin_x,
-            surface_origin_y: origin_y,
-        });
-    }
-
-    // 5. Build a `PreparedTextBlock` with one `PreparedTextLine` per
-    //    strip. `OverlayLayoutMode::PerLine` will reflow the block's
-    //    `translated_text` across these slots, word by word, using
-    //    each line's `oriented_box.width` as the slot's target width.
-    //    Horizontally inset the text box (not the bg) so the text
-    //    doesn't sit flush against the rounded edge.
-    let lines: Vec<PreparedTextLine> = visuals_local
-        .iter()
-        .map(|v| {
-            let text_box = OrientedRect {
-                cx: v.cx,
-                cy: v.cy,
-                width: (v.width - 2.0 * translator::planar_engine::OVERLAY_TEXT_HORIZONTAL_INSET_PX).max(1.0),
-                height: v.height,
-                angle_radians: v.angle_radians,
-            };
-            let aabb = text_box.to_aabb();
-            let bbox = Rect {
-                left: aabb.left.min(bitmap_w.saturating_sub(1)),
-                top: aabb.top.min(bitmap_h.saturating_sub(1)),
-                right: aabb.right.min(bitmap_w),
-                bottom: aabb.bottom.min(bitmap_h),
-            };
-            PreparedTextLine {
-                // Per-line text is unused — the block's `translated_text`
-                // is what `render_per_line` reflows across slots.
-                text: String::new(),
-                bounding_box: bbox.clone(),
-                oriented_box: text_box,
-                word_rects: vec![bbox],
-                background_argb: 0,
-                foreground_argb,
-            }
-        })
-        .collect();
-    // Suggested font size: derive from the dominant strip height so
-    // long paragraphs (where strips agree) get a stable size, and
-    // mixed-height detections (rare; headings + body in one block)
-    // settle on the larger one.
-    let suggested_font_px = visuals
-        .iter()
-        .map(|v| v.height)
-        .fold(0.0_f32, f32::max)
-        .clamp(10.0, 120.0);
-    let block_bbox = Rect {
-        left: 0,
-        top: 0,
-        right: bitmap_w,
-        bottom: bitmap_h,
-    };
-    let block = PreparedTextBlock {
-        source_text: String::new(),
-        translated_text: display_text.to_string(),
-        bounding_box: block_bbox,
-        lines,
-        layout_hints: OverlayLayoutHints {
-            layout_mode: OverlayLayoutMode::PerLine,
-            suggested_font_size_px: suggested_font_px,
-        },
-        // Block-level bg is unused — per-strip backgrounds are baked
-        // into `rgba` above (matted texture or fallback pill). The
-        // text rasterizer's per-line `background_argb` is also 0 so
-        // it doesn't paint over the texture.
-        background_argb: 0,
-        foreground_argb,
-    };
-
-    // 6. Run the shared `image_render::render_overlay` rasterizer.
-    //    Its `PerLine` mode treats the block's translated text as one
-    //    string and greedy-breaks it across our line slots.
-    let prepared = PreparedImageOverlay {
-        rgba_bytes: rgba,
-        width: bitmap_w,
-        height: bitmap_h,
-        extracted_text: String::new(),
-        translated_text: String::new(),
-        blocks: vec![block],
-    };
-    let opts = translator::image_render::RenderOptions {
-        language: language.to_string(),
-        min_font_size_px: 6.0,
-    };
-    let final_bytes = translator::image_render::render_overlay(
-        &prepared,
-        &crate::android_font_provider::AndroidFontProvider,
-        &opts,
-    )
-    .ok()?;
-    Some(ItemRaster {
-        bitmap: final_bytes,
-        width: bitmap_w,
-        height: bitmap_h,
-        surface_origin_x: origin_x,
-        surface_origin_y: origin_y,
-    })
-}
-
-/// Unpack a `0xAARRGGBB` value into the `[r, g, b, a]` byte tuple the
-/// rasterizer's per-pixel blender expects.
-#[cfg(feature = "planar-tracker")]
-fn argb_to_rgba_bytes(argb: u32) -> [u8; 4] {
-    let a = ((argb >> 24) & 0xff) as u8;
-    let r = ((argb >> 16) & 0xff) as u8;
-    let g = ((argb >> 8) & 0xff) as u8;
-    let b = (argb & 0xff) as u8;
-    [r, g, b, a]
-}
-
-/// Group detected entries (one per line) into translation blocks
-/// (paragraphs / labels). Returns `Vec<Vec<usize>>` where each inner
-/// vec is a block's entry indices in reading order (top → bottom).
-///
-/// We feed empty `text` to `ocr::group_live_lines_into_blocks` because
-/// rec hasn't happened yet — grouping is pure geometry (baseline,
-/// vertical adjacency, horizontal alignment). The `is_live_measurement_token`
-/// special-case inside the grouper short-circuits on empty text, so we
-/// just lose the "don't merge mg/g/kg into the body" guard. That's
-/// acceptable for the live-camera UX; if it becomes an issue we can
-/// regroup after rec.
-///
-/// Output ordering: blocks in top → bottom order, strips within a
-/// block also top → bottom. Stable across acquires on the same
-/// anchor (surface coords don't change).
-#[cfg(feature = "planar-tracker")]
-#[allow(dead_code)]
-fn group_entries_into_blocks(entries: &[AcquireEntry]) -> Vec<Vec<usize>> {
-    use translator::ocr::TextLine;
-    if entries.is_empty() {
-        return Vec::new();
-    }
-    let lines: Vec<TextLine> = entries
-        .iter()
-        .map(|e| TextLine {
-            text: String::new(),
-            bounding_box: e.rec_box.rect,
-            oriented_box: e.rec_box.oriented_box,
-            tight_box: e.tight,
-            word_rects: Vec::new(),
-        })
-        .collect();
-    let blocks = translator::ocr::group_live_lines_into_blocks(lines);
-    blocks
-        .into_iter()
-        .map(|b| {
-            // Map back to indices in `entries` by tight_box equality.
-            // Each detected box has a unique cx/cy so equality is
-            // exact. If a line doesn't match (shouldn't happen), drop
-            // it from the block rather than panic.
-            b.lines
-                .iter()
-                .filter_map(|l| entries.iter().position(|e| e.tight == l.tight_box))
-                .collect()
-        })
-        .filter(|v: &Vec<usize>| !v.is_empty())
-        .collect()
-}
-
-/// Group a set of `SurfaceLine`s into translation blocks. Same
-/// shape as `group_entries_into_blocks` but the input is the
-/// surface-map line records (with merged bboxes), not raw acquire
-/// entries. Returns indices into the input slice. Round-trips
-/// through `translator::ocr::group_live_lines_into_blocks` so the
-/// grouping geometry is identical to what acquire used pre-map.
-#[cfg(feature = "planar-tracker")]
-fn group_surface_lines_into_blocks(
-    lines: &[translator::surface_map::SurfaceLine],
-) -> Vec<Vec<usize>> {
-    use translator::ocr::TextLine;
-    if lines.is_empty() {
-        return Vec::new();
-    }
-    let text_lines: Vec<TextLine> = lines
-        .iter()
-        .map(|l| TextLine {
-            text: String::new(),
-            bounding_box: l.bbox.to_aabb(),
-            oriented_box: l.bbox.clone(),
-            tight_box: l.bbox.clone(),
-            word_rects: Vec::new(),
-        })
-        .collect();
-    let blocks = translator::ocr::group_live_lines_into_blocks(text_lines);
-    blocks
-        .into_iter()
-        .map(|b| {
-            b.lines
-                .iter()
-                .filter_map(|tl| lines.iter().position(|sl| sl.bbox == tl.tight_box))
-                .collect::<Vec<usize>>()
-        })
-        .filter(|v: &Vec<usize>| !v.is_empty())
-        .collect()
-}
-
-/// Stable block id from the sorted line ids in the block. Same set
-/// of lines → same id across acquires → `upsert_overlay_block`'s
-/// content-hash cache reuses the rasterized bitmap. FNV-1a 64-bit
-/// is fine here — we only need uniformity over small `Vec<u64>`
-/// inputs.
-#[cfg(feature = "planar-tracker")]
-fn stable_block_id(sorted_line_ids: &[translator::surface_map::SurfaceLineId]) -> u64 {
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for &id in sorted_line_ids {
-        for byte in id.to_le_bytes() {
-            hash ^= byte as u64;
-            hash = hash.wrapping_mul(0x100000001b3);
-        }
-    }
-    // Avoid collision with the legacy `next_entry_id`-derived ids
-    // (which start at 1 and grow linearly); set the high bit so
-    // both id spaces can coexist if any caller still uses the old
-    // generator.
-    hash | (1u64 << 63)
-}
-
-/// Snap sibling line strips within one paragraph block to a shared
-/// column in the block's rotated basis. Detector noise gives each
-/// strip its own `cx`/`width`/`angle_radians`; without this step
-/// the per-line pills form a left-edge "staircase" rather than
-/// following the paragraph's column on a tilted page. See
-/// FUTURE_SURFACE_MAP.md → "Per-block column alignment".
-///
-/// Pure in-plane rotation handling: out-of-plane perspective is
-/// out of scope (see FUTURE_ANCHOR_RECTIFICATION.md).
-#[cfg(feature = "planar-tracker")]
-fn normalize_block_visuals_rotated_basis(visuals: &mut [translator::ocr::OrientedRect]) {
-    if visuals.len() < 2 {
-        return;
-    }
-    let mut sum_cos = 0.0_f32;
-    let mut sum_sin = 0.0_f32;
-    let mut total_w = 0.0_f32;
-    for v in visuals.iter() {
-        let w = v.width.max(0.0);
-        sum_cos += v.angle_radians.cos() * w;
-        sum_sin += v.angle_radians.sin() * w;
-        total_w += w;
-    }
-    if total_w <= 0.0 {
-        return;
-    }
-    let theta = sum_sin.atan2(sum_cos);
-    let max_dev = 10.0_f32.to_radians();
-    for v in visuals.iter() {
-        let mut d = v.angle_radians - theta;
-        while d > std::f32::consts::PI {
-            d -= 2.0 * std::f32::consts::PI;
-        }
-        while d < -std::f32::consts::PI {
-            d += 2.0 * std::f32::consts::PI;
-        }
-        if d.abs() > max_dev {
-            return;
-        }
-    }
-    let c = theta.cos();
-    let s = theta.sin();
-    let mut u_left = f32::INFINITY;
-    let mut u_right = f32::NEG_INFINITY;
-    for v in visuals.iter() {
-        for (x, y) in oriented_corners(v) {
-            let u = x * c + y * s;
-            if u < u_left {
-                u_left = u;
-            }
-            if u > u_right {
-                u_right = u;
-            }
-        }
-    }
-    if !(u_right > u_left) {
-        return;
-    }
-    let u_centre = 0.5 * (u_left + u_right);
-    let block_width = u_right - u_left;
-    for v in visuals.iter_mut() {
-        let v_axis = -v.cx * s + v.cy * c;
-        v.cx = u_centre * c - v_axis * s;
-        v.cy = u_centre * s + v_axis * c;
-        v.width = block_width;
-        v.angle_radians = theta;
-    }
-}
-
-/// Compute the four (TL, TR, BR, BL) corners of an OrientedRect in
-/// surface coords. Mirrors the Kotlin `orientedCornersFlat`.
-#[cfg(feature = "planar-tracker")]
-fn oriented_corners(o: &translator::ocr::OrientedRect) -> [(f32, f32); 4] {
-    let c = o.angle_radians.cos();
-    let s = o.angle_radians.sin();
-    let hw = o.width * 0.5;
-    let hh = o.height * 0.5;
-    let mut out = [(0.0, 0.0); 4];
-    let locals = [(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)];
-    for (i, &(lx, ly)) in locals.iter().enumerate() {
-        let rx = c * lx - s * ly;
-        let ry = s * lx + c * ly;
-        out[i] = (o.cx + rx, o.cy + ry);
-    }
-    out
-}
 
