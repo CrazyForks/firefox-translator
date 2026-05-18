@@ -1387,16 +1387,12 @@ pub struct PlanarTextRenderItem {
 /// rec-batch update changed only 4 items but we re-rastered all 98).
 /// Now `upsert_overlay_item` only re-rasters items whose content hash
 /// changed; everything else stays resident.
+///
+/// Lives in `translator::live_session::OverlayItem`; re-exported here
+/// under the legacy name to minimize diff during the orchestration
+/// extraction. Future cleanup: drop the alias.
 #[cfg(feature = "planar-tracker")]
-struct CurrentOverlayItem {
-    id: u64,
-    bitmap: Vec<u8>,
-    width: u32,
-    height: u32,
-    surface_origin_x: f32,
-    surface_origin_y: f32,
-    content_hash: u64,
-}
+type CurrentOverlayItem = translator::live_session::OverlayItem;
 
 #[cfg(feature = "planar-tracker")]
 #[derive(uniffi::Object)]
@@ -1408,16 +1404,18 @@ pub struct LivePlanarTracker {
     /// a set. Persisted across many composite calls so dense pages only
     /// re-rasterize the handful of items whose text changed in the
     /// latest rec batch, not the whole set.
-    current_overlay_items: std::sync::Mutex<Vec<CurrentOverlayItem>>,
     /// Bumped on every `reset()` (tap-to-focus, language change, etc.).
     /// In-flight acquire pipelines pass the generation they captured at
     /// launch as a parameter; before each potentially-slow step
     /// (detect, recognize, translate) the pipeline checks whether the
     /// generation has moved on and bails if so.
     generation: std::sync::atomic::AtomicU64,
-    /// Per-block id source for items shipped to `upsert_overlay_block`.
-    /// We keep stable ids across rec batches so each block's rasterized
-    /// bitmap is reused unchanged when only its translation is added.
+    /// Per-block id source. Used to be the only block-id generator;
+    /// now block ids are derived from the sorted SurfaceLine ids
+    /// (see `stable_block_id`) so unchanged blocks across acquires
+    /// hit `upsert_overlay_block`'s content-hash cache. Kept around
+    /// as a fallback / for any caller still on the legacy path.
+    #[allow(dead_code)]
     next_entry_id: std::sync::atomic::AtomicU64,
     /// EMA-smoothed homography state, kept across consecutive
     /// `process_and_composite` calls. Holds the last smoothed H + the
@@ -1442,6 +1440,11 @@ pub struct LivePlanarTracker {
     matted_strips: std::sync::Mutex<
         std::collections::HashMap<u64, Vec<Option<translator::color_matting::MattedStrip>>>,
     >,
+    /// Cross-platform orchestration state. Owns the surface map
+    /// (and, in subsequent phases, the engine, overlay store, etc.)
+    /// so the desktop `surface_sim` binary and this Android wrapper
+    /// share one codebase. Reset on tap-to-focus / language change.
+    session: std::sync::Arc<translator::live_session::LiveSession>,
 }
 
 #[cfg(feature = "planar-tracker")]
@@ -1453,12 +1456,12 @@ impl LivePlanarTracker {
             state: std::sync::Mutex::new(translator::planar_engine::LivePlanarEngine::new(
                 translator::planar_engine::EngineConfig::default(),
             )),
-            current_overlay_items: std::sync::Mutex::new(Vec::new()),
             smoothed_h: std::sync::Mutex::new(SmoothedHomography::default()),
             generation: std::sync::atomic::AtomicU64::new(0),
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
             pending_display: std::sync::Mutex::new(None),
             matted_strips: std::sync::Mutex::new(std::collections::HashMap::new()),
+            session: std::sync::Arc::new(translator::live_session::LiveSession::new()),
         })
     }
 
@@ -1520,7 +1523,7 @@ impl LivePlanarTracker {
     /// when an anchor switches.
     fn retain_overlay_items(&self, ids: Vec<u64>) {
         let keep: std::collections::HashSet<u64> = ids.into_iter().collect();
-        if let Ok(mut items) = self.current_overlay_items.lock() {
+        if let Ok(mut items) = self.session.overlay_items.lock() {
             items.retain(|it| keep.contains(&it.id));
         }
     }
@@ -1528,7 +1531,7 @@ impl LivePlanarTracker {
     /// Drop every resident overlay item. Compositor will draw a
     /// camera-only frame after this.
     fn clear_overlay(&self) {
-        if let Ok(mut items) = self.current_overlay_items.lock() {
+        if let Ok(mut items) = self.session.overlay_items.lock() {
             items.clear();
         }
     }
@@ -1545,6 +1548,9 @@ impl LivePlanarTracker {
         self.clear_overlay();
         if let Ok(mut sm) = self.smoothed_h.lock() {
             *sm = SmoothedHomography::default();
+        }
+        if let Ok(mut map) = self.session.surface_map.lock() {
+            map.clear();
         }
     }
 
@@ -1729,9 +1735,76 @@ impl LivePlanarTracker {
                 source_code: from_lang_code.clone(),
                 rec_attempted: false,
                 rec_box: d,
+                line_id: 0,
             })
             .collect();
         let total = entries.len();
+
+        // Feed each detection into the per-anchor surface map.
+        //
+        // The map is the authoritative store of per-line state across
+        // acquires of the same anchor: line bbox (extent grows as the
+        // user pans), source_text, translated_text. We capture each
+        // entry's resulting line id here so downstream stages can
+        //   (a) skip rec for entries whose map line already has text
+        //       (Chunk 2 — the actual rec-cost saving), and
+        //   (b) derive a stable block id from the sorted line ids in
+        //       each block (Chunk 1 — raster cache stability).
+        let mut new_lines_count = 0usize;
+        let mut extended_lines_count = 0usize;
+        let mut unchanged_lines_count = 0usize;
+        let mut cache_hits = 0usize;
+        {
+            use translator::surface_map::{AddResult, SurfaceLineObservation};
+            if let Ok(mut map) = self.session.surface_map.lock() {
+                for e in entries.iter_mut() {
+                    let obs = SurfaceLineObservation {
+                        bbox: e.tight.clone(),
+                        source_text: String::new(),
+                        translated_text: String::new(),
+                        source_language: from_lang_code.clone(),
+                    };
+                    let res = map.add_or_merge(obs);
+                    e.line_id = res.id();
+                    match res {
+                        AddResult::Created(_) => new_lines_count += 1,
+                        AddResult::MergedAndExtended(_) => extended_lines_count += 1,
+                        AddResult::MergedUnchanged(_) => unchanged_lines_count += 1,
+                    }
+                    // Rec-cache hit: only short-circuit rec when the
+                    // line was unchanged (the user is looking at the
+                    // same view) AND we already have text for it.
+                    // `MergedAndExtended` means the user panned to
+                    // reveal more of the line past where we last
+                    // rec'd — those glyphs haven't been seen by the
+                    // recognizer yet, so we MUST re-rec.
+                    if !res.needs_rec() {
+                        if let Some(line) = map.get(e.line_id) {
+                            if !line.source_text.is_empty() {
+                                e.source_text = line.source_text.clone();
+                                e.source_code = if line.source_language.is_empty() {
+                                    from_lang_code.clone()
+                                } else {
+                                    line.source_language.clone()
+                                };
+                                e.rec_attempted = true;
+                                cache_hits += 1;
+                            }
+                        }
+                    }
+                }
+                log::debug!(
+                    "[acquire] surface_map anchor={} +new={} extended={} unchanged={} \
+                     cache_hits={} total_lines={}",
+                    anchor_id,
+                    new_lines_count,
+                    extended_lines_count,
+                    unchanged_lines_count,
+                    cache_hits,
+                    map.len()
+                );
+            }
+        }
 
         let source_selection = if is_auto_source {
             translator::OcrSourceSelection::Auto
@@ -1767,14 +1840,71 @@ impl LivePlanarTracker {
         // to camera motion; recognising the same anchor later (cache
         // hit) reuses the same blocks.
         let t_group = Instant::now();
-        let block_strip_indices: Vec<Vec<usize>> = group_entries_into_blocks(&entries);
-        let block_strips: Vec<Vec<translator::ocr::OrientedRect>> = block_strip_indices
-            .iter()
-            .map(|idxs| idxs.iter().map(|&i| entries[i].tight.clone()).collect())
-            .collect();
-        let block_ids: Vec<u64> = (0..block_strip_indices.len())
-            .map(|_| self.next_entry_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
-            .collect();
+        // Group from the surface map. We feed only the lines that
+        // were observed THIS acquire (others may exist in the map
+        // but aren't visible right now) and use the map's bbox
+        // rather than the per-entry tight rect — the map bbox is
+        // the merged union of all observations and may be wider.
+        // Block ids are derived from sorted line ids per block, so
+        // an unchanged set of lines hashes to the same block id
+        // across acquires → `upsert_overlay_block`'s content-hash
+        // cache hits and we skip re-raster.
+        let block_strip_indices: Vec<Vec<usize>>;
+        let block_strips: Vec<Vec<translator::ocr::OrientedRect>>;
+        let block_ids: Vec<u64>;
+        {
+            let map_guard = self.session.surface_map.lock();
+            let snapshot_lines: Vec<translator::surface_map::SurfaceLine> = match map_guard {
+                Ok(ref m) => entries
+                    .iter()
+                    .filter_map(|e| m.get(e.line_id).cloned())
+                    .collect(),
+                Err(_) => Vec::new(),
+            };
+            let groups = group_surface_lines_into_blocks(&snapshot_lines);
+            block_strip_indices = groups
+                .iter()
+                .map(|g| {
+                    g.iter()
+                        .filter_map(|&snap_idx| {
+                            let line_id = snapshot_lines[snap_idx].id;
+                            entries.iter().position(|e| e.line_id == line_id)
+                        })
+                        .collect::<Vec<usize>>()
+                })
+                .filter(|v| !v.is_empty())
+                .collect();
+            block_strips = block_strip_indices
+                .iter()
+                .map(|idxs| {
+                    idxs.iter()
+                        .map(|&i| {
+                            // Prefer the map's merged bbox; fall back
+                            // to entries[i].tight if the lookup
+                            // races (shouldn't happen, but cheap to
+                            // guard).
+                            match map_guard
+                                .as_ref()
+                                .ok()
+                                .and_then(|m| m.get(entries[i].line_id))
+                            {
+                                Some(line) => line.bbox.clone(),
+                                None => entries[i].tight.clone(),
+                            }
+                        })
+                        .collect()
+                })
+                .collect();
+            block_ids = block_strip_indices
+                .iter()
+                .map(|idxs| {
+                    let mut ids: Vec<translator::surface_map::SurfaceLineId> =
+                        idxs.iter().map(|&i| entries[i].line_id).collect();
+                    ids.sort_unstable();
+                    stable_block_id(&ids)
+                })
+                .collect();
+        }
         log::debug!(
             "[acquire] group: {:.1}ms strips={} → blocks={}",
             t_group.elapsed().as_secs_f64() * 1_000.0,
@@ -1822,9 +1952,14 @@ impl LivePlanarTracker {
                 block_of_entry[ei] = bi;
             }
         }
+        // Account for cache hits: entries pre-filled from the surface
+        // map don't need rec, so they shouldn't count toward
+        // `block_rec_remaining`. A block where every line is cached
+        // will start at 0 and be picked up as ready on the first
+        // batch iteration without any actual rec call.
         let mut block_rec_remaining: Vec<usize> = block_strip_indices
             .iter()
-            .map(|idxs| idxs.len())
+            .map(|idxs| idxs.iter().filter(|&&i| !entries[i].rec_attempted).count())
             .collect();
         let mut block_translated = vec![false; block_ids.len()];
 
@@ -1836,9 +1971,19 @@ impl LivePlanarTracker {
             let end = (start + REC_BATCH_SIZE).min(total);
             let t_batch = Instant::now();
 
-            let batch_boxes: Vec<translator::DetectedTextBox> =
-                entries[start..end].iter().map(|e| e.rec_box.clone()).collect();
-            let lines: Vec<translator::ocr::RecognizedTextLine> = {
+            // Skip entries already pre-filled from the surface map
+            // cache. `original_indices[i]` maps the i-th recognized
+            // line back to its position in `entries`.
+            let original_indices: Vec<usize> = (start..end)
+                .filter(|&i| !entries[i].rec_attempted)
+                .collect();
+            let batch_boxes: Vec<translator::DetectedTextBox> = original_indices
+                .iter()
+                .map(|&i| entries[i].rec_box.clone())
+                .collect();
+            let lines: Vec<translator::ocr::RecognizedTextLine> = if batch_boxes.is_empty() {
+                Vec::new()
+            } else {
                 let state = match frame.state.lock() {
                     Ok(s) => s,
                     Err(_) => break,
@@ -1874,10 +2019,10 @@ impl LivePlanarTracker {
             };
 
             for (i, line) in lines.iter().enumerate() {
-                let idx = start + i;
-                if idx >= entries.len() {
-                    break;
-                }
+                let idx = match original_indices.get(i) {
+                    Some(&v) => v,
+                    None => break,
+                };
                 entries[idx].source_text = line.text.trim().to_string();
                 entries[idx].rec_attempted = true;
                 if is_auto_source {
@@ -1888,6 +2033,18 @@ impl LivePlanarTracker {
                 let bi = block_of_entry[idx];
                 if block_rec_remaining[bi] > 0 {
                     block_rec_remaining[bi] -= 1;
+                }
+                // Push rec result back into the surface map and
+                // snapshot the current bbox extent as "rec just saw
+                // up to here." Future observations that extend the
+                // bbox past this snapshot by ≥ ½ height will be
+                // flagged `MergedAndExtended` and re-OCR'd.
+                if let Ok(mut map) = self.session.surface_map.lock() {
+                    if let Some(line_ref) = map.get_mut(entries[idx].line_id) {
+                        line_ref.source_text = entries[idx].source_text.clone();
+                        line_ref.source_language = entries[idx].source_code.clone();
+                        line_ref.record_rec_extent();
+                    }
                 }
             }
 
@@ -1984,6 +2141,17 @@ impl LivePlanarTracker {
                             anchor_id,
                             &kept_indices,
                         );
+                        // Push translated_text into the surface map
+                        // for each line in this block. Next acquire's
+                        // cache hit will reuse this without re-running
+                        // translate either.
+                        if let Ok(mut map) = self.session.surface_map.lock() {
+                            for &i in &kept_indices {
+                                if let Some(line_ref) = map.get_mut(entries[i].line_id) {
+                                    line_ref.translated_text = translated.clone();
+                                }
+                            }
+                        }
                         self.upsert_overlay_block_with_mats_impl(
                             block_ids[bi],
                             kept_strips,
@@ -2201,7 +2369,7 @@ impl LivePlanarTracker {
         let dst_bytes = (display_width as usize) * (display_height as usize) * 4;
         let mut dst = vec![0u8; dst_bytes];
         let overlay_wait = Instant::now();
-        let overlay_guard = self.current_overlay_items.lock().ok();
+        let overlay_guard = self.session.overlay_items.lock().ok();
         let overlay_acquired = Instant::now();
         let h_arr: Option<[f32; 9]> = if h_surface_to_viewport.len() == 9 {
             let mut a = [0.0f32; 9];
@@ -2445,7 +2613,7 @@ impl LivePlanarTracker {
         let hash = block_content_hash(&strips, &display_text, &language);
         // Fast path: same content → keep the cached bitmap.
         {
-            if let Ok(items) = self.current_overlay_items.lock() {
+            if let Ok(items) = self.session.overlay_items.lock() {
                 if let Some(existing) = items.iter().find(|it| it.id == id) {
                     if existing.content_hash == hash {
                         return;
@@ -2460,7 +2628,7 @@ impl LivePlanarTracker {
             None => return,
         };
         let raster_end = Instant::now();
-        if let Ok(mut items) = self.current_overlay_items.lock() {
+        if let Ok(mut items) = self.session.overlay_items.lock() {
             let new_item = CurrentOverlayItem {
                 id,
                 bitmap: raster.bitmap,
@@ -2775,6 +2943,14 @@ struct AcquireEntry {
     source_code: String,
     rec_attempted: bool,
     rec_box: translator::DetectedTextBox,
+    /// `SurfaceLine` id this entry was matched to (or freshly created
+    /// for) when its observation was fed into the per-anchor
+    /// `SurfaceMap`. Used downstream to (a) push rec / translate
+    /// results back into the map, (b) derive stable block ids from
+    /// sorted line ids so unchanged blocks across acquires reuse
+    /// their rasterized bitmap via `upsert_overlay_block`'s
+    /// content-hash cache.
+    line_id: translator::surface_map::SurfaceLineId,
 }
 
 /// Visual-box tuning: the detector's `tight` rect covers ink-only
@@ -3134,6 +3310,7 @@ fn argb_to_rgba_bytes(argb: u32) -> [u8; 4] {
 /// block also top → bottom. Stable across acquires on the same
 /// anchor (surface coords don't change).
 #[cfg(feature = "planar-tracker")]
+#[allow(dead_code)]
 fn group_entries_into_blocks(entries: &[AcquireEntry]) -> Vec<Vec<usize>> {
     use translator::ocr::TextLine;
     if entries.is_empty() {
@@ -3164,6 +3341,64 @@ fn group_entries_into_blocks(entries: &[AcquireEntry]) -> Vec<Vec<usize>> {
         })
         .filter(|v: &Vec<usize>| !v.is_empty())
         .collect()
+}
+
+/// Group a set of `SurfaceLine`s into translation blocks. Same
+/// shape as `group_entries_into_blocks` but the input is the
+/// surface-map line records (with merged bboxes), not raw acquire
+/// entries. Returns indices into the input slice. Round-trips
+/// through `translator::ocr::group_live_lines_into_blocks` so the
+/// grouping geometry is identical to what acquire used pre-map.
+#[cfg(feature = "planar-tracker")]
+fn group_surface_lines_into_blocks(
+    lines: &[translator::surface_map::SurfaceLine],
+) -> Vec<Vec<usize>> {
+    use translator::ocr::TextLine;
+    if lines.is_empty() {
+        return Vec::new();
+    }
+    let text_lines: Vec<TextLine> = lines
+        .iter()
+        .map(|l| TextLine {
+            text: String::new(),
+            bounding_box: l.bbox.to_aabb(),
+            oriented_box: l.bbox.clone(),
+            tight_box: l.bbox.clone(),
+            word_rects: Vec::new(),
+        })
+        .collect();
+    let blocks = translator::ocr::group_live_lines_into_blocks(text_lines);
+    blocks
+        .into_iter()
+        .map(|b| {
+            b.lines
+                .iter()
+                .filter_map(|tl| lines.iter().position(|sl| sl.bbox == tl.tight_box))
+                .collect::<Vec<usize>>()
+        })
+        .filter(|v: &Vec<usize>| !v.is_empty())
+        .collect()
+}
+
+/// Stable block id from the sorted line ids in the block. Same set
+/// of lines → same id across acquires → `upsert_overlay_block`'s
+/// content-hash cache reuses the rasterized bitmap. FNV-1a 64-bit
+/// is fine here — we only need uniformity over small `Vec<u64>`
+/// inputs.
+#[cfg(feature = "planar-tracker")]
+fn stable_block_id(sorted_line_ids: &[translator::surface_map::SurfaceLineId]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for &id in sorted_line_ids {
+        for byte in id.to_le_bytes() {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+    }
+    // Avoid collision with the legacy `next_entry_id`-derived ids
+    // (which start at 1 and grow linearly); set the high bit so
+    // both id spaces can coexist if any caller still uses the old
+    // generator.
+    hash | (1u64 << 63)
 }
 
 /// Snap sibling line strips within one paragraph block to a shared
