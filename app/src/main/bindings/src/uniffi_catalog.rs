@@ -1432,6 +1432,16 @@ pub struct LivePlanarTracker {
     /// resolution. Vec<u8>-via-JNI-memcpy avoids uniffi marshalling for
     /// an 8 MB buffer per frame.
     pending_display: std::sync::Mutex<Option<Vec<u8>>>,
+    /// Color-matting results from the most recent acquire, keyed by
+    /// the anchor those mats belong to. Indexed parallel to the
+    /// acquire pipeline's `entries` (i.e. by detection order).
+    /// `None` entries are detections where matting failed (small
+    /// contour, sparse ink) — callers fall back to the legacy pill
+    /// rendering for those. Cleared when an anchor's overlays go
+    /// away.
+    matted_strips: std::sync::Mutex<
+        std::collections::HashMap<u64, Vec<Option<translator::color_matting::MattedStrip>>>,
+    >,
 }
 
 #[cfg(feature = "planar-tracker")]
@@ -1448,6 +1458,7 @@ impl LivePlanarTracker {
             generation: std::sync::atomic::AtomicU64::new(0),
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
             pending_display: std::sync::Mutex::new(None),
+            matted_strips: std::sync::Mutex::new(std::collections::HashMap::new()),
         })
     }
 
@@ -1487,55 +1498,21 @@ impl LivePlanarTracker {
         translated_text: String,
         language: String,
     ) {
-        if strips.is_empty() {
-            return;
-        }
-        let display_text = pick_display_text(&source_text, &translated_text);
-        let hash = block_content_hash(&strips, &display_text, &language);
-        // Fast path: same content → keep the cached bitmap.
-        {
-            if let Ok(items) = self.current_overlay_items.lock() {
-                if let Some(existing) = items.iter().find(|it| it.id == id) {
-                    if existing.content_hash == hash {
-                        return;
-                    }
-                }
-            }
-        }
-        let raster_start = Instant::now();
-        let raster = match render_block_bitmap(&strips, &display_text, &language) {
-            Some(r) => r,
-            None => return,
-        };
-        let raster_end = Instant::now();
-        if let Ok(mut items) = self.current_overlay_items.lock() {
-            let new_item = CurrentOverlayItem {
-                id,
-                bitmap: raster.bitmap,
-                width: raster.width,
-                height: raster.height,
-                surface_origin_x: raster.surface_origin_x,
-                surface_origin_y: raster.surface_origin_y,
-                content_hash: hash,
-            };
-            if let Some(slot) = items.iter_mut().find(|it| it.id == id) {
-                *slot = new_item;
-            } else {
-                items.push(new_item);
-            }
-        }
-        if LIVE_PIPELINE_DIAG {
-            let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
-            if raster_ms > LOCK_LOG_THRESHOLD_MS {
-                log::debug!(
-                    "[work] block raster: id={} {:.1}ms strips={} text={:?}",
-                    id,
-                    raster_ms,
-                    strips.len(),
-                    display_text,
-                );
-            }
-        }
+        // Public uniffi-exported entry — no matted strips. Used by
+        // the pending-placeholder pass and any future external caller.
+        // Falls back to legacy pill rendering for every strip.
+        // Internal callers (run_acquire_pipeline) use
+        // `upsert_overlay_block_with_mats` directly to thread per-
+        // strip matting through.
+        Self::upsert_overlay_block_with_mats_impl(
+            self,
+            id,
+            strips,
+            Vec::new(),
+            source_text,
+            translated_text,
+            language,
+        );
     }
 
     /// Drop any resident overlay item whose id is not in `ids`. Used
@@ -1704,6 +1681,42 @@ impl LivePlanarTracker {
             return AcquirePipelineOutcome::canceled();
         }
 
+        // ---- Color matting ----
+        // Disabled for now: when the per-strip uniform-bg detection
+        // works it looks great, but when it fails or flips between
+        // acquires the pill colour jarringly snaps in and out. White-
+        // on-dark is consistent and that's what we ship. Flip
+        // `ENABLE_COLOR_MATTING` to true to re-enable; the algorithm
+        // is in `translator::color_matting`, the histogram-peak
+        // uniformity check on ring samples is in `uniform_bg_argb`.
+        // See `FUTURE_SURFACE_MAP.md` "Color matting" for the full
+        // design + open algorithmic questions.
+        const ENABLE_COLOR_MATTING: bool = false;
+        if ENABLE_COLOR_MATTING {
+            let t_mat = Instant::now();
+            let matted: Vec<Option<translator::color_matting::MattedStrip>> = {
+                let state = match frame.state.lock() {
+                    Ok(s) => s,
+                    Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+                };
+                let oriented = state
+                    .cached
+                    .as_ref()
+                    .expect("oriented still cached");
+                translator::color_matting::mat_detections(&oriented.rgb.to_rgba8(), &detected)
+            };
+            let mat_count = matted.iter().filter(|m| m.is_some()).count();
+            log::debug!(
+                "[acquire] mat: {:.1}ms ok={}/{}",
+                t_mat.elapsed().as_secs_f64() * 1_000.0,
+                mat_count,
+                matted.len(),
+            );
+            if let Ok(mut store) = self.matted_strips.lock() {
+                store.insert(anchor_id, matted);
+            }
+        }
+
         // Build per-strip state local to this pipeline call. Each
         // entry tracks one detected line's rec progress; blocks group
         // these entries (by index) once `group_entries_into_blocks`
@@ -1774,9 +1787,15 @@ impl LivePlanarTracker {
         // rec+translate run. retain_overlay_items drops any leftover
         // items from a prior anchor.
         for (i, &id) in block_ids.iter().enumerate() {
-            self.upsert_overlay_block(
+            let block_mats = clone_matted_for_block(
+                &self.matted_strips,
+                anchor_id,
+                &block_strip_indices[i],
+            );
+            self.upsert_overlay_block_with_mats_impl(
                 id,
                 block_strips[i].clone(),
+                block_mats,
                 String::new(),
                 String::new(),
                 to_lang_code.clone(),
@@ -1948,18 +1967,27 @@ impl LivePlanarTracker {
                         // floating where no text could be read). The
                         // renderer reflows the translation across the
                         // surviving strips only.
-                        let kept_strips: Vec<translator::ocr::OrientedRect> =
-                            block_strip_indices[bi]
-                                .iter()
-                                .filter(|&&i| !entries[i].source_text.is_empty())
-                                .map(|&i| entries[i].tight.clone())
-                                .collect();
-                        if kept_strips.is_empty() {
+                        let kept_indices: Vec<usize> = block_strip_indices[bi]
+                            .iter()
+                            .copied()
+                            .filter(|&i| !entries[i].source_text.is_empty())
+                            .collect();
+                        if kept_indices.is_empty() {
                             continue;
                         }
-                        self.upsert_overlay_block(
+                        let kept_strips: Vec<translator::ocr::OrientedRect> = kept_indices
+                            .iter()
+                            .map(|&i| entries[i].tight.clone())
+                            .collect();
+                        let kept_mats = clone_matted_for_block(
+                            &self.matted_strips,
+                            anchor_id,
+                            &kept_indices,
+                        );
+                        self.upsert_overlay_block_with_mats_impl(
                             block_ids[bi],
                             kept_strips,
+                            kept_mats,
                             src,
                             translated,
                             to_lang_code.clone(),
@@ -2391,6 +2419,78 @@ impl LivePlanarTracker {
     }
 }
 
+/// Non-uniffi-exported methods on `LivePlanarTracker`. Anything whose
+/// signature uses types uniffi can't introspect (e.g.
+/// `translator::color_matting::MattedStrip`) lives here.
+#[cfg(feature = "planar-tracker")]
+impl LivePlanarTracker {
+    /// Variant of `upsert_overlay_block` that accepts pre-computed
+    /// matted strips. Internal callers (`run_acquire_pipeline`) thread
+    /// per-strip matting through this; the uniffi-exported
+    /// `upsert_overlay_block` delegates with empty mats so external
+    /// callers (and the pending-placeholder pass) still work.
+    fn upsert_overlay_block_with_mats_impl(
+        &self,
+        id: u64,
+        strips: Vec<translator::ocr::OrientedRect>,
+        matted_strips: Vec<Option<translator::color_matting::MattedStrip>>,
+        source_text: String,
+        translated_text: String,
+        language: String,
+    ) {
+        if strips.is_empty() {
+            return;
+        }
+        let display_text = pick_display_text(&source_text, &translated_text);
+        let hash = block_content_hash(&strips, &display_text, &language);
+        // Fast path: same content → keep the cached bitmap.
+        {
+            if let Ok(items) = self.current_overlay_items.lock() {
+                if let Some(existing) = items.iter().find(|it| it.id == id) {
+                    if existing.content_hash == hash {
+                        return;
+                    }
+                }
+            }
+        }
+        let raster_start = Instant::now();
+        let raster = match render_block_bitmap(&strips, &matted_strips, &display_text, &language)
+        {
+            Some(r) => r,
+            None => return,
+        };
+        let raster_end = Instant::now();
+        if let Ok(mut items) = self.current_overlay_items.lock() {
+            let new_item = CurrentOverlayItem {
+                id,
+                bitmap: raster.bitmap,
+                width: raster.width,
+                height: raster.height,
+                surface_origin_x: raster.surface_origin_x,
+                surface_origin_y: raster.surface_origin_y,
+                content_hash: hash,
+            };
+            if let Some(slot) = items.iter_mut().find(|it| it.id == id) {
+                *slot = new_item;
+            } else {
+                items.push(new_item);
+            }
+        }
+        if LIVE_PIPELINE_DIAG {
+            let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
+            if raster_ms > LOCK_LOG_THRESHOLD_MS {
+                log::debug!(
+                    "[work] block raster: id={} {:.1}ms strips={} text={:?}",
+                    id,
+                    raster_ms,
+                    strips.len(),
+                    display_text,
+                );
+            }
+        }
+    }
+}
+
 #[cfg(feature = "planar-tracker")]
 fn cmd_to_result(cmd: translator::planar_engine::TrackerCommand) -> PlanarFrameResult {
     use translator::planar_engine::TrackerCommand as C;
@@ -2702,6 +2802,36 @@ const RENDER_SOURCE_AS_FALLBACK: bool = false;
 /// available; otherwise we render source text (handy for diagnosing
 /// detection / recognition without waiting for translation).
 #[cfg(feature = "planar-tracker")]
+/// Pull the matted strips for the given block out of the cache. The
+/// indices are entry positions (from `block_strip_indices[bi]`); we
+/// look each up against the per-anchor matted-strip array. Missing
+/// entries (no anchor cached, index out of range, or `None` in the
+/// stored vec) translate to `None` so the renderer falls back to the
+/// legacy pill for those strips. Cheap deep copy — strip RGBA is the
+/// only large field and these only run on acquire / block-translate
+/// boundaries, not per-frame.
+#[cfg(feature = "planar-tracker")]
+fn clone_matted_for_block(
+    store: &std::sync::Mutex<
+        std::collections::HashMap<u64, Vec<Option<translator::color_matting::MattedStrip>>>,
+    >,
+    anchor_id: u64,
+    entry_indices: &[usize],
+) -> Vec<Option<translator::color_matting::MattedStrip>> {
+    let guard = match store.lock() {
+        Ok(g) => g,
+        Err(_) => return entry_indices.iter().map(|_| None).collect(),
+    };
+    let mats = match guard.get(&anchor_id) {
+        Some(m) => m,
+        None => return entry_indices.iter().map(|_| None).collect(),
+    };
+    entry_indices
+        .iter()
+        .map(|&i| mats.get(i).and_then(|m| m.clone()))
+        .collect()
+}
+
 fn pick_display_text(source_text: &str, translated_text: &str) -> String {
     if !translated_text.trim().is_empty() {
         translated_text.to_string()
@@ -2768,6 +2898,7 @@ struct ItemRaster {
 /// as a "pending" placeholder (per-strip bg fills, no glyphs).
 fn render_block_bitmap(
     strips: &[translator::ocr::OrientedRect],
+    matted_strips: &[Option<translator::color_matting::MattedStrip>],
     display_text: &str,
     language: &str,
 ) -> Option<ItemRaster> {
@@ -2779,9 +2910,13 @@ fn render_block_bitmap(
         return None;
     }
 
-    // 1. Inflate each strip into a "visual" box (vertical extra for
-    //    ascenders/descenders, horizontal pad so glyphs don't kiss
-    //    the rounded bg edge). Mirrors the old single-strip logic.
+    // 1. Inflate each strip into a "visual" box using the legacy pad
+    //    rules. We deliberately do *not* use the matted strip's
+    //    canonical footprint (which has its own ascender/descender
+    //    padding for the inpaint walk) so the overlay's geometric
+    //    extent stays stable regardless of whether matting succeeded —
+    //    only the *colour* of the pill changes. `visuals[i]` parallels
+    //    `strips[i]` and `matted_strips[i]`.
     let visuals: Vec<OrientedRect> = strips
         .iter()
         .filter_map(|s| {
@@ -2822,14 +2957,16 @@ fn render_block_bitmap(
     let bitmap_w = ((max_x + pad - origin_x).ceil() as i32).max(1) as u32;
     let bitmap_h = ((max_y + pad - origin_y).ceil() as i32).max(1) as u32;
 
-    // 3. Start the canvas + paint per-strip bg fills. The bg fill is
-    //    the same colour for every strip in the block; only their
-    //    positions differ. This gives the per-strip "label box" look,
-    //    where each detected line gets its own rounded rect — even
-    //    when they all share one translation.
+    // 3. Start the canvas. Per-strip background colour comes from the
+    //    matted strip's `bg_uniform_argb` when matting found a single
+    //    dominant peak in the ring samples (i.e. the surrounding bg is
+    //    one colour with sensor noise). Otherwise fall back to the
+    //    neutral dark pill — gradients/shadows where no single colour
+    //    matches the bg cleanly stay readable on a dark pill rather
+    //    than mismatching at the strip edge.
     let pixels = (bitmap_w as usize) * (bitmap_h as usize);
     let mut rgba = vec![0u8; pixels * 4];
-    let bg_color = [0x10, 0x10, 0x10, 0xC8];
+    let default_bg = [0x10, 0x10, 0x10, 0xC8];
     let visuals_local: Vec<OrientedRect> = visuals
         .iter()
         .map(|v| OrientedRect {
@@ -2840,11 +2977,25 @@ fn render_block_bitmap(
             angle_radians: v.angle_radians,
         })
         .collect();
-    for v in &visuals_local {
+    for (i, v) in visuals_local.iter().enumerate() {
+        let strip_color = matted_strips
+            .get(i)
+            .and_then(|m| m.as_ref())
+            .and_then(|m| m.bg_uniform_argb)
+            .map(argb_to_rgba_bytes)
+            .unwrap_or(default_bg);
         translator::planar_engine::fill_oriented_rect_blended(
-            &mut rgba, bitmap_w, bitmap_h, v, bg_color,
+            &mut rgba, bitmap_w, bitmap_h, v, strip_color,
         );
     }
+    // Pick the text colour from the first matting result we have:
+    // ink_is_dark = bg was light → text should be dark, vice versa.
+    // Default to white for the all-fallback case.
+    let foreground_argb: u32 = matted_strips
+        .iter()
+        .find_map(|m| m.as_ref().map(|s| s.ink_is_dark))
+        .map(|dark| if dark { 0xFF10_1010 } else { 0xFFFF_FFFF })
+        .unwrap_or(0xFFFF_FFFF);
 
     // 4. If no text yet (pending placeholder), we're done — return the
     //    bitmap with just the bg fills painted.
@@ -2889,7 +3040,7 @@ fn render_block_bitmap(
                 oriented_box: text_box,
                 word_rects: vec![bbox],
                 background_argb: 0,
-                foreground_argb: 0xFFFF_FFFF,
+                foreground_argb,
             }
         })
         .collect();
@@ -2917,8 +3068,12 @@ fn render_block_bitmap(
             layout_mode: OverlayLayoutMode::PerLine,
             suggested_font_size_px: suggested_font_px,
         },
-        background_argb: bg_argb_u32(),
-        foreground_argb: 0xFFFF_FFFF,
+        // Block-level bg is unused — per-strip backgrounds are baked
+        // into `rgba` above (matted texture or fallback pill). The
+        // text rasterizer's per-line `background_argb` is also 0 so
+        // it doesn't paint over the texture.
+        background_argb: 0,
+        foreground_argb,
     };
 
     // 6. Run the shared `image_render::render_overlay` rasterizer.
@@ -2951,9 +3106,15 @@ fn render_block_bitmap(
     })
 }
 
+/// Unpack a `0xAARRGGBB` value into the `[r, g, b, a]` byte tuple the
+/// rasterizer's per-pixel blender expects.
 #[cfg(feature = "planar-tracker")]
-fn bg_argb_u32() -> u32 {
-    0xC810_1010
+fn argb_to_rgba_bytes(argb: u32) -> [u8; 4] {
+    let a = ((argb >> 24) & 0xff) as u8;
+    let r = ((argb >> 16) & 0xff) as u8;
+    let g = ((argb >> 8) & 0xff) as u8;
+    let b = (argb & 0xff) as u8;
+    [r, g, b, a]
 }
 
 /// Group detected entries (one per line) into translation blocks

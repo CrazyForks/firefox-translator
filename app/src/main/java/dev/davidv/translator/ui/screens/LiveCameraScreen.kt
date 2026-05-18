@@ -122,8 +122,9 @@ private const val DEBUG_HIDE_TRACKER_OVERLAY: Boolean = false
 
 /** Show a small overlay pill in the corner reporting tracker state
  *  (Idle/Acquiring/Locked/Lost + inliers + last acquire's det/rec
- *  counts). Useful while tuning, off in production. */
-private const val DEBUG_SHOW_TRACKER_STATUS: Boolean = true
+ *  counts). Useful while tuning, off in production. Gated on
+ *  `BuildConfig.DEBUG` so release builds never show it. */
+private val DEBUG_SHOW_TRACKER_STATUS: Boolean = dev.davidv.translator.BuildConfig.DEBUG
 
 @Composable
 fun LiveCameraScreen(
