@@ -1388,12 +1388,6 @@ pub struct PlanarTextRenderItem {
 /// Now `upsert_overlay_item` only re-rasters items whose content hash
 /// changed; everything else stays resident.
 ///
-/// Lives in `translator::live_session::OverlayItem`; re-exported here
-/// under the legacy name to minimize diff during the orchestration
-/// extraction. Future cleanup: drop the alias.
-#[cfg(feature = "planar-tracker")]
-type CurrentOverlayItem = translator::live_session::OverlayItem;
-
 #[cfg(feature = "planar-tracker")]
 #[derive(uniffi::Object)]
 pub struct LivePlanarTracker {
@@ -1424,6 +1418,27 @@ pub struct LivePlanarTracker {
     /// `tracker step → smooth → composite` in one trip instead of
     /// pinging back to Kotlin for the H math.
     smoothed_h: std::sync::Mutex<SmoothedHomography>,
+    /// Most recent raw `H_root→view` for the currently-Locked anchor,
+    /// stashed by `process_and_composite` on every Locked frame.
+    /// Used as the "latest known H" for non-refresh purposes; the
+    /// refresh worker reads `pending_refresh_target` instead so a
+    /// snap-back / pan-induced anchor change between trigger-fire
+    /// and worker-pickup doesn't make the worker project detections
+    /// through the wrong anchor's H.
+    last_root_to_view: std::sync::Mutex<Option<(u64, [f32; 9])>>,
+    /// Snapshot of `(anchor_id, H_root→view)` taken at the moment
+    /// `process_and_composite` set `should_refresh_detect = true`.
+    /// `run_refresh_pipeline` consumes from this slot. Pinning the
+    /// pair at trigger time defends against the worker running
+    /// asynchronously: by the time the worker thread picks up the
+    /// frame, the detector thread may have processed many more
+    /// frames and `last_root_to_view` may now point at a different
+    /// anchor (engine snap-back, mid-pan re-lock). Using a stale
+    /// `(anchor, H)` would project the worker's camera-coord
+    /// detections into garbage surface coords — "boxes flying in
+    /// the middle of the room" + `cache=0` because no surface lines
+    /// match the projection.
+    pending_refresh_target: std::sync::Mutex<Option<(u64, [f32; 9])>>,
     /// Output buffer produced by `composite_frame` (uniffi) and
     /// consumed by `Java_..._PlanarRenderJni_compositeInto` (JNI).
     /// Holds the fully-composited camera + overlay RGBA at display
@@ -1457,6 +1472,8 @@ impl LivePlanarTracker {
                 translator::planar_engine::EngineConfig::default(),
             )),
             smoothed_h: std::sync::Mutex::new(SmoothedHomography::default()),
+            last_root_to_view: std::sync::Mutex::new(None),
+            pending_refresh_target: std::sync::Mutex::new(None),
             generation: std::sync::atomic::AtomicU64::new(0),
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
             pending_display: std::sync::Mutex::new(None),
@@ -1493,47 +1510,10 @@ impl LivePlanarTracker {
     /// Content-hashed on (strips + texts + language). If a previous
     /// upsert for the same `id` produced the same hash, this is a
     /// no-op — no re-raster, no slot write.
-    fn upsert_overlay_block(
-        &self,
-        id: u64,
-        strips: Vec<translator::ocr::OrientedRect>,
-        source_text: String,
-        translated_text: String,
-        language: String,
-    ) {
-        // Public uniffi-exported entry — no matted strips. Used by
-        // the pending-placeholder pass and any future external caller.
-        // Falls back to legacy pill rendering for every strip.
-        // Internal callers (run_acquire_pipeline) use
-        // `upsert_overlay_block_with_mats` directly to thread per-
-        // strip matting through.
-        Self::upsert_overlay_block_with_mats_impl(
-            self,
-            id,
-            strips,
-            Vec::new(),
-            source_text,
-            translated_text,
-            language,
-        );
-    }
-
-    /// Drop any resident overlay item whose id is not in `ids`. Used
-    /// when an anchor finishes acquire (final list of ids known) or
-    /// when an anchor switches.
-    fn retain_overlay_items(&self, ids: Vec<u64>) {
-        let keep: std::collections::HashSet<u64> = ids.into_iter().collect();
-        if let Ok(mut items) = self.session.overlay_items.lock() {
-            items.retain(|it| keep.contains(&it.id));
-        }
-    }
-
     /// Drop every resident overlay item. Compositor will draw a
     /// camera-only frame after this.
     fn clear_overlay(&self) {
-        if let Ok(mut items) = self.session.overlay_items.lock() {
-            items.clear();
-        }
+        self.session.clear_overlays();
     }
 
     /// Bump the generation counter, clear the engine state, drop all
@@ -1545,13 +1525,17 @@ impl LivePlanarTracker {
         if let Ok(mut engine) = self.state.lock() {
             engine.clear();
         }
-        self.clear_overlay();
         if let Ok(mut sm) = self.smoothed_h.lock() {
             *sm = SmoothedHomography::default();
         }
-        if let Ok(mut map) = self.session.surface_map.lock() {
-            map.clear();
+        if let Ok(mut slot) = self.last_root_to_view.lock() {
+            *slot = None;
         }
+        if let Ok(mut slot) = self.pending_refresh_target.lock() {
+            *slot = None;
+        }
+        // Clears overlays + anchor states + refresh counters in one go.
+        self.session.clear();
     }
 
     /// Read the current generation. Callers about to launch
@@ -1648,6 +1632,8 @@ impl LivePlanarTracker {
                 detected_count: 0,
                 rec_ok_count: 0,
                 rec_empty_count: 0,
+                cache_hits: 0,
+                rec_called_count: 0,
                 total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
                 canceled: false,
                 error: None,
@@ -1723,87 +1709,7 @@ impl LivePlanarTracker {
             }
         }
 
-        // Build per-strip state local to this pipeline call. Each
-        // entry tracks one detected line's rec progress; blocks group
-        // these entries (by index) once `group_entries_into_blocks`
-        // runs below.
-        let mut entries: Vec<AcquireEntry> = detected
-            .into_iter()
-            .map(|d| AcquireEntry {
-                tight: d.tight_box,
-                source_text: String::new(),
-                source_code: from_lang_code.clone(),
-                rec_attempted: false,
-                rec_box: d,
-                line_id: 0,
-            })
-            .collect();
-        let total = entries.len();
-
-        // Feed each detection into the per-anchor surface map.
-        //
-        // The map is the authoritative store of per-line state across
-        // acquires of the same anchor: line bbox (extent grows as the
-        // user pans), source_text, translated_text. We capture each
-        // entry's resulting line id here so downstream stages can
-        //   (a) skip rec for entries whose map line already has text
-        //       (Chunk 2 — the actual rec-cost saving), and
-        //   (b) derive a stable block id from the sorted line ids in
-        //       each block (Chunk 1 — raster cache stability).
-        let mut new_lines_count = 0usize;
-        let mut extended_lines_count = 0usize;
-        let mut unchanged_lines_count = 0usize;
-        let mut cache_hits = 0usize;
-        {
-            use translator::live_session::AddResultKind;
-            let bboxes: Vec<translator::ocr::OrientedRect> =
-                entries.iter().map(|e| e.tight.clone()).collect();
-            let outcomes = self.session.observe_detections(&bboxes, &from_lang_code);
-            for (e, outcome) in entries.iter_mut().zip(outcomes.iter()) {
-                e.line_id = outcome.line_id;
-                match outcome.kind {
-                    AddResultKind::Created => new_lines_count += 1,
-                    AddResultKind::MergedAndExtended => extended_lines_count += 1,
-                    AddResultKind::MergedUnchanged => unchanged_lines_count += 1,
-                }
-                // Cache hit: pre-fill the entry so the rec batch loop
-                // skips it. `observe_detections` only populates
-                // `cached_*` when needs_rec is false AND the line
-                // already had text — both conditions for safe reuse.
-                if !outcome.needs_rec && !outcome.cached_source_text.is_empty() {
-                    e.source_text = outcome.cached_source_text.clone();
-                    e.source_code = if outcome.cached_source_language.is_empty() {
-                        from_lang_code.clone()
-                    } else {
-                        outcome.cached_source_language.clone()
-                    };
-                    e.rec_attempted = true;
-                    cache_hits += 1;
-                }
-            }
-            log::debug!(
-                "[acquire] surface_map anchor={} +new={} extended={} unchanged={} \
-                 cache_hits={} total_lines={}",
-                anchor_id,
-                new_lines_count,
-                extended_lines_count,
-                unchanged_lines_count,
-                cache_hits,
-                self.session
-                    .surface_map
-                    .lock()
-                    .map(|m| m.len())
-                    .unwrap_or(0)
-            );
-        }
-
-        let source_selection = if is_auto_source {
-            translator::OcrSourceSelection::Auto
-        } else {
-            translator::OcrSourceSelection::Specific {
-                language_code: translator::LanguageCode::from(from_lang_code.as_str()),
-            }
-        };
+        let total = detected.len();
 
         // Pre-compute the catalog's installed language codes for
         // `translate_mixed_texts`. Only used when forced_source_code
@@ -1817,394 +1723,60 @@ impl LivePlanarTracker {
             .map(|row| translator::LanguageCode::from(row.language.code.as_str()))
             .collect();
 
-        // ---- Group strips into translation blocks ----
-        //
-        // The block is the unit of overlay state: a 1-line label is a
-        // 1-strip block, a paragraph is N strips. Translation happens
-        // per block (one merged source text → one translation), and
-        // the renderer reflows that translation across the strips so
-        // the visual reads as the original text shape.
-        //
-        // Grouping runs on the surface-coord tight rects right after
-        // detect, before rec, so we can immediately upsert per-block
-        // pending placeholders. Stable coords → grouping is invariant
-        // to camera motion; recognising the same anchor later (cache
-        // hit) reuses the same blocks.
-        let t_group = Instant::now();
-        // Group from the surface map. We feed only the lines that
-        // were observed THIS acquire (others may exist in the map
-        // but aren't visible right now) and use the map's bbox
-        // rather than the per-entry tight rect — the map bbox is
-        // the merged union of all observations and may be wider.
-        // Block ids are derived from sorted line ids per block, so
-        // an unchanged set of lines hashes to the same block id
-        // across acquires → `upsert_overlay_block`'s content-hash
-        // cache hits and we skip re-raster.
-        let block_strip_indices: Vec<Vec<usize>>;
-        let block_strips: Vec<Vec<translator::ocr::OrientedRect>>;
-        let block_ids: Vec<u64>;
+        let matted_strips: Vec<Option<translator::color_matting::MattedStrip>> = match self
+            .matted_strips
+            .lock()
         {
-            let map_guard = self.session.surface_map.lock();
-            let snapshot_lines: Vec<translator::surface_map::SurfaceLine> = match map_guard {
-                Ok(ref m) => entries
-                    .iter()
-                    .filter_map(|e| m.get(e.line_id).cloned())
-                    .collect(),
-                Err(_) => Vec::new(),
-            };
-            let groups = translator::live_session::group_surface_lines_into_blocks(&snapshot_lines);
-            block_strip_indices = groups
-                .iter()
-                .map(|g| {
-                    g.iter()
-                        .filter_map(|&snap_idx| {
-                            let line_id = snapshot_lines[snap_idx].id;
-                            entries.iter().position(|e| e.line_id == line_id)
-                        })
-                        .collect::<Vec<usize>>()
-                })
-                .filter(|v| !v.is_empty())
-                .collect();
-            block_strips = block_strip_indices
-                .iter()
-                .map(|idxs| {
-                    idxs.iter()
-                        .map(|&i| {
-                            // Prefer the map's merged bbox; fall back
-                            // to entries[i].tight if the lookup
-                            // races (shouldn't happen, but cheap to
-                            // guard).
-                            match map_guard
-                                .as_ref()
-                                .ok()
-                                .and_then(|m| m.get(entries[i].line_id))
-                            {
-                                Some(line) => line.bbox.clone(),
-                                None => entries[i].tight.clone(),
-                            }
-                        })
-                        .collect()
-                })
-                .collect();
-            block_ids = block_strip_indices
-                .iter()
-                .map(|idxs| {
-                    let mut ids: Vec<translator::surface_map::SurfaceLineId> =
-                        idxs.iter().map(|&i| entries[i].line_id).collect();
-                    ids.sort_unstable();
-                    translator::live_session::stable_block_id(&ids)
-                })
-                .collect();
-        }
-        log::debug!(
-            "[acquire] group: {:.1}ms strips={} → blocks={}",
-            t_group.elapsed().as_secs_f64() * 1_000.0,
-            total,
-            block_ids.len(),
-        );
+            Ok(g) => g.get(&anchor_id).cloned().unwrap_or_default(),
+            Err(_) => Vec::new(),
+        };
 
-        // Pending placeholders: per-strip bg rects, no text. Visible
-        // immediately so the user sees "we detected text here" while
-        // rec+translate run. retain_overlay_items drops any leftover
-        // items from a prior anchor.
-        for (i, &id) in block_ids.iter().enumerate() {
-            let block_mats = clone_matted_for_block(
-                &self.matted_strips,
+        let state = match frame.state.lock() {
+            Ok(s) => s,
+            Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+        };
+        let oriented = match state
+            .cached
+            .as_ref()
+            .filter(|oi| oi.display_crop == display_crop)
+        {
+            Some(o) => o,
+            None => return AcquirePipelineOutcome::error("oriented cache miss"),
+        };
+        let cancel = || {
+            self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
+        };
+        let session_ref: &translator::TranslatorSession = &catalog.session;
+        let outcome = self.session.run_post_detect(
+            translator::live_session::PostDetectInput {
+                detections: &detected,
+                oriented,
+                h_view_to_surface: None,
                 anchor_id,
-                &block_strip_indices[i],
-            );
-            self.upsert_overlay_block_with_mats_impl(
-                id,
-                block_strips[i].clone(),
-                block_mats,
-                String::new(),
-                String::new(),
-                to_lang_code.clone(),
-            );
-        }
-        self.retain_overlay_items(block_ids.clone());
+                from_lang: &from_lang_code,
+                to_lang: &to_lang_code,
+                is_auto_source,
+                available_codes: &available_codes,
+                font_provider: &crate::android_font_provider::AndroidFontProvider,
+                matted_strips: &matted_strips,
+                rec_batch_size: 4,
+            },
+            &session_ref,
+            &session_ref,
+            &cancel,
+        );
+        drop(state);
+        // The session marks `on_acquire` here so the detect-on-track
+        // refresh trigger doesn't immediately fire on the next Locked
+        // frame after a brand-new acquire.
+        self.session.on_acquire();
 
-        if !gen_check() {
+        if outcome.canceled {
             return AcquirePipelineOutcome::canceled();
         }
 
-        // ---- Recognise strips in batches ----
-        //
-        // We rec all strips in detection order (batches of 4) and
-        // track per-block completion. As soon as every strip of a
-        // block is rec'd, the block is "ready" — we translate (with
-        // any other blocks ready in the same wave) and upsert with
-        // the final text. The pending placeholder stays visible until
-        // its block's final translation lands.
-        const REC_BATCH_SIZE: usize = 4;
-        let mut block_of_entry = vec![0usize; total];
-        for (bi, idxs) in block_strip_indices.iter().enumerate() {
-            for &ei in idxs {
-                block_of_entry[ei] = bi;
-            }
-        }
-        // Account for cache hits: entries pre-filled from the surface
-        // map don't need rec, so they shouldn't count toward
-        // `block_rec_remaining`. A block where every line is cached
-        // will start at 0 and be picked up as ready on the first
-        // batch iteration without any actual rec call.
-        let mut block_rec_remaining: Vec<usize> = block_strip_indices
-            .iter()
-            .map(|idxs| idxs.iter().filter(|&&i| !entries[i].rec_attempted).count())
-            .collect();
-        let mut block_translated = vec![false; block_ids.len()];
-
-        let mut start = 0;
-        while start < total {
-            if !gen_check() {
-                return AcquirePipelineOutcome::canceled();
-            }
-            let end = (start + REC_BATCH_SIZE).min(total);
-            let t_batch = Instant::now();
-
-            // Skip entries already pre-filled from the surface map
-            // cache. `original_indices[i]` maps the i-th recognized
-            // line back to its position in `entries`.
-            let original_indices: Vec<usize> = (start..end)
-                .filter(|&i| !entries[i].rec_attempted)
-                .collect();
-            let batch_boxes: Vec<translator::DetectedTextBox> = original_indices
-                .iter()
-                .map(|&i| entries[i].rec_box.clone())
-                .collect();
-            let lines: Vec<translator::ocr::RecognizedTextLine> = if batch_boxes.is_empty() {
-                Vec::new()
-            } else {
-                let state = match frame.state.lock() {
-                    Ok(s) => s,
-                    Err(_) => break,
-                };
-                let oriented = match state
-                    .cached
-                    .as_ref()
-                    .filter(|oi| oi.display_crop == display_crop)
-                {
-                    Some(o) => o,
-                    None => break,
-                };
-                match catalog.session.recognize_in_oriented_image(
-                    oriented,
-                    &batch_boxes,
-                    source_selection.clone(),
-                ) {
-                    Ok(l) => l,
-                    Err(e) => {
-                        if is_auto_source {
-                            log::info!(
-                                "auto mode: recognize failed (batch start={}, size={}): {:?}",
-                                start,
-                                end - start,
-                                e,
-                            );
-                        } else {
-                            log::warn!("recognize failed: {e:?}");
-                        }
-                        break;
-                    }
-                }
-            };
-
-            for (i, line) in lines.iter().enumerate() {
-                let idx = match original_indices.get(i) {
-                    Some(&v) => v,
-                    None => break,
-                };
-                entries[idx].source_text = line.text.trim().to_string();
-                entries[idx].rec_attempted = true;
-                if is_auto_source {
-                    if let Some(code) = &line.source_code {
-                        entries[idx].source_code = code.clone();
-                    }
-                }
-                let bi = block_of_entry[idx];
-                if block_rec_remaining[bi] > 0 {
-                    block_rec_remaining[bi] -= 1;
-                }
-                // Push rec result back into the surface map and
-                // snapshot the current bbox extent. Future
-                // observations extending past it trigger re-OCR.
-                self.session.ingest_rec(
-                    entries[idx].line_id,
-                    &entries[idx].source_text,
-                    &entries[idx].source_code,
-                );
-            }
-
-            if !gen_check() {
-                return AcquirePipelineOutcome::canceled();
-            }
-
-            // Which blocks just finished rec'ing all their strips?
-            let mut ready_blocks: Vec<usize> = (0..block_ids.len())
-                .filter(|&bi| block_rec_remaining[bi] == 0 && !block_translated[bi])
-                .collect();
-
-            if !ready_blocks.is_empty() {
-                // Build each ready block's source text by joining its
-                // strips' rec'd texts. Newline join keeps reading
-                // order; the translator treats each line as a sentence.
-                let block_sources: Vec<String> = ready_blocks
-                    .iter()
-                    .map(|&bi| {
-                        block_strip_indices[bi]
-                            .iter()
-                            .map(|&i| entries[i].source_text.as_str())
-                            .filter(|t| !t.is_empty())
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    })
-                    .collect();
-                // Drop blocks whose entire concat is empty (every
-                // strip's rec failed). They stay as pending; we'll
-                // skip them at the very end by not upserting.
-                let kept: Vec<(usize, String)> = ready_blocks
-                    .drain(..)
-                    .zip(block_sources)
-                    .filter(|(_, s)| !s.trim().is_empty())
-                    .collect();
-                if !kept.is_empty() {
-                    let inputs: Vec<String> =
-                        kept.iter().map(|(_, s)| s.clone()).collect();
-                    let t_tr = Instant::now();
-                    let forced = if is_auto_source {
-                        None
-                    } else {
-                        Some(from_lang_code.as_str())
-                    };
-                    let result = catalog.session.translate_mixed_texts(
-                        &inputs,
-                        forced,
-                        &to_lang_code,
-                        &available_codes,
-                    );
-                    let tr_ms = t_tr.elapsed().as_secs_f64() * 1_000.0;
-                    log::debug!(
-                        "[acquire] block translate {:.1}ms blocks={}",
-                        tr_ms,
-                        kept.len(),
-                    );
-                    let by_src: std::collections::HashMap<String, String> = match result {
-                        Ok(res) => res
-                            .translations
-                            .into_iter()
-                            .map(|t| (t.source_text, t.translated_text))
-                            .collect(),
-                        Err(e) => {
-                            log::warn!("translate batch failed: {e:?}");
-                            std::collections::HashMap::new()
-                        }
-                    };
-                    for (bi, src) in kept {
-                        if !gen_check() {
-                            return AcquirePipelineOutcome::canceled();
-                        }
-                        let translated = by_src.get(&src).cloned().unwrap_or_default();
-                        // Only keep strips that actually rec'd
-                        // something. Otherwise rec-failed strips
-                        // still display as empty bg rects inside the
-                        // block (visible as orange/teal placeholders
-                        // floating where no text could be read). The
-                        // renderer reflows the translation across the
-                        // surviving strips only.
-                        let kept_indices: Vec<usize> = block_strip_indices[bi]
-                            .iter()
-                            .copied()
-                            .filter(|&i| !entries[i].source_text.is_empty())
-                            .collect();
-                        if kept_indices.is_empty() {
-                            continue;
-                        }
-                        let kept_strips: Vec<translator::ocr::OrientedRect> = kept_indices
-                            .iter()
-                            .map(|&i| entries[i].tight.clone())
-                            .collect();
-                        let kept_mats = clone_matted_for_block(
-                            &self.matted_strips,
-                            anchor_id,
-                            &kept_indices,
-                        );
-                        // Push translated_text into the surface map
-                        // for each line in this block. Next acquire's
-                        // cache hit will reuse this without re-running
-                        // translate either.
-                        let line_ids: Vec<translator::surface_map::SurfaceLineId> =
-                            kept_indices.iter().map(|&i| entries[i].line_id).collect();
-                        self.session.ingest_translation(&line_ids, &translated);
-                        self.upsert_overlay_block_with_mats_impl(
-                            block_ids[bi],
-                            kept_strips,
-                            kept_mats,
-                            src,
-                            translated,
-                            to_lang_code.clone(),
-                        );
-                        block_translated[bi] = true;
-                    }
-                }
-            }
-
-            let batch_ms = t_batch.elapsed().as_secs_f64() * 1_000.0;
-            let recd_ok = lines.iter().filter(|l| !l.text.trim().is_empty()).count();
-            log::debug!(
-                "[acquire] batch {}/{}: {:.1}ms rec_ok={}/{}",
-                start / REC_BATCH_SIZE + 1,
-                (total + REC_BATCH_SIZE - 1) / REC_BATCH_SIZE,
-                batch_ms,
-                recd_ok,
-                end - start,
-            );
-            start = end;
-        }
-
-        // Drop any block whose final source text was entirely empty
-        // (every strip's rec failed). Those still have a pending
-        // placeholder on screen; remove them.
-        let surviving_ids: Vec<u64> = block_ids
-            .iter()
-            .enumerate()
-            .filter_map(|(bi, &id)| if block_translated[bi] { Some(id) } else { None })
-            .collect();
-        self.retain_overlay_items(surviving_ids);
-
-        let rec_ok = entries
-            .iter()
-            .filter(|e| e.rec_attempted && !e.source_text.is_empty())
-            .count();
-        let rec_empty = entries
-            .iter()
-            .filter(|e| e.rec_attempted && e.source_text.is_empty())
-            .count();
-
-        if is_auto_source {
-            let mut by_code: std::collections::BTreeMap<&str, usize> =
-                std::collections::BTreeMap::new();
-            for e in &entries {
-                if e.rec_attempted && !e.source_text.is_empty() {
-                    *by_code.entry(e.source_code.as_str()).or_default() += 1;
-                }
-            }
-            let codes = if by_code.is_empty() {
-                "<none>".to_string()
-            } else {
-                by_code
-                    .iter()
-                    .map(|(c, n)| format!("{}={}", c, n))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            };
-            log::info!(
-                "auto mode result: {} detections, rec_ok={} rec_empty={}, chose codes: {}",
-                total,
-                rec_ok,
-                rec_empty,
-                codes,
-            );
-        }
+        let rec_ok = outcome.rec_ok_count as usize;
+        let rec_empty = outcome.rec_empty_count as usize;
 
         // If nothing recognised, the tracker locked onto garbage. Clear
         // so the next stable frame re-acquires somewhere useful.
@@ -2215,11 +1787,186 @@ impl LivePlanarTracker {
             self.clear_overlay();
         }
 
+        // Keep the session's anchor-state HashMap aligned with the
+        // engine's anchor cache so we don't carry per-anchor state
+        // for surfaces the engine has already evicted. Uses
+        // `cached_root_ids` (not `cached_handle_ids`!) because the
+        // session keys by root id — the engine's internal cache
+        // handles are a different id space; handoffs grow internal
+        // ids without changing the root, so the two diverge fast on
+        // pans.
+        if let Ok(engine) = self.state.lock() {
+            let keep = engine.cached_root_ids();
+            drop(engine);
+            self.session.retain_anchors(&keep);
+        }
+
         AcquirePipelineOutcome {
             anchor_id,
             detected_count: total as u32,
             rec_ok_count: rec_ok as u32,
             rec_empty_count: rec_empty as u32,
+            cache_hits: outcome.cache_hits,
+            rec_called_count: outcome.rec_called_count,
+            total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
+            canceled: false,
+            error: None,
+        }
+    }
+
+    /// Detect-on-tracking-frame refresh: while Locked on an existing
+    /// anchor, run detection on the current camera frame, project the
+    /// detected boxes back into surface coords via the stashed
+    /// `H_root→view`, and feed the result into `run_post_detect`.
+    /// Unlike `run_acquire_pipeline` we do *not* call `acquire_now`;
+    /// the anchor stays put. This is the engine that fires
+    /// `MergedAndExtended` / `MergedUnchanged` outcomes on the surface
+    /// map after the initial acquire — the user-visible "pan reveals
+    /// new text → it gets OCR'd, held text hits the cache" behaviour.
+    ///
+    /// Caller (Kotlin) should gate this on `should_refresh_detect` in
+    /// the latest `PlanarComposeResult` and dedupe against any
+    /// in-flight acquire.
+    fn run_refresh_pipeline(
+        &self,
+        catalog: Arc<CatalogHandle>,
+        frame: Arc<FrameHandle>,
+        display_crop: translator::Rect,
+        det_max_pixels: u32,
+        from_lang_code: String,
+        to_lang_code: String,
+        is_auto_source: bool,
+        generation: u64,
+    ) -> AcquirePipelineOutcome {
+        let gen_check =
+            || -> bool { self.generation.load(std::sync::atomic::Ordering::SeqCst) == generation };
+        if !gen_check() {
+            return AcquirePipelineOutcome::canceled();
+        }
+
+        let t_overall = Instant::now();
+
+        // Consume the snapshot the trigger pinned for us. This is
+        // the (anchor, H) pair that was active when
+        // `should_refresh_detect = true` was decided — *not*
+        // whatever the engine has since snapped to. Taking the slot
+        // (not just reading it) ensures one trigger fires at most
+        // one refresh; an unsolicited `run_refresh_pipeline` call
+        // from Kotlin (shouldn't happen, but defensive) returns an
+        // error.
+        let (anchor_id, h_root_to_view) = match self.pending_refresh_target.lock() {
+            Ok(mut g) => match g.take() {
+                Some((id, h)) => (id, h),
+                None => {
+                    return AcquirePipelineOutcome::error("refresh without armed trigger")
+                }
+            },
+            Err(_) => {
+                return AcquirePipelineOutcome::error("pending_refresh_target poisoned")
+            }
+        };
+        let h_view_to_surface = match translator::homography::invert(&h_root_to_view) {
+            Some(h) => h,
+            None => return AcquirePipelineOutcome::error("H_root→view not invertible"),
+        };
+
+        // Detect on the current frame (camera coords).
+        let detected: Vec<translator::DetectedTextBox> = {
+            let mut state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            if ensure_oriented_locked(&mut state, display_crop, det_max_pixels).is_err() {
+                return AcquirePipelineOutcome::error("ensure_oriented failed");
+            }
+            let oriented = state
+                .cached
+                .as_ref()
+                .expect("ensure_oriented filled cache");
+            let raw = match catalog.session.detect_text_in_oriented_image(oriented) {
+                Ok(r) => r,
+                Err(e) => {
+                    log::warn!("[refresh] detect failed: {e:?}");
+                    return AcquirePipelineOutcome::error("detect failed");
+                }
+            };
+            let scale = oriented.det_to_full_scale;
+            let max_w = oriented.rgb.width();
+            let max_h = oriented.rgb.height();
+            raw.into_iter()
+                .map(|b| scale_detected_box(b, scale, max_w, max_h))
+                .collect()
+        };
+        if !gen_check() {
+            return AcquirePipelineOutcome::canceled();
+        }
+        if detected.is_empty() {
+            return AcquirePipelineOutcome {
+                anchor_id,
+                detected_count: 0,
+                rec_ok_count: 0,
+                rec_empty_count: 0,
+                cache_hits: 0,
+                rec_called_count: 0,
+                total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
+                canceled: false,
+                error: None,
+            };
+        }
+
+        let available_codes: Vec<translator::LanguageCode> = catalog
+            .session
+            .language_rows()
+            .into_iter()
+            .map(|row| translator::LanguageCode::from(row.language.code.as_str()))
+            .collect();
+
+        let state = match frame.state.lock() {
+            Ok(s) => s,
+            Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+        };
+        let oriented = match state
+            .cached
+            .as_ref()
+            .filter(|oi| oi.display_crop == display_crop)
+        {
+            Some(o) => o,
+            None => return AcquirePipelineOutcome::error("oriented cache miss"),
+        };
+        let cancel = || {
+            self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
+        };
+        let session_ref: &translator::TranslatorSession = &catalog.session;
+        let outcome = self.session.run_post_detect(
+            translator::live_session::PostDetectInput {
+                detections: &detected,
+                oriented,
+                h_view_to_surface: Some(h_view_to_surface),
+                anchor_id,
+                from_lang: &from_lang_code,
+                to_lang: &to_lang_code,
+                is_auto_source,
+                available_codes: &available_codes,
+                font_provider: &crate::android_font_provider::AndroidFontProvider,
+                matted_strips: &[],
+                rec_batch_size: 4,
+            },
+            &session_ref,
+            &session_ref,
+            &cancel,
+        );
+        drop(state);
+
+        if outcome.canceled {
+            return AcquirePipelineOutcome::canceled();
+        }
+        AcquirePipelineOutcome {
+            anchor_id,
+            detected_count: outcome.detected_count,
+            rec_ok_count: outcome.rec_ok_count,
+            rec_empty_count: outcome.rec_empty_count,
+            cache_hits: outcome.cache_hits,
+            rec_called_count: outcome.rec_called_count,
             total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
             canceled: false,
             error: None,
@@ -2311,19 +2058,106 @@ impl LivePlanarTracker {
         let h_vec: Vec<f32> = h_for_compose
             .map(|h| h.to_vec())
             .unwrap_or_default();
-        let bytes = self.composite_frame(frame, display_width, display_height, h_vec);
+        let bytes = self.composite_frame(
+            frame,
+            display_width,
+            display_height,
+            h_vec,
+            result.anchor_id,
+        );
+
+        // Tick the detect-on-tracking-frame counter on Locked frames.
+        // Refresh fires only when BOTH gates clear:
+        //   1. cadence: at least `refresh_every_n_locked_frames` ticks
+        //      since the previous fire (floor of ~1 / fps × N).
+        //   2. coverage: the current viewport, projected to the active
+        //      anchor's surface coords, is *not* already inside that
+        //      anchor's covered_region — i.e. we'd actually see new
+        //      pixels that detection hasn't run on yet.
+        //
+        // Gating on covered_region instead of an H-delta motion proxy
+        // means: pan back to text we've already detected → silent (no
+        // detection re-run, no detector-noise wobble). Pan into new
+        // surface area → fires once on the new strip. Pure rotate in
+        // place that doesn't change visible surface area → silent.
+        let should_refresh_detect = if matches!(result.state, PlanarTrackerState::Locked) {
+            let current_h: Option<[f32; 9]> = if result.homography.len() == 9 {
+                let mut h = [0.0f32; 9];
+                h.copy_from_slice(&result.homography[..9]);
+                if let Ok(mut slot) = self.last_root_to_view.lock() {
+                    *slot = Some((result.anchor_id, h));
+                }
+                Some(h)
+            } else {
+                None
+            };
+            self.session.on_locked_frame();
+
+            if !self.session.refresh_cadence_elapsed() {
+                false
+            } else {
+                let coverage_ok = match current_h {
+                    Some(h) => {
+                        match translator::homography::invert(&h) {
+                            Some(h_inv) => {
+                                match translator::live_session::viewport_surface_aabb(
+                                    &h_inv,
+                                    display_width as f32,
+                                    display_height as f32,
+                                ) {
+                                    Some(viewport) => !self.session.viewport_contained_in_coverage(
+                                        result.anchor_id,
+                                        &viewport,
+                                        translator::live_session::COVERAGE_PADDING_SURFACE_PX,
+                                    ),
+                                    None => false,
+                                }
+                            }
+                            None => false,
+                        }
+                    }
+                    None => false,
+                };
+                if coverage_ok {
+                    self.session.mark_refresh_fired();
+                    // Pin (anchor, H) at trigger time so the worker
+                    // — which may run minutes of frames later if it
+                    // was queued behind an acquire — gets the
+                    // anchor+H pair that the trigger was *for*, not
+                    // whatever the engine has snapped to since.
+                    if let (Some(h), Ok(mut slot)) =
+                        (current_h, self.pending_refresh_target.lock())
+                    {
+                        *slot = Some((result.anchor_id, h));
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+        } else {
+            false
+        };
 
         Ok(PlanarComposeResult {
             state: result.state,
             anchor_id: result.anchor_id,
             inliers: result.inliers,
             composite_byte_size: bytes,
+            should_refresh_detect,
         })
     }
 
     /// `h_surface_to_viewport` is a 9-element row-major homography; an
     /// empty slice (or length != 9) is treated as "no overlay this
     /// frame, just blit the camera".
+    ///
+    /// `active_anchor_id` filters `session.overlay_items` to only the
+    /// items whose surface coords correspond to the H we're about to
+    /// warp them by — items from previously-active anchors are still
+    /// in the store (LRU evict aligned with the engine), but they
+    /// can't be warped by *this* anchor's H without landing at
+    /// random viewport positions.
     ///
     /// Returns the byte length of the composited buffer (0 on failure).
     fn composite_frame(
@@ -2332,6 +2166,7 @@ impl LivePlanarTracker {
         display_width: u32,
         display_height: u32,
         h_surface_to_viewport: Vec<f32>,
+        active_anchor_id: u64,
     ) -> u32 {
         let frame_state_wait = Instant::now();
         let state = match frame.state.lock() {
@@ -2365,6 +2200,7 @@ impl LivePlanarTracker {
             match (&overlay_guard, &h_arr) {
                 (Some(items), Some(_)) => items
                     .iter()
+                    .filter(|it| it.anchor_id == active_anchor_id)
                     .map(|it| translator::live_compositor::OverlayItem {
                         bitmap_rgba: &it.bitmap,
                         bitmap_width: it.width,
@@ -2566,83 +2402,6 @@ impl LivePlanarTracker {
     fn clear(&self) {
         if let Ok(mut g) = self.state.lock() {
             g.clear();
-        }
-    }
-}
-
-/// Non-uniffi-exported methods on `LivePlanarTracker`. Anything whose
-/// signature uses types uniffi can't introspect (e.g.
-/// `translator::color_matting::MattedStrip`) lives here.
-#[cfg(feature = "planar-tracker")]
-impl LivePlanarTracker {
-    /// Variant of `upsert_overlay_block` that accepts pre-computed
-    /// matted strips. Internal callers (`run_acquire_pipeline`) thread
-    /// per-strip matting through this; the uniffi-exported
-    /// `upsert_overlay_block` delegates with empty mats so external
-    /// callers (and the pending-placeholder pass) still work.
-    fn upsert_overlay_block_with_mats_impl(
-        &self,
-        id: u64,
-        strips: Vec<translator::ocr::OrientedRect>,
-        matted_strips: Vec<Option<translator::color_matting::MattedStrip>>,
-        source_text: String,
-        translated_text: String,
-        language: String,
-    ) {
-        if strips.is_empty() {
-            return;
-        }
-        let display_text = pick_display_text(&source_text, &translated_text);
-        let hash = block_content_hash(&strips, &display_text, &language);
-        // Fast path: same content → keep the cached bitmap.
-        {
-            if let Ok(items) = self.session.overlay_items.lock() {
-                if let Some(existing) = items.iter().find(|it| it.id == id) {
-                    if existing.content_hash == hash {
-                        return;
-                    }
-                }
-            }
-        }
-        let raster_start = Instant::now();
-        let raster = match translator::live_session::render_block_bitmap(
-            &strips,
-            &matted_strips,
-            &display_text,
-            &language,
-            &crate::android_font_provider::AndroidFontProvider,
-        ) {
-            Some(r) => r,
-            None => return,
-        };
-        let raster_end = Instant::now();
-        if let Ok(mut items) = self.session.overlay_items.lock() {
-            let new_item = CurrentOverlayItem {
-                id,
-                bitmap: raster.bitmap,
-                width: raster.width,
-                height: raster.height,
-                surface_origin_x: raster.surface_origin_x,
-                surface_origin_y: raster.surface_origin_y,
-                content_hash: hash,
-            };
-            if let Some(slot) = items.iter_mut().find(|it| it.id == id) {
-                *slot = new_item;
-            } else {
-                items.push(new_item);
-            }
-        }
-        if LIVE_PIPELINE_DIAG {
-            let raster_ms = (raster_end - raster_start).as_secs_f64() * 1_000.0;
-            if raster_ms > LOCK_LOG_THRESHOLD_MS {
-                log::debug!(
-                    "[work] block raster: id={} {:.1}ms strips={} text={:?}",
-                    id,
-                    raster_ms,
-                    strips.len(),
-                    display_text,
-                );
-            }
         }
     }
 }
@@ -2861,6 +2620,13 @@ pub struct PlanarComposeResult {
     /// zero, frame buffer empty, etc.); Kotlin should skip the JNI
     /// memcpy.
     pub composite_byte_size: u32,
+    /// Detect-on-tracking-frame trigger: true when the session's
+    /// per-frame counter says it's time to fire a fresh detection
+    /// pass on this Locked frame. Caller should launch a worker that
+    /// invokes `run_refresh_pipeline` (deduping against
+    /// `acquireInFlight` so an initial-acquire and a refresh don't
+    /// fan out together). False on Idle / Acquiring / Lost.
+    pub should_refresh_detect: bool,
 }
 
 /// Outcome reported by `run_acquire_pipeline`. The pipeline either ran
@@ -2878,6 +2644,13 @@ pub struct AcquirePipelineOutcome {
     pub detected_count: u32,
     pub rec_ok_count: u32,
     pub rec_empty_count: u32,
+    /// Detections that hit the surface-map cache (no ppocr rec
+    /// call). On a held camera this should approach `detected_count`
+    /// — the diagnostic signal that the cache path is doing its job.
+    pub cache_hits: u32,
+    /// Detections that actually went through ppocr rec this run.
+    /// Sums with `cache_hits` to `detected_count` (minus cancels).
+    pub rec_called_count: u32,
     pub total_ms: f64,
     pub canceled: bool,
     pub error: Option<String>,
@@ -2891,6 +2664,8 @@ impl AcquirePipelineOutcome {
             detected_count: 0,
             rec_ok_count: 0,
             rec_empty_count: 0,
+            cache_hits: 0,
+            rec_called_count: 0,
             total_ms: 0.0,
             canceled: true,
             error: None,
@@ -2902,6 +2677,8 @@ impl AcquirePipelineOutcome {
             detected_count: 0,
             rec_ok_count: 0,
             rec_empty_count: 0,
+            cache_hits: 0,
+            rec_called_count: 0,
             total_ms: 0.0,
             canceled: false,
             error: Some(reason.to_string()),
@@ -2909,110 +2686,5 @@ impl AcquirePipelineOutcome {
     }
 }
 
-/// Local per-detection state owned by `run_acquire_pipeline`. One
-/// `AcquireEntry` per detected line: stores the tight rect (the
-/// strip), the source text once rec lands, the detected source code
-/// (auto-source mode), and the original `DetectedTextBox` we need to
-/// hand back to `recognize_in_oriented_image` (it works in the
-/// detector's full-crop coord space).
-///
-/// Blocks group multiple `AcquireEntry`s by index — the `id` field
-/// here is no longer the overlay-block id (those are minted later in
-/// the pipeline, one per block, not one per entry).
-#[cfg(feature = "planar-tracker")]
-struct AcquireEntry {
-    tight: translator::ocr::OrientedRect,
-    source_text: String,
-    /// Set to the per-line detected source from rec when running in
-    /// auto-source mode; otherwise stays as the caller's
-    /// `from_lang_code`. Unused right now but kept so a future
-    /// content map can record mixed-language detections per strip.
-    #[allow(dead_code)]
-    source_code: String,
-    rec_attempted: bool,
-    rec_box: translator::DetectedTextBox,
-    /// `SurfaceLine` id this entry was matched to (or freshly created
-    /// for) when its observation was fed into the per-anchor
-    /// `SurfaceMap`. Used downstream to (a) push rec / translate
-    /// results back into the map, (b) derive stable block ids from
-    /// sorted line ids so unchanged blocks across acquires reuse
-    /// their rasterized bitmap via `upsert_overlay_block`'s
-    /// content-hash cache.
-    line_id: translator::surface_map::SurfaceLineId,
-}
-
-/// Debug toggle: render the source text instead of waiting on
-/// translation. Matches the old Kotlin `DEBUG_TRACKER_VIEW_PLANAR`.
-#[cfg(feature = "planar-tracker")]
-const RENDER_SOURCE_AS_FALLBACK: bool = false;
-
-/// Pick the string to render for a given item. Translation wins when
-/// available; otherwise we render source text (handy for diagnosing
-/// detection / recognition without waiting for translation).
-#[cfg(feature = "planar-tracker")]
-/// Pull the matted strips for the given block out of the cache. The
-/// indices are entry positions (from `block_strip_indices[bi]`); we
-/// look each up against the per-anchor matted-strip array. Missing
-/// entries (no anchor cached, index out of range, or `None` in the
-/// stored vec) translate to `None` so the renderer falls back to the
-/// legacy pill for those strips. Cheap deep copy — strip RGBA is the
-/// only large field and these only run on acquire / block-translate
-/// boundaries, not per-frame.
-#[cfg(feature = "planar-tracker")]
-fn clone_matted_for_block(
-    store: &std::sync::Mutex<
-        std::collections::HashMap<u64, Vec<Option<translator::color_matting::MattedStrip>>>,
-    >,
-    anchor_id: u64,
-    entry_indices: &[usize],
-) -> Vec<Option<translator::color_matting::MattedStrip>> {
-    let guard = match store.lock() {
-        Ok(g) => g,
-        Err(_) => return entry_indices.iter().map(|_| None).collect(),
-    };
-    let mats = match guard.get(&anchor_id) {
-        Some(m) => m,
-        None => return entry_indices.iter().map(|_| None).collect(),
-    };
-    entry_indices
-        .iter()
-        .map(|&i| mats.get(i).and_then(|m| m.clone()))
-        .collect()
-}
-
-fn pick_display_text(source_text: &str, translated_text: &str) -> String {
-    if !translated_text.trim().is_empty() {
-        translated_text.to_string()
-    } else if RENDER_SOURCE_AS_FALLBACK {
-        source_text.to_string()
-    } else {
-        String::new()
-    }
-}
-
-/// Content hash for `upsert_overlay_block` change detection. Same
-/// hash → same rasterized bitmap, no need to re-render. Hashes the
-/// strip list verbatim so any change in strip geometry, count, or
-/// order forces a re-raster.
-#[cfg(feature = "planar-tracker")]
-fn block_content_hash(
-    strips: &[translator::ocr::OrientedRect],
-    display_text: &str,
-    language: &str,
-) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (strips.len() as u64).hash(&mut h);
-    for s in strips {
-        s.cx.to_bits().hash(&mut h);
-        s.cy.to_bits().hash(&mut h);
-        s.width.to_bits().hash(&mut h);
-        s.height.to_bits().hash(&mut h);
-        s.angle_radians.to_bits().hash(&mut h);
-    }
-    display_text.hash(&mut h);
-    language.hash(&mut h);
-    h.finish()
-}
 
 

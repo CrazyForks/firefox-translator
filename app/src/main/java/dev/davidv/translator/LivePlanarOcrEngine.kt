@@ -513,6 +513,28 @@ class LivePlanarOcrEngine(
         // frame's handle — release it.
         releaseFrameHandle(pending.handle)
       }
+    } else if (result.state == PlanarTrackerState.LOCKED && result.shouldRefreshDetect) {
+      // Detect-on-tracking-frame trigger: surface map says enough
+      // tracked frames have elapsed since the last detection that
+      // it's worth a fresh detect pass. Same in-flight dedupe as
+      // the acquire branch so an acquire and a refresh don't fan
+      // out together (the refresh would race the acquire's overlay
+      // upserts).
+      if (acquireInFlight.compareAndSet(false, true)) {
+        val capturedPending = pending
+        workerScope.launch(Dispatchers.Default) {
+          try {
+            runRefreshStage(capturedPending, cropRect)
+          } catch (e: Throwable) {
+            Log.w(TAG_PLANAR, "refresh stage crashed", e)
+            releaseFrameHandle(capturedPending.handle)
+          } finally {
+            acquireInFlight.set(false)
+          }
+        }
+      } else {
+        releaseFrameHandle(pending.handle)
+      }
     } else {
       releaseFrameHandle(pending.handle)
     }
@@ -563,6 +585,7 @@ class LivePlanarOcrEngine(
         TAG_PLANAR,
         "acquire pipeline: anchor=${outcome.anchorId} det=${outcome.detectedCount} " +
           "rec_ok=${outcome.recOkCount} rec_empty=${outcome.recEmptyCount} " +
+          "cache=${outcome.cacheHits} rec_called=${outcome.recCalledCount} " +
           "total=${"%.1f".format(outcome.totalMs)}ms canceled=${outcome.canceled}" +
           (outcome.error?.let { " error=$it" } ?: ""),
       )
@@ -573,6 +596,52 @@ class LivePlanarOcrEngine(
           lastAcquireRecEmpty = outcome.recEmptyCount.toInt(),
           lastAcquirePending = (outcome.detectedCount - outcome.recOkCount - outcome.recEmptyCount).toInt(),
         )
+    } finally {
+      releaseFrameHandle(handle)
+    }
+  }
+
+  /** Thin Kotlin shim around `tracker.runRefreshPipeline`. Fires while
+   *  the engine is Locked on an existing anchor; runs detection +
+   *  surface-map ingest + rec/translate for newly-revealed text. The
+   *  anchor is *not* re-acquired. */
+  private suspend fun runRefreshStage(
+    pending: PendingPlanarFrame,
+    cropRect: NativeRect,
+  ) {
+    val handle = pending.handle
+    val gen =
+      try {
+        tracker.currentGeneration()
+      } catch (e: Throwable) {
+        Log.w(TAG_PLANAR, "currentGeneration failed", e)
+        return
+      }
+    try {
+      val outcome =
+        try {
+          tracker.runRefreshPipeline(
+            catalog.planarHandle(),
+            handle,
+            cropRect,
+            DETECTOR_TARGET_PIXELS_PLANAR_UINT,
+            pending.from.code,
+            pending.to.code,
+            pending.isAutoSource,
+            gen,
+          )
+        } catch (e: Throwable) {
+          Log.w(TAG_PLANAR, "runRefreshPipeline crashed", e)
+          return
+        }
+      Log.d(
+        TAG_PLANAR,
+        "refresh pipeline: anchor=${outcome.anchorId} det=${outcome.detectedCount} " +
+          "rec_ok=${outcome.recOkCount} rec_empty=${outcome.recEmptyCount} " +
+          "cache=${outcome.cacheHits} rec_called=${outcome.recCalledCount} " +
+          "total=${"%.1f".format(outcome.totalMs)}ms canceled=${outcome.canceled}" +
+          (outcome.error?.let { " error=$it" } ?: ""),
+      )
     } finally {
       releaseFrameHandle(handle)
     }
