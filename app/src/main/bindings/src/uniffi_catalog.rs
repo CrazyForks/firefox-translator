@@ -2917,7 +2917,7 @@ fn render_block_bitmap(
     //    extent stays stable regardless of whether matting succeeded —
     //    only the *colour* of the pill changes. `visuals[i]` parallels
     //    `strips[i]` and `matted_strips[i]`.
-    let visuals: Vec<OrientedRect> = strips
+    let mut visuals: Vec<OrientedRect> = strips
         .iter()
         .filter_map(|s| {
             let v = OrientedRect {
@@ -2937,6 +2937,7 @@ fn render_block_bitmap(
     if visuals.is_empty() {
         return None;
     }
+    normalize_block_visuals_rotated_basis(&mut visuals);
 
     // 2. Bitmap dims = AABB of all visual strips + small pad for the
     //    rounded-corner AA. The bitmap origin in surface coords is
@@ -3163,6 +3164,75 @@ fn group_entries_into_blocks(entries: &[AcquireEntry]) -> Vec<Vec<usize>> {
         })
         .filter(|v: &Vec<usize>| !v.is_empty())
         .collect()
+}
+
+/// Snap sibling line strips within one paragraph block to a shared
+/// column in the block's rotated basis. Detector noise gives each
+/// strip its own `cx`/`width`/`angle_radians`; without this step
+/// the per-line pills form a left-edge "staircase" rather than
+/// following the paragraph's column on a tilted page. See
+/// FUTURE_SURFACE_MAP.md → "Per-block column alignment".
+///
+/// Pure in-plane rotation handling: out-of-plane perspective is
+/// out of scope (see FUTURE_ANCHOR_RECTIFICATION.md).
+#[cfg(feature = "planar-tracker")]
+fn normalize_block_visuals_rotated_basis(visuals: &mut [translator::ocr::OrientedRect]) {
+    if visuals.len() < 2 {
+        return;
+    }
+    let mut sum_cos = 0.0_f32;
+    let mut sum_sin = 0.0_f32;
+    let mut total_w = 0.0_f32;
+    for v in visuals.iter() {
+        let w = v.width.max(0.0);
+        sum_cos += v.angle_radians.cos() * w;
+        sum_sin += v.angle_radians.sin() * w;
+        total_w += w;
+    }
+    if total_w <= 0.0 {
+        return;
+    }
+    let theta = sum_sin.atan2(sum_cos);
+    let max_dev = 10.0_f32.to_radians();
+    for v in visuals.iter() {
+        let mut d = v.angle_radians - theta;
+        while d > std::f32::consts::PI {
+            d -= 2.0 * std::f32::consts::PI;
+        }
+        while d < -std::f32::consts::PI {
+            d += 2.0 * std::f32::consts::PI;
+        }
+        if d.abs() > max_dev {
+            return;
+        }
+    }
+    let c = theta.cos();
+    let s = theta.sin();
+    let mut u_left = f32::INFINITY;
+    let mut u_right = f32::NEG_INFINITY;
+    for v in visuals.iter() {
+        for (x, y) in oriented_corners(v) {
+            let u = x * c + y * s;
+            if u < u_left {
+                u_left = u;
+            }
+            if u > u_right {
+                u_right = u;
+            }
+        }
+    }
+    if !(u_right > u_left) {
+        return;
+    }
+    let u_centre = 0.5 * (u_left + u_right);
+    let block_width = u_right - u_left;
+    for v in visuals.iter_mut() {
+        let v_axis = -v.cx * s + v.cy * c;
+        v.cx = u_centre * c - v_axis * s;
+        v.cy = u_centre * s + v_axis * c;
+        v.width = block_width;
+        v.angle_radians = theta;
+    }
 }
 
 /// Compute the four (TL, TR, BR, BL) corners of an OrientedRect in
