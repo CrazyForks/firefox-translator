@@ -20,6 +20,10 @@ package dev.davidv.translator.ui.screens
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
+import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CaptureRequest
+import android.hardware.camera2.CaptureResult
+import android.hardware.camera2.TotalCaptureResult
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -28,6 +32,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
@@ -301,6 +306,13 @@ private fun CameraSurface(
         .build()
     }
 
+  // AF state from the Camera2 session capture callback. True while the
+  // sensor reports CONTROL_AF_STATE_*_SCAN. The planar engine treats
+  // this as a hard "don't try to lock" signal — features from blurred
+  // frames during the scan would lock against geometry that's about to
+  // shift when focus settles.
+  val afScanning = remember { kotlinx.coroutines.flow.MutableStateFlow(false) }
+
   val imageAnalysis =
     remember {
       // Cap analyzer source at ~1.5 MP regardless of device. The bigger the source,
@@ -320,11 +332,27 @@ private fun CameraSurface(
             sizes.filter { it.width.toLong() * it.height <= maxPixels }
           }
           .build()
-      ImageAnalysis.Builder()
-        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-        .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-        .setResolutionSelector(resolutionSelector)
-        .build()
+      val builder =
+        ImageAnalysis.Builder()
+          .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+          .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+          .setResolutionSelector(resolutionSelector)
+      Camera2Interop.Extender(builder).setSessionCaptureCallback(
+        object : CameraCaptureSession.CaptureCallback() {
+          override fun onCaptureCompleted(
+            session: CameraCaptureSession,
+            request: CaptureRequest,
+            result: TotalCaptureResult,
+          ) {
+            val afState = result.get(CaptureResult.CONTROL_AF_STATE) ?: return
+            val scanning =
+              afState == CaptureResult.CONTROL_AF_STATE_ACTIVE_SCAN ||
+                afState == CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN
+            if (afScanning.value != scanning) afScanning.value = scanning
+          }
+        },
+      )
+      builder.build()
     }
   val analyzerExecutor =
     remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
@@ -351,6 +379,13 @@ private fun CameraSurface(
   LaunchedEffect(from.code, isAutoSource, hasPaddleOcrModels, liveOverlayDefaultEnabled) {
     liveOverlayOn = liveOverlayDefaultEnabled && hasPaddleOcrModels
     if (!liveOverlayOn) liveOcrEngine?.clear()
+  }
+
+  LaunchedEffect(liveOcrEngine) {
+    val engine = liveOcrEngine ?: return@LaunchedEffect
+    afScanning.collect { scanning ->
+      if (scanning) engine.onAfScanStart() else engine.onAfScanEnd()
+    }
   }
 
   DisposableEffect(liveOverlayOn, liveOcrEngine, from.code, to.code, isAutoSource) {

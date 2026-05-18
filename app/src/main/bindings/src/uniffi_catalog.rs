@@ -1426,6 +1426,13 @@ pub struct LivePlanarTracker {
     /// and worker-pickup doesn't make the worker project detections
     /// through the wrong anchor's H.
     last_root_to_view: std::sync::Mutex<Option<(u64, [f32; 9])>>,
+    /// `H_root→view` at the last refresh we *fired*. The motion gate
+    /// compares the current frame's H against this; on a held camera
+    /// (RANSAC + handoff micro-drift only), the corner delta stays
+    /// under [`MIN_REFRESH_DELTA_PX`] and we skip the refresh
+    /// entirely — restoring the "rock solid still" feel that the
+    /// pre-#28 era had.
+    last_refresh_h: std::sync::Mutex<Option<[f32; 9]>>,
     /// Snapshot of `(anchor_id, H_root→view)` taken at the moment
     /// `process_and_composite` set `should_refresh_detect = true`.
     /// `run_refresh_pipeline` consumes from this slot. Pinning the
@@ -1473,6 +1480,7 @@ impl LivePlanarTracker {
             )),
             smoothed_h: std::sync::Mutex::new(SmoothedHomography::default()),
             last_root_to_view: std::sync::Mutex::new(None),
+            last_refresh_h: std::sync::Mutex::new(None),
             pending_refresh_target: std::sync::Mutex::new(None),
             generation: std::sync::atomic::AtomicU64::new(0),
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
@@ -1529,6 +1537,9 @@ impl LivePlanarTracker {
             *sm = SmoothedHomography::default();
         }
         if let Ok(mut slot) = self.last_root_to_view.lock() {
+            *slot = None;
+        }
+        if let Ok(mut slot) = self.last_refresh_h.lock() {
             *slot = None;
         }
         if let Ok(mut slot) = self.pending_refresh_target.lock() {
@@ -2067,20 +2078,28 @@ impl LivePlanarTracker {
         );
 
         // Tick the detect-on-tracking-frame counter on Locked frames.
-        // Refresh fires only when BOTH gates clear:
-        //   1. cadence: at least `refresh_every_n_locked_frames` ticks
-        //      since the previous fire (floor of ~1 / fps × N).
-        //   2. coverage: the current viewport, projected to the active
-        //      anchor's surface coords, is *not* already inside that
-        //      anchor's covered_region — i.e. we'd actually see new
-        //      pixels that detection hasn't run on yet.
+        // Refresh fires only when ALL THREE gates clear, in this
+        // order (cheapest first):
+        //   1. cadence  — at least `refresh_every_n_locked_frames`
+        //      ticks since the previous fire (rate limiter).
+        //   2. motion   — H_root→view has moved by more than
+        //      [`MIN_REFRESH_DELTA_PX`] at the viewport corners
+        //      since `last_refresh_h`. Held cameras + handoff drift
+        //      stay below; intentional pans clear it.
+        //   3. coverage — the current viewport, projected to the
+        //      active anchor's surface coords, isn't already inside
+        //      that anchor's `covered_region` (no new pixels would
+        //      be revealed).
         //
-        // Gating on covered_region instead of an H-delta motion proxy
-        // means: pan back to text we've already detected → silent (no
-        // detection re-run, no detector-noise wobble). Pan into new
-        // surface area → fires once on the new strip. Pure rotate in
-        // place that doesn't change visible surface area → silent.
-        let should_refresh_detect = if matches!(result.state, PlanarTrackerState::Locked) {
+        // The motion gate kills "still wobble": even with the
+        // covered-region check, RANSAC noise + handoff micro-drift
+        // can shift the viewport-AABB just past covered → fire →
+        // detector returns slightly different boxes → MergedAnd-
+        // Extended on detector noise → overlay re-raster on a held
+        // camera. Motion-gating first removes that whole class.
+        let should_refresh_detect = if ENABLE_REFRESH_DETECT
+            && matches!(result.state, PlanarTrackerState::Locked)
+        {
             let current_h: Option<[f32; 9]> = if result.homography.len() == 9 {
                 let mut h = [0.0f32; 9];
                 h.copy_from_slice(&result.homography[..9]);
@@ -2096,43 +2115,76 @@ impl LivePlanarTracker {
             if !self.session.refresh_cadence_elapsed() {
                 false
             } else {
-                let coverage_ok = match current_h {
-                    Some(h) => {
-                        match translator::homography::invert(&h) {
+                // Motion gate (gate #2). First refresh ever (no
+                // last_refresh_h) passes — we always want one
+                // refresh after acquire to clean up any partial
+                // observations.
+                let motion_ok = match (current_h, self.last_refresh_h.lock()) {
+                    (Some(_), Ok(slot)) if slot.is_none() => true,
+                    (Some(h), Ok(slot)) => {
+                        let prev = slot.expect("is_none branch above");
+                        corner_delta_px(
+                            &prev,
+                            &h,
+                            display_width as f32,
+                            display_height as f32,
+                        ) > MIN_REFRESH_DELTA_PX
+                    }
+                    _ => false,
+                };
+                if !motion_ok {
+                    false
+                } else {
+                    // Coverage gate (gate #3).
+                    let coverage_ok = match current_h {
+                        Some(h) => match translator::homography::invert(&h) {
                             Some(h_inv) => {
                                 match translator::live_session::viewport_surface_aabb(
                                     &h_inv,
                                     display_width as f32,
                                     display_height as f32,
                                 ) {
-                                    Some(viewport) => !self.session.viewport_contained_in_coverage(
-                                        result.anchor_id,
-                                        &viewport,
-                                        translator::live_session::COVERAGE_PADDING_SURFACE_PX,
-                                    ),
+                                    Some(viewport) => !self
+                                        .session
+                                        .viewport_contained_in_coverage(
+                                            result.anchor_id,
+                                            &viewport,
+                                            translator::live_session::COVERAGE_PADDING_SURFACE_PX,
+                                        ),
                                     None => false,
                                 }
                             }
                             None => false,
+                        },
+                        None => false,
+                    };
+                    if coverage_ok {
+                        self.session.mark_refresh_fired();
+                        // Update last_refresh_h *only when we
+                        // actually fire* — that way the motion gate
+                        // measures cumulative camera movement since
+                        // the last real refresh, not since the last
+                        // frame we considered firing.
+                        if let (Some(h), Ok(mut slot)) =
+                            (current_h, self.last_refresh_h.lock())
+                        {
+                            *slot = Some(h);
                         }
+                        // Pin (anchor, H) at trigger time so the
+                        // worker — which may run frames later if it
+                        // was queued behind an acquire — gets the
+                        // anchor+H pair that the trigger was *for*,
+                        // not whatever the engine has snapped to
+                        // since.
+                        if let (Some(h), Ok(mut slot)) =
+                            (current_h, self.pending_refresh_target.lock())
+                        {
+                            *slot = Some((result.anchor_id, h));
+                        }
+                        true
+                    } else {
+                        false
                     }
-                    None => false,
-                };
-                if coverage_ok {
-                    self.session.mark_refresh_fired();
-                    // Pin (anchor, H) at trigger time so the worker
-                    // — which may run minutes of frames later if it
-                    // was queued behind an acquire — gets the
-                    // anchor+H pair that the trigger was *for*, not
-                    // whatever the engine has snapped to since.
-                    if let (Some(h), Ok(mut slot)) =
-                        (current_h, self.pending_refresh_target.lock())
-                    {
-                        *slot = Some((result.anchor_id, h));
-                    }
-                    true
-                } else {
-                    false
                 }
             }
         } else {
@@ -2466,6 +2518,76 @@ const SMOOTH_MIN_ALPHA: f32 = 0.35;
 /// flicker). ~270 ms @ 30 fps.
 #[cfg(feature = "planar-tracker")]
 const LOSS_HIDE_AFTER_FRAMES: u32 = 8;
+
+/// Minimum viewport corner displacement (in display pixels) between
+/// `last_refresh_h` and the current `H_root→view` before the
+/// detect-on-tracking-frame trigger is even considered. Layers in
+/// front of the covered-region gate.
+///
+/// Calibration: this is a *cross-refresh* delta (not per-frame).
+/// Sources of "motion" on a still hand: RANSAC residual (~1–3 px),
+/// handoff micro-drift (~1–3 px per hop), slight EMA H smoothing
+/// lag. At the cadence floor (~333 ms = 10 frames @ 30 fps), these
+/// accumulate ~10–30 px of corner drift on a held camera before
+/// touching anything intentional. 50 px keeps that out while
+/// staying well below "the user moved enough to reveal new text"
+/// motions (which are usually 80+ px at typical zoom).
+#[cfg(feature = "planar-tracker")]
+const MIN_REFRESH_DELTA_PX: f32 = 50.0;
+
+/// Master toggle for the detect-on-tracking-frame refresh path. When
+/// `false`, `process_and_composite` never sets `should_refresh_detect`
+/// — the only detection + recognition that runs is the initial
+/// `run_acquire_pipeline` on each tap-to-focus / reset. That mirrors
+/// the rock-solid pre-#28 behavior: one detect+rec pass per
+/// acquire, no per-refresh churn, no risk of same-line containment
+/// bugs spawning stacked overlays on hand shake.
+///
+/// The refresh path remains compiled in (run_refresh_pipeline is
+/// still uniffi-exported, Kotlin still has runRefreshStage wired)
+/// so flipping this back to `true` re-enables it without further
+/// changes. Outstanding items before that flip is safe again:
+///   - `same_line` containment rule so shake-shifted detections
+///     don't spawn duplicate lines stacked on existing ones.
+///   - (likely) eviction policy for lines not re-observed across N
+///     refreshes.
+///   - Snapshot RGBA at trigger time, not just (anchor, H), so the
+///     refresh worker detects on the frame the trigger was *for*
+///     rather than whatever's freshest when it runs.
+#[cfg(feature = "planar-tracker")]
+const ENABLE_REFRESH_DETECT: bool = false;
+
+/// Max corner displacement (in display pixels) between two
+/// `H_root→view` homographies, projected at the four corners of the
+/// `frame_w × frame_h` viewport. The motion-gate primitive.
+#[cfg(feature = "planar-tracker")]
+fn corner_delta_px(
+    h_old: &[f32; 9],
+    h_new: &[f32; 9],
+    frame_w: f32,
+    frame_h: f32,
+) -> f32 {
+    let corners = [
+        (0.0_f32, 0.0_f32),
+        (frame_w, 0.0),
+        (frame_w, frame_h),
+        (0.0, frame_h),
+    ];
+    let mut max_d = 0.0_f32;
+    for (cx, cy) in corners {
+        let pn = translator::homography::project(h_new, cx, cy);
+        let po = translator::homography::project(h_old, cx, cy);
+        if let (Some(pn), Some(po)) = (pn, po) {
+            let dx = pn.0 - po.0;
+            let dy = pn.1 - po.1;
+            let d = (dx * dx + dy * dy).sqrt();
+            if d > max_d {
+                max_d = d;
+            }
+        }
+    }
+    max_d
+}
 
 /// Bypass the EMA H smoother and use the tracker's raw per-frame H
 /// directly. The smoother was designed for the old two-surface

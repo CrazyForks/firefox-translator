@@ -179,6 +179,15 @@ class LivePlanarOcrEngine(
   private var lastFocusY: Float = Float.NaN
   private var latestImuSnapshot: FloatArray? = null
 
+  /** Set while the camera's AF is actively scanning. We don't trust
+   *  features from blurred frames and we don't want to lock inliers
+   *  against geometry that's about to shift when focus settles. While
+   *  this is true, every frame resets the tracker so it stays in Idle;
+   *  in-flight acquires bail via the generation bump. The first frame
+   *  after AF settles naturally restarts the stable-window → acquire. */
+  @Volatile
+  private var afScanning: Boolean = false
+
   /** True while a `runAcquireStage` coroutine is running. We launch
    *  acquire async so the detector thread doesn't block for the
    *  ~100-150 ms of detection + initial bitmap raster (which would
@@ -318,6 +327,22 @@ class LivePlanarOcrEngine(
     frameSignal.trySend(Unit)
   }
 
+  fun onAfScanStart() {
+    if (afScanning) return
+    afScanning = true
+    Log.i(TAG_PLANAR, "AF scan started → resetting tracker, suppressing acquire until focus settles")
+    try {
+      tracker.reset()
+    } catch (_: Throwable) {
+    }
+  }
+
+  fun onAfScanEnd() {
+    if (!afScanning) return
+    afScanning = false
+    Log.i(TAG_PLANAR, "AF scan ended → tracker allowed to re-acquire")
+  }
+
   fun clear() {
     // `reset()` clears engine state + overlay items + bumps Rust's
     // generation so any in-flight acquire pipeline bails. `clear()` is
@@ -403,6 +428,21 @@ class LivePlanarOcrEngine(
         // Bumps Rust's generation → any in-flight acquire pipeline
         // bails at its next gen-check. Also clears engine state +
         // resident overlay items.
+        tracker.reset()
+      } catch (_: Throwable) {
+      }
+      mutex.withLock {
+        smoothedHomography = null
+        smoothedAnchorId = 0uL
+      }
+    }
+    if (afScanning) {
+      // Keep generation bumping while AF scans so any acquire that
+      // started just before the scan bails on its next gen-check, and
+      // so the engine's stable-window restarts on each frame and can
+      // never elapse mid-scan. processAndComposite still runs so the
+      // surface keeps refreshing with camera-only frames.
+      try {
         tracker.reset()
       } catch (_: Throwable) {
       }
