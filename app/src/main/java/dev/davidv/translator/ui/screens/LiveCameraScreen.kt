@@ -453,9 +453,16 @@ private fun CameraSurface(
         // Falls back to the un-timestamped "now" snapshot when history
         // doesn't yet cover that moment (first few frames).
         val imuSnap = imuService.rotationAt(captureTs) ?: imuService.currentRotation()
+        // Linear-accel sample at the same capture timestamp. Used Rust-side
+        // to integrate a short-horizon translation prior for guided
+        // descriptor matching under fast handheld motion (especially
+        // off-axis rotation, which has a large translational component the
+        // gyro-only prior can't model). Null until the accel buffer is
+        // warm — Rust falls back to brute-force matching when absent.
+        val accelSnap = imuService.accelAt(captureTs)
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
-        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, isAutoSource, convertMs, imuSnap)
+        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, isAutoSource, convertMs, imuSnap, accelSnap)
       }
     } else {
       imageAnalysis.clearAnalyzer()

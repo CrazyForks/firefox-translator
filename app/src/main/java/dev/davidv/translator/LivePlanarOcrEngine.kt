@@ -89,6 +89,8 @@ private data class PendingPlanarFrame(
   val to: Language,
   val isAutoSource: Boolean,
   val imuRotationAtCapture: FloatArray?,
+  val linearAccelAtCapture: FloatArray?,
+  val convertMs: Double,
 )
 
 /* Per-anchor canonical entries: a recognised text region in canonical
@@ -306,8 +308,9 @@ class LivePlanarOcrEngine(
     from: Language,
     to: Language,
     isAutoSource: Boolean,
-    @Suppress("UNUSED_PARAMETER") convertMs: Double = 0.0,
+    convertMs: Double = 0.0,
     imuRotationAtCapture: FloatArray? = null,
+    linearAccelAtCapture: FloatArray? = null,
   ) {
     val newFrame =
       PendingPlanarFrame(
@@ -321,9 +324,15 @@ class LivePlanarOcrEngine(
         to,
         isAutoSource,
         imuRotationAtCapture,
+        linearAccelAtCapture,
+        convertMs,
       )
+    timingProbe?.recordSubmit()
     val prev = pendingFrame.getAndSet(newFrame)
-    prev?.let { releaseFrameHandle(it.handle) }
+    if (prev != null) {
+      timingProbe?.recordDrop()
+      releaseFrameHandle(prev.handle)
+    }
     frameSignal.trySend(Unit)
   }
 
@@ -480,10 +489,13 @@ class LivePlanarOcrEngine(
     // Avoids the per-frame Kotlin↔Rust ping-pong (two uniffi calls +
     // a Kotlin-side H-math detour) that the old split did.
     val imuRotList = if (rot != null && rot.size == 9) rot.toList() else emptyList()
+    val accel = pending.linearAccelAtCapture
+    val linearAccelList = if (accel != null && accel.size == 3) accel.toList() else emptyList()
     val fx = pxIntr?.fx ?: 0f
     val fy = pxIntr?.fy ?: 0f
     val cx = pxIntr?.cx ?: 0f
     val cy = pxIntr?.cy ?: 0f
+    val processStartNs = System.nanoTime()
     val result =
       try {
         tracker.processAndComposite(
@@ -493,6 +505,7 @@ class LivePlanarOcrEngine(
           imuStable,
           nowNs,
           imuRotList,
+          linearAccelList,
           fx,
           fy,
           cx,
@@ -505,6 +518,9 @@ class LivePlanarOcrEngine(
         releaseFrameHandle(pending.handle)
         return
       }
+    val processMs = (System.nanoTime() - processStartNs) / 1_000_000.0
+    timingProbe?.recordConvert(pending.convertMs)
+    timingProbe?.recordProcess(processMs)
 
     framesSinceLog++
     val stateName = result.state.name
@@ -522,11 +538,13 @@ class LivePlanarOcrEngine(
         anchorId = result.anchorId.toLong(),
         inliers = result.inliers.toInt(),
       )
-    // Rust already produced the composited bytes into its
-    // `pending_display` slot. `compositeAndEmit` is now just the JNI
-    // memcpy + Bitmap copy + StateFlow emit.
+    // The uniffi `processAndComposite` call only ran the tracker step
+    // and stashed `(anchor, H)` for the compositor. The actual
+    // composite math runs inside the JNI `compositeInto` below,
+    // writing directly into the Kotlin-owned DirectByteBuffer — no
+    // intermediate Rust Vec, no JNI memcpy of bytes out.
     if (result.compositeByteSize > 0u) {
-      compositeAndEmit(displayW, displayH, result.compositeByteSize.toInt())
+      compositeAndEmit(pending.handle, displayW, displayH, result.compositeByteSize.toInt())
     }
     // For ACQUIRING, kick off the acquire stage on a separate worker
     // coroutine so this detector thread is free to keep processing
@@ -582,6 +600,15 @@ class LivePlanarOcrEngine(
 
   private var lastLoggedState: String = ""
   private var framesSinceLog: Int = 0
+
+  /** Per-frame timing probe — gated on `BuildConfig.DEBUG`. Counts
+   *  dropped frames (analyzer submitted faster than worker drained)
+   *  and accumulates per-stage durations across a 30-frame window so
+   *  we can answer "is the worker keeping up with 30 fps and if not
+   *  where is the time going?". One log line per ~1 s. Single-thread:
+   *  all writes happen on the detector worker thread. */
+  private val timingProbe =
+    if (dev.davidv.translator.BuildConfig.DEBUG) FrameTimingProbe() else null
 
   /** Thin Kotlin shim around `tracker.runAcquirePipeline`. The whole
    *  acquire stage (detect → acquire → rec batches → batched translate
@@ -713,6 +740,7 @@ class LivePlanarOcrEngine(
    *  the preceding `processAndComposite` call; we only need to drain
    *  the `pending_display` slot here. */
   private fun compositeAndEmit(
+    handle: FrameHandle,
     displayWidth: Int,
     displayHeight: Int,
     expected: Int,
@@ -727,9 +755,17 @@ class LivePlanarOcrEngine(
         Log.w(TAG_PLANAR, "rawAddressForJni failed", e)
         return
       }
+    val framePtr =
+      try {
+        handle.rawAddressForJni().toLong()
+      } catch (e: Throwable) {
+        Log.w(TAG_PLANAR, "frame.rawAddressForJni failed", e)
+        return
+      }
+    val jniStartNs = System.nanoTime()
     val written =
       try {
-        PlanarRenderJni.compositeInto(trackerPtr, buffer)
+        PlanarRenderJni.compositeInto(trackerPtr, framePtr, buffer, displayWidth, displayHeight)
       } catch (e: Throwable) {
         Log.w(TAG_PLANAR, "PlanarRenderJni.compositeInto failed", e)
         return
@@ -740,8 +776,11 @@ class LivePlanarOcrEngine(
     }
     buffer.rewind()
     bitmap.copyPixelsFromBuffer(buffer)
+    val jniBlitMs = (System.nanoTime() - jniStartNs) / 1_000_000.0
+    timingProbe?.recordCompositeJni(jniBlitMs)
     _compositedFrame.value =
       CompositedFrame(bitmap = bitmap, width = displayWidth, height = displayHeight)
+    timingProbe?.recordEmit()
     // Ping-pong: next composite writes into the other slot so the view
     // can keep drawing the bitmap we just emitted without racing.
     displayBitmapIndex = 1 - displayBitmapIndex
@@ -794,5 +833,107 @@ class LivePlanarOcrEngine(
       }
     displayBitmaps[slot] = fresh
     return fresh
+  }
+}
+
+/** Aggregates per-stage frame timings over a small window so we can
+ *  diagnose "is the worker thread keeping up with the camera, and if
+ *  not which stage costs us the most." Writes are not synchronised —
+ *  the writer is the single detector worker thread; the only
+ *  exception is [recordDrop] which is called from the analyzer
+ *  thread. That's racy on the long counter but the count is only ever
+ *  read for an order-of-magnitude diagnostic so we accept the lost
+ *  increments rather than paying lock overhead per frame. */
+private class FrameTimingProbe {
+  private var processMsSum: Double = 0.0
+  private var processMsMax: Double = 0.0
+  private var convertMsSum: Double = 0.0
+  private var convertMsMax: Double = 0.0
+  private var compositeJniMsSum: Double = 0.0
+  private var compositeJniMsMax: Double = 0.0
+  private var emitIntervalMsSum: Double = 0.0
+  private var emitIntervalMsMin: Double = Double.MAX_VALUE
+  private var emitIntervalMsMax: Double = 0.0
+  private var framesInWindow: Int = 0
+  private var lastEmitNs: Long = 0L
+  private val droppedFrames = java.util.concurrent.atomic.AtomicLong(0)
+  private val submittedFrames = java.util.concurrent.atomic.AtomicLong(0)
+
+  fun recordSubmit() {
+    submittedFrames.incrementAndGet()
+  }
+
+  fun recordDrop() {
+    droppedFrames.incrementAndGet()
+  }
+
+  fun recordConvert(convertMs: Double) {
+    convertMsSum += convertMs
+    if (convertMs > convertMsMax) convertMsMax = convertMs
+  }
+
+  fun recordProcess(processMs: Double) {
+    processMsSum += processMs
+    if (processMs > processMsMax) processMsMax = processMs
+  }
+
+  fun recordCompositeJni(compositeJniMs: Double) {
+    compositeJniMsSum += compositeJniMs
+    if (compositeJniMs > compositeJniMsMax) compositeJniMsMax = compositeJniMs
+  }
+
+  fun recordEmit() {
+    val nowNs = System.nanoTime()
+    if (lastEmitNs != 0L) {
+      val intervalMs = (nowNs - lastEmitNs) / 1_000_000.0
+      emitIntervalMsSum += intervalMs
+      if (intervalMs > emitIntervalMsMax) emitIntervalMsMax = intervalMs
+      if (intervalMs < emitIntervalMsMin) emitIntervalMsMin = intervalMs
+    }
+    lastEmitNs = nowNs
+    framesInWindow++
+    if (framesInWindow >= 30) flush()
+  }
+
+  private fun flush() {
+    val frames = framesInWindow
+    if (frames == 0) return
+    val avgConvert = convertMsSum / frames
+    val avgProcess = processMsSum / frames
+    val avgCompJni = compositeJniMsSum / frames
+    val intervalSamples = frames - 1
+    val avgInterval =
+      if (intervalSamples > 0) emitIntervalMsSum / intervalSamples else 0.0
+    val effFps = if (avgInterval > 0.0) 1000.0 / avgInterval else 0.0
+    val submitted = submittedFrames.getAndSet(0)
+    val dropped = droppedFrames.getAndSet(0)
+    Log.i(
+      "PlanarTiming",
+      "%d frames | convert avg=%.1f max=%.1f | process avg=%.1f max=%.1f | jniBlit avg=%.1f max=%.1f | emit avg=%.1f min=%.1f max=%.1f → %.1f fps | submitted=%d dropped=%d".format(
+        frames,
+        avgConvert,
+        convertMsMax,
+        avgProcess,
+        processMsMax,
+        avgCompJni,
+        compositeJniMsMax,
+        avgInterval,
+        if (emitIntervalMsMin == Double.MAX_VALUE) 0.0 else emitIntervalMsMin,
+        emitIntervalMsMax,
+        effFps,
+        submitted,
+        dropped,
+      ),
+    )
+    processMsSum = 0.0
+    processMsMax = 0.0
+    convertMsSum = 0.0
+    convertMsMax = 0.0
+    compositeJniMsSum = 0.0
+    compositeJniMsMax = 0.0
+    emitIntervalMsSum = 0.0
+    emitIntervalMsMin = Double.MAX_VALUE
+    emitIntervalMsMax = 0.0
+    framesInWindow = 0
   }
 }

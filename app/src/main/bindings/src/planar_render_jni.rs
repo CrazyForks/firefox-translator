@@ -1,16 +1,18 @@
 //! JNI fast-path for the planar tracker's composited display frame.
 //!
-//! Companion to `LivePlanarTracker::composite_frame` (uniffi). The
-//! uniffi side composites camera + overlay into a Vec<u8> and parks it
-//! in `pending_display`; this shim memcpys those bytes into a
-//! Kotlin-owned `DirectByteBuffer` (the live-translate SurfaceView's
-//! backing buffer). Bypasses uniffi's `Vec<u8>` marshalling, which
-//! would cost a JVM ByteArray allocation + copy per frame.
+//! Companion to `LivePlanarTracker::process_and_composite` (uniffi).
+//! The uniffi side runs the per-frame tracker step and stashes
+//! `(active_anchor_id, h_surface_to_viewport)` on the tracker; this
+//! shim then runs the actual rotate+overlay composite **directly
+//! into** a Kotlin-owned `DirectByteBuffer`. Eliminates the previous
+//! `pending_display: Vec<u8>` intermediate and the JNI memcpy that
+//! copied it into the buffer afterwards — saves ~1.5 ms of JNI
+//! memcpy + a 4.9 MB Vec allocation per frame.
 //!
-//! Safety boundary: Kotlin must hold the `Arc<LivePlanarTracker>` for
-//! the duration of this call, otherwise `tracker_ptr` is dangling. The
-//! uniffi wrapper class is `AutoCloseable`; the planar-tracker engine
-//! lives for the entire camera session.
+//! Safety boundary: Kotlin must hold the `Arc<LivePlanarTracker>` and
+//! the `Arc<FrameHandle>` for the duration of this call, otherwise
+//! `tracker_ptr` / `frame_ptr` are dangling. Both wrappers are
+//! `AutoCloseable` and live for the entire camera session.
 
 #![cfg(feature = "planar-tracker")]
 
@@ -18,45 +20,68 @@ use jni::objects::{JByteBuffer, JClass};
 use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 
-use crate::uniffi_catalog::LivePlanarTracker;
+use crate::uniffi_catalog::{FrameHandle, LivePlanarTracker, PER_FRAME_TIMING_LOG};
 
-/// Pop the pending composited display frame and memcpy it into `dst`.
-/// Pair with `LivePlanarTracker.composite_frame` (uniffi). Same
-/// rationale as `renderInto`: skip uniffi's `Vec<u8>` marshalling cost
-/// for an 8 MB-class buffer per camera frame.
+/// Composite the per-frame display image (camera rotated to display
+/// orientation + overlay quads warped on top) directly into `dst`.
+/// Pair with `LivePlanarTracker.process_and_composite` (uniffi): that
+/// call runs the tracker step and stashes the H + anchor id; this
+/// call consumes them and writes the actual pixels to `dst`. Returns
+/// the number of bytes written (0 on any failure — bad pointer, bad
+/// buffer capacity, composite math error).
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_davidv_translator_PlanarRenderJni_compositeInto(
     env: JNIEnv,
     _class: JClass,
     tracker_ptr: jlong,
+    frame_ptr: jlong,
     dst: JByteBuffer,
+    display_width: jint,
+    display_height: jint,
 ) -> jint {
-    if tracker_ptr == 0 {
+    if tracker_ptr == 0 || frame_ptr == 0 {
         return 0;
     }
     let tracker = unsafe { &*(tracker_ptr as *const LivePlanarTracker) };
-    let bytes = match tracker.take_pending_display() {
-        Some(b) => b,
-        None => return 0,
-    };
-    copy_into_direct_buffer(env, &dst, &bytes)
-}
-
-fn copy_into_direct_buffer(env: JNIEnv, dst: &JByteBuffer, bytes: &[u8]) -> jint {
-    let dst_addr = match env.get_direct_buffer_address(dst) {
+    let frame = unsafe { &*(frame_ptr as *const FrameHandle) };
+    if display_width <= 0 || display_height <= 0 {
+        return 0;
+    }
+    let dw = display_width as u32;
+    let dh = display_height as u32;
+    let needed = (dw as usize) * (dh as usize) * 4;
+    let dst_addr = match env.get_direct_buffer_address(&dst) {
         Ok(p) if !p.is_null() => p,
         _ => return 0,
     };
-    let dst_capacity = env.get_direct_buffer_capacity(dst).unwrap_or(0);
-    if bytes.len() > dst_capacity {
+    let dst_capacity = env.get_direct_buffer_capacity(&dst).unwrap_or(0);
+    if needed > dst_capacity {
         return 0;
     }
     // SAFETY: dst_addr points to a valid DirectByteBuffer region of at
-    // least `bytes.len()` bytes (we checked capacity). Source and dest
-    // are disjoint — `bytes` is Rust-owned, `dst` is JVM-owned native
-    // memory.
-    unsafe {
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), dst_addr, bytes.len());
+    // least `needed` bytes (checked above). We hold exclusive access
+    // for the duration of this call — Kotlin is on the detector
+    // worker thread and won't touch the buffer until we return. The
+    // tracker + frame mutex acquires happen inside
+    // `composite_into_slice`.
+    let dst_slice = unsafe { std::slice::from_raw_parts_mut(dst_addr, needed) };
+
+    let (anchor_id, h) = match tracker.take_pending_compose() {
+        Some((a, h)) => (a, Some(h)),
+        None => (0u64, None),
+    };
+    let t_compose = std::time::Instant::now();
+    let result = tracker.composite_into_slice(frame, dst_slice, dw, dh, h, anchor_id);
+    if PER_FRAME_TIMING_LOG {
+        log::info!(
+            target: "planar_timing",
+            "outer: composite={:.1}ms overlay_active={}",
+            t_compose.elapsed().as_secs_f64() * 1000.0,
+            h.is_some(),
+        );
     }
-    bytes.len() as jint
+    match result {
+        Ok(()) => needed as jint,
+        Err(_) => 0,
+    }
 }

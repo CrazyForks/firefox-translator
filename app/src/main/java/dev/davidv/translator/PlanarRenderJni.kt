@@ -41,15 +41,22 @@ internal object PlanarRenderJni {
     System.loadLibrary("bindings")
   }
 
-  /** Copy the pending composited camera+overlay frame (parked by the
-   *  most recent [LivePlanarTracker.compositeFrame] call) into `dst`.
-   *  Returns the number of bytes written, or 0 on any failure. The
-   *  destination buffer must have capacity ≥
-   *  `displayWidth × displayHeight × 4`.
+  /** Composite the camera frame (rotated to display orientation) +
+   *  any pending overlay quads (parked by the most recent
+   *  `processAndComposite` uniffi call) **directly** into `dst` —
+   *  zero-copy in the sense that there's no intermediate Rust-side
+   *  `Vec<u8>` and no JNI memcpy of bytes-out; the composite math
+   *  writes its output bytes straight to the
+   *  `DirectByteBuffer`-backed memory. Returns the number of bytes
+   *  written, or 0 on any failure. The destination buffer must have
+   *  capacity ≥ `displayWidth × displayHeight × 4`.
    */
   @JvmStatic
   external fun compositeInto(
     trackerPtr: Long,
+    framePtr: Long,
     dst: ByteBuffer,
+    displayWidth: Int,
+    displayHeight: Int,
   ): Int
 }

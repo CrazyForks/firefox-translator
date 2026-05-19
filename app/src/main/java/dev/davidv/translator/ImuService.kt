@@ -66,6 +66,15 @@ class ImuService(
     context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
   private val gyroSensor: Sensor? = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
+  /** Android sensor-fused linear acceleration: raw accel with gravity
+   *  subtracted internally. Units m/s² in device-body frame, same axis
+   *  convention as TYPE_ACCELEROMETER. The fused signal is cleaner than
+   *  doing our own subtraction with an AHRS estimate and removes the
+   *  "where is gravity in our frame" coordination from the translation
+   *  prior path. Available on essentially every Android device. */
+  private val linearAccelSensor: Sensor? =
+    sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+
   private val lock = Any()
   private var lastSampleNs: Long = 0L
   private var baselineSet: Boolean = false
@@ -93,6 +102,18 @@ class ImuService(
   private var historyHead: Int = 0
   private var historySize: Int = 0
 
+  /** Parallel ring for linear-accel samples. Same size + clock as the
+   *  gyro ring so we can [accelAt] at the exact capture timestamp the
+   *  caller used for [rotationAt]. Accel is asynchronous from gyro on
+   *  most devices — separate event stream — so we keep its own buffer
+   *  rather than trying to align in onSensorChanged. */
+  private val accelTs = LongArray(HISTORY_CAPACITY)
+  private val accelAx = FloatArray(HISTORY_CAPACITY)
+  private val accelAy = FloatArray(HISTORY_CAPACITY)
+  private val accelAz = FloatArray(HISTORY_CAPACITY)
+  private var accelHead: Int = 0
+  private var accelSize: Int = 0
+
   fun hasGyro(): Boolean = gyroSensor != null
 
   fun start() {
@@ -103,6 +124,10 @@ class ImuService(
     }
     val ok = sensorManager.registerListener(this, sensor, GYRO_SAMPLE_PERIOD_US)
     if (!ok) Log.w(TAG, "registerListener returned false for gyroscope")
+    linearAccelSensor?.let { accel ->
+      val okA = sensorManager.registerListener(this, accel, GYRO_SAMPLE_PERIOD_US)
+      if (!okA) Log.w(TAG, "registerListener returned false for linear_acceleration")
+    } ?: Log.w(TAG, "no linear_acceleration sensor on this device — translation prior disabled")
     synchronized(lock) {
       qw = 1f
       qx = 0f
@@ -111,6 +136,8 @@ class ImuService(
       baselineSet = true
       historyHead = 0
       historySize = 0
+      accelHead = 0
+      accelSize = 0
     }
   }
 
@@ -128,6 +155,8 @@ class ImuService(
       lastOmegaZ = 0f
       historyHead = 0
       historySize = 0
+      accelHead = 0
+      accelSize = 0
     }
   }
 
@@ -187,7 +216,19 @@ class ImuService(
     }
 
   override fun onSensorChanged(event: SensorEvent) {
-    if (event.sensor.type != Sensor.TYPE_GYROSCOPE) return
+    when (event.sensor.type) {
+      Sensor.TYPE_GYROSCOPE -> handleGyro(event)
+      Sensor.TYPE_LINEAR_ACCELERATION -> handleLinearAccel(event)
+    }
+  }
+
+  private fun handleLinearAccel(event: SensorEvent) {
+    synchronized(lock) {
+      pushAccel(event.timestamp, event.values[0], event.values[1], event.values[2])
+    }
+  }
+
+  private fun handleGyro(event: SensorEvent) {
     synchronized(lock) {
       val ts = event.timestamp
       if (lastSampleNs == 0L || !baselineSet) {
@@ -253,6 +294,77 @@ class ImuService(
       historyHead = (historyHead + 1) % HISTORY_CAPACITY
     }
   }
+
+  private fun pushAccel(
+    ts: Long,
+    ax: Float,
+    ay: Float,
+    az: Float,
+  ) {
+    val slot = (accelHead + accelSize) % HISTORY_CAPACITY
+    accelTs[slot] = ts
+    accelAx[slot] = ax
+    accelAy[slot] = ay
+    accelAz[slot] = az
+    if (accelSize < HISTORY_CAPACITY) {
+      accelSize++
+    } else {
+      accelHead = (accelHead + 1) % HISTORY_CAPACITY
+    }
+  }
+
+  /** Linear acceleration (gravity-subtracted) at wall time [targetNs].
+   *  Linearly interpolates between the two bracketing accel samples.
+   *  Returns null when no accel samples have arrived yet or when
+   *  [targetNs] is outside the retained window. Same clock as
+   *  [rotationAt] (SystemClock.elapsedRealtimeNanos via SensorEvent). */
+  fun accelAt(targetNs: Long): FloatArray? =
+    synchronized(lock) {
+      if (accelSize == 0) return@synchronized null
+      val oldestSlot = accelHead
+      val newestSlot = (accelHead + accelSize - 1) % HISTORY_CAPACITY
+      val oldestTs = accelTs[oldestSlot]
+      val newestTs = accelTs[newestSlot]
+      if (targetNs < oldestTs) return@synchronized null
+      if (targetNs > newestTs) {
+        val gapNs = targetNs - newestTs
+        if ((gapNs / 1e9f) > MAX_PREDICT_SECONDS) return@synchronized null
+        return@synchronized floatArrayOf(
+          accelAx[newestSlot],
+          accelAy[newestSlot],
+          accelAz[newestSlot],
+        )
+      }
+      var lo = 0
+      var hi = accelSize - 1
+      while (lo < hi) {
+        val mid = (lo + hi) ushr 1
+        val slot = (accelHead + mid) % HISTORY_CAPACITY
+        if (accelTs[slot] < targetNs) {
+          lo = mid + 1
+        } else {
+          hi = mid
+        }
+      }
+      val upperSlot = (accelHead + lo) % HISTORY_CAPACITY
+      val upperTs = accelTs[upperSlot]
+      if (upperTs == targetNs || lo == 0) {
+        return@synchronized floatArrayOf(
+          accelAx[upperSlot],
+          accelAy[upperSlot],
+          accelAz[upperSlot],
+        )
+      }
+      val lowerSlot = (accelHead + lo - 1) % HISTORY_CAPACITY
+      val lowerTs = accelTs[lowerSlot]
+      val span = (upperTs - lowerTs).toFloat()
+      val t = if (span > 0f) ((targetNs - lowerTs).toFloat() / span).coerceIn(0f, 1f) else 0f
+      floatArrayOf(
+        accelAx[lowerSlot] + t * (accelAx[upperSlot] - accelAx[lowerSlot]),
+        accelAy[lowerSlot] + t * (accelAy[upperSlot] - accelAy[lowerSlot]),
+        accelAz[lowerSlot] + t * (accelAz[upperSlot] - accelAz[lowerSlot]),
+      )
+    }
 
   /** Integrated rotation at wall time [targetNs] (same clock as
    *  `SensorEvent.timestamp` and `ImageProxy.imageInfo.timestamp` —

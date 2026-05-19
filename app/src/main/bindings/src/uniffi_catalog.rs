@@ -9,6 +9,14 @@ use std::{fs, path::Path};
 #[cfg(feature = "planar-tracker")]
 const LIVE_PIPELINE_DIAG: bool = false;
 
+/// Master toggle for per-frame outer timing logs (the
+/// `outer: orient=... engine=...` and `outer: composite=...` lines
+/// emitted to logcat target `planar_timing`). Pair with
+/// `translator::planar_tracker::PER_FRAME_TIMING_LOG` (separate crate)
+/// to silence the corresponding `guided: ...` / `brute: ...` lines.
+#[cfg(feature = "planar-tracker")]
+pub(crate) const PER_FRAME_TIMING_LOG: bool = true;
+
 /// Threshold in ms below which we suppress lock-timing logs even when
 /// `LIVE_PIPELINE_DIAG` is on — keeps the diagnostic mode focused on
 /// actually-slow operations.
@@ -1125,7 +1133,7 @@ impl CatalogHandle {
         det_max_pixels: u32,
     ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
         let mut state = frame.state.lock().map_err(|_| poisoned())?;
-        ensure_oriented_locked(&mut state, crop, det_max_pixels)?;
+        ensure_oriented_with_rgb_locked(&mut state, crop, det_max_pixels)?;
         let oriented = state
             .cached
             .as_ref()
@@ -1135,8 +1143,9 @@ impl CatalogHandle {
             .detect_text_in_oriented_image(oriented)
             .map_err(CatalogError::from)?;
         let scale = oriented.det_to_full_scale;
-        let max_w = oriented.rgb.width();
-        let max_h = oriented.rgb.height();
+        let rgb = oriented.rgb.as_ref().expect("with_rgb path");
+        let max_w = rgb.width();
+        let max_h = rgb.height();
         let scaled: Vec<translator::DetectedTextBox> = raw
             .into_iter()
             .map(|b| scale_detected_box(b, scale, max_w, max_h))
@@ -1177,7 +1186,7 @@ impl CatalogHandle {
 /// cached oriented image is rebuilt whenever the crop region changes.
 #[derive(uniffi::Object)]
 pub struct FrameHandle {
-    state: std::sync::Mutex<FrameState>,
+    pub(crate) state: std::sync::Mutex<FrameState>,
 }
 
 pub(crate) struct FrameState {
@@ -1253,6 +1262,11 @@ impl FrameHandle {
 
 
 #[cfg(feature = "ppocr")]
+/// Gray-only build path. Used by the per-frame planar-tracker step
+/// which only reads `oriented.gray`. Reuses the cached oriented image
+/// if its `display_crop` still matches — even if the cached one was
+/// built with rgb, we keep it (downgrading would re-do the fused gray
+/// pass unnecessarily).
 fn ensure_oriented_locked(
     state: &mut FrameState,
     display_crop: translator::Rect,
@@ -1264,6 +1278,33 @@ fn ensure_oriented_locked(
     };
     if needs_rebuild {
         let oi = translator::live_frame::OrientedImage::build(
+            &state.rgba,
+            state.width,
+            state.height,
+            state.rotation_degrees,
+            display_crop,
+            det_max_pixels,
+        )
+        .map_err(CatalogError::from)?;
+        state.cached = Some(oi);
+    }
+    Ok(())
+}
+
+/// Eager build path with `rgb` + `rgb_det` populated, for acquire /
+/// refresh / detect / recognize callers. If the cached frame was built
+/// gray-only, rebuild it to materialise rgb. Otherwise reuse.
+fn ensure_oriented_with_rgb_locked(
+    state: &mut FrameState,
+    display_crop: translator::Rect,
+    det_max_pixels: u32,
+) -> Result<(), CatalogError> {
+    let needs_rebuild = match state.cached.as_ref() {
+        Some(oi) => oi.display_crop != display_crop || !oi.has_rgb(),
+        None => true,
+    };
+    if needs_rebuild {
+        let oi = translator::live_frame::OrientedImage::build_with_rgb(
             &state.rgba,
             state.width,
             state.height,
@@ -1451,7 +1492,16 @@ pub struct LivePlanarTracker {
     /// Holds the fully-composited camera + overlay RGBA at display
     /// resolution. Vec<u8>-via-JNI-memcpy avoids uniffi marshalling for
     /// an 8 MB buffer per frame.
-    pending_display: std::sync::Mutex<Option<Vec<u8>>>,
+    /// Stashed by `process_and_composite` for the follow-up JNI
+    /// `compositeIntoBuffer` call: the homography to warp the active
+    /// anchor's overlay items by and the id of that active anchor.
+    /// `None` between frames where the engine wasn't Locked + Idle and
+    /// the previous-good H has been cleared. The JNI call reads this
+    /// + `frame.state.rgba` + `session.overlay_items` and runs the
+    /// composite directly into the caller-provided DirectByteBuffer,
+    /// eliminating the previous intermediate `pending_display` Vec
+    /// and the JNI memcpy that copied it into the buffer afterwards.
+    pending_compose: std::sync::Mutex<Option<(u64, [f32; 9])>>,
     /// Color-matting results from the most recent acquire, keyed by
     /// the anchor those mats belong to. Indexed parallel to the
     /// acquire pipeline's `entries` (i.e. by detection order).
@@ -1484,7 +1534,7 @@ impl LivePlanarTracker {
             pending_refresh_target: std::sync::Mutex::new(None),
             generation: std::sync::atomic::AtomicU64::new(0),
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
-            pending_display: std::sync::Mutex::new(None),
+            pending_compose: std::sync::Mutex::new(None),
             matted_strips: std::sync::Mutex::new(std::collections::HashMap::new()),
             session: std::sync::Arc::new(translator::live_session::LiveSession::new()),
         })
@@ -1595,7 +1645,7 @@ impl LivePlanarTracker {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
             };
-            if ensure_oriented_locked(&mut state, display_crop, det_max_pixels).is_err() {
+            if ensure_oriented_with_rgb_locked(&mut state, display_crop, det_max_pixels).is_err() {
                 return AcquirePipelineOutcome::error("ensure_oriented failed");
             }
             let oriented = state
@@ -1613,8 +1663,9 @@ impl LivePlanarTracker {
                 }
             };
             let scale = oriented.det_to_full_scale;
-            let max_w = oriented.rgb.width();
-            let max_h = oriented.rgb.height();
+            let rgb = oriented.rgb.as_ref().expect("with_rgb path");
+            let max_w = rgb.width();
+            let max_h = rgb.height();
             raw.into_iter()
                 .map(|b| scale_detected_box(b, scale, max_w, max_h))
                 .collect()
@@ -1706,7 +1757,14 @@ impl LivePlanarTracker {
                     .cached
                     .as_ref()
                     .expect("oriented still cached");
-                translator::color_matting::mat_detections(&oriented.rgb.to_rgba8(), &detected)
+                translator::color_matting::mat_detections(
+                    &oriented
+                        .rgb
+                        .as_ref()
+                        .expect("with_rgb path")
+                        .to_rgba8(),
+                    &detected,
+                )
             };
             let mat_count = matted.iter().filter(|m| m.is_some()).count();
             log::debug!(
@@ -1887,7 +1945,7 @@ impl LivePlanarTracker {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
             };
-            if ensure_oriented_locked(&mut state, display_crop, det_max_pixels).is_err() {
+            if ensure_oriented_with_rgb_locked(&mut state, display_crop, det_max_pixels).is_err() {
                 return AcquirePipelineOutcome::error("ensure_oriented failed");
             }
             let oriented = state
@@ -1902,8 +1960,9 @@ impl LivePlanarTracker {
                 }
             };
             let scale = oriented.det_to_full_scale;
-            let max_w = oriented.rgb.width();
-            let max_h = oriented.rgb.height();
+            let rgb = oriented.rgb.as_ref().expect("with_rgb path");
+            let max_w = rgb.width();
+            let max_h = rgb.height();
             raw.into_iter()
                 .map(|b| scale_detected_box(b, scale, max_w, max_h))
                 .collect()
@@ -2020,6 +2079,7 @@ impl LivePlanarTracker {
         imu_stable: bool,
         timestamp_ns: u64,
         imu_rotation_dev: Vec<f32>,
+        linear_accel_dev: Vec<f32>,
         intrinsics_fx: f32,
         intrinsics_fy: f32,
         intrinsics_cx: f32,
@@ -2034,12 +2094,15 @@ impl LivePlanarTracker {
         // a brief re-acquire (the mutex is uncontended in steady
         // state) and lets us keep composite_frame as a self-contained
         // method we can call directly.
+        let t_orient_start = Instant::now();
         let cmd = {
             let mut state = frame.state.lock().map_err(|_| poisoned())?;
             ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
+            let t_orient_end = Instant::now();
             let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
             let mut engine = self.state.lock().map_err(|_| poisoned())?;
-            if imu_rotation_dev.len() == 9 {
+            let t_engine_start = Instant::now();
+            let cmd = if imu_rotation_dev.len() == 9 {
                 let mut rot = [0.0f32; 9];
                 rot.copy_from_slice(&imu_rotation_dev[..9]);
                 let intr = translator::imu_prior::CameraIntrinsics {
@@ -2048,34 +2111,53 @@ impl LivePlanarTracker {
                     cx: intrinsics_cx,
                     cy: intrinsics_cy,
                 };
-                engine.process_frame_with_imu(&oriented.gray, imu_stable, timestamp_ns, &rot, &intr)
+                let accel = if linear_accel_dev.len() == 3 {
+                    let mut a = [0.0f32; 3];
+                    a.copy_from_slice(&linear_accel_dev[..3]);
+                    Some(a)
+                } else {
+                    None
+                };
+                engine.process_frame_with_imu(
+                    &oriented.gray,
+                    imu_stable,
+                    timestamp_ns,
+                    &rot,
+                    accel.as_ref(),
+                    &intr,
+                )
             } else {
                 engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
+            };
+            let t_engine_end = Instant::now();
+            if PER_FRAME_TIMING_LOG {
+                log::info!(
+                    target: "planar_timing",
+                    "outer: orient={:.1}ms engine={:.1}ms",
+                    (t_orient_end - t_orient_start).as_secs_f64() * 1000.0,
+                    (t_engine_end - t_engine_start).as_secs_f64() * 1000.0,
+                );
             }
+            cmd
         };
         let result = cmd_to_result(cmd);
 
         // 2. Decide which H to use for compositing, updating the
-        // smoothed-H state along the way.
+        // smoothed-H state along the way. Stash `(anchor_id, h)` so
+        // the follow-up `compositeIntoBuffer` JNI call has everything
+        // it needs to warp the active anchor's overlay items directly
+        // into the Kotlin-owned DirectByteBuffer.
         let h_for_compose = self.select_compose_h(
             &result,
             display_width as f32,
             display_height as f32,
         );
-
-        // 3. Composite. An empty `h` means "skip the overlay warp" —
-        // we still want the camera frame on screen, so call composite
-        // unconditionally and just hand it the appropriate H (or none).
-        let h_vec: Vec<f32> = h_for_compose
-            .map(|h| h.to_vec())
-            .unwrap_or_default();
-        let bytes = self.composite_frame(
-            frame,
-            display_width,
-            display_height,
-            h_vec,
-            result.anchor_id,
-        );
+        if let Ok(mut slot) = self.pending_compose.lock() {
+            *slot = h_for_compose.map(|h| (result.anchor_id, h));
+        }
+        let bytes = (display_width as u32)
+            .saturating_mul(display_height as u32)
+            .saturating_mul(4);
 
         // Tick the detect-on-tracking-frame counter on Locked frames.
         // Refresh fires only when ALL THREE gates clear, in this
@@ -2211,112 +2293,6 @@ impl LivePlanarTracker {
     /// can't be warped by *this* anchor's H without landing at
     /// random viewport positions.
     ///
-    /// Returns the byte length of the composited buffer (0 on failure).
-    fn composite_frame(
-        &self,
-        frame: Arc<FrameHandle>,
-        display_width: u32,
-        display_height: u32,
-        h_surface_to_viewport: Vec<f32>,
-        active_anchor_id: u64,
-    ) -> u32 {
-        let frame_state_wait = Instant::now();
-        let state = match frame.state.lock() {
-            Ok(s) => s,
-            Err(_) => return 0,
-        };
-        let frame_state_acquired = Instant::now();
-        let sensor_w = state.width;
-        let sensor_h = state.height;
-        let rotation = state.rotation_degrees;
-        if sensor_w == 0 || sensor_h == 0 {
-            return 0;
-        }
-        let expected_src = (sensor_w as usize) * (sensor_h as usize) * 4;
-        if state.rgba.len() != expected_src {
-            return 0;
-        }
-        let dst_bytes = (display_width as usize) * (display_height as usize) * 4;
-        let mut dst = vec![0u8; dst_bytes];
-        let overlay_wait = Instant::now();
-        let overlay_guard = self.session.overlay_items.lock().ok();
-        let overlay_acquired = Instant::now();
-        let h_arr: Option<[f32; 9]> = if h_surface_to_viewport.len() == 9 {
-            let mut a = [0.0f32; 9];
-            a.copy_from_slice(&h_surface_to_viewport[..9]);
-            Some(a)
-        } else {
-            None
-        };
-        let items_vec: Vec<translator::live_compositor::OverlayItem<'_>> =
-            match (&overlay_guard, &h_arr) {
-                (Some(items), Some(_)) => items
-                    .iter()
-                    .filter(|it| it.anchor_id == active_anchor_id)
-                    .map(|it| translator::live_compositor::OverlayItem {
-                        bitmap_rgba: &it.bitmap,
-                        bitmap_width: it.width,
-                        bitmap_height: it.height,
-                        bitmap_origin_surface_x: it.surface_origin_x,
-                        bitmap_origin_surface_y: it.surface_origin_y,
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-        let h_for_call = h_arr.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
-        let composite_start = Instant::now();
-        let result = translator::live_compositor::composite_frame_into(
-            &mut dst,
-            display_width,
-            display_height,
-            &state.rgba,
-            sensor_w,
-            sensor_h,
-            rotation,
-            &h_for_call,
-            &items_vec,
-        );
-        let composite_end = Instant::now();
-        let items_count = items_vec.len();
-        drop(items_vec);
-        drop(overlay_guard);
-        let overlay_released = Instant::now();
-        log_lock_timing(
-            "frame.state/composite_frame",
-            frame_state_acquired - frame_state_wait,
-            composite_end - frame_state_acquired,
-        );
-        log_lock_timing(
-            "current_overlay_items/composite_frame",
-            overlay_acquired - overlay_wait,
-            overlay_released - overlay_acquired,
-        );
-        if LIVE_PIPELINE_DIAG {
-            let composite_ms = (composite_end - composite_start).as_secs_f64() * 1_000.0;
-            if composite_ms > LOCK_LOG_THRESHOLD_MS {
-                log::debug!(
-                    "[work] composite_frame body: {:.1}ms ({}x{}, items={})",
-                    composite_ms,
-                    display_width,
-                    display_height,
-                    items_count,
-                );
-            }
-        }
-        if result.is_err() {
-            return 0;
-        }
-        let len = dst.len() as u32;
-        if let Ok(mut slot) = self.pending_display.lock() {
-            *slot = Some(dst);
-        }
-        len
-    }
-
-    /// Exposes the pending-display slot to the JNI shim (same crate).
-    pub(crate) fn take_pending_display(&self) -> Option<Vec<u8>> {
-        self.pending_display.lock().ok().and_then(|mut s| s.take())
-    }
 
     /// Feed one camera frame through the state machine. The current
     /// `display_crop` is what the engine should treat as the working
@@ -2374,7 +2350,7 @@ impl LivePlanarTracker {
                 cx: intrinsics_cx,
                 cy: intrinsics_cy,
             };
-            engine.process_frame_with_imu(&oriented.gray, imu_stable, timestamp_ns, &rot, &intr)
+            engine.process_frame_with_imu(&oriented.gray, imu_stable, timestamp_ns, &rot, None, &intr)
         } else {
             engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
         };
@@ -2616,6 +2592,66 @@ struct SmoothedHomography {
 /// introspect.
 #[cfg(feature = "planar-tracker")]
 impl LivePlanarTracker {
+    /// Pop the `(anchor_id, h_surface_to_viewport)` pair stashed by
+    /// the most recent `process_and_composite`. Used by the JNI
+    /// `compositeInto` shim to decide which anchor's overlays to warp
+    /// + at what H. `None` means "no overlay this frame — blit the
+    /// camera only".
+    pub(crate) fn take_pending_compose(&self) -> Option<(u64, [f32; 9])> {
+        self.pending_compose.lock().ok().and_then(|mut s| s.take())
+    }
+
+    /// Composite directly into the caller-supplied destination slice
+    /// — the zero-copy JNI fast path. Locks the session's
+    /// `overlay_items` for the duration of the composite so the
+    /// bitmaps can be borrowed without cloning (same lock-hold shape
+    /// as the previous `composite_frame`). `h_surface_to_viewport` is
+    /// `None` on Idle / Acquiring / sustained Lost — we still want
+    /// the camera frame on screen, just with no overlay warp.
+    pub(crate) fn composite_into_slice(
+        &self,
+        frame: &FrameHandle,
+        dst: &mut [u8],
+        display_width: u32,
+        display_height: u32,
+        h_surface_to_viewport: Option<[f32; 9]>,
+        active_anchor_id: u64,
+    ) -> Result<(), translator::live_compositor::CompositeError> {
+        let state = frame.state.lock().expect("frame mutex poisoned");
+        let sensor_w = state.width;
+        let sensor_h = state.height;
+        let rotation = state.rotation_degrees;
+        let overlay_guard = self.session.overlay_items.lock().ok();
+        let items_vec: Vec<translator::live_compositor::OverlayItem<'_>> =
+            match (&overlay_guard, h_surface_to_viewport) {
+                (Some(items), Some(_)) => items
+                    .iter()
+                    .filter(|it| it.anchor_id == active_anchor_id)
+                    .map(|it| translator::live_compositor::OverlayItem {
+                        bitmap_rgba: &it.bitmap,
+                        bitmap_width: it.width,
+                        bitmap_height: it.height,
+                        bitmap_origin_surface_x: it.surface_origin_x,
+                        bitmap_origin_surface_y: it.surface_origin_y,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+        let h_for_call =
+            h_surface_to_viewport.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
+        translator::live_compositor::composite_frame_into(
+            dst,
+            display_width,
+            display_height,
+            &state.rgba,
+            sensor_w,
+            sensor_h,
+            rotation,
+            &h_for_call,
+            &items_vec,
+        )
+    }
+
     /// Decide which H to feed into the compositor for one frame,
     /// updating the smoothed-H state in the process. Returns `None`
     /// when we should skip the overlay warp entirely (Idle,
