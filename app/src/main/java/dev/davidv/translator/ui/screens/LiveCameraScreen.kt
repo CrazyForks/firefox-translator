@@ -319,7 +319,7 @@ private fun CameraSurface(
       // the slower the per-frame bitmap conversion (RGBA copy + rotation) — and
       // detection downscales to a fixed 400k target anyway, so the larger source
       // mostly burns memory bandwidth.
-      val maxPixels = 1_500_000L
+      val maxPixels = 2_500_000L
       val resolutionSelector =
         ResolutionSelector.Builder()
           .setResolutionStrategy(
@@ -504,6 +504,26 @@ private fun CameraSurface(
 
   val liveSurfaceView =
     remember { LiveTranslatorSurfaceView(context) }
+
+  // Publish SurfaceView dims to the engine so its `display_crop`
+  // matches the FILL_CENTER visible region. Surface dims arrive
+  // asynchronously via `surfaceChanged`; until then `setViewSize(0,0)`
+  // is the no-op default and the engine falls back to full-display
+  // crop on the first few frames.
+  DisposableEffect(liveSurfaceView, liveOcrEngine) {
+    val engine = liveOcrEngine
+    if (engine != null) {
+      liveSurfaceView.onSizeChanged = { w, h -> engine.setViewSize(w, h) }
+      // Push the current dims in case the surface was already sized
+      // before the engine attached.
+      if (liveSurfaceView.width > 0 && liveSurfaceView.height > 0) {
+        engine.setViewSize(liveSurfaceView.width, liveSurfaceView.height)
+      }
+    }
+    onDispose {
+      liveSurfaceView.onSizeChanged = null
+    }
+  }
 
   DisposableEffect(liveSurfaceView) {
     val scaleDetector =

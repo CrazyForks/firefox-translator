@@ -44,6 +44,59 @@ private const val TAG_PLANAR = "LivePlanarOcrEngine"
  *  features to the union of detected text bboxes, so we no longer need
  *  the old per-region tracker's center crop to keep work bounded. */
 private const val CENTER_CROP_FRACTION_PLANAR = 1.0f
+
+/** Compute the algorithm's `display_crop` from the SurfaceView's
+ *  FILL_CENTER visible region. Returns the full display frame when
+ *  view dims aren't available yet (surface not laid out, viewW/H = 0),
+ *  so first-frame behaviour matches the previous full-sensor path
+ *  rather than failing.
+ *
+ *  Math mirrors `LiveTranslatorSurfaceView.drawComposited`:
+ *  scale = max(viewW/displayW, viewH/displayH) (FILL_CENTER); the
+ *  visible portion of the bitmap is viewW/scale × viewH/scale,
+ *  centred. Result is in display-orient coords. */
+private fun computeDisplayCrop(
+  sensorW: Int,
+  sensorH: Int,
+  rotationDegrees: Int,
+  viewW: Int,
+  viewH: Int,
+): NativeRect {
+  val r = ((rotationDegrees % 360) + 360) % 360
+  val displayW: Int
+  val displayH: Int
+  if (r == 90 || r == 270) {
+    displayW = sensorH
+    displayH = sensorW
+  } else {
+    displayW = sensorW
+    displayH = sensorH
+  }
+  if (viewW <= 0 || viewH <= 0 || displayW <= 0 || displayH <= 0) {
+    return NativeRect(0u, 0u, displayW.toUInt(), displayH.toUInt())
+  }
+  val scale =
+    kotlin.math.max(
+      viewW.toFloat() / displayW.toFloat(),
+      viewH.toFloat() / displayH.toFloat(),
+    )
+  if (scale <= 0f) {
+    return NativeRect(0u, 0u, displayW.toUInt(), displayH.toUInt())
+  }
+  val visibleDispW = (viewW.toFloat() / scale).coerceAtMost(displayW.toFloat())
+  val visibleDispH = (viewH.toFloat() / scale).coerceAtMost(displayH.toFloat())
+  val left = ((displayW - visibleDispW) * 0.5f).toInt().coerceAtLeast(0)
+  val top = ((displayH - visibleDispH) * 0.5f).toInt().coerceAtLeast(0)
+  val right = (left + visibleDispW.toInt()).coerceAtMost(displayW)
+  val bottom = (top + visibleDispH.toInt()).coerceAtMost(displayH)
+  return NativeRect(
+    left.toUInt(),
+    top.toUInt(),
+    right.toUInt(),
+    bottom.toUInt(),
+  )
+}
+
 private const val DETECTOR_TARGET_PIXELS_PLANAR_UINT: UInt = 650_000u
 private const val DETECTOR_TARGET_PIXELS_PLANAR_INT: Int = 650_000
 
@@ -98,6 +151,13 @@ private data class PendingPlanarFrame(
   val linearAccelAtCapture: FloatArray?,
   val convertMs: Double,
   val proxy: androidx.camera.core.ImageProxy?,
+  /** Live `SurfaceView` dimensions at submit time. Used to compute a
+   *  `display_crop` matching the FILL_CENTER visible region so the
+   *  algorithm processes only what the user sees — preserves the
+   *  preview-as-framing-feedback contract. `0` means dims weren't
+   *  available (surface not yet sized); fall back to full sensor. */
+  val viewWidth: Int,
+  val viewHeight: Int,
 )
 
 /* Per-anchor canonical entries: a recognised text region in canonical
@@ -220,6 +280,22 @@ class LivePlanarOcrEngine(
    *  IMU-extrapolate at refresh rate. */
   private var latestPixelIntrinsics: FrameIntrinsics? = null
 
+  /** Live `SurfaceView` dimensions, updated via [setViewSize] from
+   *  the SurfaceView's `surfaceChanged`. Used to compute the
+   *  `display_crop` matching the FILL_CENTER visible region. `0`
+   *  means the surface hasn't been sized yet; falls back to
+   *  full-display crop. */
+  private val liveViewWidth = AtomicInteger(0)
+  private val liveViewHeight = AtomicInteger(0)
+
+  fun setViewSize(
+    width: Int,
+    height: Int,
+  ) {
+    liveViewWidth.set(width.coerceAtLeast(0))
+    liveViewHeight.set(height.coerceAtLeast(0))
+  }
+
   private val pendingFrame = java.util.concurrent.atomic.AtomicReference<PendingPlanarFrame?>(null)
   private val frameSignal = Channel<Unit>(Channel.CONFLATED)
   private val handlePool = ConcurrentLinkedDeque<FrameHandle>()
@@ -331,6 +407,12 @@ class LivePlanarOcrEngine(
     linearAccelAtCapture: FloatArray? = null,
     proxy: androidx.camera.core.ImageProxy? = null,
   ) {
+    // View dims are stashed on the engine by `setViewSize` from the
+    // SurfaceView's `surfaceChanged`; we read the latest values at
+    // frame-submit time. Atomic int pair (no need for synchronisation
+    // — torn reads are harmless since we round to int and clamp).
+    val viewWidth = liveViewWidth.get()
+    val viewHeight = liveViewHeight.get()
     val newFrame =
       PendingPlanarFrame(
         handle,
@@ -346,6 +428,8 @@ class LivePlanarOcrEngine(
         linearAccelAtCapture,
         convertMs,
         proxy,
+        viewWidth,
+        viewHeight,
       )
     timingProbe?.recordSubmit()
     val prev = pendingFrame.getAndSet(newFrame)
@@ -418,20 +502,39 @@ class LivePlanarOcrEngine(
     val rotation = pending.rotationDegrees
     val sensorW = pending.sensorWidth
     val sensorH = pending.sensorHeight
-    // The tracker engine works entirely in **sensor coords** now —
-    // no per-frame rotation. The SurfaceView rotates the composited
-    // bitmap at draw time via its drawMatrix (GPU-composited at
-    // scanout). With CENTER_CROP_FRACTION_PLANAR=1.0 the cropRect is
-    // the full sensor frame; the legacy per-focus sub-crop math
-    // doesn't fire in production. If we ever re-enable sub-crops
-    // we'll add display→sensor focus-point conversion here.
+    // `display_crop` (the `cropRect` we pass to Rust) is the region
+    // of the *display-orient* frame that the algorithm should process.
+    // We restrict it to the SurfaceView's FILL_CENTER visible region
+    // so what the user sees is exactly what the algorithm sees —
+    // preserves the preview-as-framing-feedback contract. The fused
+    // crop+rotate+RGBA→luma single-pass in Rust honours this rect
+    // directly (no extra pass), so smaller crop == fewer touched
+    // pixels == strictly faster.
     val cropRect =
-      NativeRect(
-        left = 0u,
-        top = 0u,
-        right = sensorW.toUInt(),
-        bottom = sensorH.toUInt(),
+      computeDisplayCrop(
+        sensorW,
+        sensorH,
+        rotation,
+        pending.viewWidth,
+        pending.viewHeight,
       )
+    // Visible-region-sensor dims: bitmap allocated by the compositor +
+    // `display_width`/`display_height` passed to `processAndComposite`
+    // must match the visible region (in sensor coords) so the overlay
+    // surface coords land correctly when the compositor reads a centred
+    // crop of the full-sensor RGBA. Swap if rotation is 90° / 270°.
+    val rNorm = ((rotation % 360) + 360) % 360
+    val cropDispW = (cropRect.right.toInt() - cropRect.left.toInt()).coerceAtLeast(1)
+    val cropDispH = (cropRect.bottom.toInt() - cropRect.top.toInt()).coerceAtLeast(1)
+    val visibleSensorW: Int
+    val visibleSensorH: Int
+    if (rNorm == 90 || rNorm == 270) {
+      visibleSensorW = cropDispH
+      visibleSensorH = cropDispW
+    } else {
+      visibleSensorW = cropDispW
+      visibleSensorH = cropDispH
+    }
 
     latestImuSnapshot = pending.imuRotationAtCapture
     // Tap-to-focus = "fresh start" intent. Detect it via focus-point
@@ -532,8 +635,8 @@ class LivePlanarOcrEngine(
           fy,
           cx,
           cy,
-          sensorW.toUInt(),
-          sensorH.toUInt(),
+          visibleSensorW.toUInt(),
+          visibleSensorH.toUInt(),
         )
       } catch (e: Throwable) {
         Log.w(TAG_PLANAR, "processAndComposite failed", e)
@@ -573,8 +676,8 @@ class LivePlanarOcrEngine(
     if (result.compositeByteSize > 0u) {
       compositeAndEmit(
         pending.handle,
-        sensorW,
-        sensorH,
+        visibleSensorW,
+        visibleSensorH,
         rotation,
         result.compositeByteSize.toInt(),
       )

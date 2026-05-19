@@ -73,6 +73,7 @@ pub extern "system" fn Java_dev_davidv_translator_LiveFrameJni_writeFrom(
     state.height = height as u32;
     state.rotation_degrees = rotation;
     state.cached = None;
+    state.cached_tracker = None;
     jni::sys::JNI_TRUE
 }
 
@@ -118,6 +119,7 @@ pub extern "system" fn Java_dev_davidv_translator_LiveFrameJni_setExternalBuffer
     state.height = height as u32;
     state.rotation_degrees = rotation;
     state.cached = None;
+    state.cached_tracker = None;
     jni::sys::JNI_TRUE
 }
 

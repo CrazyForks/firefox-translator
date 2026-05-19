@@ -60,6 +60,14 @@ class LiveTranslatorSurfaceView(context: Context) : SurfaceView(context), Surfac
   private var lastFrame: CompositedFrame? = null
   private val drawLock = Any()
 
+  /** Listener invoked from `surfaceChanged` with the SurfaceView's
+   *  current dimensions. `LiveCameraScreen` wires this to the engine's
+   *  `setViewSize` so the algorithm's `display_crop` matches the
+   *  FILL_CENTER visible region — keeps the preview-as-framing-feedback
+   *  contract honest. */
+  @Volatile
+  var onSizeChanged: ((Int, Int) -> Unit)? = null
+
   init {
     holder.addCallback(this)
     // Opaque surface — we always cover every pixel of the view with
@@ -82,6 +90,7 @@ class LiveTranslatorSurfaceView(context: Context) : SurfaceView(context), Surfac
     width: Int,
     height: Int,
   ) {
+    onSizeChanged?.invoke(width, height)
     lastFrame?.let { drawComposited(it) }
   }
 

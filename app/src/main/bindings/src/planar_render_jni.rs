@@ -145,7 +145,7 @@ pub extern "system" fn Java_dev_davidv_translator_PlanarRenderJni_compositeInto(
         None => (0u64, None),
     };
     let t_compose = std::time::Instant::now();
-    let result = tracker.composite_into_slice(frame, dst_slice, h, anchor_id);
+    let result = tracker.composite_into_slice(frame, dst_slice, sw, sh, h, anchor_id);
     if PER_FRAME_TIMING_LOG {
         log::info!(
             target: "planar_timing",

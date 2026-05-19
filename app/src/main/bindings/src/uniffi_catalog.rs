@@ -15,7 +15,7 @@ const LIVE_PIPELINE_DIAG: bool = false;
 /// `translator::planar_tracker::PER_FRAME_TIMING_LOG` (separate crate)
 /// to silence the corresponding `guided: ...` / `brute: ...` lines.
 #[cfg(feature = "planar-tracker")]
-pub(crate) const PER_FRAME_TIMING_LOG: bool = true;
+pub(crate) const PER_FRAME_TIMING_LOG: bool = false;
 
 /// Threshold in ms below which we suppress lock-timing logs even when
 /// `LIVE_PIPELINE_DIAG` is on — keeps the diagnostic mode focused on
@@ -1207,6 +1207,15 @@ pub(crate) struct FrameState {
     pub height: u32,
     pub rotation_degrees: i32,
     pub cached: Option<translator::live_frame::OrientedImage>,
+    /// Tracker-side gray pyramid, *always* built on the full-display
+    /// rect. The tracker needs every feature the sensor produces —
+    /// including ones just outside the SurfaceView's FILL_CENTER
+    /// visible region — so its anchor stays robust under small motion
+    /// that would otherwise push edge features out of frame. Built
+    /// separately from `cached` (which is sized to the visible region
+    /// for OCR) because the OCR pipeline benefits from detect's
+    /// pixel-count-linear cost being scoped to what the user can see.
+    pub cached_tracker: Option<translator::live_frame::OrientedImage>,
 }
 
 /// Pointer + length into a Kotlin-held DirectByteBuffer. Marked
@@ -1264,6 +1273,7 @@ impl FrameHandle {
                 height: 0,
                 rotation_degrees: 0,
                 cached: None,
+                cached_tracker: None,
             }),
         }
     }
@@ -1296,6 +1306,7 @@ impl FrameHandle {
         state.height = height;
         state.rotation_degrees = rotation_degrees;
         state.cached = None;
+        state.cached_tracker = None;
     }
 }
 
@@ -1326,6 +1337,60 @@ impl FrameHandle {
 /// if its `display_crop` still matches — even if the cached one was
 /// built with rgb, we keep it (downgrading would re-do the fused gray
 /// pass unnecessarily).
+/// Tracker-side ensure: build (and cache) a gray-only OrientedImage
+/// sized to the *full display* into `state.cached_tracker`. The
+/// per-frame planar tracker reads `state.cached_tracker.gray` so it
+/// has every available feature, even those just outside the
+/// SurfaceView's FILL_CENTER visible region. Cheap to rebuild because
+/// it's gray-only (no rgb / rgb_det chains) and the typical full-frame
+/// fused crop+rotate+luma pass is ~3 ms on phone.
+fn ensure_tracker_oriented_locked(
+    state: &mut FrameState,
+    det_max_pixels: u32,
+) -> Result<(), CatalogError> {
+    let crop = full_display_rect(state);
+    let needs_rebuild = match state.cached_tracker.as_ref() {
+        Some(oi) => oi.display_crop != crop,
+        None => true,
+    };
+    if needs_rebuild {
+        let oi = translator::live_frame::OrientedImage::build(
+            state.rgba_bytes(),
+            state.width,
+            state.height,
+            state.rotation_degrees,
+            crop,
+            det_max_pixels,
+        )
+        .map_err(CatalogError::from)?;
+        state.cached_tracker = Some(oi);
+    }
+    Ok(())
+}
+
+/// Full-display rect for the current frame state. Independent of
+/// the visible-region crop the SurfaceView shows: the tracker is
+/// always built from the full sensor area so it has every available
+/// feature, even those just outside the user's framing — keeps the
+/// anchor robust under small motion that would otherwise push edge
+/// features out of frame. The OCR + compositor still use the
+/// visible-region rect (passed separately as `display_crop`) for
+/// box filtering and bitmap sizing.
+fn full_display_rect(state: &FrameState) -> translator::Rect {
+    let r = ((state.rotation_degrees % 360) + 360) % 360;
+    let (w, h) = if r == 90 || r == 270 {
+        (state.height, state.width)
+    } else {
+        (state.width, state.height)
+    };
+    translator::Rect {
+        left: 0,
+        top: 0,
+        right: w,
+        bottom: h,
+    }
+}
+
 fn ensure_oriented_locked(
     state: &mut FrameState,
     display_crop: translator::Rect,
@@ -1571,6 +1636,13 @@ pub struct LivePlanarTracker {
     matted_strips: std::sync::Mutex<
         std::collections::HashMap<u64, Vec<Option<translator::color_matting::MattedStrip>>>,
     >,
+    /// Most recently received camera intrinsics from
+    /// `process_and_composite` / `process_frame_with_imu`. Cached
+    /// here so the acquire pipeline can build `H_rect` post-commit
+    /// without requiring Kotlin to pass K through the acquire API
+    /// (intrinsics are constant for a given camera+config, so the
+    /// per-frame path's latest value is always current).
+    last_intrinsics: std::sync::Mutex<Option<translator::imu_prior::CameraIntrinsics>>,
     /// Cross-platform orchestration state. Owns the surface map
     /// (and, in subsequent phases, the engine, overlay store, etc.)
     /// so the desktop `surface_sim` binary and this Android wrapper
@@ -1595,6 +1667,7 @@ impl LivePlanarTracker {
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
             pending_compose: std::sync::Mutex::new(None),
             matted_strips: std::sync::Mutex::new(std::collections::HashMap::new()),
+            last_intrinsics: std::sync::Mutex::new(None),
             session: std::sync::Arc::new(translator::live_session::LiveSession::new()),
         })
     }
@@ -1704,6 +1777,11 @@ impl LivePlanarTracker {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
             };
+            // OCR pipeline uses `cached` built on the *visible region*
+            // — detect's cost is linear in pixel count and the user
+            // can't see anything outside this crop anyway. The tracker
+            // still gets the full-display gray via `cached_tracker`
+            // (populated by the per-frame `process_and_composite`).
             if ensure_oriented_with_rgb_locked(&mut state, display_crop, det_max_pixels).is_err() {
                 return AcquirePipelineOutcome::error("ensure_oriented failed");
             }
@@ -1764,34 +1842,45 @@ impl LivePlanarTracker {
         // ---- Acquire anchor ----
         let t_acquire = Instant::now();
         let anchor_id = {
-            let state = match frame.state.lock() {
+            let mut state = match frame.state.lock() {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
             };
-            let oriented = state
-                .cached
+            // Anchor MUST be built from the *full-sensor* gray that
+            // the per-frame tracker also uses, otherwise the anchor's
+            // feature positions live in visible-region coords while
+            // the tracker tries to match against full-sensor coords —
+            // mismatch → zero inliers → never locks. Ensure the
+            // tracker-side OrientedImage is populated (it might be
+            // missing on the very first acquire before the per-frame
+            // path has fired).
+            if ensure_tracker_oriented_locked(&mut state, det_max_pixels).is_err() {
+                return AcquirePipelineOutcome::error("ensure_tracker failed");
+            }
+            let tracker_oriented = state
+                .cached_tracker
                 .as_ref()
-                .expect("oriented still cached");
-            // PPOCR boundary: `detected` boxes are in display-orient
-            // coords (PPOCR ran on display-orient RGB). The tracker
-            // engine operates on sensor-orient gray, so the regions
-            // passed to `acquire_now_in_regions` must be in sensor
-            // coords. Convert each box's display rect via the inverse
-            // sensor→display rotation.
+                .expect("ensure_tracker filled cache");
+            // `detected` boxes are in visible-region display coords
+            // (PPOCR ran on `cached` at `display_crop`). Convert to
+            // *full-display* by translating by the visible region's
+            // top-left, then to sensor coords via the standard
+            // display→sensor rotation. The regions land in the
+            // tracker_oriented.gray's coordinate system (full sensor).
             let sensor_w = state.width;
             let sensor_h = state.height;
             let rotation = state.rotation_degrees;
             let regions: Vec<(u32, u32, u32, u32)> = detected
                 .iter()
                 .filter_map(|d| {
-                    let display_rect = translator::Rect {
-                        left: d.rect.left,
-                        top: d.rect.top,
-                        right: d.rect.right,
-                        bottom: d.rect.bottom,
+                    let full_display_rect = translator::Rect {
+                        left: d.rect.left + display_crop.left,
+                        top: d.rect.top + display_crop.top,
+                        right: d.rect.right + display_crop.left,
+                        bottom: d.rect.bottom + display_crop.top,
                     };
                     translator::live_frame::display_crop_to_sensor(
-                        display_rect,
+                        full_display_rect,
                         sensor_w,
                         sensor_h,
                         rotation,
@@ -1805,7 +1894,12 @@ impl LivePlanarTracker {
                 Err(_) => return AcquirePipelineOutcome::error("engine.state poisoned"),
             };
             engine
-                .acquire_now_in_regions(&oriented.gray, &regions, anchor_padding_px, timestamp_ns)
+                .acquire_now_in_regions(
+                    &tracker_oriented.gray,
+                    &regions,
+                    anchor_padding_px,
+                    timestamp_ns,
+                )
                 .unwrap_or(0)
         };
         let acquire_ms = t_acquire.elapsed().as_secs_f64() * 1_000.0;
@@ -1883,53 +1977,217 @@ impl LivePlanarTracker {
             Err(_) => Vec::new(),
         };
 
-        let state = match frame.state.lock() {
-            Ok(s) => s,
-            Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+        // Snapshot the state metadata we'll need below (rotation +
+        // dims for h_disp_to_sensor). Drop the lock so the per-frame
+        // composite thread isn't blocked while we run rec.
+        let (state_width, state_height, state_rotation_degrees) = {
+            let state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            (state.width, state.height, state.rotation_degrees)
         };
-        let oriented = match state
-            .cached
-            .as_ref()
-            .filter(|oi| oi.display_crop == display_crop)
-        {
-            Some(o) => o,
-            None => return AcquirePipelineOutcome::error("oriented cache miss"),
-        };
-        // PPOCR boundary: `detected` boxes are in display coords;
-        // the surface map (and anchor canonical frame) is in sensor
-        // coords. h_view_to_surface = pixel display→sensor rotation
-        // so the surface-map projection lands in sensor coords. On
-        // initial acquire there's no per-anchor H yet (anchor was
-        // just built; its canonical IS this sensor frame), so the
-        // pixel rotation is the entire transform.
-        let h_disp_to_sensor = translator::live_frame::display_to_sensor_homography(
-            state.width,
-            state.height,
-            state.rotation_degrees,
+        // Earlier this site polled the engine's H-burst for up to
+        // 200 ms to wait on a rectification commit before deciding
+        // rectified-vs-raw rec inputs. With the rectified-overlay
+        // path gated off (`ENABLE_RECTIFIED_OVERLAY`), there's
+        // nothing to wait for — the poll only created window where
+        // the per-frame compositor warped stale overlays through
+        // freshly-built-and-still-jittery engine H's, producing
+        // visible wobble. The H-burst still fills naturally on
+        // per-frame Locked ticks; `try_commit_rectification` still
+        // runs from `process_and_composite` and logs on transition.
+        let rect_outcome = translator::live_session::RectificationAttempt::Pending;
+        let intrinsics_opt: Option<translator::imu_prior::CameraIntrinsics> = None;
+
+        // PPOCR boundary: `detected` boxes are in visible-region
+        // display coords (PPOCR ran on `cached` which is sized to the
+        // user's visible region). The anchor canonical is full-sensor
+        // (the tracker uses `cached_tracker` which is built on the
+        // full display). Compose:
+        //   visible-region-display → full-display via translate by
+        //   the visible-region's top-left in display coords;
+        //   full-display → full-sensor via the standard rotation H
+        //   parameterised on full-sensor dims.
+        let h_disp_full_to_sensor = translator::live_frame::display_to_sensor_homography(
+            state_width,
+            state_height,
+            state_rotation_degrees,
         );
+        let translate_visible_to_full = [
+            1.0, 0.0, display_crop.left as f32,
+            0.0, 1.0, display_crop.top as f32,
+            0.0, 0.0, 1.0,
+        ];
+        let h_disp_to_sensor =
+            translator::homography::mat3_mul(&h_disp_full_to_sensor, &translate_visible_to_full);
+
+        // The rectified-overlay path is gated off until burst-sampling
+        // robustness improves. With the current single-burst-per-acquire
+        // policy:
+        //   - Real tilted surfaces tend to land `HighDisagreement` and
+        //     refuse anyway (the case the rectification was designed to
+        //     win).
+        //   - Near-fronto-parallel surfaces that *do* commit produce a
+        //     tiny `h_rect`, which then gets stashed and applied to
+        //     subsequent frames even after the user moves the camera —
+        //     so the visible overlay loses the per-line/per-block angle
+        //     variation the un-rectified path captures naturally,
+        //     without gaining back enough perspective at composite time
+        //     to look right.
+        // The math (decompose + disambiguate + commit) is still tested
+        // in `live_session::rectification_tests` and the commit
+        // diagnostic logs still print on transition — useful when we
+        // come back to fix burst sampling (min-H-delta gate) and turn
+        // this back on. See FUTURE_ANCHOR_RECTIFICATION.md for state.
+        const ENABLE_RECTIFIED_OVERLAY: bool = false;
+        // On a successful commit (when the flag is on), build a
+        // rectified OrientedImage + box set so rec sees fronto-parallel
+        // glyphs. Boxes stay in rectified-display coords end-to-end
+        // (`h_view_to_surface = None`) so the surface map stores them
+        // axis-aligned, and per-frame compositing post-composes the
+        // perspective re-skew via `invert(h_rect)` ⊗ `h_disp_to_sensor`
+        // ⊗ engine_H.
+        let rectified_pack: Option<(
+            translator::live_frame::OrientedImage,
+            Vec<translator::DetectedTextBox>,
+            [f32; 9],
+        )> = if !ENABLE_RECTIFIED_OVERLAY {
+            None
+        } else if let (
+            translator::live_session::RectificationAttempt::Committed { pose, .. },
+            Some(intr),
+        ) = (rect_outcome, intrinsics_opt)
+        {
+            let state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            let oriented = match state
+                .cached
+                .as_ref()
+                .filter(|oi| oi.display_crop == display_crop)
+            {
+                Some(o) => o,
+                None => {
+                    return AcquirePipelineOutcome::error("oriented cache miss");
+                }
+            };
+            let rgb_dims = oriented
+                .rgb
+                .as_ref()
+                .map(|r| (r.width(), r.height()))
+                .unwrap_or((0, 0));
+            let out_centre =
+                (rgb_dims.0 as f32 * 0.5, rgb_dims.1 as f32 * 0.5);
+            let h_rect_opt = translator::rectification::rectification_matrix(
+                &pose,
+                &intr,
+                intr.fx,
+                out_centre,
+            );
+            let pack = h_rect_opt.and_then(|h_rect| {
+                let rectified = translator::live_session::rectified_oriented_image(
+                    oriented,
+                    &h_rect,
+                    rgb_dims.0,
+                    rgb_dims.1,
+                )?;
+                let warped: Vec<translator::DetectedTextBox> = detected
+                    .iter()
+                    .map(|b| {
+                        let mut w = translator::live_session::warp_detection_through(
+                            b, &h_rect,
+                        )
+                        .unwrap_or_else(|| b.clone());
+                        // Clear the polygon contour — its dewarp path
+                        // assumes the contour traces the line in the
+                        // image's native coords, but post-rectification
+                        // the line is axis-aligned and the simple AABB
+                        // crop on the rectified canvas is correct.
+                        w.contour.clear();
+                        Some(w)
+                    })
+                    .map(|opt| opt.unwrap())
+                    .collect();
+                Some((rectified, warped, h_rect))
+            });
+            drop(state);
+            pack
+        } else {
+            None
+        };
+
         let cancel = || {
             self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
         };
         let session_ref: &translator::TranslatorSession = &catalog.session;
-        let outcome = self.session.run_post_detect(
-            translator::live_session::PostDetectInput {
-                detections: &detected,
-                oriented,
-                h_view_to_surface: Some(h_disp_to_sensor),
-                anchor_id,
-                from_lang: &from_lang_code,
-                to_lang: &to_lang_code,
-                is_auto_source,
-                available_codes: &available_codes,
-                font_provider: &crate::android_font_provider::AndroidFontProvider,
-                matted_strips: &matted_strips,
-                rec_batch_size: 4,
-            },
-            &session_ref,
-            &session_ref,
-            &cancel,
-        );
-        drop(state);
+        let outcome = if let Some((rectified_oriented, rectified_boxes, h_rect)) =
+            rectified_pack.as_ref()
+        {
+            // Rectified path: rec sees fronto-parallel canvas. Boxes
+            // stay in rectified-display coords; `h_view_to_surface`
+            // is `None` (identity) so the surface map stores them
+            // axis-aligned. The per-frame compositor (see
+            // `process_and_composite` below) looks up the anchor's
+            // committed `h_rect` and post-composes the inverse to
+            // re-skew the overlay back onto the page's perspective
+            // at draw time. Stash `h_rect` on the anchor's state
+            // for that lookup.
+            self.session.set_anchor_h_rect(anchor_id, *h_rect);
+            self.session.run_post_detect(
+                translator::live_session::PostDetectInput {
+                    detections: rectified_boxes,
+                    oriented: rectified_oriented,
+                    h_view_to_surface: None,
+                    anchor_id,
+                    from_lang: &from_lang_code,
+                    to_lang: &to_lang_code,
+                    is_auto_source,
+                    available_codes: &available_codes,
+                    font_provider: &crate::android_font_provider::AndroidFontProvider,
+                    matted_strips: &matted_strips,
+                    rec_batch_size: 4,
+                },
+                &session_ref,
+                &session_ref,
+                &cancel,
+            )
+        } else {
+            // Refusal / no-intrinsics fallback: same path as before.
+            let state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            let oriented = match state
+                .cached
+                .as_ref()
+                .filter(|oi| oi.display_crop == display_crop)
+            {
+                Some(o) => o,
+                None => return AcquirePipelineOutcome::error("oriented cache miss"),
+            };
+            let outcome = self.session.run_post_detect(
+                translator::live_session::PostDetectInput {
+                    detections: &detected,
+                    oriented,
+                    h_view_to_surface: Some(h_disp_to_sensor),
+                    anchor_id,
+                    from_lang: &from_lang_code,
+                    to_lang: &to_lang_code,
+                    is_auto_source,
+                    available_codes: &available_codes,
+                    font_provider: &crate::android_font_provider::AndroidFontProvider,
+                    matted_strips: &matted_strips,
+                    rec_batch_size: 4,
+                },
+                &session_ref,
+                &session_ref,
+                &cancel,
+            );
+            drop(state);
+            outcome
+        };
         // The session marks `on_acquire` here so the detect-on-track
         // refresh trigger doesn't immediately fire on the next Locked
         // frame after a brand-new acquire.
@@ -2041,7 +2299,8 @@ impl LivePlanarTracker {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
             };
-            if ensure_oriented_with_rgb_locked(&mut state, display_crop, det_max_pixels).is_err() {
+            let oriented_crop = full_display_rect(&state);
+            if ensure_oriented_with_rgb_locked(&mut state, oriented_crop, det_max_pixels).is_err() {
                 return AcquirePipelineOutcome::error("ensure_oriented failed");
             }
             let oriented = state
@@ -2102,14 +2361,24 @@ impl LivePlanarTracker {
         let cancel = || {
             self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
         };
-        // PPOCR boundary: compose display→sensor pixel rotation with
-        // the engine's sensor-view → sensor-surface H, so detected
-        // boxes (display coords) project straight to sensor surface.
-        let h_disp_to_sensor = translator::live_frame::display_to_sensor_homography(
+        // PPOCR boundary: detected boxes are in visible-region display
+        // coords (OrientedImage at `display_crop`). The anchor
+        // canonical is full-sensor. Compose: visible-region-display →
+        // full-display (translate by crop top-left) → full-sensor
+        // (standard rotation on full dims) → sensor-surface (engine
+        // inverse).
+        let h_disp_full_to_sensor = translator::live_frame::display_to_sensor_homography(
             state.width,
             state.height,
             state.rotation_degrees,
         );
+        let translate_visible_to_full = [
+            1.0, 0.0, display_crop.left as f32,
+            0.0, 1.0, display_crop.top as f32,
+            0.0, 0.0, 1.0,
+        ];
+        let h_disp_to_sensor =
+            translator::homography::mat3_mul(&h_disp_full_to_sensor, &translate_visible_to_full);
         let h_view_to_surface_composed =
             translator::homography::mat3_mul(&h_sensor_view_to_surface, &h_disp_to_sensor);
         let session_ref: &translator::TranslatorSession = &catalog.session;
@@ -2201,11 +2470,26 @@ impl LivePlanarTracker {
         // state) and lets us keep composite_frame as a self-contained
         // method we can call directly.
         let t_orient_start = Instant::now();
+        // Capture frame metadata before dropping the state lock so the
+        // perspective re-skew composition below can compute
+        // `h_disp_to_sensor` without re-locking.
+        let frame_state_dims: (u32, u32, i32);
         let cmd = {
             let mut state = frame.state.lock().map_err(|_| poisoned())?;
-            ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
+            // Tracker gets `cached_tracker`, always sized to the full
+            // display (every available feature). OCR gets `cached`,
+            // sized to the visible region — detect's cost is linear
+            // in pixel count so we want the smallest acceptable input.
+            // The per-frame composite path here only needs the tracker
+            // gray; the OCR `cached` is populated lazily by the acquire
+            // / refresh pipelines.
+            ensure_tracker_oriented_locked(&mut state, det_max_pixels)?;
+            frame_state_dims = (state.width, state.height, state.rotation_degrees);
             let t_orient_end = Instant::now();
-            let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
+            let oriented = state
+                .cached_tracker
+                .as_ref()
+                .expect("ensure_tracker filled cache");
             let mut engine = self.state.lock().map_err(|_| poisoned())?;
             let t_engine_start = Instant::now();
             let cmd = if imu_rotation_dev.len() == 9 {
@@ -2217,6 +2501,9 @@ impl LivePlanarTracker {
                     cx: intrinsics_cx,
                     cy: intrinsics_cy,
                 };
+                if let Ok(mut slot) = self.last_intrinsics.lock() {
+                    *slot = Some(intr);
+                }
                 let accel = if linear_accel_dev.len() == 3 {
                     let mut a = [0.0f32; 3];
                     a.copy_from_slice(&linear_accel_dev[..3]);
@@ -2253,11 +2540,62 @@ impl LivePlanarTracker {
         // the follow-up `compositeIntoBuffer` JNI call has everything
         // it needs to warp the active anchor's overlay items directly
         // into the Kotlin-owned DirectByteBuffer.
-        let h_for_compose = self.select_compose_h(
+        // Smoothing's corner-delta measure tests at corners (0, 0),
+        // (frame_w, frame_h) etc. in surface coords; the result is in
+        // view-pixels. With H in full-sensor coords and the user
+        // seeing only the visible-region bitmap, using full-sensor
+        // dims here makes rotation-induced deltas ~2× larger than
+        // the user actually perceives — `SMOOTH_HIGH_PX = 9` then
+        // trips on tiny rotations and the H snaps aggressively,
+        // producing visible UI jumps on small motion. Use the
+        // visible-region dims (= bitmap dims) instead so the
+        // threshold band matches user-perceived motion. Translation
+        // motion is 1:1 either way.
+        let h_engine = self.select_compose_h(
             &result,
             display_width as f32,
             display_height as f32,
         );
+        // Surface→view homography for the compositor. When the active
+        // anchor has a committed `h_rect` (rectified path), the
+        // surface map's lines live in rectified-display coords and we
+        // need to post-compose the inverse rectification + the
+        // display→sensor rotation so the overlay re-skews onto the
+        // page's perspective at draw time. When `h_rect` is absent
+        // (refusal path), surface = sensor and the engine's H alone is
+        // correct.
+        // Gated off — see the matching gate in `run_acquire_pipeline`.
+        // When the rectified-overlay path is enabled, this composes
+        // `engine_H × h_disp_to_sensor × invert(h_rect)` so the
+        // axis-aligned-in-surface bitmap gets perspective-warped at
+        // composite time. With the flag off, no h_rect is ever
+        // stashed, so this collapses to `engine_H` alone (today's
+        // un-rectified behaviour).
+        let h_for_compose = h_engine.map(|h| {
+            let Some(h_rect) = self.session.anchor_h_rect(result.anchor_id) else {
+                return h;
+            };
+            let Some(h_rect_inv) = translator::homography::invert(&h_rect) else {
+                return h;
+            };
+            let sensor_crop = match translator::live_frame::display_crop_to_sensor(
+                display_crop,
+                frame_state_dims.0,
+                frame_state_dims.1,
+                frame_state_dims.2,
+            ) {
+                Ok(c) => c,
+                Err(_) => return h,
+            };
+            let h_disp_to_sensor = translator::live_frame::display_to_sensor_homography(
+                sensor_crop.right - sensor_crop.left,
+                sensor_crop.bottom - sensor_crop.top,
+                frame_state_dims.2,
+            );
+            let intermediate =
+                translator::homography::mat3_mul(&h_disp_to_sensor, &h_rect_inv);
+            translator::homography::mat3_mul(&h, &intermediate)
+        });
         if let Ok(mut slot) = self.pending_compose.lock() {
             *slot = h_for_compose.map(|h| (result.anchor_id, h));
         }
@@ -2285,6 +2623,37 @@ impl LivePlanarTracker {
         // detector returns slightly different boxes → MergedAnd-
         // Extended on detector noise → overlay re-raster on a held
         // camera. Motion-gating first removes that whole class.
+        // Rectification orchestration (Phase 2B) runs on every Locked
+        // frame regardless of `ENABLE_REFRESH_DETECT` — it has no
+        // user-visible behaviour, just stashes the recovered plane
+        // pose in `AnchorState::rectification` and logs on the
+        // Pending→{Committed, Refused} transition. Decoupled from
+        // refresh so we can validate the geometry independently.
+        if matches!(result.state, PlanarTrackerState::Locked) {
+            let h_burst_copy: Vec<[f32; 9]> = {
+                if let Ok(engine) = self.state.lock() {
+                    engine.h_burst_of(result.anchor_id).to_vec()
+                } else {
+                    Vec::new()
+                }
+            };
+            if !h_burst_copy.is_empty() {
+                let intr_rect = translator::imu_prior::CameraIntrinsics {
+                    fx: intrinsics_fx,
+                    fy: intrinsics_fy,
+                    cx: intrinsics_cx,
+                    cy: intrinsics_cy,
+                };
+                self.session.try_commit_rectification(
+                    result.anchor_id,
+                    &h_burst_copy,
+                    &intr_rect,
+                    None,
+                    translator::rectification::SurfaceKind::Unknown,
+                );
+            }
+        }
+
         let should_refresh_detect = if ENABLE_REFRESH_DETECT
             && matches!(result.state, PlanarTrackerState::Locked)
         {
@@ -2311,6 +2680,9 @@ impl LivePlanarTracker {
                     (Some(_), Ok(slot)) if slot.is_none() => true,
                     (Some(h), Ok(slot)) => {
                         let prev = slot.expect("is_none branch above");
+                        // Measure on visible-region dims so the
+                        // threshold band matches user-perceived motion
+                        // — see the matching note in select_compose_h.
                         corner_delta_px(
                             &prev,
                             &h,
@@ -2720,12 +3092,22 @@ impl LivePlanarTracker {
         &self,
         frame: &FrameHandle,
         dst: &mut [u8],
+        bitmap_w: u32,
+        bitmap_h: u32,
         h_surface_to_viewport: Option<[f32; 9]>,
         active_anchor_id: u64,
     ) -> Result<(), translator::live_compositor::CompositeError> {
         let state = frame.state.lock().expect("frame mutex poisoned");
         let sensor_w = state.width;
         let sensor_h = state.height;
+        // Bitmap dims are the *visible-region-sensor* dims (= the
+        // FILL_CENTER preview region in sensor coords). The source
+        // RGBA is the full sensor frame; compute the centred crop
+        // offset to feed only the visible portion to the compositor.
+        // When dims match (no crop case), this collapses to a 0-offset
+        // copy — equivalent to today's full-frame composite.
+        let src_offset_x = sensor_w.saturating_sub(bitmap_w) / 2;
+        let src_offset_y = sensor_h.saturating_sub(bitmap_h) / 2;
         let overlay_guard = self.session.overlay_items.lock().ok();
         let items_vec: Vec<translator::live_compositor::OverlayItem<'_>> =
             match (&overlay_guard, h_surface_to_viewport) {
@@ -2744,12 +3126,31 @@ impl LivePlanarTracker {
             };
         let h_for_call =
             h_surface_to_viewport.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
-        translator::live_compositor::composite_frame_into(
+        // Surface coords are in *full-sensor view* (anchor canonical
+        // lives on the full sensor). The compositor's bitmap is the
+        // *visible-region* of that view, with its (0,0) at full-sensor
+        // (src_offset_x, src_offset_y). Translate the H so overlay
+        // items end up in bitmap-local coords rather than full-sensor
+        // coords — otherwise overlay-engine_H would project everything
+        // to full-sensor positions, and a centred bitmap would catch
+        // only the part of an overlay that happens to fall inside its
+        // sensor crop.
+        let translate = [
+            1.0, 0.0, -(src_offset_x as f32),
+            0.0, 1.0, -(src_offset_y as f32),
+            0.0, 0.0, 1.0,
+        ];
+        let h_translated = translator::homography::mat3_mul(&translate, &h_for_call);
+        translator::live_compositor::composite_frame_into_cropped(
             dst,
+            bitmap_w,
+            bitmap_h,
+            state.rgba_bytes(),
             sensor_w,
             sensor_h,
-            state.rgba_bytes(),
-            &h_for_call,
+            src_offset_x,
+            src_offset_y,
+            &h_translated,
             &items_vec,
         )
     }
