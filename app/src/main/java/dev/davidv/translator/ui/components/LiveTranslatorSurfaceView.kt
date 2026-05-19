@@ -110,10 +110,18 @@ class LiveTranslatorSurfaceView(context: Context) : SurfaceView(context), Surfac
     }
   }
 
-  /** Acquire the surface canvas, blit the composited bitmap with
-   *  FILL_CENTER letterboxing, post. Mirrors the math
+  /** Acquire the surface canvas, **rotate** the sensor-orient
+   *  composited bitmap to display orientation via the drawMatrix
+   *  (GPU-composited at scanout — no CPU rotation pass), then blit
+   *  it with FILL_CENTER letterboxing. Mirrors the math
    *  `PreviewView.ScaleType.FILL_CENTER` uses, so the rendered scene
-   *  occupies the same view region as the old preview did. */
+   *  occupies the same view region as the old preview did.
+   *
+   *  The bitmap dimensions are sensor-orient (e.g. 1920×1080 for a
+   *  back-facing camera on a phone held in portrait). Under
+   *  [CompositedFrame.rotationDegrees] = 90 we rotate the bitmap
+   *  90° clockwise; the *post-rotation* bounding box is then
+   *  `bmpH × bmpW`, which is what we FILL_CENTER-fit into the view. */
   private fun drawComposited(frame: CompositedFrame) {
     val viewW = width
     val viewH = height
@@ -123,6 +131,17 @@ class LiveTranslatorSurfaceView(context: Context) : SurfaceView(context), Surfac
     val bmpW = bitmap.width.toFloat()
     val bmpH = bitmap.height.toFloat()
     if (bmpW <= 0f || bmpH <= 0f) return
+
+    val r = ((frame.rotationDegrees % 360) + 360) % 360
+    val rotatedW: Float
+    val rotatedH: Float
+    if (r == 90 || r == 270) {
+      rotatedW = bmpH
+      rotatedH = bmpW
+    } else {
+      rotatedW = bmpW
+      rotatedH = bmpH
+    }
 
     val canvas =
       try {
@@ -136,10 +155,18 @@ class LiveTranslatorSurfaceView(context: Context) : SurfaceView(context), Surfac
         null
       } ?: return
     try {
-      val scale = max(viewW / bmpW, viewH / bmpH)
-      val offsetX = (viewW - bmpW * scale) * 0.5f
-      val offsetY = (viewH - bmpH * scale) * 0.5f
+      val scale = max(viewW / rotatedW, viewH / rotatedH)
+      val offsetX = (viewW - rotatedW * scale) * 0.5f
+      val offsetY = (viewH - rotatedH * scale) * 0.5f
       drawMatrix.reset()
+      // Rotate around bitmap centre. After rotation the bitmap's
+      // bounding box is offset; postTranslate below shifts it back
+      // so its top-left lands at the origin of the rotated frame.
+      drawMatrix.postRotate(r.toFloat(), bmpW / 2f, bmpH / 2f)
+      // After postRotate around centre, the rotated bitmap's top-left
+      // is at ((bmpW - rotatedW) / 2, (bmpH - rotatedH) / 2). Shift
+      // by the negative of that so its top-left is at (0, 0).
+      drawMatrix.postTranslate(-(bmpW - rotatedW) / 2f, -(bmpH - rotatedH) / 2f)
       drawMatrix.postScale(scale, scale)
       drawMatrix.postTranslate(offsetX, offsetY)
       canvas.drawColor(Color.BLACK)

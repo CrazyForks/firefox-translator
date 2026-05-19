@@ -58,6 +58,23 @@ data class CameraIntrinsicsRaw(
     val cy = displayHeightPx * 0.5f
     return PixelIntrinsics(fx, fy, cx, cy)
   }
+
+  /** Pinhole intrinsics in **sensor pixel coordinates** — no rotation
+   *  applied. The planar tracker engine works in sensor orient, so
+   *  this is what gets passed to the Rust IMU prior. The K matrix
+   *  built from these maps sensor-coord points to sensor-coord points
+   *  under camera rotation, which is what the tracker fits the
+   *  homography to. */
+  fun sensorIntrinsics(
+    sensorWidthPx: Int,
+    sensorHeightPx: Int,
+  ): PixelIntrinsics {
+    val fx = sensorWidthPx.toFloat() * focalLengthMm / sensorPhysicalWidthMm
+    val fy = sensorHeightPx.toFloat() * focalLengthMm / sensorPhysicalHeightMm
+    val cx = sensorWidthPx * 0.5f
+    val cy = sensorHeightPx * 0.5f
+    return PixelIntrinsics(fx, fy, cx, cy)
+  }
 }
 
 data class PixelIntrinsics(

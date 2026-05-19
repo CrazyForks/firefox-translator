@@ -144,8 +144,17 @@ data class FrameIntrinsics(val fx: Float, val fy: Float, val cx: Float, val cy: 
  *  apart under motion. */
 data class CompositedFrame(
   val bitmap: android.graphics.Bitmap,
+  /** Bitmap dimensions — in **sensor orientation**. The SurfaceView
+   *  rotates this for display via [rotationDegrees] at draw time. */
   val width: Int,
   val height: Int,
+  /** Sensor→display rotation as reported by CameraX
+   *  `ImageInfo.rotationDegrees` (one of 0, 90, 180, 270). The
+   *  [LiveTranslatorSurfaceView] applies this rotation to the
+   *  drawMatrix so the displayed image lands in the natural
+   *  display orientation. The Rust compositor produces the bitmap
+   *  in sensor orient — the rotation only happens here, GPU-side. */
+  val rotationDegrees: Int,
 )
 
 /** Thin Kotlin wrapper around `LivePlanarTracker`. Owns the camera
@@ -389,27 +398,21 @@ class LivePlanarOcrEngine(
 
   private suspend fun runFrame(pending: PendingPlanarFrame) {
     val rotation = pending.rotationDegrees
-    val displayW: Int
-    val displayH: Int
-    if (rotation == 90 || rotation == 270) {
-      displayW = pending.sensorHeight
-      displayH = pending.sensorWidth
-    } else {
-      displayW = pending.sensorWidth
-      displayH = pending.sensorHeight
-    }
-    val cropW = (displayW * CENTER_CROP_FRACTION_PLANAR).toInt().coerceAtLeast(1)
-    val cropH = (displayH * CENTER_CROP_FRACTION_PLANAR).toInt().coerceAtLeast(1)
-    val focusFx = (pending.focusXNormalized.coerceIn(0f, 1f) * displayW).toInt()
-    val focusFy = (pending.focusYNormalized.coerceIn(0f, 1f) * displayH).toInt()
-    val cropLeft = (focusFx - cropW / 2).coerceIn(0, displayW - cropW)
-    val cropTop = (focusFy - cropH / 2).coerceIn(0, displayH - cropH)
+    val sensorW = pending.sensorWidth
+    val sensorH = pending.sensorHeight
+    // The tracker engine works entirely in **sensor coords** now —
+    // no per-frame rotation. The SurfaceView rotates the composited
+    // bitmap at draw time via its drawMatrix (GPU-composited at
+    // scanout). With CENTER_CROP_FRACTION_PLANAR=1.0 the cropRect is
+    // the full sensor frame; the legacy per-focus sub-crop math
+    // doesn't fire in production. If we ever re-enable sub-crops
+    // we'll add display→sensor focus-point conversion here.
     val cropRect =
       NativeRect(
-        left = cropLeft.toUInt(),
-        top = cropTop.toUInt(),
-        right = (cropLeft + cropW).toUInt(),
-        bottom = (cropTop + cropH).toUInt(),
+        left = 0u,
+        top = 0u,
+        right = sensorW.toUInt(),
+        bottom = sensorH.toUInt(),
       )
 
     latestImuSnapshot = pending.imuRotationAtCapture
@@ -472,12 +475,13 @@ class LivePlanarOcrEngine(
     // Prefer the IMU-prior path when both rotation + intrinsics are
     // available. The Rust side computes per-frame deltas from the
     // device-frame rotation and uses K·R·K^-1 as a RANSAC seed; huge
-    // tracking lift on fast pans/rotations.
+    // tracking lift on fast pans/rotations. **Sensor-orient
+    // intrinsics**: the engine fits H in sensor coords now.
     val rot = pending.imuRotationAtCapture
     val intrRaw = cameraIntrinsics
     val pxIntr =
       if (intrRaw != null) {
-        val p = intrRaw.pixelIntrinsics(displayW, displayH, pending.rotationDegrees)
+        val p = intrRaw.sensorIntrinsics(sensorW, sensorH)
         FrameIntrinsics(p.fx, p.fy, p.cx, p.cy)
       } else {
         null
@@ -510,8 +514,8 @@ class LivePlanarOcrEngine(
           fy,
           cx,
           cy,
-          displayW.toUInt(),
-          displayH.toUInt(),
+          sensorW.toUInt(),
+          sensorH.toUInt(),
         )
       } catch (e: Throwable) {
         Log.w(TAG_PLANAR, "processAndComposite failed", e)
@@ -544,7 +548,13 @@ class LivePlanarOcrEngine(
     // writing directly into the Kotlin-owned DirectByteBuffer — no
     // intermediate Rust Vec, no JNI memcpy of bytes out.
     if (result.compositeByteSize > 0u) {
-      compositeAndEmit(pending.handle, displayW, displayH, result.compositeByteSize.toInt())
+      compositeAndEmit(
+        pending.handle,
+        sensorW,
+        sensorH,
+        rotation,
+        result.compositeByteSize.toInt(),
+      )
     }
     // For ACQUIRING, kick off the acquire stage on a separate worker
     // coroutine so this detector thread is free to keep processing
@@ -741,13 +751,14 @@ class LivePlanarOcrEngine(
    *  the `pending_display` slot here. */
   private fun compositeAndEmit(
     handle: FrameHandle,
-    displayWidth: Int,
-    displayHeight: Int,
+    sensorWidth: Int,
+    sensorHeight: Int,
+    rotationDegrees: Int,
     expected: Int,
   ) {
-    if (displayWidth <= 0 || displayHeight <= 0) return
-    val buffer = ensureDisplayBuffer(expected, displayWidth, displayHeight)
-    val bitmap = ensureDisplayBitmap(displayWidth, displayHeight) ?: return
+    if (sensorWidth <= 0 || sensorHeight <= 0) return
+    val buffer = ensureDisplayBuffer(expected, sensorWidth, sensorHeight)
+    val bitmap = ensureDisplayBitmap(sensorWidth, sensorHeight) ?: return
     val trackerPtr =
       try {
         tracker.rawAddressForJni().toLong()
@@ -765,7 +776,7 @@ class LivePlanarOcrEngine(
     val jniStartNs = System.nanoTime()
     val written =
       try {
-        PlanarRenderJni.compositeInto(trackerPtr, framePtr, buffer, displayWidth, displayHeight)
+        PlanarRenderJni.compositeInto(trackerPtr, framePtr, buffer, sensorWidth, sensorHeight)
       } catch (e: Throwable) {
         Log.w(TAG_PLANAR, "PlanarRenderJni.compositeInto failed", e)
         return
@@ -779,7 +790,12 @@ class LivePlanarOcrEngine(
     val jniBlitMs = (System.nanoTime() - jniStartNs) / 1_000_000.0
     timingProbe?.recordCompositeJni(jniBlitMs)
     _compositedFrame.value =
-      CompositedFrame(bitmap = bitmap, width = displayWidth, height = displayHeight)
+      CompositedFrame(
+        bitmap = bitmap,
+        width = sensorWidth,
+        height = sensorHeight,
+        rotationDegrees = rotationDegrees,
+      )
     timingProbe?.recordEmit()
     // Ping-pong: next composite writes into the other slot so the view
     // can keep drawing the bitmap we just emitted without racing.

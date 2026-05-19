@@ -1713,9 +1713,33 @@ impl LivePlanarTracker {
                 .cached
                 .as_ref()
                 .expect("oriented still cached");
+            // PPOCR boundary: `detected` boxes are in display-orient
+            // coords (PPOCR ran on display-orient RGB). The tracker
+            // engine operates on sensor-orient gray, so the regions
+            // passed to `acquire_now_in_regions` must be in sensor
+            // coords. Convert each box's display rect via the inverse
+            // sensor→display rotation.
+            let sensor_w = state.width;
+            let sensor_h = state.height;
+            let rotation = state.rotation_degrees;
             let regions: Vec<(u32, u32, u32, u32)> = detected
                 .iter()
-                .map(|d| (d.rect.left, d.rect.top, d.rect.right, d.rect.bottom))
+                .filter_map(|d| {
+                    let display_rect = translator::Rect {
+                        left: d.rect.left,
+                        top: d.rect.top,
+                        right: d.rect.right,
+                        bottom: d.rect.bottom,
+                    };
+                    translator::live_frame::display_crop_to_sensor(
+                        display_rect,
+                        sensor_w,
+                        sensor_h,
+                        rotation,
+                    )
+                    .ok()
+                    .map(|r| (r.left, r.top, r.right, r.bottom))
+                })
                 .collect();
             let mut engine = match self.state.lock() {
                 Ok(g) => g,
@@ -1812,6 +1836,18 @@ impl LivePlanarTracker {
             Some(o) => o,
             None => return AcquirePipelineOutcome::error("oriented cache miss"),
         };
+        // PPOCR boundary: `detected` boxes are in display coords;
+        // the surface map (and anchor canonical frame) is in sensor
+        // coords. h_view_to_surface = pixel display→sensor rotation
+        // so the surface-map projection lands in sensor coords. On
+        // initial acquire there's no per-anchor H yet (anchor was
+        // just built; its canonical IS this sensor frame), so the
+        // pixel rotation is the entire transform.
+        let h_disp_to_sensor = translator::live_frame::display_to_sensor_homography(
+            state.width,
+            state.height,
+            state.rotation_degrees,
+        );
         let cancel = || {
             self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
         };
@@ -1820,7 +1856,7 @@ impl LivePlanarTracker {
             translator::live_session::PostDetectInput {
                 detections: &detected,
                 oriented,
-                h_view_to_surface: None,
+                h_view_to_surface: Some(h_disp_to_sensor),
                 anchor_id,
                 from_lang: &from_lang_code,
                 to_lang: &to_lang_code,
@@ -1934,7 +1970,8 @@ impl LivePlanarTracker {
                 return AcquirePipelineOutcome::error("pending_refresh_target poisoned")
             }
         };
-        let h_view_to_surface = match translator::homography::invert(&h_root_to_view) {
+        // Sensor-view → sensor-surface (engine's H is in sensor coords).
+        let h_sensor_view_to_surface = match translator::homography::invert(&h_root_to_view) {
             Some(h) => h,
             None => return AcquirePipelineOutcome::error("H_root→view not invertible"),
         };
@@ -2006,12 +2043,22 @@ impl LivePlanarTracker {
         let cancel = || {
             self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
         };
+        // PPOCR boundary: compose display→sensor pixel rotation with
+        // the engine's sensor-view → sensor-surface H, so detected
+        // boxes (display coords) project straight to sensor surface.
+        let h_disp_to_sensor = translator::live_frame::display_to_sensor_homography(
+            state.width,
+            state.height,
+            state.rotation_degrees,
+        );
+        let h_view_to_surface_composed =
+            translator::homography::mat3_mul(&h_sensor_view_to_surface, &h_disp_to_sensor);
         let session_ref: &translator::TranslatorSession = &catalog.session;
         let outcome = self.session.run_post_detect(
             translator::live_session::PostDetectInput {
                 detections: &detected,
                 oriented,
-                h_view_to_surface: Some(h_view_to_surface),
+                h_view_to_surface: Some(h_view_to_surface_composed),
                 anchor_id,
                 from_lang: &from_lang_code,
                 to_lang: &to_lang_code,
@@ -2604,23 +2651,22 @@ impl LivePlanarTracker {
     /// Composite directly into the caller-supplied destination slice
     /// — the zero-copy JNI fast path. Locks the session's
     /// `overlay_items` for the duration of the composite so the
-    /// bitmaps can be borrowed without cloning (same lock-hold shape
-    /// as the previous `composite_frame`). `h_surface_to_viewport` is
-    /// `None` on Idle / Acquiring / sustained Lost — we still want
-    /// the camera frame on screen, just with no overlay warp.
+    /// bitmaps can be borrowed without cloning. Output is
+    /// **sensor-orient** (same dims as the camera buffer); the
+    /// SurfaceView rotates it for display at scanout.
+    /// `h_surface_to_viewport` is `None` on Idle / Acquiring /
+    /// sustained Lost — we still want the camera frame on screen,
+    /// just with no overlay warp.
     pub(crate) fn composite_into_slice(
         &self,
         frame: &FrameHandle,
         dst: &mut [u8],
-        display_width: u32,
-        display_height: u32,
         h_surface_to_viewport: Option<[f32; 9]>,
         active_anchor_id: u64,
     ) -> Result<(), translator::live_compositor::CompositeError> {
         let state = frame.state.lock().expect("frame mutex poisoned");
         let sensor_w = state.width;
         let sensor_h = state.height;
-        let rotation = state.rotation_degrees;
         let overlay_guard = self.session.overlay_items.lock().ok();
         let items_vec: Vec<translator::live_compositor::OverlayItem<'_>> =
             match (&overlay_guard, h_surface_to_viewport) {
@@ -2641,12 +2687,9 @@ impl LivePlanarTracker {
             h_surface_to_viewport.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
         translator::live_compositor::composite_frame_into(
             dst,
-            display_width,
-            display_height,
-            &state.rgba,
             sensor_w,
             sensor_h,
-            rotation,
+            &state.rgba,
             &h_for_call,
             &items_vec,
         )

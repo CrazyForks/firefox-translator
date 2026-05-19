@@ -36,20 +36,20 @@ pub extern "system" fn Java_dev_davidv_translator_PlanarRenderJni_compositeInto(
     tracker_ptr: jlong,
     frame_ptr: jlong,
     dst: JByteBuffer,
-    display_width: jint,
-    display_height: jint,
+    sensor_width: jint,
+    sensor_height: jint,
 ) -> jint {
     if tracker_ptr == 0 || frame_ptr == 0 {
         return 0;
     }
     let tracker = unsafe { &*(tracker_ptr as *const LivePlanarTracker) };
     let frame = unsafe { &*(frame_ptr as *const FrameHandle) };
-    if display_width <= 0 || display_height <= 0 {
+    if sensor_width <= 0 || sensor_height <= 0 {
         return 0;
     }
-    let dw = display_width as u32;
-    let dh = display_height as u32;
-    let needed = (dw as usize) * (dh as usize) * 4;
+    let sw = sensor_width as u32;
+    let sh = sensor_height as u32;
+    let needed = (sw as usize) * (sh as usize) * 4;
     let dst_addr = match env.get_direct_buffer_address(&dst) {
         Ok(p) if !p.is_null() => p,
         _ => return 0,
@@ -63,7 +63,8 @@ pub extern "system" fn Java_dev_davidv_translator_PlanarRenderJni_compositeInto(
     // for the duration of this call — Kotlin is on the detector
     // worker thread and won't touch the buffer until we return. The
     // tracker + frame mutex acquires happen inside
-    // `composite_into_slice`.
+    // `composite_into_slice`. Output is sensor-orient; SurfaceView
+    // rotates for display.
     let dst_slice = unsafe { std::slice::from_raw_parts_mut(dst_addr, needed) };
 
     let (anchor_id, h) = match tracker.take_pending_compose() {
@@ -71,13 +72,15 @@ pub extern "system" fn Java_dev_davidv_translator_PlanarRenderJni_compositeInto(
         None => (0u64, None),
     };
     let t_compose = std::time::Instant::now();
-    let result = tracker.composite_into_slice(frame, dst_slice, dw, dh, h, anchor_id);
+    let result = tracker.composite_into_slice(frame, dst_slice, h, anchor_id);
     if PER_FRAME_TIMING_LOG {
         log::info!(
             target: "planar_timing",
-            "outer: composite={:.1}ms overlay_active={}",
+            "outer: composite={:.1}ms overlay_active={} dims={}x{}",
             t_compose.elapsed().as_secs_f64() * 1000.0,
             h.is_some(),
+            sw,
+            sh,
         );
     }
     match result {
