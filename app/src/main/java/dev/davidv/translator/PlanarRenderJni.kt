@@ -17,21 +17,21 @@
 
 package dev.davidv.translator
 
-import java.nio.ByteBuffer
+import android.graphics.Bitmap
 
 /** JNI fast-path for the planar tracker's overlay bitmap.
  *
- *  uniffi's `Vec<u8>` ↔ `ByteArray` marshalling allocates + memcpy's the
- *  whole return value through JNA. For a 960×1280 bitmap (4.6 MB) the
- *  cost is significant and we render it 3–4 times per acquire (initial
- *  + per rec batch + post-translate).
+ *  The composite math (camera blit + overlay warp) writes its output
+ *  **directly into the on-screen [Bitmap]'s pixel memory** via the
+ *  NDK `AndroidBitmap_lockPixels` API. Skips both the Rust-side
+ *  intermediate `Vec<u8>` AND the Kotlin-side
+ *  `Bitmap.copyPixelsFromBuffer` pass — one write into the bitmap
+ *  per frame, no extra memcpys.
  *
- *  This shim pairs with [LivePlanarTracker.prepareTextOverlayRender]
- *  (uniffi, items in) → this `renderInto` (JNI, bytes out). Kotlin
- *  pre-allocates a `DirectByteBuffer`; Rust memcpys straight into it;
- *  Kotlin then `Bitmap.copyPixelsFromBuffer`s into the on-screen
- *  `Bitmap`. Zero uniffi marshalling, no JVM ByteArray allocation per
- *  render.
+ *  Pairs with [LivePlanarTracker.processAndComposite] (uniffi, runs
+ *  the tracker step and stashes the H + anchor id) → this
+ *  `compositeInto` (JNI, runs the composite math directly into the
+ *  bitmap).
  */
 internal object PlanarRenderJni {
   init {
@@ -41,22 +41,20 @@ internal object PlanarRenderJni {
     System.loadLibrary("bindings")
   }
 
-  /** Composite the camera frame (rotated to display orientation) +
-   *  any pending overlay quads (parked by the most recent
-   *  `processAndComposite` uniffi call) **directly** into `dst` —
-   *  zero-copy in the sense that there's no intermediate Rust-side
-   *  `Vec<u8>` and no JNI memcpy of bytes-out; the composite math
-   *  writes its output bytes straight to the
-   *  `DirectByteBuffer`-backed memory. Returns the number of bytes
-   *  written, or 0 on any failure. The destination buffer must have
-   *  capacity ≥ `displayWidth × displayHeight × 4`.
+  /** Composite the camera frame + any pending overlay quads (parked
+   *  by the most recent `processAndComposite` uniffi call) **directly
+   *  into [bitmap]'s pixel memory** via `AndroidBitmap_lockPixels`.
+   *  Returns the number of bytes written, or 0 on any failure
+   *  (bad pointer, wrong bitmap format, dim mismatch, composite
+   *  math error). The bitmap must be `ARGB_8888` and exactly
+   *  `sensorWidth × sensorHeight` pixels.
    */
   @JvmStatic
   external fun compositeInto(
     trackerPtr: Long,
     framePtr: Long,
-    dst: ByteBuffer,
-    displayWidth: Int,
-    displayHeight: Int,
+    bitmap: Bitmap,
+    sensorWidth: Int,
+    sensorHeight: Int,
   ): Int
 }

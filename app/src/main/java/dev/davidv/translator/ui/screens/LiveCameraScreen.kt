@@ -411,12 +411,23 @@ private fun CameraSurface(
         // it composes with imuService.rotationAt() below.
         val captureTs = proxy.imageInfo.timestamp
         val length = width * pixelStride * height
-        val ok =
-          if (rowStride == width * pixelStride) {
-            // Fast path: contiguous DirectByteBuffer → straight memcpy into the
-            // Rust-side buffer via JNI. Zero JVM-side allocation.
-            plane.buffer.rewind()
-            LiveFrameJni.writeFrom(
+        // Try the **zero-copy fast path** first: contiguous
+        // RGBA_8888 DirectByteBuffer → record the buffer's native
+        // address inside the FrameHandle without memcpying. The
+        // ImageProxy stays open for the duration of the worker's
+        // processAndComposite + compositeInto (typically <25 ms);
+        // the worker closes it after those return, at which point
+        // CameraX recycles the buffer back into its pool. Saves
+        // ~3 ms of memcpy per frame.
+        //
+        // Stride-padded fallback (rare): repack row-by-row through
+        // uniffi (eager copy); proxy can close immediately.
+        val ok: Boolean
+        val handoverProxy: androidx.camera.core.ImageProxy?
+        if (rowStride == width * pixelStride) {
+          plane.buffer.rewind()
+          ok =
+            LiveFrameJni.setExternalBuffer(
               handle.rawAddressForJni().toLong(),
               plane.buffer,
               length,
@@ -424,23 +435,25 @@ private fun CameraSurface(
               height,
               rotation,
             )
-          } else {
-            // Stride padding — rare for RGBA_8888. Repack row-by-row into a
-            // temp ByteArray and use the uniffi marshalling fallback.
-            val src = ByteArray(plane.buffer.remaining())
-            plane.buffer.rewind()
-            plane.buffer.get(src)
-            val packed = ByteArray(length)
-            val rowBytes = width * pixelStride
-            for (row in 0 until height) {
-              System.arraycopy(src, row * rowStride, packed, row * rowBytes, rowBytes)
-            }
-            handle.resetViaUniffi(packed, width.toUInt(), height.toUInt(), rotation)
-            true
+          handoverProxy = if (ok) proxy else null
+          if (!ok) proxy.close()
+        } else {
+          val src = ByteArray(plane.buffer.remaining())
+          plane.buffer.rewind()
+          plane.buffer.get(src)
+          val packed = ByteArray(length)
+          val rowBytes = width * pixelStride
+          for (row in 0 until height) {
+            System.arraycopy(src, row * rowStride, packed, row * rowBytes, rowBytes)
           }
-        proxy.close()
+          handle.resetViaUniffi(packed, width.toUInt(), height.toUInt(), rotation)
+          ok = true
+          handoverProxy = null
+          proxy.close()
+        }
         val convertMs = (System.nanoTime() - tConvert) / 1_000_000.0
         if (!ok || analyzerSession.get() != mySession) {
+          handoverProxy?.close()
           engine.releaseFrameHandle(handle)
           return@setAnalyzer
         }
@@ -462,7 +475,21 @@ private fun CameraSurface(
         val accelSnap = imuService.accelAt(captureTs)
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
-        engine.submitFrame(handle, width, height, rotation, fx, fy, from, to, isAutoSource, convertMs, imuSnap, accelSnap)
+        engine.submitFrame(
+          handle,
+          width,
+          height,
+          rotation,
+          fx,
+          fy,
+          from,
+          to,
+          isAutoSource,
+          convertMs,
+          imuSnap,
+          accelSnap,
+          handoverProxy,
+        )
       }
     } else {
       imageAnalysis.clearAnalyzer()

@@ -59,4 +59,44 @@ internal object LiveFrameJni {
     height: Int,
     rotation: Int,
   ): Boolean
+
+  /** Zero-copy ingestion: record the camera DirectByteBuffer's
+   *  address inside the `FrameHandle` without memcpying its bytes.
+   *  Saves the ~3 ms memcpy that [writeFrom] performs.
+   *
+   *  Lifetime contract: the caller MUST keep the backing camera
+   *  [android.media.Image] / `ImageProxy` alive until either
+   *  [materializeOwned] is invoked (which copies the bytes into the
+   *  handle's owned storage) or [clearExternalBuffer] is called.
+   *  Accessing the slice after the image closes is use-after-free.
+   *
+   *  Used by the per-frame fast path: the camera buffer stays alive
+   *  for processAndComposite + compositeInto, then either the
+   *  acquire/refresh pipeline materializes a copy (so it can read
+   *  asynchronously after the proxy closes) or we just close.
+   */
+  @JvmStatic
+  external fun setExternalBuffer(
+    handlePtr: Long,
+    src: ByteBuffer,
+    length: Int,
+    width: Int,
+    height: Int,
+    rotation: Int,
+  ): Boolean
+
+  /** Memcpy the currently-borrowed external buffer into the
+   *  `FrameHandle`'s owned storage and release the borrow. Call this
+   *  immediately before closing the camera ImageProxy when an
+   *  async acquire / refresh pipeline still needs to read the bytes.
+   *  No-op when no external buffer is currently set. */
+  @JvmStatic
+  external fun materializeOwned(handlePtr: Long)
+
+  /** Release the external-buffer borrow without copying. Call when
+   *  the frame is being discarded (e.g. analyzer overwrote
+   *  pendingFrame before the worker drained it) and we just want
+   *  to invalidate the pointer before the ImageProxy closes. */
+  @JvmStatic
+  external fun clearExternalBuffer(handlePtr: Long)
 }

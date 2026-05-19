@@ -1190,11 +1190,68 @@ pub struct FrameHandle {
 }
 
 pub(crate) struct FrameState {
+    /// Owned RGBA bytes. Populated by the legacy `writeFrom` JNI
+    /// path (memcpy from camera buffer), the `reset_via_uniffi`
+    /// fallback, OR by [`Self::materialize_owned`] which copies from
+    /// `external_rgba` so async pipelines can drop the camera buffer.
     pub rgba: Vec<u8>,
+    /// Borrowed RGBA bytes from a Kotlin-held DirectByteBuffer
+    /// (typically a CameraX ImageProxy). Set by the
+    /// `setExternalBuffer` JNI path for zero-copy ingestion on the
+    /// per-frame fast path. Caller (Kotlin) MUST keep the backing
+    /// ImageProxy alive until either [`Self::materialize_owned`] or
+    /// the JNI `clearExternalBuffer` is called — accessing the slice
+    /// after the ImageProxy closes is use-after-free.
+    pub external_rgba: Option<ExternalRgba>,
     pub width: u32,
     pub height: u32,
     pub rotation_degrees: i32,
     pub cached: Option<translator::live_frame::OrientedImage>,
+}
+
+/// Pointer + length into a Kotlin-held DirectByteBuffer. Marked
+/// `Send`/`Sync` because the wrapping `Mutex<FrameState>` is held
+/// across threads in normal use — the lifetime promise is enforced
+/// by Kotlin code, not by Rust types.
+pub(crate) struct ExternalRgba {
+    pub ptr: *const u8,
+    pub len: usize,
+}
+unsafe impl Send for ExternalRgba {}
+unsafe impl Sync for ExternalRgba {}
+
+impl FrameState {
+    /// Return the active RGBA bytes — `external_rgba` when set
+    /// (zero-copy from camera buffer), `rgba` otherwise (owned copy).
+    pub(crate) fn rgba_bytes(&self) -> &[u8] {
+        if let Some(ext) = &self.external_rgba {
+            // SAFETY: Kotlin guarantees the backing ImageProxy is
+            // alive for the duration of this borrow — see contract
+            // on `external_rgba`.
+            unsafe { std::slice::from_raw_parts(ext.ptr, ext.len) }
+        } else {
+            &self.rgba
+        }
+    }
+
+    /// Memcpy `external_rgba` into the owned `rgba` Vec, then clear
+    /// the external borrow. After this returns the FrameState's
+    /// bytes are owned and the caller can safely close the camera
+    /// ImageProxy. No-op when `external_rgba` is already None.
+    pub(crate) fn materialize_owned(&mut self) {
+        if let Some(ext) = self.external_rgba.take() {
+            self.rgba.clear();
+            self.rgba.reserve(ext.len);
+            // SAFETY: caller has not yet closed the ImageProxy; the
+            // source pointer is valid for `ext.len` bytes; the dest
+            // Vec was just reserved with at least that capacity; src
+            // and dst are disjoint (camera native memory vs Rust heap).
+            unsafe {
+                std::ptr::copy_nonoverlapping(ext.ptr, self.rgba.as_mut_ptr(), ext.len);
+                self.rgba.set_len(ext.len);
+            }
+        }
+    }
 }
 
 impl FrameHandle {
@@ -1202,6 +1259,7 @@ impl FrameHandle {
         FrameHandle {
             state: std::sync::Mutex::new(FrameState {
                 rgba: Vec::with_capacity(initial_capacity),
+                external_rgba: None,
                 width: 0,
                 height: 0,
                 rotation_degrees: 0,
@@ -1233,6 +1291,7 @@ impl FrameHandle {
     ) {
         let mut state = self.state.lock().expect("frame mutex poisoned");
         state.rgba = rgba;
+        state.external_rgba = None;
         state.width = width;
         state.height = height;
         state.rotation_degrees = rotation_degrees;
@@ -1278,7 +1337,7 @@ fn ensure_oriented_locked(
     };
     if needs_rebuild {
         let oi = translator::live_frame::OrientedImage::build(
-            &state.rgba,
+            state.rgba_bytes(),
             state.width,
             state.height,
             state.rotation_degrees,
@@ -1305,7 +1364,7 @@ fn ensure_oriented_with_rgb_locked(
     };
     if needs_rebuild {
         let oi = translator::live_frame::OrientedImage::build_with_rgb(
-            &state.rgba,
+            state.rgba_bytes(),
             state.width,
             state.height,
             state.rotation_degrees,
@@ -2689,7 +2748,7 @@ impl LivePlanarTracker {
             dst,
             sensor_w,
             sensor_h,
-            &state.rgba,
+            state.rgba_bytes(),
             &h_for_call,
             &items_vec,
         )

@@ -77,7 +77,13 @@ private const val SMOOTH_MIN_ALPHA: Float = 0.35f
  *  real tap-to-focus elsewhere on screen. */
 private const val FOCUS_RESET_THRESHOLD: Float = 0.05f
 
-/** Carries one camera frame through the engine. */
+/** Carries one camera frame through the engine. [proxy] is held
+ *  alive for zero-copy ingestion — the Rust side borrows the camera
+ *  DirectByteBuffer rather than memcpying. Closed by the worker after
+ *  the per-frame fast path completes (and after any async pipeline
+ *  has materialized an owned copy via [LiveFrameJni.materializeOwned]).
+ *  Null only on the legacy memcpy fallback or the stride-padded path
+ *  where the worker has no proxy to close. */
 private data class PendingPlanarFrame(
   val handle: FrameHandle,
   val sensorWidth: Int,
@@ -91,6 +97,7 @@ private data class PendingPlanarFrame(
   val imuRotationAtCapture: FloatArray?,
   val linearAccelAtCapture: FloatArray?,
   val convertMs: Double,
+  val proxy: androidx.camera.core.ImageProxy?,
 )
 
 /* Per-anchor canonical entries: a recognised text region in canonical
@@ -237,22 +244,19 @@ class LivePlanarOcrEngine(
   private val _compositedFrame = MutableStateFlow<CompositedFrame?>(null)
   val compositedFrame: StateFlow<CompositedFrame?> = _compositedFrame.asStateFlow()
 
-  /** Double-buffer of display-orient RGBA8888 bitmaps. The engine writes
-   *  one while the view holds the other; we swap after each composite
-   *  to avoid GC churn (an 8 MB allocation per 30 Hz frame is ~240
-   *  MB/s of garbage). */
+  /** Double-buffer of sensor-orient RGBA8888 bitmaps. The engine
+   *  writes one while the view holds the other; we swap after each
+   *  composite to avoid GC churn (an 8 MB allocation per 30 Hz frame
+   *  is ~240 MB/s of garbage). The bitmap pixels are written directly
+   *  by `PlanarRenderJni.compositeInto` via `AndroidBitmap_lockPixels`
+   *  — no DirectByteBuffer intermediate. */
   private val displayBitmaps = arrayOfNulls<android.graphics.Bitmap>(2)
   private var displayBitmapIndex: Int = 0
 
-  /** Direct buffer used to memcpy from Rust into the active display
-   *  bitmap. Sized to the current display dims; grows on first use. */
-  private var displayBuffer: java.nio.ByteBuffer? = null
-
-  /** Display dims the engine is currently producing. We rebuild the
-   *  bitmaps + buffer when these change (rare — only on rotation or
-   *  camera reselection). */
-  private var displayBufferWidth: Int = 0
-  private var displayBufferHeight: Int = 0
+  /** Bitmap pool dims. We recycle both pool slots on dim change
+   *  (rare — only on rotation or camera reselection). */
+  private var displayBitmapWidth: Int = 0
+  private var displayBitmapHeight: Int = 0
 
   /** Per-frame tracker state for the debug status pill. Updated on
    *  every `processFrame` (cheap) and refined on each rec batch. */
@@ -279,6 +283,11 @@ class LivePlanarOcrEngine(
             runFrame(frame)
           } catch (e: Throwable) {
             Log.w(TAG_PLANAR, "frame stage crashed", e)
+            try {
+              LiveFrameJni.clearExternalBuffer(frame.handle.rawAddressForJni().toLong())
+            } catch (_: Throwable) {
+            }
+            frame.proxy?.close()
             releaseFrameHandle(frame.handle)
           }
         }
@@ -320,6 +329,7 @@ class LivePlanarOcrEngine(
     convertMs: Double = 0.0,
     imuRotationAtCapture: FloatArray? = null,
     linearAccelAtCapture: FloatArray? = null,
+    proxy: androidx.camera.core.ImageProxy? = null,
   ) {
     val newFrame =
       PendingPlanarFrame(
@@ -335,11 +345,20 @@ class LivePlanarOcrEngine(
         imuRotationAtCapture,
         linearAccelAtCapture,
         convertMs,
+        proxy,
       )
     timingProbe?.recordSubmit()
     val prev = pendingFrame.getAndSet(newFrame)
     if (prev != null) {
       timingProbe?.recordDrop()
+      // Drop case: invalidate any external borrow before closing
+      // the proxy (avoids the worker reading freed bytes if it
+      // wakes mid-getAndSet).
+      try {
+        LiveFrameJni.clearExternalBuffer(prev.handle.rawAddressForJni().toLong())
+      } catch (_: Throwable) {
+      }
+      prev.proxy?.close()
       releaseFrameHandle(prev.handle)
     }
     frameSignal.trySend(Unit)
@@ -393,7 +412,6 @@ class LivePlanarOcrEngine(
       displayBitmaps[i]?.recycle()
       displayBitmaps[i] = null
     }
-    displayBuffer = null
   }
 
   private suspend fun runFrame(pending: PendingPlanarFrame) {
@@ -519,6 +537,11 @@ class LivePlanarOcrEngine(
         )
       } catch (e: Throwable) {
         Log.w(TAG_PLANAR, "processAndComposite failed", e)
+        try {
+          LiveFrameJni.clearExternalBuffer(pending.handle.rawAddressForJni().toLong())
+        } catch (_: Throwable) {
+        }
+        pending.proxy?.close()
         releaseFrameHandle(pending.handle)
         return
       }
@@ -556,52 +579,70 @@ class LivePlanarOcrEngine(
         result.compositeByteSize.toInt(),
       )
     }
-    // For ACQUIRING, kick off the acquire stage on a separate worker
-    // coroutine so this detector thread is free to keep processing
-    // analyzer frames (composite + emit). Without this, every acquire
-    // stalls the display for 3-5 frames; with it, the SurfaceView
-    // keeps refreshing at full rate while detection runs in parallel.
-    // Dedupe via `acquireInFlight` so we don't fan out one acquire per
-    // ACQUIRING-state frame.
-    if (result.state == PlanarTrackerState.ACQUIRING) {
-      if (acquireInFlight.compareAndSet(false, true)) {
-        val capturedPending = pending
-        workerScope.launch(Dispatchers.Default) {
-          try {
-            runAcquireStage(capturedPending, cropRect)
-          } catch (e: Throwable) {
-            Log.w(TAG_PLANAR, "acquire stage crashed", e)
-            releaseFrameHandle(capturedPending.handle)
-          } finally {
-            acquireInFlight.set(false)
-          }
-        }
-      } else {
-        // Another acquire is in flight; nothing to do with this
-        // frame's handle — release it.
-        releaseFrameHandle(pending.handle)
+    // Decide whether an async acquire/refresh pipeline needs to
+    // launch on this frame. If so, we MUST materialize the camera
+    // bytes into the FrameHandle's owned storage before closing the
+    // ImageProxy — the async pipeline will read bytes after this
+    // function returns.
+    val launchAcquire =
+      result.state == PlanarTrackerState.ACQUIRING && acquireInFlight.compareAndSet(false, true)
+    val launchRefresh =
+      !launchAcquire &&
+        result.state == PlanarTrackerState.LOCKED &&
+        result.shouldRefreshDetect &&
+        acquireInFlight.compareAndSet(false, true)
+    val asyncWillRead = launchAcquire || launchRefresh
+    val framePtr =
+      try {
+        pending.handle.rawAddressForJni().toLong()
+      } catch (_: Throwable) {
+        0L
       }
-    } else if (result.state == PlanarTrackerState.LOCKED && result.shouldRefreshDetect) {
-      // Detect-on-tracking-frame trigger: surface map says enough
-      // tracked frames have elapsed since the last detection that
-      // it's worth a fresh detect pass. Same in-flight dedupe as
-      // the acquire branch so an acquire and a refresh don't fan
-      // out together (the refresh would race the acquire's overlay
-      // upserts).
-      if (acquireInFlight.compareAndSet(false, true)) {
-        val capturedPending = pending
-        workerScope.launch(Dispatchers.Default) {
-          try {
-            runRefreshStage(capturedPending, cropRect)
-          } catch (e: Throwable) {
-            Log.w(TAG_PLANAR, "refresh stage crashed", e)
-            releaseFrameHandle(capturedPending.handle)
-          } finally {
-            acquireInFlight.set(false)
-          }
+    if (asyncWillRead && framePtr != 0L) {
+      // Async pipeline starting → memcpy external → owned so the
+      // pipeline can read after the ImageProxy closes. This is the
+      // one frame in many where we pay the input-copy cost; on
+      // pure tracking frames (the common case) we skip it.
+      try {
+        LiveFrameJni.materializeOwned(framePtr)
+      } catch (_: Throwable) {
+      }
+    } else if (framePtr != 0L) {
+      // No async work needed — just clear the borrow so a stale
+      // pointer doesn't accidentally outlive the proxy.
+      try {
+        LiveFrameJni.clearExternalBuffer(framePtr)
+      } catch (_: Throwable) {
+      }
+    }
+    // Close the ImageProxy back to the CameraX analyzer pool. After
+    // this point, only the FrameHandle's owned `rgba` (which the
+    // async pipeline materializes above) is readable.
+    pending.proxy?.close()
+
+    if (launchAcquire) {
+      val capturedPending = pending
+      workerScope.launch(Dispatchers.Default) {
+        try {
+          runAcquireStage(capturedPending, cropRect)
+        } catch (e: Throwable) {
+          Log.w(TAG_PLANAR, "acquire stage crashed", e)
+          releaseFrameHandle(capturedPending.handle)
+        } finally {
+          acquireInFlight.set(false)
         }
-      } else {
-        releaseFrameHandle(pending.handle)
+      }
+    } else if (launchRefresh) {
+      val capturedPending = pending
+      workerScope.launch(Dispatchers.Default) {
+        try {
+          runRefreshStage(capturedPending, cropRect)
+        } catch (e: Throwable) {
+          Log.w(TAG_PLANAR, "refresh stage crashed", e)
+          releaseFrameHandle(capturedPending.handle)
+        } finally {
+          acquireInFlight.set(false)
+        }
       }
     } else {
       releaseFrameHandle(pending.handle)
@@ -757,7 +798,6 @@ class LivePlanarOcrEngine(
     expected: Int,
   ) {
     if (sensorWidth <= 0 || sensorHeight <= 0) return
-    val buffer = ensureDisplayBuffer(expected, sensorWidth, sensorHeight)
     val bitmap = ensureDisplayBitmap(sensorWidth, sensorHeight) ?: return
     val trackerPtr =
       try {
@@ -776,7 +816,7 @@ class LivePlanarOcrEngine(
     val jniStartNs = System.nanoTime()
     val written =
       try {
-        PlanarRenderJni.compositeInto(trackerPtr, framePtr, buffer, sensorWidth, sensorHeight)
+        PlanarRenderJni.compositeInto(trackerPtr, framePtr, bitmap, sensorWidth, sensorHeight)
       } catch (e: Throwable) {
         Log.w(TAG_PLANAR, "PlanarRenderJni.compositeInto failed", e)
         return
@@ -785,8 +825,6 @@ class LivePlanarOcrEngine(
       Log.w(TAG_PLANAR, "JNI composite wrote $written, expected $expected")
       return
     }
-    buffer.rewind()
-    bitmap.copyPixelsFromBuffer(buffer)
     val jniBlitMs = (System.nanoTime() - jniStartNs) / 1_000_000.0
     timingProbe?.recordCompositeJni(jniBlitMs)
     _compositedFrame.value =
@@ -802,38 +840,21 @@ class LivePlanarOcrEngine(
     displayBitmapIndex = 1 - displayBitmapIndex
   }
 
-  private fun ensureDisplayBuffer(
-    minBytes: Int,
-    width: Int,
-    height: Int,
-  ): java.nio.ByteBuffer {
-    val existing = displayBuffer
-    val widthChanged = width != displayBufferWidth || height != displayBufferHeight
-    if (existing != null && existing.capacity() >= minBytes && !widthChanged) {
-      existing.clear()
-      return existing
-    }
-    val fresh =
-      java.nio.ByteBuffer
-        .allocateDirect(minBytes)
-        .order(java.nio.ByteOrder.nativeOrder())
-    displayBuffer = fresh
-    displayBufferWidth = width
-    displayBufferHeight = height
-    // Dims changed → existing bitmaps no longer match; drop them so
-    // they get reallocated.
-    for (i in 0..1) {
-      displayBitmaps[i]?.recycle()
-      displayBitmaps[i] = null
-    }
-    displayBitmapIndex = 0
-    return fresh
-  }
-
   private fun ensureDisplayBitmap(
     width: Int,
     height: Int,
   ): android.graphics.Bitmap? {
+    // Dim change: recycle both pool slots so the next composite gets
+    // a freshly-sized bitmap. Rare path (rotation / camera reselect).
+    if (width != displayBitmapWidth || height != displayBitmapHeight) {
+      for (i in 0..1) {
+        displayBitmaps[i]?.recycle()
+        displayBitmaps[i] = null
+      }
+      displayBitmapIndex = 0
+      displayBitmapWidth = width
+      displayBitmapHeight = height
+    }
     val slot = displayBitmapIndex
     val existing = displayBitmaps[slot]
     if (existing != null && existing.width == width && existing.height == height && !existing.isRecycled) {

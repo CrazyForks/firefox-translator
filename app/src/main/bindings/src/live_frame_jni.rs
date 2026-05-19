@@ -65,9 +65,101 @@ pub extern "system" fn Java_dev_davidv_translator_LiveFrameJni_writeFrom(
         std::ptr::copy_nonoverlapping(src_addr, state.rgba.as_mut_ptr(), length as usize);
         state.rgba.set_len(length as usize);
     }
+    // Clear any leftover external borrow: this path is the legacy
+    // memcpy ingestion (used by the stride-padded fallback in
+    // LiveCameraScreen); the owned `rgba` is now authoritative.
+    state.external_rgba = None;
     state.width = width as u32;
     state.height = height as u32;
     state.rotation_degrees = rotation;
     state.cached = None;
     jni::sys::JNI_TRUE
+}
+
+/// Zero-copy ingestion: borrow the camera ImageProxy's
+/// DirectByteBuffer into the FrameHandle without memcpying. The
+/// caller (Kotlin) MUST keep the backing ImageProxy alive until
+/// either [`Java_..._materializeOwned`] is invoked OR the FrameHandle
+/// is reset via another writeFrom / setExternalBuffer / clear call.
+/// Returns JNI_TRUE on success, JNI_FALSE on failure.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LiveFrameJni_setExternalBuffer(
+    env: JNIEnv,
+    _class: JClass,
+    handle_ptr: jlong,
+    src: JByteBuffer,
+    length: jint,
+    width: jint,
+    height: jint,
+    rotation: jint,
+) -> jboolean {
+    if handle_ptr == 0 || length <= 0 {
+        return jni::sys::JNI_FALSE;
+    }
+    // SAFETY: same justification as writeFrom — Kotlin holds the Arc.
+    let handle = unsafe { &*(handle_ptr as *const FrameHandle) };
+    let src_addr = match env.get_direct_buffer_address(&src) {
+        Ok(p) if !p.is_null() => p,
+        _ => return jni::sys::JNI_FALSE,
+    };
+    let src_capacity = env.get_direct_buffer_capacity(&src).unwrap_or(0);
+    if (length as usize) > src_capacity {
+        return jni::sys::JNI_FALSE;
+    }
+    let mut state = match handle.state().lock() {
+        Ok(s) => s,
+        Err(_) => return jni::sys::JNI_FALSE,
+    };
+    state.external_rgba = Some(crate::uniffi_catalog::ExternalRgba {
+        ptr: src_addr,
+        len: length as usize,
+    });
+    state.width = width as u32;
+    state.height = height as u32;
+    state.rotation_degrees = rotation;
+    state.cached = None;
+    jni::sys::JNI_TRUE
+}
+
+/// Copy the currently-borrowed external buffer into the FrameHandle's
+/// owned `rgba` Vec, then release the borrow. Call this just before
+/// `proxy.close()` when an acquire / refresh pipeline needs to keep
+/// reading the camera bytes after the per-frame fast path has
+/// returned — the async pipeline must own its data because the
+/// ImageProxy will go away. No-op when no external buffer is set.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LiveFrameJni_materializeOwned(
+    _env: JNIEnv,
+    _class: JClass,
+    handle_ptr: jlong,
+) {
+    if handle_ptr == 0 {
+        return;
+    }
+    let handle = unsafe { &*(handle_ptr as *const FrameHandle) };
+    if let Ok(mut state) = handle.state().lock() {
+        state.materialize_owned();
+    }
+}
+
+/// Clear the external buffer borrow without copying. Use when the
+/// frame is being dropped (e.g. the analyzer overwrote `pendingFrame`
+/// before the worker drained it) and we just want to invalidate the
+/// pointer before the ImageProxy closes.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LiveFrameJni_clearExternalBuffer(
+    _env: JNIEnv,
+    _class: JClass,
+    handle_ptr: jlong,
+) {
+    if handle_ptr == 0 {
+        return;
+    }
+    let handle = unsafe { &*(handle_ptr as *const FrameHandle) };
+    if let Ok(mut state) = handle.state().lock() {
+        state.external_rgba = None;
+        // Don't touch `state.rgba` here — it may still hold valid
+        // data from a previous writeFrom or materialize that
+        // something else is reading.
+    }
 }
