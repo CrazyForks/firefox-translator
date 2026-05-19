@@ -1908,6 +1908,15 @@ impl LivePlanarTracker {
         if anchor_id == 0 {
             return AcquirePipelineOutcome::error("acquire_now returned 0");
         }
+        // Fresh-acquire wipe: the engine may have re-assigned a
+        // previously-used id (e.g. after `engine.clear()` from an AF
+        // reset). The session-side `AnchorState` and overlay items
+        // keyed by id would otherwise persist, rendering at stale
+        // surface coords through the new anchor's H — "overlay
+        // stuck to an arbitrary offset" after a fast pan → loss →
+        // re-lock cycle. Wipe before `run_post_detect` so the new
+        // acquire starts from a clean slate.
+        self.session.reset_anchor_state(anchor_id);
         if !gen_check() {
             return AcquirePipelineOutcome::canceled();
         }

@@ -21,6 +21,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
@@ -32,7 +33,9 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.camera2.interop.Camera2CameraControl
 import androidx.camera.camera2.interop.Camera2Interop
+import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
@@ -313,6 +316,15 @@ private fun CameraSurface(
   // shift when focus settles.
   val afScanning = remember { kotlinx.coroutines.flow.MutableStateFlow(false) }
 
+  // LENS_FOCUS_DISTANCE (diopters, 1/m) latched from the most recent
+  // capture result whose CONTROL_AF_STATE reports a converged focus
+  // (FOCUSED_LOCKED or PASSIVE_FOCUSED). Used to pin focus when the
+  // planar tracker reaches Locked — AF excursions blur frames, BRIEF
+  // descriptors die, the tracker drops. Pin the focus we have, accept
+  // progressive blur as the user approaches the subject.
+  val latestFocusedDistance =
+    remember { kotlinx.coroutines.flow.MutableStateFlow<Float?>(null) }
+
   val imageAnalysis =
     remember {
       // Cap analyzer source at ~1.5 MP regardless of device. The bigger the source,
@@ -349,6 +361,16 @@ private fun CameraSurface(
               afState == CaptureResult.CONTROL_AF_STATE_ACTIVE_SCAN ||
                 afState == CaptureResult.CONTROL_AF_STATE_PASSIVE_SCAN
             if (afScanning.value != scanning) afScanning.value = scanning
+            // Latch the focus distance once AF has converged; the
+            // tracker-state observer below uses it to pin focus when
+            // we reach Locked. Skip "inactive" results (no AF activity
+            // yet) and "scanning" results (in-flight, value transient).
+            if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED ||
+              afState == CaptureResult.CONTROL_AF_STATE_PASSIVE_FOCUSED
+            ) {
+              val d = result.get(CaptureResult.LENS_FOCUS_DISTANCE)
+              if (d != null) latestFocusedDistance.value = d
+            }
           }
         },
       )
@@ -385,6 +407,57 @@ private fun CameraSurface(
     val engine = liveOcrEngine ?: return@LaunchedEffect
     afScanning.collect { scanning ->
       if (scanning) engine.onAfScanStart() else engine.onAfScanEnd()
+    }
+  }
+
+  // Lock focus to the AF-converged distance once the tracker reaches
+  // LOCKED, release on any other state. Avoids AF excursions blurring
+  // frames mid-track (which kills BRIEF descriptors → tracker drops).
+  // The trade-off is accepted by design: progressive blur as the user
+  // physically moves the camera, OCR still works on slightly blurry
+  // frames, tracking stays glued. AF re-fires implicitly on the next
+  // re-acquire / tap-to-focus.
+  LaunchedEffect(camera, liveOcrEngine) {
+    val engine = liveOcrEngine ?: return@LaunchedEffect
+    val cam = camera ?: return@LaunchedEffect
+    var focusLocked = false
+    engine.trackerStatus.collect { status ->
+      val shouldLock = status.state == uniffi.bindings.PlanarTrackerState.LOCKED
+      if (shouldLock && !focusLocked) {
+        val d = latestFocusedDistance.value ?: return@collect
+        try {
+          val ctrl = Camera2CameraControl.from(cam.cameraControl)
+          val opts =
+            CaptureRequestOptions.Builder()
+              .setCaptureRequestOption(
+                CaptureRequest.CONTROL_AF_MODE,
+                CameraMetadata.CONTROL_AF_MODE_OFF,
+              )
+              .setCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE, d)
+              .build()
+          ctrl.captureRequestOptions = opts
+          focusLocked = true
+          Log.i(TAG, "AF locked at distance=$d (tracker LOCKED)")
+        } catch (e: Throwable) {
+          Log.w(TAG, "AF lock failed", e)
+        }
+      } else if (!shouldLock && focusLocked) {
+        try {
+          val ctrl = Camera2CameraControl.from(cam.cameraControl)
+          val opts =
+            CaptureRequestOptions.Builder()
+              .setCaptureRequestOption(
+                CaptureRequest.CONTROL_AF_MODE,
+                CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE,
+              )
+              .build()
+          ctrl.captureRequestOptions = opts
+          focusLocked = false
+          Log.i(TAG, "AF released (tracker state=${status.state})")
+        } catch (e: Throwable) {
+          Log.w(TAG, "AF release failed", e)
+        }
+      }
     }
   }
 
