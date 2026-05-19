@@ -17,8 +17,10 @@
 
 package dev.davidv.translator
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -138,6 +140,8 @@ class SettingsManager(
       prefs.getBoolean("translate_pdf_images", defaults.translatePdfImages)
     val liveCameraOverlayEnabled =
       prefs.getBoolean("live_camera_overlay_enabled", defaults.liveCameraOverlayEnabled)
+    val registerAsBrowser =
+      prefs.getBoolean("register_as_browser", defaults.registerAsBrowser)
 
     return AppSettings(
       defaultTargetLanguageCode = defaultTargetLanguageCode,
@@ -164,6 +168,7 @@ class SettingsManager(
       clearWebTranslatorDataOnClose = clearWebTranslatorDataOnClose,
       translatePdfImages = translatePdfImages,
       liveCameraOverlayEnabled = liveCameraOverlayEnabled,
+      registerAsBrowser = registerAsBrowser,
     )
   }
 
@@ -272,12 +277,32 @@ class SettingsManager(
         putBoolean("live_camera_overlay_enabled", newSettings.liveCameraOverlayEnabled)
         modifiedSettings.add("live_camera_overlay_enabled")
       }
+      if (newSettings.registerAsBrowser != currentSettings.registerAsBrowser) {
+        putBoolean("register_as_browser", newSettings.registerAsBrowser)
+        modifiedSettings.add("register_as_browser")
+        applyBrowserAliasState(newSettings.registerAsBrowser)
+      }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")
       remove("dictionary_base_url")
       apply()
     }
     _settings.value = newSettings
+  }
+
+  fun applyBrowserAliasState(enabled: Boolean) {
+    val component = ComponentName(appContext, "dev.davidv.translator.MainActivityBrowser")
+    val desired =
+      if (enabled) {
+        PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+      } else {
+        PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+      }
+    appContext.packageManager.setComponentEnabledSetting(
+      component,
+      desired,
+      PackageManager.DONT_KILL_APP,
+    )
   }
 
   private fun parseVoiceOverrides(json: String): Map<String, String> =

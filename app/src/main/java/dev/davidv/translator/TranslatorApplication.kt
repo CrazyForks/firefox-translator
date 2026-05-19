@@ -62,6 +62,8 @@ class TranslatorApplication : Application() {
     if (settingsManager.settings.value.tapToTranslateEnabled) {
       TapToTranslateNotification.show(this)
     }
+
+    settingsManager.applyBrowserAliasState(settingsManager.settings.value.registerAsBrowser)
   }
 
   private fun isTtsEngineProcess(): Boolean = currentProcessName().endsWith(":tts")

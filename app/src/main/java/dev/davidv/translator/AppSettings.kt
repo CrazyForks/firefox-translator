@@ -46,4 +46,5 @@ data class AppSettings(
   val clearWebTranslatorDataOnClose: Boolean = true,
   val translatePdfImages: Boolean = true,
   val liveCameraOverlayEnabled: Boolean = true,
+  val registerAsBrowser: Boolean = true,
 )

@@ -988,22 +988,41 @@ fun SettingsScreen(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Translate camera live by default",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+              )
+              Switch(
+                checked = settings.liveCameraOverlayEnabled,
+                onCheckedChange = { checked ->
+                  onSettingsChange(settings.copy(liveCameraOverlayEnabled = checked))
+                },
+              )
+            }
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
-                  text = "Live camera overlay",
+                  text = "Register as browser",
                   style = MaterialTheme.typography.bodyMedium,
                   color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                  text = "Default state for the live OCR overlay when opening the camera. Can be toggled per session from the camera screen.",
+                  text = "Offer to translate links from other apps.",
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
               }
               Switch(
-                checked = settings.liveCameraOverlayEnabled,
+                checked = settings.registerAsBrowser,
                 onCheckedChange = { checked ->
-                  onSettingsChange(settings.copy(liveCameraOverlayEnabled = checked))
+                  onSettingsChange(settings.copy(registerAsBrowser = checked))
                 },
               )
             }
