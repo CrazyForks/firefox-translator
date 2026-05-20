@@ -147,7 +147,6 @@ private data class PendingPlanarFrame(
   val from: Language,
   val to: Language,
   val isAutoSource: Boolean,
-  val imuRotationAtCapture: FloatArray?,
   /** Sensor exposure timestamp (CLOCK_BOOTTIME, same clock as
    *  `SensorEvent.timestamp`). */
   val captureTimestampNs: Long,
@@ -197,12 +196,6 @@ data class DebugContourFrame(
   val frameHeight: Int,
 )
 
-/** Pinhole intrinsics in the same pixel space as the analyser frame.
- *  Plumbed from the camera info through the engine to the view so
- *  Phase-5 render-thread IMU extrapolation can predict per-pixel
- *  motion at refresh rate. */
-data class FrameIntrinsics(val fx: Float, val fy: Float, val cx: Float, val cy: Float)
-
 /** One per-camera-frame composited display image: camera pixels in
  *  display orientation with the current overlay warped + alpha-blended
  *  on top. Produced by Rust's `composite_frame` and delivered via JNI
@@ -238,8 +231,6 @@ class LivePlanarOcrEngine(
   private val workerScope: CoroutineScope,
   @Suppress("UNUSED_PARAMETER") private val imuService: ImuService? = null,
 ) {
-  @Volatile
-  private var cameraIntrinsics: CameraIntrinsicsRaw? = null
   private val mutex = Mutex()
   private val tracker = uniffi.bindings.LivePlanarTracker()
   private var lastCropRect: NativeRect? = null
@@ -257,7 +248,6 @@ class LivePlanarOcrEngine(
    *  intentionally pointing at something else. */
   private var lastFocusX: Float = Float.NaN
   private var lastFocusY: Float = Float.NaN
-  private var latestImuSnapshot: FloatArray? = null
 
   /** Set while the camera's AF is actively scanning. We don't trust
    *  features from blurred frames and we don't want to lock inliers
@@ -276,11 +266,6 @@ class LivePlanarOcrEngine(
    *  fan out N concurrent acquires; the next `Idle → Acquiring`
    *  transition fires a fresh one. */
   private val acquireInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
-
-  /** Pixel intrinsics from the most recent frame. Set by `runFrame`,
-   *  carried through to `publishBitmapOverlay` so the view can
-   *  IMU-extrapolate at refresh rate. */
-  private var latestPixelIntrinsics: FrameIntrinsics? = null
 
   /** Live `SurfaceView` dimensions, updated via [setViewSize] from
    *  the SurfaceView's `surfaceChanged`. Used to compute the
@@ -372,10 +357,6 @@ class LivePlanarOcrEngine(
       }
   }
 
-  fun setCameraIntrinsics(intrinsics: CameraIntrinsicsRaw?) {
-    cameraIntrinsics = intrinsics
-  }
-
   fun acquireFrameHandle(): FrameHandle? {
     handlePool.pollFirst()?.let { return it }
     if (allocatedHandles.incrementAndGet() <= maxAllocatedHandles) {
@@ -406,7 +387,6 @@ class LivePlanarOcrEngine(
     isAutoSource: Boolean,
     captureTimestampNs: Long,
     convertMs: Double = 0.0,
-    imuRotationAtCapture: FloatArray? = null,
     proxy: androidx.camera.core.ImageProxy? = null,
   ) {
     // View dims are stashed on the engine by `setViewSize` from the
@@ -426,7 +406,6 @@ class LivePlanarOcrEngine(
         from,
         to,
         isAutoSource,
-        imuRotationAtCapture,
         captureTimestampNs,
         convertMs,
         proxy,
@@ -538,7 +517,6 @@ class LivePlanarOcrEngine(
       visibleSensorH = cropDispH
     }
 
-    latestImuSnapshot = pending.imuRotationAtCapture
     // Tap-to-focus = "fresh start" intent. Detect it via focus-point
     // change OR crop-rect change (legacy path; with full-frame
     // detection cropRect is constant). Either way, blow away the
@@ -595,31 +573,9 @@ class LivePlanarOcrEngine(
     // window. The planar tracker tolerates small handheld motion fine.
     val imuStable = true
 
-    // Prefer the IMU-prior path when both rotation + intrinsics are
-    // available. The Rust side computes per-frame deltas from the
-    // device-frame rotation and uses K·R·K^-1 as a RANSAC seed; huge
-    // tracking lift on fast pans/rotations. **Sensor-orient
-    // intrinsics**: the engine fits H in sensor coords now.
-    val rot = pending.imuRotationAtCapture
-    val intrRaw = cameraIntrinsics
-    val pxIntr =
-      if (intrRaw != null) {
-        val p = intrRaw.sensorIntrinsics(sensorW, sensorH)
-        FrameIntrinsics(p.fx, p.fy, p.cx, p.cy)
-      } else {
-        null
-      }
-    // Also cache the latest pixel intrinsics for render-thread
-    // extrapolation downstream.
-    latestPixelIntrinsics = pxIntr
     // One-shot: tracker step → smooth H → composite, all in Rust.
     // Avoids the per-frame Kotlin↔Rust ping-pong (two uniffi calls +
     // a Kotlin-side H-math detour) that the old split did.
-    val imuRotList = if (rot != null && rot.size == 9) rot.toList() else emptyList()
-    val fx = pxIntr?.fx ?: 0f
-    val fy = pxIntr?.fy ?: 0f
-    val cx = pxIntr?.cx ?: 0f
-    val cy = pxIntr?.cy ?: 0f
     val processStartNs = System.nanoTime()
     val result =
       try {
@@ -629,11 +585,6 @@ class LivePlanarOcrEngine(
           DETECTOR_TARGET_PIXELS_PLANAR_UINT,
           imuStable,
           nowNs,
-          imuRotList,
-          fx,
-          fy,
-          cx,
-          cy,
           visibleSensorW.toUInt(),
           visibleSensorH.toUInt(),
         )

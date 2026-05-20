@@ -95,7 +95,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import dev.davidv.translator.CameraIntrinsicsRaw
 import dev.davidv.translator.DebugContourFrame
 import dev.davidv.translator.ImuService
 import dev.davidv.translator.Language
@@ -105,7 +104,6 @@ import dev.davidv.translator.LiveFrameJni
 import dev.davidv.translator.LivePlanarOcrEngine
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
-import dev.davidv.translator.cameraIntrinsicsFromCameraX
 import dev.davidv.translator.ui.components.LanguageSelector
 import dev.davidv.translator.ui.components.LiveTranslatorSurfaceView
 import java.io.File
@@ -384,7 +382,6 @@ private fun CameraSurface(
     imuService.start()
     onDispose { imuService.stop() }
   }
-  var cameraIntrinsics by remember { mutableStateOf<CameraIntrinsicsRaw?>(null) }
 
   val workerScope = androidx.compose.runtime.rememberCoroutineScope()
   val liveOcrEngine: LivePlanarOcrEngine? =
@@ -543,15 +540,6 @@ private fun CameraSurface(
           engine.releaseFrameHandle(handle)
           return@setAnalyzer
         }
-        // Sample R_prev at the camera's actual capture timestamp (same
-        // clock as SensorEvent.timestamp) rather than at this analyzer
-        // callback. Without this we'd miss the gyro rotation that
-        // happened between sensor exposure and our callback firing —
-        // typically 30-60 ms of pipeline latency — which under sustained
-        // pan shows up as a constant overlay offset proportional to ω.
-        // Falls back to the un-timestamped "now" snapshot when history
-        // doesn't yet cover that moment (first few frames).
-        val imuSnap = imuService.rotationAt(captureTs) ?: imuService.currentRotation()
         val fx = cropFocusNormalized.x
         val fy = cropFocusNormalized.y
         engine.submitFrame(
@@ -566,7 +554,6 @@ private fun CameraSurface(
           isAutoSource,
           captureTs,
           convertMs,
-          imuSnap,
           handoverProxy,
         )
       }
@@ -679,8 +666,6 @@ private fun CameraSurface(
           )
         camera = boundCamera
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
-        cameraIntrinsics = cameraIntrinsicsFromCameraX(boundCamera.cameraInfo)
-        liveOcrEngine?.setCameraIntrinsics(cameraIntrinsics)
         // Bias auto-exposure toward shorter exposure / lower ISO. The
         // camera's AE algorithm sees this as "user wants ~2/3 stop
         // darker" and tends to shorten shutter (less motion blur on

@@ -1636,13 +1636,6 @@ pub struct LivePlanarTracker {
     matted_strips: std::sync::Mutex<
         std::collections::HashMap<u64, Vec<Option<translator::color_matting::MattedStrip>>>,
     >,
-    /// Most recently received camera intrinsics from
-    /// `process_and_composite` / `process_frame_with_imu`. Cached
-    /// here so the acquire pipeline can build `H_rect` post-commit
-    /// without requiring Kotlin to pass K through the acquire API
-    /// (intrinsics are constant for a given camera+config, so the
-    /// per-frame path's latest value is always current).
-    last_intrinsics: std::sync::Mutex<Option<translator::imu_prior::CameraIntrinsics>>,
     /// Cross-platform orchestration state. Owns the surface map
     /// (and, in subsequent phases, the engine, overlay store, etc.)
     /// so the desktop `surface_sim` binary and this Android wrapper
@@ -1667,7 +1660,6 @@ impl LivePlanarTracker {
             next_entry_id: std::sync::atomic::AtomicU64::new(1),
             pending_compose: std::sync::Mutex::new(None),
             matted_strips: std::sync::Mutex::new(std::collections::HashMap::new()),
-            last_intrinsics: std::sync::Mutex::new(None),
             session: std::sync::Arc::new(translator::live_session::LiveSession::new()),
         })
     }
@@ -2015,19 +2007,6 @@ impl LivePlanarTracker {
             };
             (state.width, state.height, state.rotation_degrees)
         };
-        // Earlier this site polled the engine's H-burst for up to
-        // 200 ms to wait on a rectification commit before deciding
-        // rectified-vs-raw rec inputs. With the rectified-overlay
-        // path gated off (`ENABLE_RECTIFIED_OVERLAY`), there's
-        // nothing to wait for — the poll only created window where
-        // the per-frame compositor warped stale overlays through
-        // freshly-built-and-still-jittery engine H's, producing
-        // visible wobble. The H-burst still fills naturally on
-        // per-frame Locked ticks; `try_commit_rectification` still
-        // runs from `process_and_composite` and logs on transition.
-        let rect_outcome = translator::live_session::RectificationAttempt::Pending;
-        let intrinsics_opt: Option<translator::imu_prior::CameraIntrinsics> = None;
-
         // PPOCR boundary: `detected` boxes are in visible-region
         // display coords (PPOCR ran on `cached` which is sized to the
         // user's visible region). The anchor canonical is full-sensor
@@ -2050,139 +2029,11 @@ impl LivePlanarTracker {
         let h_disp_to_sensor =
             translator::homography::mat3_mul(&h_disp_full_to_sensor, &translate_visible_to_full);
 
-        // The rectified-overlay path is gated off until burst-sampling
-        // robustness improves. With the current single-burst-per-acquire
-        // policy:
-        //   - Real tilted surfaces tend to land `HighDisagreement` and
-        //     refuse anyway (the case the rectification was designed to
-        //     win).
-        //   - Near-fronto-parallel surfaces that *do* commit produce a
-        //     tiny `h_rect`, which then gets stashed and applied to
-        //     subsequent frames even after the user moves the camera —
-        //     so the visible overlay loses the per-line/per-block angle
-        //     variation the un-rectified path captures naturally,
-        //     without gaining back enough perspective at composite time
-        //     to look right.
-        // The math (decompose + disambiguate + commit) is still tested
-        // in `live_session::rectification_tests` and the commit
-        // diagnostic logs still print on transition — useful when we
-        // come back to fix burst sampling (min-H-delta gate) and turn
-        // this back on. See FUTURE_ANCHOR_RECTIFICATION.md for state.
-        const ENABLE_RECTIFIED_OVERLAY: bool = false;
-        // On a successful commit (when the flag is on), build a
-        // rectified OrientedImage + box set so rec sees fronto-parallel
-        // glyphs. Boxes stay in rectified-display coords end-to-end
-        // (`h_view_to_surface = None`) so the surface map stores them
-        // axis-aligned, and per-frame compositing post-composes the
-        // perspective re-skew via `invert(h_rect)` ⊗ `h_disp_to_sensor`
-        // ⊗ engine_H.
-        let rectified_pack: Option<(
-            translator::live_frame::OrientedImage,
-            Vec<translator::DetectedTextBox>,
-            [f32; 9],
-        )> = if !ENABLE_RECTIFIED_OVERLAY {
-            None
-        } else if let (
-            translator::live_session::RectificationAttempt::Committed { pose, .. },
-            Some(intr),
-        ) = (rect_outcome, intrinsics_opt)
-        {
-            let state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            let oriented = match state
-                .cached
-                .as_ref()
-                .filter(|oi| oi.display_crop == display_crop)
-            {
-                Some(o) => o,
-                None => {
-                    return AcquirePipelineOutcome::error("oriented cache miss");
-                }
-            };
-            let rgb_dims = oriented
-                .rgb
-                .as_ref()
-                .map(|r| (r.width(), r.height()))
-                .unwrap_or((0, 0));
-            let out_centre =
-                (rgb_dims.0 as f32 * 0.5, rgb_dims.1 as f32 * 0.5);
-            let h_rect_opt = translator::rectification::rectification_matrix(
-                &pose,
-                &intr,
-                intr.fx,
-                out_centre,
-            );
-            let pack = h_rect_opt.and_then(|h_rect| {
-                let rectified = translator::live_session::rectified_oriented_image(
-                    oriented,
-                    &h_rect,
-                    rgb_dims.0,
-                    rgb_dims.1,
-                )?;
-                let warped: Vec<translator::DetectedTextBox> = detected
-                    .iter()
-                    .map(|b| {
-                        let mut w = translator::live_session::warp_detection_through(
-                            b, &h_rect,
-                        )
-                        .unwrap_or_else(|| b.clone());
-                        // Clear the polygon contour — its dewarp path
-                        // assumes the contour traces the line in the
-                        // image's native coords, but post-rectification
-                        // the line is axis-aligned and the simple AABB
-                        // crop on the rectified canvas is correct.
-                        w.contour.clear();
-                        Some(w)
-                    })
-                    .map(|opt| opt.unwrap())
-                    .collect();
-                Some((rectified, warped, h_rect))
-            });
-            drop(state);
-            pack
-        } else {
-            None
-        };
-
         let cancel = || {
             self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
         };
         let session_ref: &translator::TranslatorSession = &catalog.session;
-        let outcome = if let Some((rectified_oriented, rectified_boxes, h_rect)) =
-            rectified_pack.as_ref()
-        {
-            // Rectified path: rec sees fronto-parallel canvas. Boxes
-            // stay in rectified-display coords; `h_view_to_surface`
-            // is `None` (identity) so the surface map stores them
-            // axis-aligned. The per-frame compositor (see
-            // `process_and_composite` below) looks up the anchor's
-            // committed `h_rect` and post-composes the inverse to
-            // re-skew the overlay back onto the page's perspective
-            // at draw time. Stash `h_rect` on the anchor's state
-            // for that lookup.
-            self.session.set_anchor_h_rect(anchor_id, *h_rect);
-            self.session.run_post_detect(
-                translator::live_session::PostDetectInput {
-                    detections: rectified_boxes,
-                    oriented: rectified_oriented,
-                    h_view_to_surface: None,
-                    anchor_id,
-                    from_lang: &from_lang_code,
-                    to_lang: &to_lang_code,
-                    is_auto_source,
-                    available_codes: &available_codes,
-                    font_provider: &crate::android_font_provider::AndroidFontProvider,
-                    matted_strips: &matted_strips,
-                    rec_batch_size: 4,
-                },
-                &session_ref,
-                &session_ref,
-                &cancel,
-            )
-        } else {
-            // Refusal / no-intrinsics fallback: same path as before.
+        let outcome = {
             let state = match frame.state.lock() {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
@@ -2507,11 +2358,6 @@ impl LivePlanarTracker {
         det_max_pixels: u32,
         imu_stable: bool,
         timestamp_ns: u64,
-        imu_rotation_dev: Vec<f32>,
-        intrinsics_fx: f32,
-        intrinsics_fy: f32,
-        intrinsics_cx: f32,
-        intrinsics_cy: f32,
         display_width: u32,
         display_height: u32,
     ) -> Result<PlanarComposeResult, CatalogError> {
@@ -2546,54 +2392,7 @@ impl LivePlanarTracker {
             tracker_det_to_full = oriented.det_to_full_scale;
             let mut engine = self.state.lock().map_err(|_| poisoned())?;
             let t_engine_start = Instant::now();
-            // BYPASS_IMU_PRIOR: the device→camera basis transform in
-            // `imu_prior::device_to_camera_matrix` can't be expressed
-            // as a single Z-rotation + sign-flip that gets both yaw
-            // and pitch directions correct simultaneously (verified
-            // by working the conjugation analytically — there's an
-            // asymmetry I can't resolve without on-device probes
-            // logging predicted vs observed feature shifts for known
-            // motion). With a wrong-axis rotation prior, guided
-            // matching centres search windows off-target and even at
-            // slow/medium rotation produces RANSAC fits biased toward
-            // one image region — visible as the "warp / skew /
-            // sometimes-degenerate" overlay artefacts.
-            //
-            // Brute-force matching (this branch) is immune: the prior
-            // is used only as a RANSAC seed, and RANSAC discards a
-            // bad seed after the first iteration. Loses the fast-
-            // wrist-flick robustness that guided windows were
-            // designed for, but restores the steady ~150-inlier
-            // baseline.
-            //
-            // Future fix: synthetic-warp + IMU-trace test in
-            // `imu_prior::tests`, plus a debug-build log of predicted
-            // vs observed inlier mean-translation, so the M matrix
-            // can be validated component-by-component.
-            const BYPASS_IMU_PRIOR: bool = true;
-            let cmd = if !BYPASS_IMU_PRIOR && imu_rotation_dev.len() == 9 {
-                let mut rot = [0.0f32; 9];
-                rot.copy_from_slice(&imu_rotation_dev[..9]);
-                let intr = translator::imu_prior::CameraIntrinsics {
-                    fx: intrinsics_fx,
-                    fy: intrinsics_fy,
-                    cx: intrinsics_cx,
-                    cy: intrinsics_cy,
-                };
-                if let Ok(mut slot) = self.last_intrinsics.lock() {
-                    *slot = Some(intr);
-                }
-                engine.process_frame_with_imu(
-                    &oriented.gray,
-                    imu_stable,
-                    timestamp_ns,
-                    &rot,
-                    &intr,
-                    frame_state_dims.2,
-                )
-            } else {
-                engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
-            };
+            let cmd = engine.process_frame(&oriented.gray, imu_stable, timestamp_ns);
             let t_engine_end = Instant::now();
             if PER_FRAME_TIMING_LOG {
                 log::info!(
@@ -2636,46 +2435,7 @@ impl LivePlanarTracker {
             display_width as f32,
             display_height as f32,
         );
-        // Surface→view homography for the compositor. When the active
-        // anchor has a committed `h_rect` (rectified path), the
-        // surface map's lines live in rectified-display coords and we
-        // need to post-compose the inverse rectification + the
-        // display→sensor rotation so the overlay re-skews onto the
-        // page's perspective at draw time. When `h_rect` is absent
-        // (refusal path), surface = sensor and the engine's H alone is
-        // correct.
-        // Gated off — see the matching gate in `run_acquire_pipeline`.
-        // When the rectified-overlay path is enabled, this composes
-        // `engine_H × h_disp_to_sensor × invert(h_rect)` so the
-        // axis-aligned-in-surface bitmap gets perspective-warped at
-        // composite time. With the flag off, no h_rect is ever
-        // stashed, so this collapses to `engine_H` alone (today's
-        // un-rectified behaviour).
-        let h_for_compose = h_engine.map(|h| {
-            let Some(h_rect) = self.session.anchor_h_rect(result.anchor_id) else {
-                return h;
-            };
-            let Some(h_rect_inv) = translator::homography::invert(&h_rect) else {
-                return h;
-            };
-            let sensor_crop = match translator::live_frame::display_crop_to_sensor(
-                display_crop,
-                frame_state_dims.0,
-                frame_state_dims.1,
-                frame_state_dims.2,
-            ) {
-                Ok(c) => c,
-                Err(_) => return h,
-            };
-            let h_disp_to_sensor = translator::live_frame::display_to_sensor_homography(
-                sensor_crop.right - sensor_crop.left,
-                sensor_crop.bottom - sensor_crop.top,
-                frame_state_dims.2,
-            );
-            let intermediate =
-                translator::homography::mat3_mul(&h_disp_to_sensor, &h_rect_inv);
-            translator::homography::mat3_mul(&h, &intermediate)
-        });
+        let h_for_compose = h_engine;
         if let Ok(mut slot) = self.pending_compose.lock() {
             *slot = h_for_compose.map(|h| (result.anchor_id, h));
         }
@@ -2703,37 +2463,6 @@ impl LivePlanarTracker {
         // detector returns slightly different boxes → MergedAnd-
         // Extended on detector noise → overlay re-raster on a held
         // camera. Motion-gating first removes that whole class.
-        // Rectification orchestration (Phase 2B) runs on every Locked
-        // frame regardless of `ENABLE_REFRESH_DETECT` — it has no
-        // user-visible behaviour, just stashes the recovered plane
-        // pose in `AnchorState::rectification` and logs on the
-        // Pending→{Committed, Refused} transition. Decoupled from
-        // refresh so we can validate the geometry independently.
-        if matches!(result.state, PlanarTrackerState::Locked) {
-            let h_burst_copy: Vec<[f32; 9]> = {
-                if let Ok(engine) = self.state.lock() {
-                    engine.h_burst_of(result.anchor_id).to_vec()
-                } else {
-                    Vec::new()
-                }
-            };
-            if !h_burst_copy.is_empty() {
-                let intr_rect = translator::imu_prior::CameraIntrinsics {
-                    fx: intrinsics_fx,
-                    fy: intrinsics_fy,
-                    cx: intrinsics_cx,
-                    cy: intrinsics_cy,
-                };
-                self.session.try_commit_rectification(
-                    result.anchor_id,
-                    &h_burst_copy,
-                    &intr_rect,
-                    None,
-                    translator::rectification::SurfaceKind::Unknown,
-                );
-            }
-        }
-
         // Re-lock trigger (FUTURE_RELOCK_MODEL.md): single overlap
         // check against the anchor's `lock_viewport` (set by the most
         // recent successful detect+OCR+translate pass). Fires when
@@ -2858,67 +2587,6 @@ impl LivePlanarTracker {
         let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
         let mut engine = self.state.lock().map_err(|_| poisoned())?;
         let cmd = engine.process_frame(&oriented.gray, imu_stable, timestamp_ns);
-        Ok(cmd_to_result(cmd))
-    }
-
-    /// Like `process_frame` but seeds RANSAC with an IMU-derived
-    /// homography prior. `imu_rotation_dev` is the 9-element row-major
-    /// device-frame rotation matrix at this camera frame (the Android
-    /// gyro fusion output, e.g. from
-    /// `ImuService.currentRotation`). `intrinsics` are the camera's
-    /// fx/fy/cx/cy in the same pixel space as the analyser frame
-    /// (after rotation to display orientation). Pass empty
-    /// `imu_rotation_dev` (length != 9) to disable the prior for that
-    /// frame.
-    fn process_frame_with_imu(
-        &self,
-        frame: Arc<FrameHandle>,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-        imu_stable: bool,
-        timestamp_ns: u64,
-        imu_rotation_dev: Vec<f32>,
-        intrinsics_fx: f32,
-        intrinsics_fy: f32,
-        intrinsics_cx: f32,
-        intrinsics_cy: f32,
-    ) -> Result<PlanarFrameResult, CatalogError> {
-        let mut state = frame.state.lock().map_err(|_| poisoned())?;
-        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
-        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
-        let engine_wait_start = Instant::now();
-        let mut engine = self.state.lock().map_err(|_| poisoned())?;
-        let engine_acquired = Instant::now();
-        let cmd = if imu_rotation_dev.len() == 9 {
-            let mut rot = [0.0f32; 9];
-            rot.copy_from_slice(&imu_rotation_dev[..9]);
-            let intr = translator::imu_prior::CameraIntrinsics {
-                fx: intrinsics_fx,
-                fy: intrinsics_fy,
-                cx: intrinsics_cx,
-                cy: intrinsics_cy,
-            };
-            // This legacy entry point doesn't carry frame rotation
-            // metadata; assume sensor_orientation=0 (no axis swap).
-            // The active live path uses `process_and_composite` above.
-            engine.process_frame_with_imu(
-                &oriented.gray,
-                imu_stable,
-                timestamp_ns,
-                &rot,
-                &intr,
-                0,
-            )
-        } else {
-            engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
-        };
-        let engine_released = Instant::now();
-        drop(engine);
-        log_lock_timing(
-            "engine/process_frame_with_imu",
-            engine_acquired - engine_wait_start,
-            engine_released - engine_acquired,
-        );
         Ok(cmd_to_result(cmd))
     }
 
