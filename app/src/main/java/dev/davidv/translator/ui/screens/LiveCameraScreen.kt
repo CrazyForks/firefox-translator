@@ -427,6 +427,15 @@ private fun CameraSurface(
         val d = latestFocusedDistance.value ?: return@collect
         try {
           val ctrl = Camera2CameraControl.from(cam.cameraControl)
+          // Explicitly hold AE = ON in the same bundle. Empirically
+          // some Camera2 implementations couple AF and AE state; if
+          // `setCaptureRequestOptions` replaces the bundle and AE
+          // wasn't named, AE can transiently destabilise. Tiny
+          // exposure shifts kill BRIEF descriptor matches (256
+          // sign-bit comparisons; pixels near a comparison's zero
+          // crossing flip on sub-1/3-EV shifts), which manifested as
+          // sudden inlier collapses on frames where nothing actually
+          // moved.
           val opts =
             CaptureRequestOptions.Builder()
               .setCaptureRequestOption(
@@ -434,6 +443,10 @@ private fun CameraSurface(
                 CameraMetadata.CONTROL_AF_MODE_OFF,
               )
               .setCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE, d)
+              .setCaptureRequestOption(
+                CaptureRequest.CONTROL_AE_MODE,
+                CameraMetadata.CONTROL_AE_MODE_ON,
+              )
               .build()
           ctrl.captureRequestOptions = opts
           focusLocked = true
@@ -558,6 +571,7 @@ private fun CameraSurface(
           from,
           to,
           isAutoSource,
+          captureTs,
           convertMs,
           imuSnap,
           accelSnap,

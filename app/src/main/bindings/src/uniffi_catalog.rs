@@ -2205,6 +2205,11 @@ impl LivePlanarTracker {
         if outcome.canceled {
             return AcquirePipelineOutcome::canceled();
         }
+        // `last_lock_h` is lazy-initialised by `process_and_composite`
+        // on the first Locked frame after this acquire completes —
+        // by that point the engine's H reflects whatever motion
+        // happened during the ~1 s acquire window. Pinning identity
+        // here would lag the camera by that window.
 
         let rec_ok = outcome.rec_ok_count as usize;
         let rec_empty = outcome.rec_empty_count as usize;
@@ -2302,14 +2307,20 @@ impl LivePlanarTracker {
             None => return AcquirePipelineOutcome::error("H_root→view not invertible"),
         };
 
-        // Detect on the current frame (camera coords).
+        // Detect on the current frame, restricted to `display_crop`
+        // (the SurfaceView's visible region). Two reasons to match the
+        // acquire pipeline's crop here rather than `full_display_rect`:
+        // (1) the downstream `translate_visible_to_full` composition
+        //     below assumes detected boxes live in visible-region
+        //     display coords; (2) the oriented-cache lookup further
+        //     down filters on `display_crop == display_crop`, which a
+        //     full-display ensure would silently fail.
         let detected: Vec<translator::DetectedTextBox> = {
             let mut state = match frame.state.lock() {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
             };
-            let oriented_crop = full_display_rect(&state);
-            if ensure_oriented_with_rgb_locked(&mut state, oriented_crop, det_max_pixels).is_err() {
+            if ensure_oriented_with_rgb_locked(&mut state, display_crop, det_max_pixels).is_err() {
                 return AcquirePipelineOutcome::error("ensure_oriented failed");
             }
             let oriented = state
@@ -2391,6 +2402,15 @@ impl LivePlanarTracker {
         let h_view_to_surface_composed =
             translator::homography::mat3_mul(&h_sensor_view_to_surface, &h_disp_to_sensor);
         let session_ref: &translator::TranslatorSession = &catalog.session;
+        // Atomic re-lock semantics: wipe the anchor's surface map +
+        // overlay items immediately before `run_post_detect` so the
+        // existing `add_or_merge` insert logic lands in an empty map
+        // and produces a clean replace (FUTURE_RELOCK_MODEL.md's
+        // "hard cut, all-at-once" swap). Done here — not at the top
+        // of the function — so an early-exit failure (oriented cache
+        // miss, detect failed) leaves the existing overlays in place
+        // rather than wiping them and then bailing.
+        self.session.clear_anchor_state_for_relock(anchor_id);
         let outcome = self.session.run_post_detect(
             translator::live_session::PostDetectInput {
                 detections: &detected,
@@ -2414,6 +2434,12 @@ impl LivePlanarTracker {
         if outcome.canceled {
             return AcquirePipelineOutcome::canceled();
         }
+        // `last_lock_h` is lazy-initialised by `process_and_composite`
+        // on the next Locked frame — the trigger cleared it when it
+        // fired so that initialisation uses the engine's *then-current*
+        // H rather than the now-stale `h_root_to_view` pinned ~1.5 s
+        // ago at trigger fire.
+
         AcquirePipelineOutcome {
             anchor_id,
             detected_count: outcome.detected_count,
@@ -2462,6 +2488,7 @@ impl LivePlanarTracker {
         det_max_pixels: u32,
         imu_stable: bool,
         timestamp_ns: u64,
+        imu_capture_timestamp_ns: u64,
         imu_rotation_dev: Vec<f32>,
         linear_accel_dev: Vec<f32>,
         intrinsics_fx: f32,
@@ -2501,7 +2528,32 @@ impl LivePlanarTracker {
                 .expect("ensure_tracker filled cache");
             let mut engine = self.state.lock().map_err(|_| poisoned())?;
             let t_engine_start = Instant::now();
-            let cmd = if imu_rotation_dev.len() == 9 {
+            // BYPASS_IMU_PRIOR: the device→camera basis transform in
+            // `imu_prior::device_to_camera_matrix` can't be expressed
+            // as a single Z-rotation + sign-flip that gets both yaw
+            // and pitch directions correct simultaneously (verified
+            // by working the conjugation analytically — there's an
+            // asymmetry I can't resolve without on-device probes
+            // logging predicted vs observed feature shifts for known
+            // motion). With a wrong-axis rotation prior, guided
+            // matching centres search windows off-target and even at
+            // slow/medium rotation produces RANSAC fits biased toward
+            // one image region — visible as the "warp / skew /
+            // sometimes-degenerate" overlay artefacts.
+            //
+            // Brute-force matching (this branch) is immune: the prior
+            // is used only as a RANSAC seed, and RANSAC discards a
+            // bad seed after the first iteration. Loses the fast-
+            // wrist-flick robustness that guided windows were
+            // designed for, but restores the steady ~150-inlier
+            // baseline.
+            //
+            // Future fix: synthetic-warp + IMU-trace test in
+            // `imu_prior::tests`, plus a debug-build log of predicted
+            // vs observed inlier mean-translation, so the M matrix
+            // can be validated component-by-component.
+            const BYPASS_IMU_PRIOR: bool = true;
+            let cmd = if !BYPASS_IMU_PRIOR && imu_rotation_dev.len() == 9 {
                 let mut rot = [0.0f32; 9];
                 rot.copy_from_slice(&imu_rotation_dev[..9]);
                 let intr = translator::imu_prior::CameraIntrinsics {
@@ -2524,9 +2576,11 @@ impl LivePlanarTracker {
                     &oriented.gray,
                     imu_stable,
                     timestamp_ns,
+                    imu_capture_timestamp_ns,
                     &rot,
                     accel.as_ref(),
                     &intr,
+                    frame_state_dims.2,
                 )
             } else {
                 engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
@@ -2663,9 +2717,28 @@ impl LivePlanarTracker {
             }
         }
 
-        let should_refresh_detect = if ENABLE_REFRESH_DETECT
-            && matches!(result.state, PlanarTrackerState::Locked)
-        {
+        // Re-lock trigger (FUTURE_RELOCK_MODEL.md): single overlap
+        // check against the anchor's `lock_viewport` (set by the most
+        // recent successful detect+OCR+translate pass). Fires when
+        //   area(intersect) / max(area(viewport), area(lock_viewport))
+        //     < RELOCK_OVERLAP_THRESHOLD
+        // — symmetric in zoom direction (zoom-in shrinks viewport so
+        // max=lock; zoom-out grows it so max=viewport; pan crosses
+        // zero overlap regardless).
+        //
+        // Coord-system note: both the lock_viewport stored by
+        // `run_post_detect` and the current viewport computed here
+        // must live in the same canonical anchor frame for the
+        // overlap math to mean anything. `run_post_detect` projects
+        // `(cropDispW, cropDispH)` display-crop corners through
+        // `h_view_to_surface = h_disp_to_sensor` (acquire) or
+        // `inv(engine_H) · h_disp_to_sensor` (refresh). We mirror
+        // that here: build the same composition from the current
+        // frame state + `engine_H`, then project the same display-
+        // crop corners. With a steady camera the two AABBs coincide
+        // (overlap ≈ 1); a real pan/zoom shifts the corners through
+        // a different `inv(engine_H)` and the overlap drops.
+        let should_refresh_detect = if matches!(result.state, PlanarTrackerState::Locked) {
             let current_h: Option<[f32; 9]> = if result.homography.len() == 9 {
                 let mut h = [0.0f32; 9];
                 h.copy_from_slice(&result.homography[..9]);
@@ -2676,85 +2749,56 @@ impl LivePlanarTracker {
             } else {
                 None
             };
-            self.session.on_locked_frame();
-
-            if !self.session.refresh_cadence_elapsed() {
-                false
-            } else {
-                // Motion gate (gate #2). First refresh ever (no
-                // last_refresh_h) passes — we always want one
-                // refresh after acquire to clean up any partial
-                // observations.
-                let motion_ok = match (current_h, self.last_refresh_h.lock()) {
-                    (Some(_), Ok(slot)) if slot.is_none() => true,
-                    (Some(h), Ok(slot)) => {
-                        let prev = slot.expect("is_none branch above");
-                        // Measure on visible-region dims so the
-                        // threshold band matches user-perceived motion
-                        // — see the matching note in select_compose_h.
-                        corner_delta_px(
-                            &prev,
-                            &h,
-                            display_width as f32,
-                            display_height as f32,
-                        ) > MIN_REFRESH_DELTA_PX
-                    }
-                    _ => false,
-                };
-                if !motion_ok {
-                    false
-                } else {
-                    // Coverage gate (gate #3).
-                    let coverage_ok = match current_h {
-                        Some(h) => match translator::homography::invert(&h) {
-                            Some(h_inv) => {
-                                match translator::live_session::viewport_surface_aabb(
-                                    &h_inv,
-                                    display_width as f32,
-                                    display_height as f32,
-                                ) {
-                                    Some(viewport) => !self
-                                        .session
-                                        .viewport_contained_in_coverage(
-                                            result.anchor_id,
-                                            &viewport,
-                                            translator::live_session::COVERAGE_PADDING_SURFACE_PX,
-                                        ),
-                                    None => false,
-                                }
-                            }
-                            None => false,
-                        },
-                        None => false,
-                    };
-                    if coverage_ok {
-                        self.session.mark_refresh_fired();
-                        // Update last_refresh_h *only when we
-                        // actually fire* — that way the motion gate
-                        // measures cumulative camera movement since
-                        // the last real refresh, not since the last
-                        // frame we considered firing.
-                        if let (Some(h), Ok(mut slot)) =
-                            (current_h, self.last_refresh_h.lock())
-                        {
-                            *slot = Some(h);
-                        }
-                        // Pin (anchor, H) at trigger time so the
-                        // worker — which may run frames later if it
-                        // was queued behind an acquire — gets the
-                        // anchor+H pair that the trigger was *for*,
-                        // not whatever the engine has snapped to
-                        // since.
-                        if let (Some(h), Ok(mut slot)) =
-                            (current_h, self.pending_refresh_target.lock())
-                        {
-                            *slot = Some((result.anchor_id, h));
-                        }
-                        true
-                    } else {
+            match current_h {
+                Some(h) => {
+                    // Lazy init: the first Locked frame for an
+                    // anchor (or the first after a trigger fire
+                    // invalidated `last_lock_h`) seeds the reference
+                    // pose from the current engine H. We skip the
+                    // overlap check on this frame — comparing the
+                    // current H against itself would trivially pass
+                    // anyway. Subsequent frames compare against this
+                    // initialised value.
+                    if !self.session.has_last_lock_h(result.anchor_id) {
+                        self.session.set_last_lock_h(result.anchor_id, h);
                         false
+                    } else {
+                        // Full-display dims (the engine's view —
+                        // `cached_tracker` is built on the full
+                        // display).
+                        let r = ((frame_state_dims.2 % 360) + 360) % 360;
+                        let (full_view_w, full_view_h) = if r == 90 || r == 270 {
+                            (frame_state_dims.1 as f32, frame_state_dims.0 as f32)
+                        } else {
+                            (frame_state_dims.0 as f32, frame_state_dims.1 as f32)
+                        };
+                        if self.session.should_relock_by_view(
+                            result.anchor_id,
+                            &h,
+                            full_view_w,
+                            full_view_h,
+                            RELOCK_OVERLAP_THRESHOLD,
+                        ) {
+                            // Invalidate `last_lock_h` so the next
+                            // Locked frame re-seeds from the engine's
+                            // *then-current* H — not this trigger-
+                            // fire H, which would lag the camera by
+                            // the ~1-2 s refresh pipeline duration.
+                            self.session.clear_last_lock_h(result.anchor_id);
+                            // Pin (anchor, H) so the refresh worker
+                            // projects through the H the trigger
+                            // fired *for*, not whatever the engine
+                            // has snapped to by pickup time.
+                            if let Ok(mut slot) = self.pending_refresh_target.lock() {
+                                *slot = Some((result.anchor_id, h));
+                            }
+                            true
+                        } else {
+                            false
+                        }
                     }
                 }
+                None => false,
             }
         } else {
             false
@@ -2837,7 +2881,24 @@ impl LivePlanarTracker {
                 cx: intrinsics_cx,
                 cy: intrinsics_cy,
             };
-            engine.process_frame_with_imu(&oriented.gray, imu_stable, timestamp_ns, &rot, None, &intr)
+            // This legacy entry point doesn't carry frame rotation
+            // metadata or a separate capture timestamp; assume
+            // sensor_orientation=0 (no axis swap) and reuse
+            // timestamp_ns as the capture timestamp (best effort
+            // backwards compat — equivalent to the pre-fix behaviour
+            // where processing and capture clocks were conflated).
+            // The active live path uses `process_and_composite`
+            // above which passes both properly.
+            engine.process_frame_with_imu(
+                &oriented.gray,
+                imu_stable,
+                timestamp_ns,
+                timestamp_ns,
+                &rot,
+                None,
+                &intr,
+                0,
+            )
         } else {
             engine.process_frame(&oriented.gray, imu_stable, timestamp_ns)
         };
@@ -2976,81 +3037,30 @@ const SMOOTH_HIGH_PX: f32 = 9.0;
 #[cfg(feature = "planar-tracker")]
 const SMOOTH_MIN_ALPHA: f32 = 0.35;
 
-/// Frames of sustained tracker LOST before we hide the overlay (vs
-/// keep showing the last good H so a single missed frame doesn't
-/// flicker). ~270 ms @ 30 fps.
+/// Frames of sustained tracker LOST before we hide the overlay.
+/// Set to 1 to hide *immediately* on the first Lost frame — keeping
+/// it higher renders the overlay through the prior frame's (stale)
+/// H while the compositor writes fresh camera RGBA, producing the
+/// "camera moves but UI doesn't" visual artefact during the hide
+/// grace window. With `lost_after_frames = 5` upstream the engine
+/// is already permissive about brief failures; the Lost→Hide
+/// transition should be instant.
 #[cfg(feature = "planar-tracker")]
-const LOSS_HIDE_AFTER_FRAMES: u32 = 8;
+const LOSS_HIDE_AFTER_FRAMES: u32 = 4;
 
-/// Minimum viewport corner displacement (in display pixels) between
-/// `last_refresh_h` and the current `H_root→view` before the
-/// detect-on-tracking-frame trigger is even considered. Layers in
-/// front of the covered-region gate.
+/// Re-lock trigger threshold (FUTURE_RELOCK_MODEL.md). Fire a fresh
+/// detect+OCR+translate pass when
+///   `area(intersect) / max(area(viewport), area(lock_viewport)) <
+///    RELOCK_OVERLAP_THRESHOLD`.
 ///
-/// Calibration: this is a *cross-refresh* delta (not per-frame).
-/// Sources of "motion" on a still hand: RANSAC residual (~1–3 px),
-/// handoff micro-drift (~1–3 px per hop), slight EMA H smoothing
-/// lag. At the cadence floor (~333 ms = 10 frames @ 30 fps), these
-/// accumulate ~10–30 px of corner drift on a held camera before
-/// touching anything intentional. 50 px keeps that out while
-/// staying well below "the user moved enough to reveal new text"
-/// motions (which are usually 80+ px at typical zoom).
+/// At 0.65 the trigger corresponds to roughly:
+///   - Translation: pan covering ~1/3 of viewport width.
+///   - Zoom: scale change past ~1.25× in either direction
+///     (zoom²=1.56; ratio drops to 1/1.56 ≈ 0.64).
+///   - In-plane rotation alone: overlap ≈ 1.0, never fires (matches
+///     observed Google Translate behaviour).
 #[cfg(feature = "planar-tracker")]
-const MIN_REFRESH_DELTA_PX: f32 = 50.0;
-
-/// Master toggle for the detect-on-tracking-frame refresh path. When
-/// `false`, `process_and_composite` never sets `should_refresh_detect`
-/// — the only detection + recognition that runs is the initial
-/// `run_acquire_pipeline` on each tap-to-focus / reset. That mirrors
-/// the rock-solid pre-#28 behavior: one detect+rec pass per
-/// acquire, no per-refresh churn, no risk of same-line containment
-/// bugs spawning stacked overlays on hand shake.
-///
-/// The refresh path remains compiled in (run_refresh_pipeline is
-/// still uniffi-exported, Kotlin still has runRefreshStage wired)
-/// so flipping this back to `true` re-enables it without further
-/// changes. Outstanding items before that flip is safe again:
-///   - `same_line` containment rule so shake-shifted detections
-///     don't spawn duplicate lines stacked on existing ones.
-///   - (likely) eviction policy for lines not re-observed across N
-///     refreshes.
-///   - Snapshot RGBA at trigger time, not just (anchor, H), so the
-///     refresh worker detects on the frame the trigger was *for*
-///     rather than whatever's freshest when it runs.
-#[cfg(feature = "planar-tracker")]
-const ENABLE_REFRESH_DETECT: bool = false;
-
-/// Max corner displacement (in display pixels) between two
-/// `H_root→view` homographies, projected at the four corners of the
-/// `frame_w × frame_h` viewport. The motion-gate primitive.
-#[cfg(feature = "planar-tracker")]
-fn corner_delta_px(
-    h_old: &[f32; 9],
-    h_new: &[f32; 9],
-    frame_w: f32,
-    frame_h: f32,
-) -> f32 {
-    let corners = [
-        (0.0_f32, 0.0_f32),
-        (frame_w, 0.0),
-        (frame_w, frame_h),
-        (0.0, frame_h),
-    ];
-    let mut max_d = 0.0_f32;
-    for (cx, cy) in corners {
-        let pn = translator::homography::project(h_new, cx, cy);
-        let po = translator::homography::project(h_old, cx, cy);
-        if let (Some(pn), Some(po)) = (pn, po) {
-            let dx = pn.0 - po.0;
-            let dy = pn.1 - po.1;
-            let d = (dx * dx + dy * dy).sqrt();
-            if d > max_d {
-                max_d = d;
-            }
-        }
-    }
-    max_d
-}
+const RELOCK_OVERLAP_THRESHOLD: f32 = 0.65;
 
 /// Bypass the EMA H smoother and use the tracker's raw per-frame H
 /// directly. The smoother was designed for the old two-surface

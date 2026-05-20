@@ -279,6 +279,26 @@ val abiToBindingsTask =
       inputs.file(bindingsRootDir.resolve("Cargo.lock"))
       inputs.file(bindingsRootDir.resolve(".cargo/config.toml"))
       inputs.dir(bindingsRootDir.resolve("src"))
+
+      // Local-dev convenience: auto-discover any `path = "..."`
+      // dependency in Cargo.toml and watch its `src/` so editing the
+      // path-deped crate (typically translator-rs in a sibling
+      // checkout) invalidates this task without a manual cache-bust.
+      // CI uses git deps — the parsed paths don't exist there, so the
+      // inputs.dir calls are skipped and behaviour is unchanged.
+      val cargoTomlText = bindingsRootDir.resolve("Cargo.toml").readText()
+      val pathDepRegex = Regex("""(?m)^\s*path\s*=\s*"([^"]+)"""")
+      pathDepRegex.findAll(cargoTomlText).forEach { match ->
+        val raw = match.groupValues[1]
+        val resolved =
+          if (File(raw).isAbsolute) File(raw) else bindingsRootDir.resolve(raw).normalize()
+        val srcDir = resolved.resolve("src")
+        if (srcDir.exists()) {
+          inputs.dir(srcDir)
+          val depCargo = resolved.resolve("Cargo.toml")
+          if (depCargo.exists()) inputs.file(depCargo)
+        }
+      }
       inputs.file(onnxRuntimeSharedLibrary(abi))
       inputs.property("cargoTarget", cargoTarget)
       inputs.property("androidApi", bindingsAndroidApi)

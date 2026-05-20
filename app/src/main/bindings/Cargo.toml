@@ -42,15 +42,6 @@ default-features = false
 # git = "https://github.com/DavidVentura/translator-rs.git"
 path = "/home/david/git/translator-rs"
 features = ["uniffi", "html"]
-# NOTE: gradle's `buildBindingsAarch64` task fingerprints files inside
-# `app/src/main/bindings/` only — it does NOT track this path dependency.
-# If you edit translator-rs/src/*.rs and run `./gradlew :app:assembleDebug`,
-# gradle will report UP-TO-DATE and the old libbindings.so ships. Force a
-# rebuild via:
-#     touch app/src/main/bindings/src/uniffi_catalog.rs && \
-#     ./gradlew :app:buildBindingsAarch64 --rerun-tasks
-# or any edit inside `app/src/main/bindings/src/` (it's the bindings src
-# dir that's part of the fingerprint).
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = { version = "0.14", default-features = false }
@@ -63,10 +54,6 @@ android_logger = { version = "0.14", default-features = false }
 #
 # [patch."https://github.com/DavidVentura/mnn-sys"]
 # mnn-sys = { path = "/home/david/git/mnn-sys" }
-
-# cache-buster: bump this comment after editing translator-rs to force a rebuild
-# (gradle's inputs.dir only watches bindings/src, not the path = ".." translator crate).
-# rev: 18
 
 [profile.release]
 lto = "thin"

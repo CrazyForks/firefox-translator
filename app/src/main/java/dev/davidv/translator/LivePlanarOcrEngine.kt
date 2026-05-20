@@ -110,7 +110,7 @@ private const val ANCHOR_REGION_PAD_PX_UINT: UInt = 60u
  *  keep the last good one). 8 frames ≈ 270 ms at 30 fps — short enough
  *  to react when the user pans away, long enough to ignore single-
  *  frame blur or one bad match. */
-private const val LOSS_HIDE_AFTER_FRAMES: Int = 8
+private const val LOSS_HIDE_AFTER_FRAMES: Int = 4
 
 /* Adaptive homography-smoothing thresholds (pixels). Below `LOW` we
  *  treat consecutive-frame differences as feature noise → heavy
@@ -149,6 +149,13 @@ private data class PendingPlanarFrame(
   val isAutoSource: Boolean,
   val imuRotationAtCapture: FloatArray?,
   val linearAccelAtCapture: FloatArray?,
+  /** Sensor exposure timestamp (CLOCK_BOOTTIME, same clock as
+   *  `SensorEvent.timestamp`). Used by the engine's IMU prior so
+   *  `dt` for velocity integration matches the time the rotation/
+   *  accel samples were taken — not the analyzer-pipeline processing
+   *  wall clock, which can jitter under load and over-predict
+   *  translation by the squared ratio. */
+  val captureTimestampNs: Long,
   val convertMs: Double,
   val proxy: androidx.camera.core.ImageProxy?,
   /** Live `SurfaceView` dimensions at submit time. Used to compute a
@@ -402,6 +409,7 @@ class LivePlanarOcrEngine(
     from: Language,
     to: Language,
     isAutoSource: Boolean,
+    captureTimestampNs: Long,
     convertMs: Double = 0.0,
     imuRotationAtCapture: FloatArray? = null,
     linearAccelAtCapture: FloatArray? = null,
@@ -426,6 +434,7 @@ class LivePlanarOcrEngine(
         isAutoSource,
         imuRotationAtCapture,
         linearAccelAtCapture,
+        captureTimestampNs,
         convertMs,
         proxy,
         viewWidth,
@@ -629,6 +638,7 @@ class LivePlanarOcrEngine(
           DETECTOR_TARGET_PIXELS_PLANAR_UINT,
           imuStable,
           nowNs,
+          pending.captureTimestampNs.toULong(),
           imuRotList,
           linearAccelList,
           fx,
