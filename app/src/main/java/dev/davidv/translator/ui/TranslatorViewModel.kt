@@ -356,20 +356,22 @@ class TranslatorViewModel(
       }
 
       is TranslatorMessage.SetImageUri -> {
-        viewModelScope.launch {
-          val bm = translationCoordinator.correctBitmap(message.uri, message.deleteAfterLoad)
-          ocrCache = null
-          _originalImage.value = bm
-          _displayImage.value = bm
-          _inputType.value = InputType.IMAGE
-          _currentDetectedLanguage.value = null
-          _output.value = null
-          val fromLang = _from.value
-          val toLang = _to.value
-          if (fromLang != null && toLang != null) {
-            runImageTranslation(bm, fromLang, toLang)
+        translationJob?.cancel()
+        translationJob =
+          viewModelScope.launch {
+            val bm = translationCoordinator.correctBitmap(message.uri, message.deleteAfterLoad)
+            ocrCache = null
+            _originalImage.value = bm
+            _displayImage.value = bm
+            _inputType.value = InputType.IMAGE
+            _currentDetectedLanguage.value = null
+            _output.value = null
+            val fromLang = _from.value
+            val toLang = _to.value
+            if (fromLang != null && toLang != null) {
+              runImageTranslation(bm, fromLang, toLang)
+            }
           }
-        }
       }
 
       is TranslatorMessage.SetDocumentPath -> {

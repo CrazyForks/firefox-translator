@@ -31,7 +31,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +70,8 @@ fun StyledTextField(
 ) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
+  val currentText by rememberUpdatedState(text)
+  val currentOnValueChange by rememberUpdatedState(onValueChange)
   val actionModeCallback =
     remember(onDictionaryLookup) {
       DictionaryActionModeCallback(context, onDictionaryLookup)
@@ -131,9 +135,8 @@ fun StyledTextField(
 
               override fun afterTextChanged(s: Editable?) {
                 val newText = s?.toString() ?: ""
-                // TODO text is always ''
-                if (newText != text || newText == "") {
-                  onValueChange(newText)
+                if (newText != currentText) {
+                  currentOnValueChange(newText)
                 }
               }
             },

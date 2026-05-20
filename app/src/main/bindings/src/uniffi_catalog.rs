@@ -1870,6 +1870,17 @@ impl LivePlanarTracker {
             let sensor_w = state.width;
             let sensor_h = state.height;
             let rotation = state.rotation_degrees;
+            // tracker_oriented.gray is downsampled to det_max_pixels;
+            // its pixel coords are 1 / det_to_full_scale of full sensor
+            // coords. Scale region tuples down to match the gray we're
+            // about to hand to acquire_now_in_regions — otherwise the
+            // engine filters keypoints in small-pixel coords against
+            // full-coord regions and lets nothing through.
+            let scale_down = if tracker_oriented.det_to_full_scale > 0.0 {
+                1.0 / tracker_oriented.det_to_full_scale
+            } else {
+                1.0
+            };
             let regions: Vec<(u32, u32, u32, u32)> = detected
                 .iter()
                 .filter_map(|d| {
@@ -1886,7 +1897,15 @@ impl LivePlanarTracker {
                         rotation,
                     )
                     .ok()
-                    .map(|r| (r.left, r.top, r.right, r.bottom))
+                    .map(|r| {
+                        let scale_u32 = |v: u32| ((v as f32) * scale_down).round() as u32;
+                        (
+                            scale_u32(r.left),
+                            scale_u32(r.top),
+                            scale_u32(r.right),
+                            scale_u32(r.bottom),
+                        )
+                    })
                 })
                 .collect();
             let mut engine = match self.state.lock() {
@@ -2488,9 +2507,7 @@ impl LivePlanarTracker {
         det_max_pixels: u32,
         imu_stable: bool,
         timestamp_ns: u64,
-        imu_capture_timestamp_ns: u64,
         imu_rotation_dev: Vec<f32>,
-        linear_accel_dev: Vec<f32>,
         intrinsics_fx: f32,
         intrinsics_fy: f32,
         intrinsics_cx: f32,
@@ -2510,15 +2527,15 @@ impl LivePlanarTracker {
         // perspective re-skew composition below can compute
         // `h_disp_to_sensor` without re-locking.
         let frame_state_dims: (u32, u32, i32);
+        let tracker_det_to_full: f32;
         let cmd = {
             let mut state = frame.state.lock().map_err(|_| poisoned())?;
-            // Tracker gets `cached_tracker`, always sized to the full
-            // display (every available feature). OCR gets `cached`,
-            // sized to the visible region — detect's cost is linear
-            // in pixel count so we want the smallest acceptable input.
-            // The per-frame composite path here only needs the tracker
-            // gray; the OCR `cached` is populated lazily by the acquire
-            // / refresh pipelines.
+            // Tracker gets `cached_tracker`, downsampled to
+            // `det_max_pixels` so per-frame detect+describe is
+            // linear-cost cheap (~2× speedup vs full-res). Anchor +
+            // per-frame match in the same small-coord system; we
+            // conjugate the engine's H back to full-display coords
+            // below before handing to the compositor.
             ensure_tracker_oriented_locked(&mut state, det_max_pixels)?;
             frame_state_dims = (state.width, state.height, state.rotation_degrees);
             let t_orient_end = Instant::now();
@@ -2526,6 +2543,7 @@ impl LivePlanarTracker {
                 .cached_tracker
                 .as_ref()
                 .expect("ensure_tracker filled cache");
+            tracker_det_to_full = oriented.det_to_full_scale;
             let mut engine = self.state.lock().map_err(|_| poisoned())?;
             let t_engine_start = Instant::now();
             // BYPASS_IMU_PRIOR: the device→camera basis transform in
@@ -2565,20 +2583,11 @@ impl LivePlanarTracker {
                 if let Ok(mut slot) = self.last_intrinsics.lock() {
                     *slot = Some(intr);
                 }
-                let accel = if linear_accel_dev.len() == 3 {
-                    let mut a = [0.0f32; 3];
-                    a.copy_from_slice(&linear_accel_dev[..3]);
-                    Some(a)
-                } else {
-                    None
-                };
                 engine.process_frame_with_imu(
                     &oriented.gray,
                     imu_stable,
                     timestamp_ns,
-                    imu_capture_timestamp_ns,
                     &rot,
-                    accel.as_ref(),
                     &intr,
                     frame_state_dims.2,
                 )
@@ -2596,7 +2605,15 @@ impl LivePlanarTracker {
             }
             cmd
         };
-        let result = cmd_to_result(cmd);
+        let mut result = cmd_to_result(cmd);
+        // Engine ran on the downsampled tracker gray, so its H maps
+        // `anchor_small → frame_small`. Conjugate back into
+        // full-display coords (`anchor_full → frame_full`) before any
+        // downstream smoothing / compositing sees it — overlay surface
+        // positions still live in full coords.
+        if result.homography.len() == 9 && tracker_det_to_full != 1.0 {
+            result.homography = scale_homography(&result.homography, tracker_det_to_full);
+        }
 
         // 2. Decide which H to use for compositing, updating the
         // smoothed-H state along the way. Stash `(anchor_id, h)` so
@@ -2882,20 +2899,13 @@ impl LivePlanarTracker {
                 cy: intrinsics_cy,
             };
             // This legacy entry point doesn't carry frame rotation
-            // metadata or a separate capture timestamp; assume
-            // sensor_orientation=0 (no axis swap) and reuse
-            // timestamp_ns as the capture timestamp (best effort
-            // backwards compat — equivalent to the pre-fix behaviour
-            // where processing and capture clocks were conflated).
-            // The active live path uses `process_and_composite`
-            // above which passes both properly.
+            // metadata; assume sensor_orientation=0 (no axis swap).
+            // The active live path uses `process_and_composite` above.
             engine.process_frame_with_imu(
                 &oriented.gray,
                 imu_stable,
                 timestamp_ns,
-                timestamp_ns,
                 &rot,
-                None,
                 &intr,
                 0,
             )
@@ -2980,6 +2990,24 @@ impl LivePlanarTracker {
             g.clear();
         }
     }
+}
+
+#[cfg(feature = "planar-tracker")]
+/// Conjugate a homography `H` by an isotropic scale `s`:
+/// `H' = diag(s,s,1) · H · diag(1/s,1/s,1)`. If `H` maps points in a
+/// downsampled coord system to points in the same downsampled coord
+/// system, `H'` maps the equivalent points in the upscaled (full) coord
+/// system. Used to lift the engine's small-coord H back to full-display
+/// coords for the compositor.
+#[cfg(feature = "planar-tracker")]
+fn scale_homography(h: &[f32], s: f32) -> Vec<f32> {
+    debug_assert_eq!(h.len(), 9);
+    let inv_s = 1.0 / s;
+    vec![
+        h[0],          h[1],          h[2] * s,
+        h[3],          h[4],          h[5] * s,
+        h[6] * inv_s,  h[7] * inv_s,  h[8],
+    ]
 }
 
 #[cfg(feature = "planar-tracker")]

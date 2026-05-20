@@ -148,13 +148,8 @@ private data class PendingPlanarFrame(
   val to: Language,
   val isAutoSource: Boolean,
   val imuRotationAtCapture: FloatArray?,
-  val linearAccelAtCapture: FloatArray?,
   /** Sensor exposure timestamp (CLOCK_BOOTTIME, same clock as
-   *  `SensorEvent.timestamp`). Used by the engine's IMU prior so
-   *  `dt` for velocity integration matches the time the rotation/
-   *  accel samples were taken — not the analyzer-pipeline processing
-   *  wall clock, which can jitter under load and over-predict
-   *  translation by the squared ratio. */
+   *  `SensorEvent.timestamp`). */
   val captureTimestampNs: Long,
   val convertMs: Double,
   val proxy: androidx.camera.core.ImageProxy?,
@@ -412,7 +407,6 @@ class LivePlanarOcrEngine(
     captureTimestampNs: Long,
     convertMs: Double = 0.0,
     imuRotationAtCapture: FloatArray? = null,
-    linearAccelAtCapture: FloatArray? = null,
     proxy: androidx.camera.core.ImageProxy? = null,
   ) {
     // View dims are stashed on the engine by `setViewSize` from the
@@ -433,7 +427,6 @@ class LivePlanarOcrEngine(
         to,
         isAutoSource,
         imuRotationAtCapture,
-        linearAccelAtCapture,
         captureTimestampNs,
         convertMs,
         proxy,
@@ -623,8 +616,6 @@ class LivePlanarOcrEngine(
     // Avoids the per-frame Kotlin↔Rust ping-pong (two uniffi calls +
     // a Kotlin-side H-math detour) that the old split did.
     val imuRotList = if (rot != null && rot.size == 9) rot.toList() else emptyList()
-    val accel = pending.linearAccelAtCapture
-    val linearAccelList = if (accel != null && accel.size == 3) accel.toList() else emptyList()
     val fx = pxIntr?.fx ?: 0f
     val fy = pxIntr?.fy ?: 0f
     val cx = pxIntr?.cx ?: 0f
@@ -638,9 +629,7 @@ class LivePlanarOcrEngine(
           DETECTOR_TARGET_PIXELS_PLANAR_UINT,
           imuStable,
           nowNs,
-          pending.captureTimestampNs.toULong(),
           imuRotList,
-          linearAccelList,
           fx,
           fy,
           cx,
