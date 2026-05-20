@@ -229,7 +229,6 @@ data class CompositedFrame(
 class LivePlanarOcrEngine(
   private val catalog: LanguageCatalog,
   private val workerScope: CoroutineScope,
-  @Suppress("UNUSED_PARAMETER") private val imuService: ImuService? = null,
 ) {
   private val mutex = Mutex()
   private val tracker = uniffi.bindings.LivePlanarTracker()

@@ -18,6 +18,7 @@ PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 
 PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det_int8.mnn"
 PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
+PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x0_25_wq8.mnn"
 
 # Recognizer model filename per script slug.
 PPOCR_RECOGNIZER_FILENAMES = {
@@ -107,6 +108,7 @@ def add_ppocr_packs(catalog: dict) -> None:
         "files": [
             _make_file(PPOCR_DETECTOR_FILENAME),
             _make_file(PPOCR_SCRIPT_CLASSIFIER_FILENAME),
+            _make_file(PPOCR_TEXTLINE_ORIENTATION_FILENAME),
         ],
         "dependsOn": [],
     }

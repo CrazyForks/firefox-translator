@@ -96,7 +96,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import dev.davidv.translator.DebugContourFrame
-import dev.davidv.translator.ImuService
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityState
 import dev.davidv.translator.LanguageMetadata
@@ -377,15 +376,9 @@ private fun CameraSurface(
   val analyzerExecutor =
     remember { java.util.concurrent.Executors.newSingleThreadExecutor() }
 
-  val imuService = remember { ImuService(context) }
-  DisposableEffect(imuService) {
-    imuService.start()
-    onDispose { imuService.stop() }
-  }
-
   val workerScope = androidx.compose.runtime.rememberCoroutineScope()
   val liveOcrEngine: LivePlanarOcrEngine? =
-    remember(catalog) { catalog?.let { LivePlanarOcrEngine(it, workerScope, imuService) } }
+    remember(catalog) { catalog?.let { LivePlanarOcrEngine(it, workerScope) } }
   val debugContours by (liveOcrEngine?.debugContours ?: remember { kotlinx.coroutines.flow.MutableStateFlow<DebugContourFrame?>(null) })
     .collectAsState()
   var previewSizePx by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
@@ -490,8 +483,6 @@ private fun CameraSurface(
         val rotation = proxy.imageInfo.rotationDegrees
         // Capture the sensor exposure timestamp BEFORE proxy.close()
         // since accessing imageInfo on a closed proxy isn't guaranteed.
-        // Same clock as SensorEvent.timestamp (elapsedRealtimeNanos), so
-        // it composes with imuService.rotationAt() below.
         val captureTs = proxy.imageInfo.timestamp
         val length = width * pixelStride * height
         // Try the **zero-copy fast path** first: contiguous

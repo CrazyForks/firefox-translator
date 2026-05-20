@@ -1174,7 +1174,7 @@ impl CatalogHandle {
                     .to_string(),
             })?;
         self.session
-            .recognize_in_oriented_image(oriented, &boxes, source_selection)
+            .recognize_in_oriented_image(oriented, &boxes, source_selection, None)
             .map_err(CatalogError::from)
     }
 }
@@ -1832,6 +1832,57 @@ impl LivePlanarTracker {
         }
 
         // ---- Acquire anchor ----
+        // ---- Estimate canonical reading-direction quadrant ----
+        // Runs the textline orientation classifier on the widest few
+        // strips and resolves to one of {R0, R90, R180, R270} (or None
+        // if no consensus). Cheap; only fires at acquire time.
+        let t_orient = Instant::now();
+        let (estimated_quadrant_display, frame_rotation_degrees) = {
+            let state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            let oriented = match state.cached.as_ref() {
+                Some(o) => o,
+                None => return AcquirePipelineOutcome::error("oriented cache miss"),
+            };
+            let r = state.rotation_degrees;
+            let q = match catalog
+                .session
+                .estimate_canonical_quadrant_in_oriented_image(oriented, &detected)
+            {
+                Ok(q) => q,
+                Err(e) => {
+                    log::warn!("[acquire] estimate_canonical_quadrant failed: {e:?}");
+                    None
+                }
+            };
+            (q, r)
+        };
+        // The estimator runs on the display-orient OrientedImage (the
+        // OCR path rotates sensor→display before detect), so its
+        // Quadrant is in display frame. The anchor surface map and
+        // `align_angle_to_canonical` both live in sensor frame. Rotate
+        // the quadrant by -rotation_degrees (i.e. display→sensor) so
+        // every consumer downstream of `acquire_now_with_orientation`
+        // sees a sensor-frame canonical and the snap math lines up.
+        //
+        // When the OCR-path round-trip is removed (estimator running
+        // directly on sensor-orient pixels), this conversion becomes
+        // the identity and these two lines can be deleted — the
+        // estimator's output will already be sensor-frame.
+        let estimated_quadrant = estimated_quadrant_display.map(|q| {
+            q.add(translator::coords::Quadrant::from_degrees_mod360(
+                -frame_rotation_degrees,
+            ))
+        });
+        let orient_ms = t_orient.elapsed().as_secs_f64() * 1_000.0;
+        log::info!(
+            "[acquire] orientation estimate: {:.1}ms quadrant={:?}",
+            orient_ms,
+            estimated_quadrant
+        );
+
         let t_acquire = Instant::now();
         let anchor_id = {
             let mut state = match frame.state.lock() {
@@ -1905,11 +1956,12 @@ impl LivePlanarTracker {
                 Err(_) => return AcquirePipelineOutcome::error("engine.state poisoned"),
             };
             engine
-                .acquire_now_in_regions(
+                .acquire_now_with_orientation(
                     &tracker_oriented.gray,
                     &regions,
                     anchor_padding_px,
                     timestamp_ns,
+                    estimated_quadrant,
                 )
                 .unwrap_or(0)
         };
@@ -2046,6 +2098,10 @@ impl LivePlanarTracker {
                 Some(o) => o,
                 None => return AcquirePipelineOutcome::error("oriented cache miss"),
             };
+            let canonical_quadrant = {
+                let engine = self.state.lock().ok();
+                engine.and_then(|e| e.canonical_rotation_for(anchor_id))
+            };
             let outcome = self.session.run_post_detect(
                 translator::live_session::PostDetectInput {
                     detections: &detected,
@@ -2059,6 +2115,7 @@ impl LivePlanarTracker {
                     font_provider: &crate::android_font_provider::AndroidFontProvider,
                     matted_strips: &matted_strips,
                     rec_batch_size: 4,
+                    canonical_quadrant,
                 },
                 &session_ref,
                 &session_ref,
@@ -2281,6 +2338,10 @@ impl LivePlanarTracker {
         // miss, detect failed) leaves the existing overlays in place
         // rather than wiping them and then bailing.
         self.session.clear_anchor_state_for_relock(anchor_id);
+        let canonical_quadrant = {
+            let engine = self.state.lock().ok();
+            engine.and_then(|e| e.canonical_rotation_for(anchor_id))
+        };
         let outcome = self.session.run_post_detect(
             translator::live_session::PostDetectInput {
                 detections: &detected,
@@ -2294,6 +2355,7 @@ impl LivePlanarTracker {
                 font_provider: &crate::android_font_provider::AndroidFontProvider,
                 matted_strips: &[],
                 rec_batch_size: 4,
+                canonical_quadrant,
             },
             &session_ref,
             &session_ref,
@@ -2701,6 +2763,7 @@ fn cmd_to_result(cmd: translator::planar_engine::TrackerCommand) -> PlanarFrameR
             homography,
             is_new,
             inliers,
+            canonical_rotation: _,
         } => PlanarFrameResult {
             state: PlanarTrackerState::Locked,
             anchor_id,
