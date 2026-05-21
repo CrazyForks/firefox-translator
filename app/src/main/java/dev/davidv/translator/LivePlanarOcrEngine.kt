@@ -152,6 +152,9 @@ class LivePlanarOcrEngine(
   @Volatile
   private var afScanning: Boolean = false
 
+  @Volatile
+  private var overlayEnabled: Boolean = true
+
   fun setViewSize(
     width: Int,
     height: Int,
@@ -345,18 +348,32 @@ class LivePlanarOcrEngine(
     if (afScanning) return
     afScanning = true
     Log.i(TAG_PLANAR, "AF scan started → suspending pipeline")
-    try {
-      tracker.setTargetMode(PipelineTargetMode.SUPPRESSED)
-    } catch (_: Throwable) {
-    }
+    applyTargetMode()
   }
 
   fun onAfScanEnd() {
     if (!afScanning) return
     afScanning = false
     Log.i(TAG_PLANAR, "AF scan ended → resuming pipeline")
+    applyTargetMode()
+  }
+
+  /** Toggle whether OCR/translation overlay work runs. When disabled,
+   *  the tracker is held in SUPPRESSED so per-frame composites still
+   *  produce camera pixels but no acquire/refresh worker is dispatched.
+   *  This lets the camera keep rendering when models are missing or
+   *  the user has turned the overlay off. */
+  fun setOverlayEnabled(enabled: Boolean) {
+    if (overlayEnabled == enabled) return
+    overlayEnabled = enabled
+    applyTargetMode()
+  }
+
+  private fun applyTargetMode() {
+    val mode =
+      if (overlayEnabled && !afScanning) PipelineTargetMode.ACTIVE else PipelineTargetMode.SUPPRESSED
     try {
-      tracker.setTargetMode(PipelineTargetMode.ACTIVE)
+      tracker.setTargetMode(mode)
     } catch (_: Throwable) {
     }
   }

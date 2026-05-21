@@ -382,6 +382,10 @@ private fun CameraSurface(
     if (!liveOverlayOn) liveOcrEngine?.clear()
   }
 
+  LaunchedEffect(liveOcrEngine, liveOverlayOn) {
+    liveOcrEngine?.setOverlayEnabled(liveOverlayOn)
+  }
+
   LaunchedEffect(liveOcrEngine) {
     val engine = liveOcrEngine ?: return@LaunchedEffect
     afScanning.collect { scanning ->
@@ -453,10 +457,18 @@ private fun CameraSurface(
     }
   }
 
-  DisposableEffect(liveOverlayOn, liveOcrEngine, from.code, to.code, isAutoSource) {
+  // The analyzer is the only source of pixels for the SurfaceView, so
+  // keep it attached whenever an engine exists — even when the OCR
+  // overlay is off or unavailable (missing models). In that case the
+  // engine runs the tracker in SUPPRESSED mode and composites
+  // camera-only frames; we just keep showing the camera without
+  // overlays. Gating this on `liveOverlayOn` would leave the surface
+  // black on startup whenever OCR models for the current language
+  // aren't installed.
+  DisposableEffect(liveOcrEngine, from.code, to.code, isAutoSource) {
     val engine = liveOcrEngine
     val mySession = analyzerSession.incrementAndGet()
-    if (liveOverlayOn && engine != null) {
+    if (engine != null) {
       imageAnalysis.setAnalyzer(analyzerExecutor) { proxy ->
         val handle = engine.acquireFrameHandle()
         if (handle == null) {
@@ -536,7 +548,6 @@ private fun CameraSurface(
       }
     } else {
       imageAnalysis.clearAnalyzer()
-      engine?.clear()
     }
     onDispose {
       analyzerSession.incrementAndGet()
@@ -676,9 +687,11 @@ private fun CameraSurface(
   ) {
     // Single surface for both camera pixels and overlay. The engine
     // composites them in Rust per analyzer frame and we blit the
-    // result; no two-surface drift possible. If the live overlay is
-    // toggled off the engine is cleared and we just keep the last
-    // composited frame on screen.
+    // result; no two-surface drift possible. When the live overlay is
+    // off (toggled by the user or unavailable because OCR models for
+    // this language aren't installed), the engine still receives
+    // frames and composites camera-only — the tracker is held in
+    // SUPPRESSED so no acquire/refresh worker runs.
     val composited by
       (liveOcrEngine?.compositedFrame ?: remember { kotlinx.coroutines.flow.MutableStateFlow(null) })
         .collectAsState()
