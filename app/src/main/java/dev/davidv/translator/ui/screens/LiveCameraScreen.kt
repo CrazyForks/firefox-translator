@@ -25,6 +25,7 @@ import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
 import android.hardware.camera2.TotalCaptureResult
+import android.net.Uri
 import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -130,6 +131,7 @@ fun LiveCameraScreen(
   liveOverlayDefaultEnabled: Boolean,
   catalog: dev.davidv.translator.LanguageCatalog?,
   onClose: () -> Unit,
+  onImageCaptured: (Uri) -> Unit,
 ) {
   val context = LocalContext.current
   var permissionGranted by remember {
@@ -172,6 +174,7 @@ fun LiveCameraScreen(
           liveOverlayDefaultEnabled = liveOverlayDefaultEnabled,
           catalog = catalog,
           onClose = onClose,
+          onImageCaptured = onImageCaptured,
         )
       hasAsked ->
         PermissionPrompt(
@@ -238,6 +241,7 @@ private fun CameraSurface(
   liveOverlayDefaultEnabled: Boolean,
   catalog: dev.davidv.translator.LanguageCatalog?,
   onClose: () -> Unit,
+  onImageCaptured: (Uri) -> Unit,
 ) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -764,7 +768,7 @@ private fun CameraSurface(
                   outputFile,
                 )
               isCapturing = false
-              onMessage(TranslatorMessage.SetImageUri(uri = uri, deleteAfterLoad = true))
+              onImageCaptured(uri)
               onClose()
             }
 

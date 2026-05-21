@@ -890,6 +890,7 @@ fun TranslatorApp(
                 onClose = {
                   navController.popBackStack("main", inclusive = false)
                 },
+                onImageCaptured = viewModel::setSharedImageUri,
               )
             }
           }
