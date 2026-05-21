@@ -1,0 +1,9 @@
+OCR:
+- Massively improved OCR capabilities; go to 'manage languages' to update the models
+- Implemented "live camera translation"
+- Add button to see original image after OCR
+
+Misc:
+- Sped up Kokoro TTS voices ~3x; download the faster Kokoro voice in 'manage languages'
+- Add a 'How to use' screen
+- Fix System TTS feature not respecting chosen voice/playback rate
