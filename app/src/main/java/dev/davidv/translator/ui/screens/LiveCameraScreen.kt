@@ -95,7 +95,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import dev.davidv.translator.DebugContourFrame
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityState
 import dev.davidv.translator.LanguageMetadata
@@ -107,23 +106,11 @@ import dev.davidv.translator.ui.components.LanguageSelector
 import dev.davidv.translator.ui.components.LiveTranslatorSurfaceView
 import java.io.File
 import java.util.concurrent.Executor
-import kotlin.math.max
 import android.util.Size as AndroidSize
 
 private const val TAG = "LiveCameraScreen"
 private val TARGET_RESOLUTION = AndroidSize(1080, 1920)
 private val ANALYZER_RESOLUTION = AndroidSize(1080, 1920)
-
-/** Debug overlay that draws the raw detector contour polygons (PaddleOCR DB
- *  mask output) as cyan outlines, updated each detection cycle (~5 Hz).
- *  Diagnostic: confirms whether the detector itself produces stable
- *  contours across firings vs whether wobble is fully on the tracker side. */
-private const val DEBUG_DRAW_DETECTOR_CONTOUR: Boolean = true
-
-/** Suppress the live-overlay layer (labelled tracker boxes / translated text)
- *  while diagnosing other overlays. Lets the cyan detector contour show
- *  through without clutter. */
-private const val DEBUG_HIDE_TRACKER_OVERLAY: Boolean = false
 
 /** Show a small overlay pill in the corner reporting tracker state
  *  (Idle/Acquiring/Locked/Lost + inliers + last acquire's det/rec
@@ -379,8 +366,6 @@ private fun CameraSurface(
   val workerScope = androidx.compose.runtime.rememberCoroutineScope()
   val liveOcrEngine: LivePlanarOcrEngine? =
     remember(catalog) { catalog?.let { LivePlanarOcrEngine(it, workerScope) } }
-  val debugContours by (liveOcrEngine?.debugContours ?: remember { kotlinx.coroutines.flow.MutableStateFlow<DebugContourFrame?>(null) })
-    .collectAsState()
   var previewSizePx by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
 
   DisposableEffect(Unit) {
@@ -702,13 +687,6 @@ private fun CameraSurface(
       update = { view -> view.update(composited) },
     )
 
-    if (DEBUG_DRAW_DETECTOR_CONTOUR) {
-      DebugContourOverlay(
-        frame = debugContours,
-        previewSizePx = previewSizePx,
-      )
-    }
-
     if (DEBUG_SHOW_TRACKER_STATUS && liveOcrEngine != null) {
       val status by liveOcrEngine.trackerStatus.collectAsState()
       TrackerStatusPill(status)
@@ -939,44 +917,6 @@ private fun BottomControls(
             liveOverlayOn -> Color.White
             else -> Color.White.copy(alpha = 0.4f)
           },
-      )
-    }
-  }
-}
-
-@Composable
-private fun DebugContourOverlay(
-  frame: DebugContourFrame?,
-  previewSizePx: androidx.compose.ui.unit.IntSize,
-) {
-  if (frame == null) return
-  if (frame.frameWidth == 0 || frame.frameHeight == 0) return
-  if (previewSizePx.width == 0 || previewSizePx.height == 0) return
-  val scale =
-    max(
-      previewSizePx.width.toFloat() / frame.frameWidth.toFloat(),
-      previewSizePx.height.toFloat() / frame.frameHeight.toFloat(),
-    )
-  val offX = (frame.frameWidth * scale - previewSizePx.width) / 2f
-  val offY = (frame.frameHeight * scale - previewSizePx.height) / 2f
-  androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-    for (poly in frame.contoursDisplay) {
-      val n = poly.size / 2
-      if (n < 2) continue
-      val path = androidx.compose.ui.graphics.Path()
-      val x0 = poly[0] * scale - offX
-      val y0 = poly[1] * scale - offY
-      path.moveTo(x0, y0)
-      for (i in 1 until n) {
-        val x = poly[i * 2] * scale - offX
-        val y = poly[i * 2 + 1] * scale - offY
-        path.lineTo(x, y)
-      }
-      path.close()
-      drawPath(
-        path = path,
-        color = androidx.compose.ui.graphics.Color(0xFFFF00FF),
-        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 4f),
       )
     }
   }

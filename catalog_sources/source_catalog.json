@@ -1,13 +1,13 @@
 {
   "formatVersion": 3,
-  "generatedAt": 1779294501,
+  "generatedAt": 1779352498,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "tesseractModelsBaseUrl": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1779294501,
+    "languageIndexUpdatedAt": 1779352498,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",

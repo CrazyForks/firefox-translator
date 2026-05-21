@@ -187,15 +187,6 @@ data class TrackerStatus(
  *  corners (current-frame coords). `cropLeft` / `cropTop` translate the
  *  result into the camera-preview display space. */
 
-/** Detector contour debug overlay (cyan polygons over the camera
- *  preview). Currently never emitted by the planar engine — kept for
- *  future use and for `LiveCameraScreen`'s gated debug renderer. */
-data class DebugContourFrame(
-  val contoursDisplay: List<FloatArray>,
-  val frameWidth: Int,
-  val frameHeight: Int,
-)
-
 /** One per-camera-frame composited display image: camera pixels in
  *  display orientation with the current overlay warped + alpha-blended
  *  on top. Produced by Rust's `composite_frame` and delivered via JNI
@@ -294,9 +285,6 @@ class LivePlanarOcrEngine(
     }
   private val detectorDispatcher = detectorExecutor.asCoroutineDispatcher()
   private val detectorJob: Job
-
-  private val _debugContours = MutableStateFlow<DebugContourFrame?>(null)
-  val debugContours: StateFlow<DebugContourFrame?> = _debugContours.asStateFlow()
 
   /** Per-camera-frame composited display image (camera in display
    *  orient + overlay warped on top) emitted to the [SurfaceView]
@@ -459,7 +447,6 @@ class LivePlanarOcrEngine(
         smoothedAnchorId = 0uL
         lastFocusX = Float.NaN
         lastFocusY = Float.NaN
-        _debugContours.value = null
         _compositedFrame.value = null
       }
     }

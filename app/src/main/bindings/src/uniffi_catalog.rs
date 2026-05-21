@@ -1833,11 +1833,27 @@ impl LivePlanarTracker {
 
         // ---- Acquire anchor ----
         // ---- Estimate canonical reading-direction quadrant ----
-        // Runs the textline orientation classifier on the widest few
-        // strips and resolves to one of {R0, R90, R180, R270} (or None
-        // if no consensus). Cheap; only fires at acquire time.
+        // Two paths:
+        //   * Forced source (script known up-front): run the rec model
+        //     at all four canonicals on K=3 sample boxes; the canonical
+        //     that yields the highest avg rec confidence wins. Rec
+        //     produces gibberish on wrong orientations so the conf gap
+        //     is a strong signal; much more reliable on OOD content
+        //     (signage, large glyphs, non-Latin scripts) than the
+        //     binary textline-ori classifier.
+        //   * Auto source (script unknown): fall back to the textline-
+        //     ori classifier path (windowed + validation-pair asymmetry
+        //     gate). Less reliable on hard content but doesn't need
+        //     to know the script.
         let t_orient = Instant::now();
-        let (estimated_quadrant_display, frame_rotation_degrees) = {
+        let forced_script = if is_auto_source {
+            None
+        } else {
+            catalog.session.ppocr_script_for_language_code(&from_lang_code)
+        };
+        let estimated_quadrant: Option<translator::coords::Quadrant>;
+        let orient_path: &'static str;
+        if let Some(script) = forced_script {
             let state = match frame.state.lock() {
                 Ok(s) => s,
                 Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
@@ -1846,8 +1862,27 @@ impl LivePlanarTracker {
                 Some(o) => o,
                 None => return AcquirePipelineOutcome::error("oriented cache miss"),
             };
-            let r = state.rotation_degrees;
-            let q = match catalog
+            let result = catalog
+                .session
+                .estimate_canonical_via_rec_in_oriented_image(oriented, &detected, script);
+            estimated_quadrant = match result {
+                Ok(q) => q,
+                Err(e) => {
+                    log::warn!("[acquire] estimate_canonical_via_rec failed: {e:?}");
+                    None
+                }
+            };
+            orient_path = "rec";
+        } else {
+            let state = match frame.state.lock() {
+                Ok(s) => s,
+                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
+            };
+            let oriented = match state.cached.as_ref() {
+                Some(o) => o,
+                None => return AcquirePipelineOutcome::error("oriented cache miss"),
+            };
+            estimated_quadrant = match catalog
                 .session
                 .estimate_canonical_quadrant_in_oriented_image(oriented, &detected)
             {
@@ -1857,30 +1892,14 @@ impl LivePlanarTracker {
                     None
                 }
             };
-            (q, r)
-        };
-        // The estimator runs on the display-orient OrientedImage (the
-        // OCR path rotates sensor→display before detect), so its
-        // Quadrant is in display frame. The anchor surface map and
-        // `align_angle_to_canonical` both live in sensor frame. Rotate
-        // the quadrant by -rotation_degrees (i.e. display→sensor) so
-        // every consumer downstream of `acquire_now_with_orientation`
-        // sees a sensor-frame canonical and the snap math lines up.
-        //
-        // When the OCR-path round-trip is removed (estimator running
-        // directly on sensor-orient pixels), this conversion becomes
-        // the identity and these two lines can be deleted — the
-        // estimator's output will already be sensor-frame.
-        let estimated_quadrant = estimated_quadrant_display.map(|q| {
-            q.add(translator::coords::Quadrant::from_degrees_mod360(
-                -frame_rotation_degrees,
-            ))
-        });
+            orient_path = "textline-ori";
+        }
         let orient_ms = t_orient.elapsed().as_secs_f64() * 1_000.0;
         log::info!(
-            "[acquire] orientation estimate: {:.1}ms quadrant={:?}",
+            "[acquire] orientation estimate ({}): {:.1}ms quadrant={:?}",
+            orient_path,
             orient_ms,
-            estimated_quadrant
+            estimated_quadrant,
         );
 
         let t_acquire = Instant::now();
@@ -1904,15 +1923,16 @@ impl LivePlanarTracker {
                 .cached_tracker
                 .as_ref()
                 .expect("ensure_tracker filled cache");
-            // `detected` boxes are in visible-region display coords
-            // (PPOCR ran on `cached` at `display_crop`). Convert to
-            // *full-display* by translating by the visible region's
-            // top-left, then to sensor coords via the standard
-            // display→sensor rotation. The regions land in the
-            // tracker_oriented.gray's coordinate system (full sensor).
-            let sensor_w = state.width;
-            let sensor_h = state.height;
-            let rotation = state.rotation_degrees;
+            // `detected` boxes are in visible-region **sensor** coords
+            // (PPOCR ran on `cached`'s sensor-orient rgb at
+            // `cached.sensor_crop`). Translate by that crop's top-left
+            // to land in full-sensor coords, then scale down to
+            // tracker_oriented.gray's downsampled pixel space.
+            let cached_sensor_crop = state
+                .cached
+                .as_ref()
+                .map(|oi| oi.sensor_crop)
+                .unwrap_or(translator::Rect { left: 0, top: 0, right: 0, bottom: 0 });
             // tracker_oriented.gray is downsampled to det_max_pixels;
             // its pixel coords are 1 / det_to_full_scale of full sensor
             // coords. Scale region tuples down to match the gray we're
@@ -1926,29 +1946,15 @@ impl LivePlanarTracker {
             };
             let regions: Vec<(u32, u32, u32, u32)> = detected
                 .iter()
-                .filter_map(|d| {
-                    let full_display_rect = translator::Rect {
-                        left: d.rect.left + display_crop.left,
-                        top: d.rect.top + display_crop.top,
-                        right: d.rect.right + display_crop.left,
-                        bottom: d.rect.bottom + display_crop.top,
-                    };
-                    translator::live_frame::display_crop_to_sensor(
-                        full_display_rect,
-                        sensor_w,
-                        sensor_h,
-                        rotation,
+                .map(|d| {
+                    let scale_u32 =
+                        |v: u32| ((v as f32) * scale_down).round() as u32;
+                    (
+                        scale_u32(d.rect.left + cached_sensor_crop.left),
+                        scale_u32(d.rect.top + cached_sensor_crop.top),
+                        scale_u32(d.rect.right + cached_sensor_crop.left),
+                        scale_u32(d.rect.bottom + cached_sensor_crop.top),
                     )
-                    .ok()
-                    .map(|r| {
-                        let scale_u32 = |v: u32| ((v as f32) * scale_down).round() as u32;
-                        (
-                            scale_u32(r.left),
-                            scale_u32(r.top),
-                            scale_u32(r.right),
-                            scale_u32(r.bottom),
-                        )
-                    })
                 })
                 .collect();
             let mut engine = match self.state.lock() {
@@ -2049,38 +2055,6 @@ impl LivePlanarTracker {
             Err(_) => Vec::new(),
         };
 
-        // Snapshot the state metadata we'll need below (rotation +
-        // dims for h_disp_to_sensor). Drop the lock so the per-frame
-        // composite thread isn't blocked while we run rec.
-        let (state_width, state_height, state_rotation_degrees) = {
-            let state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            (state.width, state.height, state.rotation_degrees)
-        };
-        // PPOCR boundary: `detected` boxes are in visible-region
-        // display coords (PPOCR ran on `cached` which is sized to the
-        // user's visible region). The anchor canonical is full-sensor
-        // (the tracker uses `cached_tracker` which is built on the
-        // full display). Compose:
-        //   visible-region-display → full-display via translate by
-        //   the visible-region's top-left in display coords;
-        //   full-display → full-sensor via the standard rotation H
-        //   parameterised on full-sensor dims.
-        let h_disp_full_to_sensor = translator::live_frame::display_to_sensor_homography(
-            state_width,
-            state_height,
-            state_rotation_degrees,
-        );
-        let translate_visible_to_full = [
-            1.0, 0.0, display_crop.left as f32,
-            0.0, 1.0, display_crop.top as f32,
-            0.0, 0.0, 1.0,
-        ];
-        let h_disp_to_sensor =
-            translator::homography::mat3_mul(&h_disp_full_to_sensor, &translate_visible_to_full);
-
         let cancel = || {
             self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
         };
@@ -2098,6 +2072,18 @@ impl LivePlanarTracker {
                 Some(o) => o,
                 None => return AcquirePipelineOutcome::error("oriented cache miss"),
             };
+            // PPOCR boundary: `detected` boxes are in visible-region
+            // **sensor** coords (PPOCR ran on `oriented.rgb`, which is
+            // a sensor-orient crop sized to `oriented.sensor_crop`).
+            // Translating by that crop's top-left brings us to
+            // full-sensor coords, which is what the anchor surface map
+            // lives in. No rotation matrix is needed — sensor IS the
+            // surface frame.
+            let h_view_to_sensor = [
+                1.0, 0.0, oriented.sensor_crop.left as f32,
+                0.0, 1.0, oriented.sensor_crop.top as f32,
+                0.0, 0.0, 1.0,
+            ];
             let canonical_quadrant = {
                 let engine = self.state.lock().ok();
                 engine.and_then(|e| e.canonical_rotation_for(anchor_id))
@@ -2106,7 +2092,7 @@ impl LivePlanarTracker {
                 translator::live_session::PostDetectInput {
                     detections: &detected,
                     oriented,
-                    h_view_to_surface: Some(h_disp_to_sensor),
+                    h_view_to_surface: Some(h_view_to_sensor),
                     anchor_id,
                     from_lang: &from_lang_code,
                     to_lang: &to_lang_code,
@@ -2308,26 +2294,18 @@ impl LivePlanarTracker {
         let cancel = || {
             self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
         };
-        // PPOCR boundary: detected boxes are in visible-region display
-        // coords (OrientedImage at `display_crop`). The anchor
-        // canonical is full-sensor. Compose: visible-region-display →
-        // full-display (translate by crop top-left) → full-sensor
-        // (standard rotation on full dims) → sensor-surface (engine
-        // inverse).
-        let h_disp_full_to_sensor = translator::live_frame::display_to_sensor_homography(
-            state.width,
-            state.height,
-            state.rotation_degrees,
-        );
-        let translate_visible_to_full = [
-            1.0, 0.0, display_crop.left as f32,
-            0.0, 1.0, display_crop.top as f32,
+        // PPOCR boundary: detected boxes are in visible-region
+        // **sensor** coords (PPOCR ran on `oriented.rgb`, a sensor-
+        // orient crop sized to `oriented.sensor_crop`). Compose:
+        // visible-region-sensor → full-sensor (translate by crop
+        // top-left) → sensor-surface (engine inverse).
+        let h_view_to_sensor = [
+            1.0, 0.0, oriented.sensor_crop.left as f32,
+            0.0, 1.0, oriented.sensor_crop.top as f32,
             0.0, 0.0, 1.0,
         ];
-        let h_disp_to_sensor =
-            translator::homography::mat3_mul(&h_disp_full_to_sensor, &translate_visible_to_full);
         let h_view_to_surface_composed =
-            translator::homography::mat3_mul(&h_sensor_view_to_surface, &h_disp_to_sensor);
+            translator::homography::mat3_mul(&h_sensor_view_to_surface, &h_view_to_sensor);
         let session_ref: &translator::TranslatorSession = &catalog.session;
         // Atomic re-lock semantics: wipe the anchor's surface map +
         // overlay items immediately before `run_post_detect` so the
