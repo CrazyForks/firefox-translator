@@ -396,41 +396,15 @@ class LanguageCatalog private constructor(
     to: Language,
   ): uniffi.translator.PreparedImageOverlay = handle.retranslateImagePlan(prepared, from.code, to.code)
 
-  /** Allocate a Rust-side frame buffer for the live-OCR pipeline. The returned
-   *  [uniffi.bindings.FrameHandle] is `AutoCloseable`; close it when the frame is
-   *  fully done. */
-  fun makeFrame(
-    rgba: ByteArray,
-    width: Int,
-    height: Int,
-    rotationDegrees: Int,
-  ): uniffi.bindings.FrameHandle = handle.makeFrame(rgba, width.toUInt(), height.toUInt(), rotationDegrees)
-
   /** Allocate an empty Rust-side frame buffer with reserved `capacity` bytes,
    *  to be filled later via JNI memcpy or `resetViaUniffi`. */
   fun makeFrameBuffer(capacity: Int): uniffi.bindings.FrameHandle = handle.makeFrameBuffer(capacity.toUInt())
 
-  /** Internal accessor for the raw uniffi `CatalogHandle`. Needed by
-   *  the live-overlay pipeline, which passes the handle into the Rust
-   *  `run_acquire_pipeline` so the Rust side can invoke session
-   *  methods (detect / recognize / translate_mixed_texts) directly,
-   *  without per-call uniffi roundtrips. */
+  /** Internal accessor for the raw uniffi `CatalogHandle`. The live-
+   *  overlay pipeline constructor takes this so it can hold an Arc to
+   *  the underlying TranslatorSession for its async acquire/refresh
+   *  worker. */
   internal fun planarHandle(): CatalogHandle = handle
-
-  @Throws(CatalogException::class)
-  fun detectTextInFrame(
-    frame: uniffi.bindings.FrameHandle,
-    crop: uniffi.translator.Rect,
-    detMaxPixels: Int,
-  ): List<uniffi.translator.DetectedTextBox> = handle.detectTextInFrame(frame, crop, detMaxPixels.toUInt())
-
-  @Throws(CatalogException::class)
-  fun recognizeInFrame(
-    frame: uniffi.bindings.FrameHandle,
-    crop: uniffi.translator.Rect,
-    boxes: List<uniffi.translator.DetectedTextBox>,
-    sourceSelection: uniffi.translator.OcrSourceSelection,
-  ): List<uniffi.translator.RecognizedTextLine> = handle.recognizeInFrame(frame, crop, boxes, sourceSelection)
 
   @Throws(CatalogException::class)
   fun renderTranslatedOverlay(

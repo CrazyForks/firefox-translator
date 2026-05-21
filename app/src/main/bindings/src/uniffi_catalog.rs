@@ -1,43 +1,14 @@
 use std::sync::Arc;
-use std::time::Instant;
 use std::{fs, path::Path};
 
-/// Diagnostic logging for the live pipeline. Flip to `true` while
-/// investigating contention or per-stage costs in the planar
-/// acquire/composite path; otherwise leave off — the lock timing +
-/// raster body lines are noisy in normal use.
-#[cfg(feature = "planar-tracker")]
-const LIVE_PIPELINE_DIAG: bool = false;
-
-/// Master toggle for per-frame outer timing logs (the
-/// `outer: orient=... engine=...` and `outer: composite=...` lines
-/// emitted to logcat target `planar_timing`). Pair with
-/// `translator::planar_tracker::PER_FRAME_TIMING_LOG` (separate crate)
-/// to silence the corresponding `guided: ...` / `brute: ...` lines.
+/// Master toggle for per-frame outer timing logs emitted to logcat
+/// target `planar_timing` from the JNI per-frame fast path. Pair with
+/// `translator::planar_tracker::PER_FRAME_TIMING_LOG` (separate
+/// crate) to silence the corresponding `guided: ...` / `brute: ...`
+/// lines.
+#[allow(dead_code)]
 #[cfg(feature = "planar-tracker")]
 pub(crate) const PER_FRAME_TIMING_LOG: bool = false;
-
-/// Threshold in ms below which we suppress lock-timing logs even when
-/// `LIVE_PIPELINE_DIAG` is on — keeps the diagnostic mode focused on
-/// actually-slow operations.
-#[cfg(feature = "planar-tracker")]
-const LOCK_LOG_THRESHOLD_MS: f64 = 3.0;
-
-#[cfg(feature = "planar-tracker")]
-fn log_lock_timing(label: &str, wait: std::time::Duration, hold: std::time::Duration) {
-    if !LIVE_PIPELINE_DIAG {
-        return;
-    }
-    let wait_ms = wait.as_secs_f64() * 1_000.0;
-    let hold_ms = hold.as_secs_f64() * 1_000.0;
-    if wait_ms > LOCK_LOG_THRESHOLD_MS || hold_ms > LOCK_LOG_THRESHOLD_MS {
-        log::debug!(
-            "[lock] {label}: wait={:.1}ms hold={:.1}ms",
-            wait_ms,
-            hold_ms,
-        );
-    }
-}
 
 use thiserror::Error;
 use translator::{
@@ -543,7 +514,7 @@ fn translate_document_path_impl(
 
 #[derive(uniffi::Object)]
 pub struct CatalogHandle {
-    session: TranslatorSession,
+    session: Arc<TranslatorSession>,
 }
 
 impl CatalogHandle {
@@ -565,7 +536,9 @@ impl CatalogHandle {
         let session =
             TranslatorSession::open(&bundled_json, disk_json.as_deref(), base_dir, &checker)
                 .map_err(|_| CatalogOpenError::ParseFailed)?;
-        Ok(Arc::new(CatalogHandle { session }))
+        Ok(Arc::new(CatalogHandle {
+            session: Arc::new(session),
+        }))
     }
 
     fn format_version(&self) -> i32 {
@@ -1091,417 +1064,88 @@ impl CatalogHandle {
         }
     }
 
-    /// Allocate a Rust-side frame buffer with a pre-sized capacity. The buffer is
-    /// reusable: feed bytes in via either [`FrameHandle::reset_via_uniffi`] or the
-    /// `LiveFrameJni.writeFrom` JNI fast-path, then call detect/recognize. Pool
-    /// the handle on the Kotlin side to amortise the Rust allocation across many
-    /// frames.
+    /// Allocate a Rust-side frame buffer with a pre-sized capacity. The
+    /// buffer is reusable: feed bytes in via either
+    /// [`FrameHandle::reset_via_uniffi`] or the `LiveFrameJni.writeFrom`
+    /// JNI fast-path. Pool the handle on the Kotlin side to amortise the
+    /// Rust allocation across many frames.
     #[cfg(feature = "ppocr")]
     fn make_frame_buffer(&self, capacity: u32) -> Arc<FrameHandle> {
         Arc::new(FrameHandle::new(capacity as usize))
     }
-
-    /// Back-compat one-shot frame creation. Allocates a fresh buffer and writes
-    /// bytes into it via the standard uniffi marshalling. Prefer the
-    /// `make_frame_buffer` + reset flow for performance.
-    #[cfg(feature = "ppocr")]
-    fn make_frame(
-        &self,
-        rgba: Vec<u8>,
-        width: u32,
-        height: u32,
-        rotation_degrees: i32,
-    ) -> Arc<FrameHandle> {
-        let handle = FrameHandle::new(rgba.len());
-        handle.reset_via_uniffi_inner(rgba, width, height, rotation_degrees);
-        Arc::new(handle)
-    }
-
-    /// Detect in a previously-allocated `FrameHandle`. The first call for a given
-    /// display crop region builds the cropped + rotated derived images and caches
-    /// them inside the handle; subsequent `recognize_in_frame` calls for the same
-    /// crop will reuse that cache.
-    ///
-    /// Returned boxes are in the **full-crop coord space** (display-orient, with
-    /// (0, 0) at top-left of the crop region), already scaled up from the
-    /// downscaled detection image.
-    #[cfg(feature = "ppocr")]
-    fn detect_text_in_frame(
-        &self,
-        frame: Arc<FrameHandle>,
-        crop: translator::Rect,
-        det_max_pixels: u32,
-    ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
-        let mut state = frame.state.lock().map_err(|_| poisoned())?;
-        ensure_oriented_with_rgb_locked(&mut state, crop, det_max_pixels)?;
-        let oriented = state
-            .cached
-            .as_ref()
-            .expect("ensure_oriented populated cache");
-        let raw = self
-            .session
-            .detect_text_in_oriented_image(oriented)
-            .map_err(CatalogError::from)?;
-        let scale = oriented.det_to_full_scale;
-        let rgb = oriented.rgb.as_ref().expect("with_rgb path");
-        let max_w = rgb.width();
-        let max_h = rgb.height();
-        let scaled: Vec<translator::DetectedTextBox> = raw
-            .into_iter()
-            .map(|b| scale_detected_box(b, scale, max_w, max_h))
-            .collect();
-        Ok(scaled)
-    }
-
-    /// Recognize text in a previously-allocated `FrameHandle`. The same crop must
-    /// have been previously passed to `detect_text_in_frame` (which built the
-    /// cached oriented image used here). Boxes must be in full-crop coord space.
-    #[cfg(feature = "ppocr")]
-    fn recognize_in_frame(
-        &self,
-        frame: Arc<FrameHandle>,
-        crop: translator::Rect,
-        boxes: Vec<translator::DetectedTextBox>,
-        source_selection: translator::OcrSourceSelection,
-    ) -> Result<Vec<translator::RecognizedTextLine>, CatalogError> {
-        let state = frame.state.lock().map_err(|_| poisoned())?;
-        let oriented = state
-            .cached
-            .as_ref()
-            .filter(|oi| oi.display_crop == crop)
-            .ok_or_else(|| CatalogError::Other {
-                reason: "recognize_in_frame called without prior detect_text_in_frame for this crop"
-                    .to_string(),
-            })?;
-        self.session
-            .recognize_in_oriented_image(oriented, &boxes, source_selection, None)
-            .map_err(CatalogError::from)
-    }
 }
 
-/// Rust-side live-OCR frame buffer. Pool of these on the Kotlin side keeps the
-/// per-frame allocation at zero; the underlying `Vec<u8>` is written into in
-/// place each frame (either via the standard uniffi marshalling path or — the
-/// fast path — directly from a DirectByteBuffer through a JNI shim). The
-/// cached oriented image is rebuilt whenever the crop region changes.
+/// Uniffi-visible handle around a `translator::live_frame::LiveFrame`.
+/// Holds an `Arc<LiveFrame>` so the JNI shims can dereference the
+/// stable Rust-heap address while the pipeline (and any in-flight
+/// async worker job) keep additional `Arc` clones alive.
+#[cfg(feature = "ppocr")]
 #[derive(uniffi::Object)]
 pub struct FrameHandle {
-    pub(crate) state: std::sync::Mutex<FrameState>,
+    pub(crate) inner: Arc<translator::live_frame::LiveFrame>,
 }
 
-pub(crate) struct FrameState {
-    /// Owned RGBA bytes. Populated by the legacy `writeFrom` JNI
-    /// path (memcpy from camera buffer), the `reset_via_uniffi`
-    /// fallback, OR by [`Self::materialize_owned`] which copies from
-    /// `external_rgba` so async pipelines can drop the camera buffer.
-    pub rgba: Vec<u8>,
-    /// Borrowed RGBA bytes from a Kotlin-held DirectByteBuffer
-    /// (typically a CameraX ImageProxy). Set by the
-    /// `setExternalBuffer` JNI path for zero-copy ingestion on the
-    /// per-frame fast path. Caller (Kotlin) MUST keep the backing
-    /// ImageProxy alive until either [`Self::materialize_owned`] or
-    /// the JNI `clearExternalBuffer` is called — accessing the slice
-    /// after the ImageProxy closes is use-after-free.
-    pub external_rgba: Option<ExternalRgba>,
-    pub width: u32,
-    pub height: u32,
-    pub rotation_degrees: i32,
-    pub cached: Option<translator::live_frame::OrientedImage>,
-    /// Tracker-side gray pyramid, *always* built on the full-display
-    /// rect. The tracker needs every feature the sensor produces —
-    /// including ones just outside the SurfaceView's FILL_CENTER
-    /// visible region — so its anchor stays robust under small motion
-    /// that would otherwise push edge features out of frame. Built
-    /// separately from `cached` (which is sized to the visible region
-    /// for OCR) because the OCR pipeline benefits from detect's
-    /// pixel-count-linear cost being scoped to what the user can see.
-    pub cached_tracker: Option<translator::live_frame::OrientedImage>,
-}
-
-/// Pointer + length into a Kotlin-held DirectByteBuffer. Marked
-/// `Send`/`Sync` because the wrapping `Mutex<FrameState>` is held
-/// across threads in normal use — the lifetime promise is enforced
-/// by Kotlin code, not by Rust types.
-pub(crate) struct ExternalRgba {
-    pub ptr: *const u8,
-    pub len: usize,
-}
-unsafe impl Send for ExternalRgba {}
-unsafe impl Sync for ExternalRgba {}
-
-impl FrameState {
-    /// Return the active RGBA bytes — `external_rgba` when set
-    /// (zero-copy from camera buffer), `rgba` otherwise (owned copy).
-    pub(crate) fn rgba_bytes(&self) -> &[u8] {
-        if let Some(ext) = &self.external_rgba {
-            // SAFETY: Kotlin guarantees the backing ImageProxy is
-            // alive for the duration of this borrow — see contract
-            // on `external_rgba`.
-            unsafe { std::slice::from_raw_parts(ext.ptr, ext.len) }
-        } else {
-            &self.rgba
-        }
-    }
-
-    /// Memcpy `external_rgba` into the owned `rgba` Vec, then clear
-    /// the external borrow. After this returns the FrameState's
-    /// bytes are owned and the caller can safely close the camera
-    /// ImageProxy. No-op when `external_rgba` is already None.
-    pub(crate) fn materialize_owned(&mut self) {
-        if let Some(ext) = self.external_rgba.take() {
-            self.rgba.clear();
-            self.rgba.reserve(ext.len);
-            // SAFETY: caller has not yet closed the ImageProxy; the
-            // source pointer is valid for `ext.len` bytes; the dest
-            // Vec was just reserved with at least that capacity; src
-            // and dst are disjoint (camera native memory vs Rust heap).
-            unsafe {
-                std::ptr::copy_nonoverlapping(ext.ptr, self.rgba.as_mut_ptr(), ext.len);
-                self.rgba.set_len(ext.len);
-            }
-        }
-    }
-}
-
+#[cfg(feature = "ppocr")]
 impl FrameHandle {
-    fn new(initial_capacity: usize) -> Self {
+    pub(crate) fn new(initial_capacity: usize) -> Self {
         FrameHandle {
-            state: std::sync::Mutex::new(FrameState {
-                rgba: Vec::with_capacity(initial_capacity),
-                external_rgba: None,
-                width: 0,
-                height: 0,
-                rotation_degrees: 0,
-                cached: None,
-                cached_tracker: None,
-            }),
+            inner: Arc::new(translator::live_frame::LiveFrame::new(initial_capacity)),
         }
-    }
-
-    /// Exposes the inner state mutex to JNI shims (same crate). Not
-    /// part of the uniffi-visible surface.
-    pub(crate) fn state(&self) -> &std::sync::Mutex<FrameState> {
-        &self.state
-    }
-
-    /// Address of this handle on the Rust heap. Used by the JNI fast-path —
-    /// Kotlin passes this `u64` to a non-uniffi extern "system" fn which casts
-    /// it back to `&FrameHandle`. The `Arc` keeps the address stable, so as long
-    /// as Kotlin still holds the wrapper, this pointer is valid.
-    fn raw_address(&self) -> u64 {
-        self as *const FrameHandle as u64
-    }
-
-    fn reset_via_uniffi_inner(
-        &self,
-        rgba: Vec<u8>,
-        width: u32,
-        height: u32,
-        rotation_degrees: i32,
-    ) {
-        let mut state = self.state.lock().expect("frame mutex poisoned");
-        state.rgba = rgba;
-        state.external_rgba = None;
-        state.width = width;
-        state.height = height;
-        state.rotation_degrees = rotation_degrees;
-        state.cached = None;
-        state.cached_tracker = None;
     }
 }
 
+#[cfg(feature = "ppocr")]
 #[uniffi::export]
 impl FrameHandle {
-    /// Returns this handle's Rust-heap address as a `u64`. Pair with
-    /// `LiveFrameJni.writeFrom(...)` for zero-JVM-copy byte transfer from a
-    /// camera DirectByteBuffer into this buffer.
+    /// Returns this handle's `LiveFrame` Rust-heap address as a `u64`.
+    /// Paired with `LiveFrameJni.{writeFrom,setExternalBuffer}` for
+    /// zero-JVM-copy byte transfer from a camera DirectByteBuffer into
+    /// this frame's storage, and with `LivePipelineJni.processFrame`
+    /// for the per-frame tracker+composite call.
     fn raw_address_for_jni(&self) -> u64 {
-        self.raw_address()
+        self.inner.raw_address()
     }
 
     /// Fallback path that copies bytes in via uniffi's standard marshalling.
-    /// Slower than the JNI shim (extra JVM ByteArray copy) but useful when the
-    /// camera's plane isn't a DirectByteBuffer or row stride doesn't match.
+    /// Slower than the JNI shim but useful when the camera's plane isn't
+    /// a contiguous DirectByteBuffer.
     fn reset_via_uniffi(&self, rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: i32) {
-        self.reset_via_uniffi_inner(rgba, width, height, rotation_degrees);
+        self.inner.reset_owned(rgba, width, height, rotation_degrees);
     }
-}
 
-
-
-
-
-#[cfg(feature = "ppocr")]
-/// Gray-only build path. Used by the per-frame planar-tracker step
-/// which only reads `oriented.gray`. Reuses the cached oriented image
-/// if its `display_crop` still matches — even if the cached one was
-/// built with rgb, we keep it (downgrading would re-do the fused gray
-/// pass unnecessarily).
-/// Tracker-side ensure: build (and cache) a gray-only OrientedImage
-/// sized to the *full display* into `state.cached_tracker`. The
-/// per-frame planar tracker reads `state.cached_tracker.gray` so it
-/// has every available feature, even those just outside the
-/// SurfaceView's FILL_CENTER visible region. Cheap to rebuild because
-/// it's gray-only (no rgb / rgb_det chains) and the typical full-frame
-/// fused crop+rotate+luma pass is ~3 ms on phone.
-fn ensure_tracker_oriented_locked(
-    state: &mut FrameState,
-    det_max_pixels: u32,
-) -> Result<(), CatalogError> {
-    let crop = full_display_rect(state);
-    let needs_rebuild = match state.cached_tracker.as_ref() {
-        Some(oi) => oi.display_crop != crop,
-        None => true,
-    };
-    if needs_rebuild {
-        let oi = translator::live_frame::OrientedImage::build(
-            state.rgba_bytes(),
-            state.width,
-            state.height,
-            state.rotation_degrees,
-            crop,
-            det_max_pixels,
-        )
-        .map_err(CatalogError::from)?;
-        state.cached_tracker = Some(oi);
-    }
-    Ok(())
-}
-
-/// Full-display rect for the current frame state. Independent of
-/// the visible-region crop the SurfaceView shows: the tracker is
-/// always built from the full sensor area so it has every available
-/// feature, even those just outside the user's framing — keeps the
-/// anchor robust under small motion that would otherwise push edge
-/// features out of frame. The OCR + compositor still use the
-/// visible-region rect (passed separately as `display_crop`) for
-/// box filtering and bitmap sizing.
-fn full_display_rect(state: &FrameState) -> translator::Rect {
-    let r = ((state.rotation_degrees % 360) + 360) % 360;
-    let (w, h) = if r == 90 || r == 270 {
-        (state.height, state.width)
-    } else {
-        (state.width, state.height)
-    };
-    translator::Rect {
-        left: 0,
-        top: 0,
-        right: w,
-        bottom: h,
-    }
-}
-
-fn ensure_oriented_locked(
-    state: &mut FrameState,
-    display_crop: translator::Rect,
-    det_max_pixels: u32,
-) -> Result<(), CatalogError> {
-    let needs_rebuild = match state.cached.as_ref() {
-        Some(oi) => oi.display_crop != display_crop,
-        None => true,
-    };
-    if needs_rebuild {
-        let oi = translator::live_frame::OrientedImage::build(
-            state.rgba_bytes(),
-            state.width,
-            state.height,
-            state.rotation_degrees,
-            display_crop,
-            det_max_pixels,
-        )
-        .map_err(CatalogError::from)?;
-        state.cached = Some(oi);
-    }
-    Ok(())
-}
-
-/// Eager build path with `rgb` + `rgb_det` populated, for acquire /
-/// refresh / detect / recognize callers. If the cached frame was built
-/// gray-only, rebuild it to materialise rgb. Otherwise reuse.
-fn ensure_oriented_with_rgb_locked(
-    state: &mut FrameState,
-    display_crop: translator::Rect,
-    det_max_pixels: u32,
-) -> Result<(), CatalogError> {
-    let needs_rebuild = match state.cached.as_ref() {
-        Some(oi) => oi.display_crop != display_crop || !oi.has_rgb(),
-        None => true,
-    };
-    if needs_rebuild {
-        let oi = translator::live_frame::OrientedImage::build_with_rgb(
-            state.rgba_bytes(),
-            state.width,
-            state.height,
-            state.rotation_degrees,
-            display_crop,
-            det_max_pixels,
-        )
-        .map_err(CatalogError::from)?;
-        state.cached = Some(oi);
-    }
-    Ok(())
-}
-
-fn poisoned() -> CatalogError {
-    CatalogError::Other {
-        reason: "frame mutex poisoned".to_string(),
-    }
-}
-
-/// Scale a `DetectedTextBox` from detector-image coords up to full-crop coords,
-/// clamping inside the destination dimensions.
-#[cfg(feature = "ppocr")]
-fn scale_detected_box(
-    b: translator::DetectedTextBox,
-    scale: f32,
-    max_w: u32,
-    max_h: u32,
-) -> translator::DetectedTextBox {
-    let left = ((b.rect.left as f32) * scale).max(0.0) as u32;
-    let top = ((b.rect.top as f32) * scale).max(0.0) as u32;
-    let right = ((b.rect.right as f32) * scale).min(max_w as f32) as u32;
-    let bottom = ((b.rect.bottom as f32) * scale).min(max_h as f32) as u32;
-    let rect = translator::Rect {
-        left: left.min(right.saturating_sub(1)),
-        top: top.min(bottom.saturating_sub(1)),
-        right: right.max(left + 1),
-        bottom: bottom.max(top + 1),
-    };
-    let oriented = translator::ocr::OrientedRect {
-        cx: b.oriented_box.cx * scale,
-        cy: b.oriented_box.cy * scale,
-        width: b.oriented_box.width * scale,
-        height: b.oriented_box.height * scale,
-        angle_radians: b.oriented_box.angle_radians,
-    };
-    let tight = translator::ocr::OrientedRect {
-        cx: b.tight_box.cx * scale,
-        cy: b.tight_box.cy * scale,
-        width: b.tight_box.width * scale,
-        height: b.tight_box.height * scale,
-        angle_radians: b.tight_box.angle_radians,
-    };
-    let mut contour = Vec::with_capacity(b.contour.len());
-    for v in &b.contour {
-        contour.push(v * scale);
-    }
-    translator::DetectedTextBox {
-        rect,
-        oriented_box: oriented,
-        tight_box: tight,
-        contour,
-        score: b.score,
+    /// `true` while the pipeline (or its worker thread) still holds an
+    /// `Arc<LiveFrame>` clone of the underlying frame — i.e. an
+    /// in-flight acquire or refresh job is still reading from this
+    /// frame's state. The Kotlin frame pool uses this to skip
+    /// "busy" handles when picking the next ingest target so a new
+    /// `setExternalBuffer` doesn't race with an async pipeline read.
+    ///
+    /// Implementation note: checks `Arc::strong_count(&self.inner)`.
+    /// A count of 1 means only this wrapper holds it; > 1 means at
+    /// least one extra clone exists (most commonly the pipeline
+    /// worker's job-local Arc).
+    fn is_busy(&self) -> bool {
+        Arc::strong_count(&self.inner) > 1
     }
 }
 
 // =========================================================================
-// Planar-surface tracker (Phase D wiring of FUTURE_PLANAR_TRACKER.md).
-// Lives alongside the legacy LiveMotionTracker for incremental rollout; the
-// Kotlin engine picks which to use behind a feature flag.
+// Planar-surface OCR pipeline (uniffi wrapper).
+//
+// All the orchestration logic — tracker step, smoothed-H, composite,
+// async acquire/refresh dispatch — lives in
+// `translator::live_tracker_pipeline::LiveTrackerPipeline`. This
+// uniffi `LivePlanarTracker` is a thin shim that holds an `Arc` to it
+// + forwards a handful of uniffi-facing methods (set config, reset,
+// telemetry getter). The hot per-frame entry is the JNI extern fn
+// `Java_..._LivePipelineJni_processFrame`, which dereferences the
+// raw address from `raw_address_for_jni` and calls
+// `LiveTrackerPipeline::process_frame` directly with a `&mut [u8]`
+// pointing at the Bitmap's pixel memory.
 // =========================================================================
 
 #[cfg(feature = "planar-tracker")]
-#[derive(uniffi::Enum)]
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PlanarTrackerState {
     Idle,
     Acquiring,
@@ -1510,1598 +1154,135 @@ pub enum PlanarTrackerState {
 }
 
 #[cfg(feature = "planar-tracker")]
-#[derive(uniffi::Record)]
-pub struct PlanarFrameResult {
-    pub state: PlanarTrackerState,
-    /// Active anchor id when state is Locked or last-known anchor when Lost.
-    /// 0 when state is Idle or Acquiring.
-    pub anchor_id: u64,
-    /// 9-element row-major homography. Empty unless state is Locked.
-    pub homography: Vec<f32>,
-    /// True the first frame after a brand-new acquisition (Kotlin should
-    /// run detect + recognise + translate). False on subsequent frames or
-    /// when re-locking onto a cached anchor (skip OCR).
-    pub is_new: bool,
-    /// Inlier count for the locked fit; 0 otherwise.
-    pub inliers: u32,
+impl From<translator::live_tracker_pipeline::PlanarTrackerState> for PlanarTrackerState {
+    fn from(s: translator::live_tracker_pipeline::PlanarTrackerState) -> Self {
+        use translator::live_tracker_pipeline::PlanarTrackerState as S;
+        match s {
+            S::Idle => Self::Idle,
+            S::Acquiring => Self::Acquiring,
+            S::Locked => Self::Locked,
+            S::Lost => Self::Lost,
+        }
+    }
 }
 
 #[cfg(feature = "planar-tracker")]
-#[derive(uniffi::Record)]
-pub struct PlanarTextRenderItem {
-    pub id: u64,
-    /// 8 floats = 4 corners (x,y), canonical-frame coords, TL/TR/BR/BL.
-    pub quad: Vec<f32>,
-    pub translated_text: String,
-    pub source_text: String,
-    /// BCP-47 of the target language (font-fallback hint).
-    pub language: String,
-    pub bg_argb: u32,
-    pub fg_argb: u32,
-    pub suggested_font_px: f32,
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PipelineTargetMode {
+    /// Normal operation: tracker step + composite + async acquire/refresh.
+    Active,
+    /// Suppress: every frame bumps generation + clears engine + smoothed H.
+    /// Used during camera AF scans so any in-flight acquire bails at its
+    /// next gen-check and the stable-window restarts on every frame.
+    Suppressed,
 }
 
-/// One per-item rasterized bitmap kept resident in the tracker. Each
-/// item carries its own small RGBA region (sized to the item's visual
-/// quad + a small AA pad) plus its surface-frame origin and a hash of
-/// the content that produced the bitmap. `composite_frame` iterates
-/// over the list and warps each item through `h_surface_to_viewport`.
-///
-/// Per-item storage replaces the previous one-big-union-bitmap design:
-/// a dense page with 98 items wasted ~96 % of every raster (each
-/// rec-batch update changed only 4 items but we re-rastered all 98).
-/// Now `upsert_overlay_item` only re-rasters items whose content hash
-/// changed; everything else stays resident.
-///
+#[cfg(feature = "planar-tracker")]
+impl From<PipelineTargetMode> for translator::live_tracker_pipeline::TargetMode {
+    fn from(m: PipelineTargetMode) -> Self {
+        match m {
+            PipelineTargetMode::Active => Self::Active,
+            PipelineTargetMode::Suppressed => Self::Suppressed,
+        }
+    }
+}
+
+/// Surfaced to Kotlin for the on-screen debug tracker pill. Drained
+/// from the pipeline (take-and-clear) on each poll, so a subsequent
+/// poll without a new acquire returns `None`.
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct AcquireTelemetryRecord {
+    pub anchor_id: u64,
+    pub detected_count: u32,
+    pub rec_ok_count: u32,
+    pub rec_empty_count: u32,
+    pub cache_hits: u32,
+    pub rec_called_count: u32,
+    pub total_ms: f64,
+    pub canceled: bool,
+    pub error: Option<String>,
+    pub is_refresh: bool,
+}
+
+#[cfg(feature = "planar-tracker")]
+impl From<translator::live_tracker_pipeline::AcquireTelemetry> for AcquireTelemetryRecord {
+    fn from(t: translator::live_tracker_pipeline::AcquireTelemetry) -> Self {
+        AcquireTelemetryRecord {
+            anchor_id: t.anchor_id,
+            detected_count: t.detected_count,
+            rec_ok_count: t.rec_ok_count,
+            rec_empty_count: t.rec_empty_count,
+            cache_hits: t.cache_hits,
+            rec_called_count: t.rec_called_count,
+            total_ms: t.total_ms,
+            canceled: t.canceled,
+            error: t.error,
+            is_refresh: t.is_refresh,
+        }
+    }
+}
+
 #[cfg(feature = "planar-tracker")]
 #[derive(uniffi::Object)]
 pub struct LivePlanarTracker {
-    state: std::sync::Mutex<translator::planar_engine::LivePlanarEngine>,
-    /// Per-item resident rasterized overlays for the composite
-    /// pipeline. Each item is keyed by its stable id; `upsert_overlay_block`
-    /// adds or replaces, `retain_overlay_items` drops anything outside
-    /// a set. Persisted across many composite calls so dense pages only
-    /// re-rasterize the handful of items whose text changed in the
-    /// latest rec batch, not the whole set.
-    /// Bumped on every `reset()` (tap-to-focus, language change, etc.).
-    /// In-flight acquire pipelines pass the generation they captured at
-    /// launch as a parameter; before each potentially-slow step
-    /// (detect, recognize, translate) the pipeline checks whether the
-    /// generation has moved on and bails if so.
-    generation: std::sync::atomic::AtomicU64,
-    /// Per-block id source. Used to be the only block-id generator;
-    /// now block ids are derived from the sorted SurfaceLine ids
-    /// (see `stable_block_id`) so unchanged blocks across acquires
-    /// hit `upsert_overlay_block`'s content-hash cache. Kept around
-    /// as a fallback / for any caller still on the legacy path.
-    #[allow(dead_code)]
-    next_entry_id: std::sync::atomic::AtomicU64,
-    /// EMA-smoothed homography state, kept across consecutive
-    /// `process_and_composite` calls. Holds the last smoothed H + the
-    /// anchor it belongs to + the streak of LOST frames since the
-    /// previous Locked. Lives in Rust so the per-frame call can do
-    /// `tracker step → smooth → composite` in one trip instead of
-    /// pinging back to Kotlin for the H math.
-    smoothed_h: std::sync::Mutex<SmoothedHomography>,
-    /// Most recent raw `H_root→view` for the currently-Locked anchor,
-    /// stashed by `process_and_composite` on every Locked frame.
-    /// Used as the "latest known H" for non-refresh purposes; the
-    /// refresh worker reads `pending_refresh_target` instead so a
-    /// snap-back / pan-induced anchor change between trigger-fire
-    /// and worker-pickup doesn't make the worker project detections
-    /// through the wrong anchor's H.
-    last_root_to_view: std::sync::Mutex<Option<(u64, [f32; 9])>>,
-    /// `H_root→view` at the last refresh we *fired*. The motion gate
-    /// compares the current frame's H against this; on a held camera
-    /// (RANSAC + handoff micro-drift only), the corner delta stays
-    /// under [`MIN_REFRESH_DELTA_PX`] and we skip the refresh
-    /// entirely — restoring the "rock solid still" feel that the
-    /// pre-#28 era had.
-    last_refresh_h: std::sync::Mutex<Option<[f32; 9]>>,
-    /// Snapshot of `(anchor_id, H_root→view)` taken at the moment
-    /// `process_and_composite` set `should_refresh_detect = true`.
-    /// `run_refresh_pipeline` consumes from this slot. Pinning the
-    /// pair at trigger time defends against the worker running
-    /// asynchronously: by the time the worker thread picks up the
-    /// frame, the detector thread may have processed many more
-    /// frames and `last_root_to_view` may now point at a different
-    /// anchor (engine snap-back, mid-pan re-lock). Using a stale
-    /// `(anchor, H)` would project the worker's camera-coord
-    /// detections into garbage surface coords — "boxes flying in
-    /// the middle of the room" + `cache=0` because no surface lines
-    /// match the projection.
-    pending_refresh_target: std::sync::Mutex<Option<(u64, [f32; 9])>>,
-    /// Output buffer produced by `composite_frame` (uniffi) and
-    /// consumed by `Java_..._PlanarRenderJni_compositeInto` (JNI).
-    /// Holds the fully-composited camera + overlay RGBA at display
-    /// resolution. Vec<u8>-via-JNI-memcpy avoids uniffi marshalling for
-    /// an 8 MB buffer per frame.
-    /// Stashed by `process_and_composite` for the follow-up JNI
-    /// `compositeIntoBuffer` call: the homography to warp the active
-    /// anchor's overlay items by and the id of that active anchor.
-    /// `None` between frames where the engine wasn't Locked + Idle and
-    /// the previous-good H has been cleared. The JNI call reads this
-    /// + `frame.state.rgba` + `session.overlay_items` and runs the
-    /// composite directly into the caller-provided DirectByteBuffer,
-    /// eliminating the previous intermediate `pending_display` Vec
-    /// and the JNI memcpy that copied it into the buffer afterwards.
-    pending_compose: std::sync::Mutex<Option<(u64, [f32; 9])>>,
-    /// Color-matting results from the most recent acquire, keyed by
-    /// the anchor those mats belong to. Indexed parallel to the
-    /// acquire pipeline's `entries` (i.e. by detection order).
-    /// `None` entries are detections where matting failed (small
-    /// contour, sparse ink) — callers fall back to the legacy pill
-    /// rendering for those. Cleared when an anchor's overlays go
-    /// away.
-    matted_strips: std::sync::Mutex<
-        std::collections::HashMap<u64, Vec<Option<translator::color_matting::MattedStrip>>>,
-    >,
-    /// Cross-platform orchestration state. Owns the surface map
-    /// (and, in subsequent phases, the engine, overlay store, etc.)
-    /// so the desktop `surface_sim` binary and this Android wrapper
-    /// share one codebase. Reset on tap-to-focus / language change.
-    session: std::sync::Arc<translator::live_session::LiveSession>,
+    pub(crate) pipeline: Arc<translator::live_tracker_pipeline::LiveTrackerPipeline>,
 }
 
 #[cfg(feature = "planar-tracker")]
 #[uniffi::export]
 impl LivePlanarTracker {
     #[uniffi::constructor]
-    fn new() -> Arc<Self> {
+    fn new(catalog: Arc<CatalogHandle>) -> Arc<Self> {
+        let session = catalog.session_arc();
+        let provider: Arc<dyn translator::font_provider::FontProvider + Send + Sync> =
+            Arc::new(crate::android_font_provider::AndroidFontProvider);
         Arc::new(Self {
-            state: std::sync::Mutex::new(translator::planar_engine::LivePlanarEngine::new(
-                translator::planar_engine::EngineConfig::default(),
-            )),
-            smoothed_h: std::sync::Mutex::new(SmoothedHomography::default()),
-            last_root_to_view: std::sync::Mutex::new(None),
-            last_refresh_h: std::sync::Mutex::new(None),
-            pending_refresh_target: std::sync::Mutex::new(None),
-            generation: std::sync::atomic::AtomicU64::new(0),
-            next_entry_id: std::sync::atomic::AtomicU64::new(1),
-            pending_compose: std::sync::Mutex::new(None),
-            matted_strips: std::sync::Mutex::new(std::collections::HashMap::new()),
-            session: std::sync::Arc::new(translator::live_session::LiveSession::new()),
+            pipeline: translator::live_tracker_pipeline::LiveTrackerPipeline::new(
+                session, provider,
+            ),
         })
     }
 
-    /// Return this tracker's address on the Rust heap as a `u64`. Pair
-    /// with [`PlanarRenderJni.renderInto`] — Kotlin passes this back as
-    /// a `jlong`, the JNI shim casts it to `&LivePlanarTracker` and
-    /// reads `pending_bitmap`. The `Arc` keeps the address stable as
-    /// long as Kotlin holds the wrapper.
+    /// Address of the underlying pipeline on the Rust heap. Used by
+    /// the JNI per-frame fast path to cast back to
+    /// `&LiveTrackerPipeline` without a uniffi marshalling hop.
     fn raw_address_for_jni(&self) -> u64 {
-        self as *const LivePlanarTracker as u64
+        Arc::as_ptr(&self.pipeline) as u64
     }
 
-    /// Upsert the resident overlay item with id `id`. If the content
-    /// (tight box + texts + language) matches what was already
-    /// rasterized for this id, this is a no-op — we keep the cached
-    /// bitmap. Otherwise we recompute the visual box, raster a fresh
-    /// bitmap, and replace the slot.
-    ///
-    /// Kotlin's job is to call this whenever a new detection /
-    /// recognition / translation result arrives. Kotlin does *not*
-    /// know about visual-box inflation, font sizing, bitmap bounds,
-    /// or hashing — Rust owns all of that.
-    /// Upsert one translation block: a set of strips (each an oriented
-    /// rect in surface coords) plus its source + translated text. The
-    /// block is the universal overlay unit — a single-line label is a
-    /// 1-strip block, a paragraph is N strips. The rasterizer reflows
-    /// `translated_text` across the strips in reading order.
-    ///
-    /// Content-hashed on (strips + texts + language). If a previous
-    /// upsert for the same `id` produced the same hash, this is a
-    /// no-op — no re-raster, no slot write.
-    /// Drop every resident overlay item. Compositor will draw a
-    /// camera-only frame after this.
-    fn clear_overlay(&self) {
-        self.session.clear_overlays();
+    fn set_languages(&self, from_code: String, to_code: String, is_auto_source: bool) {
+        self.pipeline.set_languages(&from_code, &to_code, is_auto_source);
     }
 
-    /// Bump the generation counter, clear the engine state, drop all
-    /// resident overlay items. Any in-flight `run_acquire_pipeline`
-    /// will notice the generation move and bail out at its next
-    /// check. Use this on tap-to-focus, language change, anchor reset.
+    fn set_target_mode(&self, mode: PipelineTargetMode) {
+        self.pipeline.set_target_mode(mode.into());
+    }
+
+    /// Bump generation, clear engine + smoothed H + session state.
+    /// Tap-to-focus / language change / session teardown call this.
     fn reset(&self) {
-        self.generation.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        if let Ok(mut engine) = self.state.lock() {
-            engine.clear();
-        }
-        if let Ok(mut sm) = self.smoothed_h.lock() {
-            *sm = SmoothedHomography::default();
-        }
-        if let Ok(mut slot) = self.last_root_to_view.lock() {
-            *slot = None;
-        }
-        if let Ok(mut slot) = self.last_refresh_h.lock() {
-            *slot = None;
-        }
-        if let Ok(mut slot) = self.pending_refresh_target.lock() {
-            *slot = None;
-        }
-        // Clears overlays + anchor states + refresh counters in one go.
-        self.session.clear();
+        self.pipeline.reset();
     }
 
-    /// Read the current generation. Callers about to launch
-    /// `run_acquire_pipeline` snapshot this value and pass it back; the
-    /// pipeline aborts if the value has moved on by then.
-    fn current_generation(&self) -> u64 {
-        self.generation.load(std::sync::atomic::Ordering::SeqCst)
+    /// Drop all resident overlay items without resetting the tracker
+    /// engine. The compositor will draw camera-only frames after this
+    /// until a fresh acquire completes.
+    fn clear_overlay(&self) {
+        self.pipeline.clear_overlay();
     }
 
-    /// Whole acquire pipeline: detect text in the frame → acquire an
-    /// anchor in the tracker engine → run recognition in batches of
-    /// `REC_BATCH_SIZE` → translate each batch via
-    /// `translate_mixed_texts` (one FFI-free Rust call, not N
-    /// per-text calls) → upsert per-item overlays. Runs synchronously
-    /// on the caller's thread (typically a Kotlin coroutine worker).
-    ///
-    /// At every potentially-slow boundary we check
-    /// `self.generation == generation`; if not, we abort with
-    /// `canceled = true`. That replaces the Kotlin
-    /// `globalGeneration++` cancellation scaffolding.
-    fn run_acquire_pipeline(
-        &self,
-        catalog: Arc<CatalogHandle>,
-        frame: Arc<FrameHandle>,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-        anchor_padding_px: u32,
-        timestamp_ns: u64,
-        from_lang_code: String,
-        to_lang_code: String,
-        is_auto_source: bool,
-        generation: u64,
-    ) -> AcquirePipelineOutcome {
-        let gen_check =
-            || -> bool { self.generation.load(std::sync::atomic::Ordering::SeqCst) == generation };
-        if !gen_check() {
-            return AcquirePipelineOutcome::canceled();
-        }
-
-        let t_overall = Instant::now();
-
-        // ---- Detect ----
-        let t_detect = Instant::now();
-        let detected: Vec<translator::DetectedTextBox> = {
-            let mut state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            // OCR pipeline uses `cached` built on the *visible region*
-            // — detect's cost is linear in pixel count and the user
-            // can't see anything outside this crop anyway. The tracker
-            // still gets the full-display gray via `cached_tracker`
-            // (populated by the per-frame `process_and_composite`).
-            if ensure_oriented_with_rgb_locked(&mut state, display_crop, det_max_pixels).is_err() {
-                return AcquirePipelineOutcome::error("ensure_oriented failed");
-            }
-            let oriented = state
-                .cached
-                .as_ref()
-                .expect("ensure_oriented filled cache");
-            let raw = match catalog
-                .session
-                .detect_text_in_oriented_image(oriented)
-            {
-                Ok(r) => r,
-                Err(e) => {
-                    log::warn!("detect failed: {e:?}");
-                    return AcquirePipelineOutcome::error("detect failed");
-                }
-            };
-            let scale = oriented.det_to_full_scale;
-            let rgb = oriented.rgb.as_ref().expect("with_rgb path");
-            let max_w = rgb.width();
-            let max_h = rgb.height();
-            raw.into_iter()
-                .map(|b| scale_detected_box(b, scale, max_w, max_h))
-                .collect()
-        };
-        let detect_ms = t_detect.elapsed().as_secs_f64() * 1_000.0;
-        log::debug!(
-            "[acquire] detect: {:.1}ms found={}",
-            detect_ms,
-            detected.len()
-        );
-
-        if is_auto_source {
-            log::info!(
-                "auto mode triggered, {} detections, running PULC script classifier (target={})",
-                detected.len(),
-                to_lang_code,
-            );
-        }
-
-        if !gen_check() {
-            return AcquirePipelineOutcome::canceled();
-        }
-        if detected.is_empty() {
-            return AcquirePipelineOutcome {
-                anchor_id: 0,
-                detected_count: 0,
-                rec_ok_count: 0,
-                rec_empty_count: 0,
-                cache_hits: 0,
-                rec_called_count: 0,
-                total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
-                canceled: false,
-                error: None,
-            };
-        }
-
-        // ---- Acquire anchor ----
-        // ---- Estimate canonical reading-direction quadrant ----
-        // Two paths:
-        //   * Forced source (script known up-front): run the rec model
-        //     at all four canonicals on K=3 sample boxes; the canonical
-        //     that yields the highest avg rec confidence wins. Rec
-        //     produces gibberish on wrong orientations so the conf gap
-        //     is a strong signal; much more reliable on OOD content
-        //     (signage, large glyphs, non-Latin scripts) than the
-        //     binary textline-ori classifier.
-        //   * Auto source (script unknown): fall back to the textline-
-        //     ori classifier path (windowed + validation-pair asymmetry
-        //     gate). Less reliable on hard content but doesn't need
-        //     to know the script.
-        let t_orient = Instant::now();
-        let forced_script = if is_auto_source {
-            None
-        } else {
-            catalog.session.ppocr_script_for_language_code(&from_lang_code)
-        };
-        let estimated_quadrant: Option<translator::coords::Quadrant>;
-        let orient_path: &'static str;
-        if let Some(script) = forced_script {
-            let state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            let oriented = match state.cached.as_ref() {
-                Some(o) => o,
-                None => return AcquirePipelineOutcome::error("oriented cache miss"),
-            };
-            let result = catalog
-                .session
-                .estimate_canonical_via_rec_in_oriented_image(oriented, &detected, script);
-            estimated_quadrant = match result {
-                Ok(q) => q,
-                Err(e) => {
-                    log::warn!("[acquire] estimate_canonical_via_rec failed: {e:?}");
-                    None
-                }
-            };
-            orient_path = "rec";
-        } else {
-            let state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            let oriented = match state.cached.as_ref() {
-                Some(o) => o,
-                None => return AcquirePipelineOutcome::error("oriented cache miss"),
-            };
-            estimated_quadrant = match catalog
-                .session
-                .estimate_canonical_quadrant_in_oriented_image(oriented, &detected)
-            {
-                Ok(q) => q,
-                Err(e) => {
-                    log::warn!("[acquire] estimate_canonical_quadrant failed: {e:?}");
-                    None
-                }
-            };
-            orient_path = "textline-ori";
-        }
-        let orient_ms = t_orient.elapsed().as_secs_f64() * 1_000.0;
-        log::info!(
-            "[acquire] orientation estimate ({}): {:.1}ms quadrant={:?}",
-            orient_path,
-            orient_ms,
-            estimated_quadrant,
-        );
-
-        let t_acquire = Instant::now();
-        let anchor_id = {
-            let mut state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            // Anchor MUST be built from the *full-sensor* gray that
-            // the per-frame tracker also uses, otherwise the anchor's
-            // feature positions live in visible-region coords while
-            // the tracker tries to match against full-sensor coords —
-            // mismatch → zero inliers → never locks. Ensure the
-            // tracker-side OrientedImage is populated (it might be
-            // missing on the very first acquire before the per-frame
-            // path has fired).
-            if ensure_tracker_oriented_locked(&mut state, det_max_pixels).is_err() {
-                return AcquirePipelineOutcome::error("ensure_tracker failed");
-            }
-            let tracker_oriented = state
-                .cached_tracker
-                .as_ref()
-                .expect("ensure_tracker filled cache");
-            // `detected` boxes are in visible-region **sensor** coords
-            // (PPOCR ran on `cached`'s sensor-orient rgb at
-            // `cached.sensor_crop`). Translate by that crop's top-left
-            // to land in full-sensor coords, then scale down to
-            // tracker_oriented.gray's downsampled pixel space.
-            let cached_sensor_crop = state
-                .cached
-                .as_ref()
-                .map(|oi| oi.sensor_crop)
-                .unwrap_or(translator::Rect { left: 0, top: 0, right: 0, bottom: 0 });
-            // tracker_oriented.gray is downsampled to det_max_pixels;
-            // its pixel coords are 1 / det_to_full_scale of full sensor
-            // coords. Scale region tuples down to match the gray we're
-            // about to hand to acquire_now_in_regions — otherwise the
-            // engine filters keypoints in small-pixel coords against
-            // full-coord regions and lets nothing through.
-            let scale_down = if tracker_oriented.det_to_full_scale > 0.0 {
-                1.0 / tracker_oriented.det_to_full_scale
-            } else {
-                1.0
-            };
-            let regions: Vec<(u32, u32, u32, u32)> = detected
-                .iter()
-                .map(|d| {
-                    let scale_u32 =
-                        |v: u32| ((v as f32) * scale_down).round() as u32;
-                    (
-                        scale_u32(d.rect.left + cached_sensor_crop.left),
-                        scale_u32(d.rect.top + cached_sensor_crop.top),
-                        scale_u32(d.rect.right + cached_sensor_crop.left),
-                        scale_u32(d.rect.bottom + cached_sensor_crop.top),
-                    )
-                })
-                .collect();
-            let mut engine = match self.state.lock() {
-                Ok(g) => g,
-                Err(_) => return AcquirePipelineOutcome::error("engine.state poisoned"),
-            };
-            engine
-                .acquire_now_with_orientation(
-                    &tracker_oriented.gray,
-                    &regions,
-                    anchor_padding_px,
-                    timestamp_ns,
-                    estimated_quadrant,
-                )
-                .unwrap_or(0)
-        };
-        let acquire_ms = t_acquire.elapsed().as_secs_f64() * 1_000.0;
-        log::debug!("[acquire] acquire_now: {:.1}ms id={}", acquire_ms, anchor_id);
-
-        if anchor_id == 0 {
-            return AcquirePipelineOutcome::error("acquire_now returned 0");
-        }
-        // Fresh-acquire wipe: the engine may have re-assigned a
-        // previously-used id (e.g. after `engine.clear()` from an AF
-        // reset). The session-side `AnchorState` and overlay items
-        // keyed by id would otherwise persist, rendering at stale
-        // surface coords through the new anchor's H — "overlay
-        // stuck to an arbitrary offset" after a fast pan → loss →
-        // re-lock cycle. Wipe before `run_post_detect` so the new
-        // acquire starts from a clean slate.
-        self.session.reset_anchor_state(anchor_id);
-        if !gen_check() {
-            return AcquirePipelineOutcome::canceled();
-        }
-
-        // ---- Color matting ----
-        // Disabled for now: when the per-strip uniform-bg detection
-        // works it looks great, but when it fails or flips between
-        // acquires the pill colour jarringly snaps in and out. White-
-        // on-dark is consistent and that's what we ship. Flip
-        // `ENABLE_COLOR_MATTING` to true to re-enable; the algorithm
-        // is in `translator::color_matting`, the histogram-peak
-        // uniformity check on ring samples is in `uniform_bg_argb`.
-        // See `FUTURE_SURFACE_MAP.md` "Color matting" for the full
-        // design + open algorithmic questions.
-        const ENABLE_COLOR_MATTING: bool = false;
-        if ENABLE_COLOR_MATTING {
-            let t_mat = Instant::now();
-            let matted: Vec<Option<translator::color_matting::MattedStrip>> = {
-                let state = match frame.state.lock() {
-                    Ok(s) => s,
-                    Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-                };
-                let oriented = state
-                    .cached
-                    .as_ref()
-                    .expect("oriented still cached");
-                translator::color_matting::mat_detections(
-                    &oriented
-                        .rgb
-                        .as_ref()
-                        .expect("with_rgb path")
-                        .to_rgba8(),
-                    &detected,
-                )
-            };
-            let mat_count = matted.iter().filter(|m| m.is_some()).count();
-            log::debug!(
-                "[acquire] mat: {:.1}ms ok={}/{}",
-                t_mat.elapsed().as_secs_f64() * 1_000.0,
-                mat_count,
-                matted.len(),
-            );
-            if let Ok(mut store) = self.matted_strips.lock() {
-                store.insert(anchor_id, matted);
-            }
-        }
-
-        let total = detected.len();
-
-        // Pre-compute the catalog's installed language codes for
-        // `translate_mixed_texts`. Only used when forced_source_code
-        // is None (auto-detect); ignored otherwise. We pass it
-        // unconditionally so the auto-source path doesn't need a
-        // separate branch.
-        let available_codes: Vec<translator::LanguageCode> = catalog
-            .session
-            .language_rows()
-            .into_iter()
-            .map(|row| translator::LanguageCode::from(row.language.code.as_str()))
-            .collect();
-
-        let matted_strips: Vec<Option<translator::color_matting::MattedStrip>> = match self
-            .matted_strips
-            .lock()
-        {
-            Ok(g) => g.get(&anchor_id).cloned().unwrap_or_default(),
-            Err(_) => Vec::new(),
-        };
-
-        let cancel = || {
-            self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
-        };
-        let session_ref: &translator::TranslatorSession = &catalog.session;
-        let outcome = {
-            let state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            let oriented = match state
-                .cached
-                .as_ref()
-                .filter(|oi| oi.display_crop == display_crop)
-            {
-                Some(o) => o,
-                None => return AcquirePipelineOutcome::error("oriented cache miss"),
-            };
-            // PPOCR boundary: `detected` boxes are in visible-region
-            // **sensor** coords (PPOCR ran on `oriented.rgb`, which is
-            // a sensor-orient crop sized to `oriented.sensor_crop`).
-            // Translating by that crop's top-left brings us to
-            // full-sensor coords, which is what the anchor surface map
-            // lives in. No rotation matrix is needed — sensor IS the
-            // surface frame.
-            let h_view_to_sensor = [
-                1.0, 0.0, oriented.sensor_crop.left as f32,
-                0.0, 1.0, oriented.sensor_crop.top as f32,
-                0.0, 0.0, 1.0,
-            ];
-            let canonical_quadrant = {
-                let engine = self.state.lock().ok();
-                engine.and_then(|e| e.canonical_rotation_for(anchor_id))
-            };
-            let outcome = self.session.run_post_detect(
-                translator::live_session::PostDetectInput {
-                    detections: &detected,
-                    oriented,
-                    h_view_to_surface: Some(h_view_to_sensor),
-                    anchor_id,
-                    from_lang: &from_lang_code,
-                    to_lang: &to_lang_code,
-                    is_auto_source,
-                    available_codes: &available_codes,
-                    font_provider: &crate::android_font_provider::AndroidFontProvider,
-                    matted_strips: &matted_strips,
-                    rec_batch_size: 4,
-                    canonical_quadrant,
-                },
-                &session_ref,
-                &session_ref,
-                &cancel,
-            );
-            drop(state);
-            outcome
-        };
-        // The session marks `on_acquire` here so the detect-on-track
-        // refresh trigger doesn't immediately fire on the next Locked
-        // frame after a brand-new acquire.
-        self.session.on_acquire();
-
-        if outcome.canceled {
-            return AcquirePipelineOutcome::canceled();
-        }
-        // `last_lock_h` is lazy-initialised by `process_and_composite`
-        // on the first Locked frame after this acquire completes —
-        // by that point the engine's H reflects whatever motion
-        // happened during the ~1 s acquire window. Pinning identity
-        // here would lag the camera by that window.
-
-        let rec_ok = outcome.rec_ok_count as usize;
-        let rec_empty = outcome.rec_empty_count as usize;
-
-        // If nothing recognised, the tracker locked onto garbage. Clear
-        // so the next stable frame re-acquires somewhere useful.
-        if rec_ok == 0 && rec_empty + rec_ok == total {
-            if let Ok(mut engine) = self.state.lock() {
-                engine.clear();
-            }
-            self.clear_overlay();
-        }
-
-        // Keep the session's anchor-state HashMap aligned with the
-        // engine's anchor cache so we don't carry per-anchor state
-        // for surfaces the engine has already evicted. Uses
-        // `cached_root_ids` (not `cached_handle_ids`!) because the
-        // session keys by root id — the engine's internal cache
-        // handles are a different id space; handoffs grow internal
-        // ids without changing the root, so the two diverge fast on
-        // pans.
-        if let Ok(engine) = self.state.lock() {
-            let keep = engine.cached_root_ids();
-            drop(engine);
-            self.session.retain_anchors(&keep);
-        }
-
-        AcquirePipelineOutcome {
-            anchor_id,
-            detected_count: total as u32,
-            rec_ok_count: rec_ok as u32,
-            rec_empty_count: rec_empty as u32,
-            cache_hits: outcome.cache_hits,
-            rec_called_count: outcome.rec_called_count,
-            total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
-            canceled: false,
-            error: None,
-        }
-    }
-
-    /// Detect-on-tracking-frame refresh: while Locked on an existing
-    /// anchor, run detection on the current camera frame, project the
-    /// detected boxes back into surface coords via the stashed
-    /// `H_root→view`, and feed the result into `run_post_detect`.
-    /// Unlike `run_acquire_pipeline` we do *not* call `acquire_now`;
-    /// the anchor stays put. This is the engine that fires
-    /// `MergedAndExtended` / `MergedUnchanged` outcomes on the surface
-    /// map after the initial acquire — the user-visible "pan reveals
-    /// new text → it gets OCR'd, held text hits the cache" behaviour.
-    ///
-    /// Caller (Kotlin) should gate this on `should_refresh_detect` in
-    /// the latest `PlanarComposeResult` and dedupe against any
-    /// in-flight acquire.
-    fn run_refresh_pipeline(
-        &self,
-        catalog: Arc<CatalogHandle>,
-        frame: Arc<FrameHandle>,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-        from_lang_code: String,
-        to_lang_code: String,
-        is_auto_source: bool,
-        generation: u64,
-    ) -> AcquirePipelineOutcome {
-        let gen_check =
-            || -> bool { self.generation.load(std::sync::atomic::Ordering::SeqCst) == generation };
-        if !gen_check() {
-            return AcquirePipelineOutcome::canceled();
-        }
-
-        let t_overall = Instant::now();
-
-        // Consume the snapshot the trigger pinned for us. This is
-        // the (anchor, H) pair that was active when
-        // `should_refresh_detect = true` was decided — *not*
-        // whatever the engine has since snapped to. Taking the slot
-        // (not just reading it) ensures one trigger fires at most
-        // one refresh; an unsolicited `run_refresh_pipeline` call
-        // from Kotlin (shouldn't happen, but defensive) returns an
-        // error.
-        let (anchor_id, h_root_to_view) = match self.pending_refresh_target.lock() {
-            Ok(mut g) => match g.take() {
-                Some((id, h)) => (id, h),
-                None => {
-                    return AcquirePipelineOutcome::error("refresh without armed trigger")
-                }
-            },
-            Err(_) => {
-                return AcquirePipelineOutcome::error("pending_refresh_target poisoned")
-            }
-        };
-        // Sensor-view → sensor-surface (engine's H is in sensor coords).
-        let h_sensor_view_to_surface = match translator::homography::invert(&h_root_to_view) {
-            Some(h) => h,
-            None => return AcquirePipelineOutcome::error("H_root→view not invertible"),
-        };
-
-        // Detect on the current frame, restricted to `display_crop`
-        // (the SurfaceView's visible region). Two reasons to match the
-        // acquire pipeline's crop here rather than `full_display_rect`:
-        // (1) the downstream `translate_visible_to_full` composition
-        //     below assumes detected boxes live in visible-region
-        //     display coords; (2) the oriented-cache lookup further
-        //     down filters on `display_crop == display_crop`, which a
-        //     full-display ensure would silently fail.
-        let detected: Vec<translator::DetectedTextBox> = {
-            let mut state = match frame.state.lock() {
-                Ok(s) => s,
-                Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-            };
-            if ensure_oriented_with_rgb_locked(&mut state, display_crop, det_max_pixels).is_err() {
-                return AcquirePipelineOutcome::error("ensure_oriented failed");
-            }
-            let oriented = state
-                .cached
-                .as_ref()
-                .expect("ensure_oriented filled cache");
-            let raw = match catalog.session.detect_text_in_oriented_image(oriented) {
-                Ok(r) => r,
-                Err(e) => {
-                    log::warn!("[refresh] detect failed: {e:?}");
-                    return AcquirePipelineOutcome::error("detect failed");
-                }
-            };
-            let scale = oriented.det_to_full_scale;
-            let rgb = oriented.rgb.as_ref().expect("with_rgb path");
-            let max_w = rgb.width();
-            let max_h = rgb.height();
-            raw.into_iter()
-                .map(|b| scale_detected_box(b, scale, max_w, max_h))
-                .collect()
-        };
-        if !gen_check() {
-            return AcquirePipelineOutcome::canceled();
-        }
-        if detected.is_empty() {
-            return AcquirePipelineOutcome {
-                anchor_id,
-                detected_count: 0,
-                rec_ok_count: 0,
-                rec_empty_count: 0,
-                cache_hits: 0,
-                rec_called_count: 0,
-                total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
-                canceled: false,
-                error: None,
-            };
-        }
-
-        let available_codes: Vec<translator::LanguageCode> = catalog
-            .session
-            .language_rows()
-            .into_iter()
-            .map(|row| translator::LanguageCode::from(row.language.code.as_str()))
-            .collect();
-
-        let state = match frame.state.lock() {
-            Ok(s) => s,
-            Err(_) => return AcquirePipelineOutcome::error("frame.state poisoned"),
-        };
-        let oriented = match state
-            .cached
-            .as_ref()
-            .filter(|oi| oi.display_crop == display_crop)
-        {
-            Some(o) => o,
-            None => return AcquirePipelineOutcome::error("oriented cache miss"),
-        };
-        let cancel = || {
-            self.generation.load(std::sync::atomic::Ordering::SeqCst) != generation
-        };
-        // PPOCR boundary: detected boxes are in visible-region
-        // **sensor** coords (PPOCR ran on `oriented.rgb`, a sensor-
-        // orient crop sized to `oriented.sensor_crop`). Compose:
-        // visible-region-sensor → full-sensor (translate by crop
-        // top-left) → sensor-surface (engine inverse).
-        let h_view_to_sensor = [
-            1.0, 0.0, oriented.sensor_crop.left as f32,
-            0.0, 1.0, oriented.sensor_crop.top as f32,
-            0.0, 0.0, 1.0,
-        ];
-        let h_view_to_surface_composed =
-            translator::homography::mat3_mul(&h_sensor_view_to_surface, &h_view_to_sensor);
-        let session_ref: &translator::TranslatorSession = &catalog.session;
-        // Atomic re-lock semantics: wipe the anchor's surface map +
-        // overlay items immediately before `run_post_detect` so the
-        // existing `add_or_merge` insert logic lands in an empty map
-        // and produces a clean replace (FUTURE_RELOCK_MODEL.md's
-        // "hard cut, all-at-once" swap). Done here — not at the top
-        // of the function — so an early-exit failure (oriented cache
-        // miss, detect failed) leaves the existing overlays in place
-        // rather than wiping them and then bailing.
-        self.session.clear_anchor_state_for_relock(anchor_id);
-        let canonical_quadrant = {
-            let engine = self.state.lock().ok();
-            engine.and_then(|e| e.canonical_rotation_for(anchor_id))
-        };
-        let outcome = self.session.run_post_detect(
-            translator::live_session::PostDetectInput {
-                detections: &detected,
-                oriented,
-                h_view_to_surface: Some(h_view_to_surface_composed),
-                anchor_id,
-                from_lang: &from_lang_code,
-                to_lang: &to_lang_code,
-                is_auto_source,
-                available_codes: &available_codes,
-                font_provider: &crate::android_font_provider::AndroidFontProvider,
-                matted_strips: &[],
-                rec_batch_size: 4,
-                canonical_quadrant,
-            },
-            &session_ref,
-            &session_ref,
-            &cancel,
-        );
-        drop(state);
-
-        if outcome.canceled {
-            return AcquirePipelineOutcome::canceled();
-        }
-        // `last_lock_h` is lazy-initialised by `process_and_composite`
-        // on the next Locked frame — the trigger cleared it when it
-        // fired so that initialisation uses the engine's *then-current*
-        // H rather than the now-stale `h_root_to_view` pinned ~1.5 s
-        // ago at trigger fire.
-
-        AcquirePipelineOutcome {
-            anchor_id,
-            detected_count: outcome.detected_count,
-            rec_ok_count: outcome.rec_ok_count,
-            rec_empty_count: outcome.rec_empty_count,
-            cache_hits: outcome.cache_hits,
-            rec_called_count: outcome.rec_called_count,
-            total_ms: t_overall.elapsed().as_secs_f64() * 1_000.0,
-            canceled: false,
-            error: None,
-        }
-    }
-
-    /// Build a per-frame composited display image from the camera RGBA
-    /// (in the FrameHandle) plus the resident overlay, warped by
-    /// `h_surface_to_viewport`. Writes the result into the
-    /// `pending_display` slot; pair with
-    /// `PlanarRenderJni.compositeInto` for a JNI memcpy into a
-    /// Kotlin-owned DirectByteBuffer.
-    ///
-    /// `display_width`/`display_height` are the target display-orient
-    /// pixel dimensions — must equal the sensor's W/H swapped per the
-    /// rotation reported in the FrameHandle. Caller's destination
-    /// One-shot per-frame entry point: tracker step → smooth H →
-    /// composite. Replaces the old
-    /// `process_frame_with_imu` + `composite_frame` pair, which paid
-    /// two uniffi roundtrips and a Kotlin-side H-smoothing detour per
-    /// camera frame. Now: single call in, single JNI memcpy out.
-    ///
-    /// Internal H selection mirrors what Kotlin used to do:
-    /// - `Locked` → EMA-smooth the new H against the cached one;
-    ///   use the smoothed value; reset the LOST streak.
-    /// - `Lost` with streak < `LOSS_HIDE_AFTER_FRAMES` → reuse the
-    ///   last good smoothed H, so a single-frame tracker loss doesn't
-    ///   flicker the overlay off.
-    /// - `Lost` with sustained loss → no H → overlay omitted.
-    /// - `Idle` / `Acquiring` → no H → overlay omitted.
-    ///
-    /// All overlay decisions land at the per-frame H. Block content
-    /// (`current_overlay_items`) is updated separately by
-    /// `run_acquire_pipeline` and consumed here as-is.
-    fn process_and_composite(
-        &self,
-        frame: Arc<FrameHandle>,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-        imu_stable: bool,
-        timestamp_ns: u64,
-        display_width: u32,
-        display_height: u32,
-    ) -> Result<PlanarComposeResult, CatalogError> {
-        // 1. Tracker step. We need to lock the frame state for
-        // `ensure_oriented_locked` to populate the cached grayscale,
-        // then engine state to run the tracker. The composite call
-        // below re-locks frame state to read the camera RGBA — that's
-        // a brief re-acquire (the mutex is uncontended in steady
-        // state) and lets us keep composite_frame as a self-contained
-        // method we can call directly.
-        let t_orient_start = Instant::now();
-        // Capture frame metadata before dropping the state lock so the
-        // perspective re-skew composition below can compute
-        // `h_disp_to_sensor` without re-locking.
-        let frame_state_dims: (u32, u32, i32);
-        let tracker_det_to_full: f32;
-        let cmd = {
-            let mut state = frame.state.lock().map_err(|_| poisoned())?;
-            // Tracker gets `cached_tracker`, downsampled to
-            // `det_max_pixels` so per-frame detect+describe is
-            // linear-cost cheap (~2× speedup vs full-res). Anchor +
-            // per-frame match in the same small-coord system; we
-            // conjugate the engine's H back to full-display coords
-            // below before handing to the compositor.
-            ensure_tracker_oriented_locked(&mut state, det_max_pixels)?;
-            frame_state_dims = (state.width, state.height, state.rotation_degrees);
-            let t_orient_end = Instant::now();
-            let oriented = state
-                .cached_tracker
-                .as_ref()
-                .expect("ensure_tracker filled cache");
-            tracker_det_to_full = oriented.det_to_full_scale;
-            let mut engine = self.state.lock().map_err(|_| poisoned())?;
-            let t_engine_start = Instant::now();
-            let cmd = engine.process_frame(&oriented.gray, imu_stable, timestamp_ns);
-            let t_engine_end = Instant::now();
-            if PER_FRAME_TIMING_LOG {
-                log::info!(
-                    target: "planar_timing",
-                    "outer: orient={:.1}ms engine={:.1}ms",
-                    (t_orient_end - t_orient_start).as_secs_f64() * 1000.0,
-                    (t_engine_end - t_engine_start).as_secs_f64() * 1000.0,
-                );
-            }
-            cmd
-        };
-        let mut result = cmd_to_result(cmd);
-        // Engine ran on the downsampled tracker gray, so its H maps
-        // `anchor_small → frame_small`. Conjugate back into
-        // full-display coords (`anchor_full → frame_full`) before any
-        // downstream smoothing / compositing sees it — overlay surface
-        // positions still live in full coords.
-        if result.homography.len() == 9 && tracker_det_to_full != 1.0 {
-            result.homography = scale_homography(&result.homography, tracker_det_to_full);
-        }
-
-        // 2. Decide which H to use for compositing, updating the
-        // smoothed-H state along the way. Stash `(anchor_id, h)` so
-        // the follow-up `compositeIntoBuffer` JNI call has everything
-        // it needs to warp the active anchor's overlay items directly
-        // into the Kotlin-owned DirectByteBuffer.
-        // Smoothing's corner-delta measure tests at corners (0, 0),
-        // (frame_w, frame_h) etc. in surface coords; the result is in
-        // view-pixels. With H in full-sensor coords and the user
-        // seeing only the visible-region bitmap, using full-sensor
-        // dims here makes rotation-induced deltas ~2× larger than
-        // the user actually perceives — `SMOOTH_HIGH_PX = 9` then
-        // trips on tiny rotations and the H snaps aggressively,
-        // producing visible UI jumps on small motion. Use the
-        // visible-region dims (= bitmap dims) instead so the
-        // threshold band matches user-perceived motion. Translation
-        // motion is 1:1 either way.
-        let h_engine = self.select_compose_h(
-            &result,
-            display_width as f32,
-            display_height as f32,
-        );
-        let h_for_compose = h_engine;
-        if let Ok(mut slot) = self.pending_compose.lock() {
-            *slot = h_for_compose.map(|h| (result.anchor_id, h));
-        }
-        let bytes = (display_width as u32)
-            .saturating_mul(display_height as u32)
-            .saturating_mul(4);
-
-        // Tick the detect-on-tracking-frame counter on Locked frames.
-        // Refresh fires only when ALL THREE gates clear, in this
-        // order (cheapest first):
-        //   1. cadence  — at least `refresh_every_n_locked_frames`
-        //      ticks since the previous fire (rate limiter).
-        //   2. motion   — H_root→view has moved by more than
-        //      [`MIN_REFRESH_DELTA_PX`] at the viewport corners
-        //      since `last_refresh_h`. Held cameras + handoff drift
-        //      stay below; intentional pans clear it.
-        //   3. coverage — the current viewport, projected to the
-        //      active anchor's surface coords, isn't already inside
-        //      that anchor's `covered_region` (no new pixels would
-        //      be revealed).
-        //
-        // The motion gate kills "still wobble": even with the
-        // covered-region check, RANSAC noise + handoff micro-drift
-        // can shift the viewport-AABB just past covered → fire →
-        // detector returns slightly different boxes → MergedAnd-
-        // Extended on detector noise → overlay re-raster on a held
-        // camera. Motion-gating first removes that whole class.
-        // Re-lock trigger (FUTURE_RELOCK_MODEL.md): single overlap
-        // check against the anchor's `lock_viewport` (set by the most
-        // recent successful detect+OCR+translate pass). Fires when
-        //   area(intersect) / max(area(viewport), area(lock_viewport))
-        //     < RELOCK_OVERLAP_THRESHOLD
-        // — symmetric in zoom direction (zoom-in shrinks viewport so
-        // max=lock; zoom-out grows it so max=viewport; pan crosses
-        // zero overlap regardless).
-        //
-        // Coord-system note: both the lock_viewport stored by
-        // `run_post_detect` and the current viewport computed here
-        // must live in the same canonical anchor frame for the
-        // overlap math to mean anything. `run_post_detect` projects
-        // `(cropDispW, cropDispH)` display-crop corners through
-        // `h_view_to_surface = h_disp_to_sensor` (acquire) or
-        // `inv(engine_H) · h_disp_to_sensor` (refresh). We mirror
-        // that here: build the same composition from the current
-        // frame state + `engine_H`, then project the same display-
-        // crop corners. With a steady camera the two AABBs coincide
-        // (overlap ≈ 1); a real pan/zoom shifts the corners through
-        // a different `inv(engine_H)` and the overlap drops.
-        let should_refresh_detect = if matches!(result.state, PlanarTrackerState::Locked) {
-            let current_h: Option<[f32; 9]> = if result.homography.len() == 9 {
-                let mut h = [0.0f32; 9];
-                h.copy_from_slice(&result.homography[..9]);
-                if let Ok(mut slot) = self.last_root_to_view.lock() {
-                    *slot = Some((result.anchor_id, h));
-                }
-                Some(h)
-            } else {
-                None
-            };
-            match current_h {
-                Some(h) => {
-                    // Lazy init: the first Locked frame for an
-                    // anchor (or the first after a trigger fire
-                    // invalidated `last_lock_h`) seeds the reference
-                    // pose from the current engine H. We skip the
-                    // overlap check on this frame — comparing the
-                    // current H against itself would trivially pass
-                    // anyway. Subsequent frames compare against this
-                    // initialised value.
-                    if !self.session.has_last_lock_h(result.anchor_id) {
-                        self.session.set_last_lock_h(result.anchor_id, h);
-                        false
-                    } else {
-                        // Full-display dims (the engine's view —
-                        // `cached_tracker` is built on the full
-                        // display).
-                        let r = ((frame_state_dims.2 % 360) + 360) % 360;
-                        let (full_view_w, full_view_h) = if r == 90 || r == 270 {
-                            (frame_state_dims.1 as f32, frame_state_dims.0 as f32)
-                        } else {
-                            (frame_state_dims.0 as f32, frame_state_dims.1 as f32)
-                        };
-                        if self.session.should_relock_by_view(
-                            result.anchor_id,
-                            &h,
-                            full_view_w,
-                            full_view_h,
-                            RELOCK_OVERLAP_THRESHOLD,
-                        ) {
-                            // Invalidate `last_lock_h` so the next
-                            // Locked frame re-seeds from the engine's
-                            // *then-current* H — not this trigger-
-                            // fire H, which would lag the camera by
-                            // the ~1-2 s refresh pipeline duration.
-                            self.session.clear_last_lock_h(result.anchor_id);
-                            // Pin (anchor, H) so the refresh worker
-                            // projects through the H the trigger
-                            // fired *for*, not whatever the engine
-                            // has snapped to by pickup time.
-                            if let Ok(mut slot) = self.pending_refresh_target.lock() {
-                                *slot = Some((result.anchor_id, h));
-                            }
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                }
-                None => false,
-            }
-        } else {
-            false
-        };
-
-        Ok(PlanarComposeResult {
-            state: result.state,
-            anchor_id: result.anchor_id,
-            inliers: result.inliers,
-            composite_byte_size: bytes,
-            should_refresh_detect,
-        })
-    }
-
-    /// `h_surface_to_viewport` is a 9-element row-major homography; an
-    /// empty slice (or length != 9) is treated as "no overlay this
-    /// frame, just blit the camera".
-    ///
-    /// `active_anchor_id` filters `session.overlay_items` to only the
-    /// items whose surface coords correspond to the H we're about to
-    /// warp them by — items from previously-active anchors are still
-    /// in the store (LRU evict aligned with the engine), but they
-    /// can't be warped by *this* anchor's H without landing at
-    /// random viewport positions.
-    ///
-
-    /// Feed one camera frame through the state machine. The current
-    /// `display_crop` is what the engine should treat as the working
-    /// region — we use its cached grayscale.
-    fn process_frame(
-        &self,
-        frame: Arc<FrameHandle>,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-        imu_stable: bool,
-        timestamp_ns: u64,
-    ) -> Result<PlanarFrameResult, CatalogError> {
-        let mut state = frame.state.lock().map_err(|_| poisoned())?;
-        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
-        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
-        let mut engine = self.state.lock().map_err(|_| poisoned())?;
-        let cmd = engine.process_frame(&oriented.gray, imu_stable, timestamp_ns);
-        Ok(cmd_to_result(cmd))
-    }
-
-    /// Force a fresh acquisition from the current frame's grayscale.
-    /// Returns the new anchor id, or 0 if no anchor could be built (the
-    /// cooldown blocked it or the frame had no usable features).
-    fn acquire_now(
-        &self,
-        frame: Arc<FrameHandle>,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-        timestamp_ns: u64,
-    ) -> Result<u64, CatalogError> {
-        let mut state = frame.state.lock().map_err(|_| poisoned())?;
-        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
-        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
-        let mut engine = self.state.lock().map_err(|_| poisoned())?;
-        Ok(engine.acquire_now(&oriented.gray, timestamp_ns).unwrap_or(0))
-    }
-
-    /// Like `acquire_now` but limits anchor features to those inside any
-    /// of the given axis-aligned regions (full-crop coords; same space
-    /// as detected text boxes scaled up via `detect_text_in_frame`).
-    /// Padded by `pad_px` on each side so the anchor includes a small
-    /// border around each region.
-    fn acquire_now_in_regions(
-        &self,
-        frame: Arc<FrameHandle>,
-        display_crop: translator::Rect,
-        det_max_pixels: u32,
-        regions: Vec<translator::Rect>,
-        pad_px: u32,
-        timestamp_ns: u64,
-    ) -> Result<u64, CatalogError> {
-        let mut state = frame.state.lock().map_err(|_| poisoned())?;
-        ensure_oriented_locked(&mut state, display_crop, det_max_pixels)?;
-        let oriented = state.cached.as_ref().expect("ensure_oriented filled cache");
-        let tuples: Vec<(u32, u32, u32, u32)> = regions
-            .iter()
-            .map(|r| (r.left, r.top, r.right, r.bottom))
-            .collect();
-        let engine_wait_start = Instant::now();
-        let mut engine = self.state.lock().map_err(|_| poisoned())?;
-        let engine_acquired = Instant::now();
-        let result = engine
-            .acquire_now_in_regions(&oriented.gray, &tuples, pad_px, timestamp_ns)
-            .unwrap_or(0);
-        let engine_released = Instant::now();
-        drop(engine);
-        log_lock_timing(
-            "engine/acquire_now_in_regions",
-            engine_acquired - engine_wait_start,
-            engine_released - engine_acquired,
-        );
-        Ok(result)
-    }
-
-
-
-    fn current_anchor(&self) -> u64 {
-        match self.state.lock() {
-            Ok(g) => g.current_anchor().unwrap_or(0),
-            Err(_) => 0,
-        }
-    }
-
-    fn clear(&self) {
-        if let Ok(mut g) = self.state.lock() {
-            g.clear();
-        }
+    /// Pull (and clear) the most recent async-job telemetry. Returns
+    /// `None` when no new acquire/refresh has finished since the last
+    /// poll. Used by Kotlin to update the debug status pill.
+    fn last_acquire_telemetry(&self) -> Option<AcquireTelemetryRecord> {
+        self.pipeline.last_acquire_telemetry().map(Into::into)
     }
 }
 
-#[cfg(feature = "planar-tracker")]
-/// Conjugate a homography `H` by an isotropic scale `s`:
-/// `H' = diag(s,s,1) · H · diag(1/s,1/s,1)`. If `H` maps points in a
-/// downsampled coord system to points in the same downsampled coord
-/// system, `H'` maps the equivalent points in the upscaled (full) coord
-/// system. Used to lift the engine's small-coord H back to full-display
-/// coords for the compositor.
-#[cfg(feature = "planar-tracker")]
-fn scale_homography(h: &[f32], s: f32) -> Vec<f32> {
-    debug_assert_eq!(h.len(), 9);
-    let inv_s = 1.0 / s;
-    vec![
-        h[0],          h[1],          h[2] * s,
-        h[3],          h[4],          h[5] * s,
-        h[6] * inv_s,  h[7] * inv_s,  h[8],
-    ]
-}
-
-#[cfg(feature = "planar-tracker")]
-fn cmd_to_result(cmd: translator::planar_engine::TrackerCommand) -> PlanarFrameResult {
-    use translator::planar_engine::TrackerCommand as C;
-    match cmd {
-        C::Idle => PlanarFrameResult {
-            state: PlanarTrackerState::Idle,
-            anchor_id: 0,
-            homography: Vec::new(),
-            is_new: false,
-            inliers: 0,
-        },
-        C::Acquiring => PlanarFrameResult {
-            state: PlanarTrackerState::Acquiring,
-            anchor_id: 0,
-            homography: Vec::new(),
-            is_new: false,
-            inliers: 0,
-        },
-        C::Locked {
-            anchor_id,
-            homography,
-            is_new,
-            inliers,
-            canonical_rotation: _,
-        } => PlanarFrameResult {
-            state: PlanarTrackerState::Locked,
-            anchor_id,
-            homography: homography.to_vec(),
-            is_new,
-            inliers: inliers as u32,
-        },
-        C::Lost { last_anchor_id } => PlanarFrameResult {
-            state: PlanarTrackerState::Lost,
-            anchor_id: last_anchor_id,
-            homography: Vec::new(),
-            is_new: false,
-            inliers: 0,
-        },
+#[cfg(feature = "ppocr")]
+impl CatalogHandle {
+    pub(crate) fn session_arc(&self) -> Arc<translator::TranslatorSession> {
+        Arc::clone(&self.session)
     }
 }
-
-/// Tuning for the per-frame H smoother. Same values that lived in
-/// Kotlin's `LivePlanarOcrEngine` before this got moved into Rust.
-///
-/// `LOW`/`HIGH` are corner-delta thresholds in pixels (projected
-/// through the new vs previously-smoothed H at the canonical frame's
-/// four corners). Below `LOW` we treat the per-frame change as RANSAC
-/// noise and average heavily; above `HIGH` we treat it as real motion
-/// and snap. Linear blend in between.
-#[cfg(feature = "planar-tracker")]
-const SMOOTH_LOW_PX: f32 = 3.0;
-#[cfg(feature = "planar-tracker")]
-const SMOOTH_HIGH_PX: f32 = 9.0;
-#[cfg(feature = "planar-tracker")]
-const SMOOTH_MIN_ALPHA: f32 = 0.35;
-
-/// Frames of sustained tracker LOST before we hide the overlay.
-/// Set to 1 to hide *immediately* on the first Lost frame — keeping
-/// it higher renders the overlay through the prior frame's (stale)
-/// H while the compositor writes fresh camera RGBA, producing the
-/// "camera moves but UI doesn't" visual artefact during the hide
-/// grace window. With `lost_after_frames = 5` upstream the engine
-/// is already permissive about brief failures; the Lost→Hide
-/// transition should be instant.
-#[cfg(feature = "planar-tracker")]
-const LOSS_HIDE_AFTER_FRAMES: u32 = 4;
-
-/// Re-lock trigger threshold (FUTURE_RELOCK_MODEL.md). Fire a fresh
-/// detect+OCR+translate pass when
-///   `area(intersect) / max(area(viewport), area(lock_viewport)) <
-///    RELOCK_OVERLAP_THRESHOLD`.
-///
-/// At 0.65 the trigger corresponds to roughly:
-///   - Translation: pan covering ~1/3 of viewport width.
-///   - Zoom: scale change past ~1.25× in either direction
-///     (zoom²=1.56; ratio drops to 1/1.56 ≈ 0.64).
-///   - In-plane rotation alone: overlap ≈ 1.0, never fires (matches
-///     observed Google Translate behaviour).
-#[cfg(feature = "planar-tracker")]
-const RELOCK_OVERLAP_THRESHOLD: f32 = 0.65;
-
-/// Bypass the EMA H smoother and use the tracker's raw per-frame H
-/// directly. The smoother was designed for the old two-surface
-/// architecture (preview + overlay) where preview-vs-H timing
-/// mismatch under motion contributed to perceived wobble. With the
-/// new same-frame composite, that source is gone — only intrinsic
-/// RANSAC jitter remains. Toggle to A/B whether smoothing still earns
-/// its keep on static dense pages vs the lag it adds during slow pans.
-#[cfg(feature = "planar-tracker")]
-const DISABLE_SMOOTH_H: bool = false;
-
-/// Smoothed-homography state held across `process_and_composite`
-/// calls. `h == None` means "no smoothed H yet for the current
-/// anchor" — reset on anchor switch, on `reset()`, and at start.
-#[cfg(feature = "planar-tracker")]
-#[derive(Default)]
-struct SmoothedHomography {
-    h: Option<[f32; 9]>,
-    anchor_id: u64,
-    consecutive_lost: u32,
-}
-
-/// Non-uniffi helpers on `LivePlanarTracker`. Kept out of the
-/// `#[uniffi::export] impl` block because their signatures use
-/// `[f32; 9]` and `&PlanarFrameResult` shapes that uniffi can't
-/// introspect.
-#[cfg(feature = "planar-tracker")]
-impl LivePlanarTracker {
-    /// Pop the `(anchor_id, h_surface_to_viewport)` pair stashed by
-    /// the most recent `process_and_composite`. Used by the JNI
-    /// `compositeInto` shim to decide which anchor's overlays to warp
-    /// + at what H. `None` means "no overlay this frame — blit the
-    /// camera only".
-    pub(crate) fn take_pending_compose(&self) -> Option<(u64, [f32; 9])> {
-        self.pending_compose.lock().ok().and_then(|mut s| s.take())
-    }
-
-    /// Composite directly into the caller-supplied destination slice
-    /// — the zero-copy JNI fast path. Locks the session's
-    /// `overlay_items` for the duration of the composite so the
-    /// bitmaps can be borrowed without cloning. Output is
-    /// **sensor-orient** (same dims as the camera buffer); the
-    /// SurfaceView rotates it for display at scanout.
-    /// `h_surface_to_viewport` is `None` on Idle / Acquiring /
-    /// sustained Lost — we still want the camera frame on screen,
-    /// just with no overlay warp.
-    pub(crate) fn composite_into_slice(
-        &self,
-        frame: &FrameHandle,
-        dst: &mut [u8],
-        bitmap_w: u32,
-        bitmap_h: u32,
-        h_surface_to_viewport: Option<[f32; 9]>,
-        active_anchor_id: u64,
-    ) -> Result<(), translator::live_compositor::CompositeError> {
-        let state = frame.state.lock().expect("frame mutex poisoned");
-        let sensor_w = state.width;
-        let sensor_h = state.height;
-        // Bitmap dims are the *visible-region-sensor* dims (= the
-        // FILL_CENTER preview region in sensor coords). The source
-        // RGBA is the full sensor frame; compute the centred crop
-        // offset to feed only the visible portion to the compositor.
-        // When dims match (no crop case), this collapses to a 0-offset
-        // copy — equivalent to today's full-frame composite.
-        let src_offset_x = sensor_w.saturating_sub(bitmap_w) / 2;
-        let src_offset_y = sensor_h.saturating_sub(bitmap_h) / 2;
-        let overlay_guard = self.session.overlay_items.lock().ok();
-        let items_vec: Vec<translator::live_compositor::OverlayItem<'_>> =
-            match (&overlay_guard, h_surface_to_viewport) {
-                (Some(items), Some(_)) => items
-                    .iter()
-                    .filter(|it| it.anchor_id == active_anchor_id)
-                    .map(|it| translator::live_compositor::OverlayItem {
-                        bitmap_rgba: &it.bitmap,
-                        bitmap_width: it.width,
-                        bitmap_height: it.height,
-                        bitmap_origin_surface_x: it.surface_origin_x,
-                        bitmap_origin_surface_y: it.surface_origin_y,
-                    })
-                    .collect(),
-                _ => Vec::new(),
-            };
-        let h_for_call =
-            h_surface_to_viewport.unwrap_or([1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]);
-        // Surface coords are in *full-sensor view* (anchor canonical
-        // lives on the full sensor). The compositor's bitmap is the
-        // *visible-region* of that view, with its (0,0) at full-sensor
-        // (src_offset_x, src_offset_y). Translate the H so overlay
-        // items end up in bitmap-local coords rather than full-sensor
-        // coords — otherwise overlay-engine_H would project everything
-        // to full-sensor positions, and a centred bitmap would catch
-        // only the part of an overlay that happens to fall inside its
-        // sensor crop.
-        let translate = [
-            1.0, 0.0, -(src_offset_x as f32),
-            0.0, 1.0, -(src_offset_y as f32),
-            0.0, 0.0, 1.0,
-        ];
-        let h_translated = translator::homography::mat3_mul(&translate, &h_for_call);
-        translator::live_compositor::composite_frame_into_cropped(
-            dst,
-            bitmap_w,
-            bitmap_h,
-            state.rgba_bytes(),
-            sensor_w,
-            sensor_h,
-            src_offset_x,
-            src_offset_y,
-            &h_translated,
-            &items_vec,
-        )
-    }
-
-    /// Decide which H to feed into the compositor for one frame,
-    /// updating the smoothed-H state in the process. Returns `None`
-    /// when we should skip the overlay warp entirely (Idle,
-    /// Acquiring, sustained Lost).
-    fn select_compose_h(
-        &self,
-        result: &PlanarFrameResult,
-        frame_w: f32,
-        frame_h: f32,
-    ) -> Option<[f32; 9]> {
-        let mut sm = match self.smoothed_h.lock() {
-            Ok(s) => s,
-            Err(_) => return None,
-        };
-        match result.state {
-            PlanarTrackerState::Locked => {
-                sm.consecutive_lost = 0;
-                if result.homography.len() != 9 {
-                    return None;
-                }
-                let mut incoming = [0f32; 9];
-                incoming.copy_from_slice(&result.homography[..9]);
-                if DISABLE_SMOOTH_H {
-                    sm.h = Some(incoming);
-                    sm.anchor_id = result.anchor_id;
-                    Some(incoming)
-                } else {
-                    let smoothed = smooth_homography(
-                        &mut sm,
-                        result.anchor_id,
-                        &incoming,
-                        frame_w,
-                        frame_h,
-                    );
-                    Some(smoothed)
-                }
-            }
-            PlanarTrackerState::Lost => {
-                sm.consecutive_lost = sm.consecutive_lost.saturating_add(1);
-                if sm.consecutive_lost < LOSS_HIDE_AFTER_FRAMES {
-                    sm.h
-                } else {
-                    None
-                }
-            }
-            PlanarTrackerState::Idle | PlanarTrackerState::Acquiring => {
-                sm.consecutive_lost = 0;
-                None
-            }
-        }
-    }
-}
-
-/// EMA-smooth an incoming homography against the previously-smoothed
-/// one. The blend factor scales with how far the four canonical-frame
-/// corners have moved between the two Hs: tiny corner deltas (RANSAC
-/// jitter) get heavy smoothing, large deltas (real camera motion)
-/// snap immediately. Mirrors what the old Kotlin `smoothHomography`
-/// did; consolidated here so the per-frame call stays in Rust.
-#[cfg(feature = "planar-tracker")]
-fn smooth_homography(
-    sm: &mut SmoothedHomography,
-    anchor_id: u64,
-    incoming: &[f32; 9],
-    frame_w: f32,
-    frame_h: f32,
-) -> [f32; 9] {
-    // Anchor switch (or first frame on this anchor) → reset.
-    if sm.anchor_id != anchor_id || sm.h.is_none() {
-        sm.h = Some(*incoming);
-        sm.anchor_id = anchor_id;
-        return *incoming;
-    }
-    let prev = sm.h.expect("checked above");
-    let corners = [
-        (0.0_f32, 0.0_f32),
-        (frame_w, 0.0),
-        (frame_w, frame_h),
-        (0.0, frame_h),
-    ];
-    let mut max_delta = 0.0_f32;
-    for &(cx, cy) in &corners {
-        let pn = translator::homography::project(incoming, cx, cy);
-        let pp = translator::homography::project(&prev, cx, cy);
-        if let (Some(pn), Some(pp)) = (pn, pp) {
-            let dx = pn.0 - pp.0;
-            let dy = pn.1 - pp.1;
-            let d = (dx * dx + dy * dy).sqrt();
-            if d > max_delta {
-                max_delta = d;
-            }
-        }
-    }
-    let alpha = if max_delta <= SMOOTH_LOW_PX {
-        SMOOTH_MIN_ALPHA
-    } else if max_delta >= SMOOTH_HIGH_PX {
-        1.0
-    } else {
-        let t = (max_delta - SMOOTH_LOW_PX) / (SMOOTH_HIGH_PX - SMOOTH_LOW_PX);
-        SMOOTH_MIN_ALPHA + t * (1.0 - SMOOTH_MIN_ALPHA)
-    };
-    let mut out = [0.0_f32; 9];
-    for i in 0..9 {
-        out[i] = alpha * incoming[i] + (1.0 - alpha) * prev[i];
-    }
-    sm.h = Some(out);
-    sm.anchor_id = anchor_id;
-    out
-}
-
-/// Result of one `process_and_composite` call. Same shape as the
-/// old `PlanarFrameResult` minus `homography` and `is_new` (the H is
-/// internal now; `is_new` was unused on the Kotlin side), plus a
-/// `composite_byte_size` so the caller knows the JNI memcpy size to
-/// expect.
-#[cfg(feature = "planar-tracker")]
-#[derive(uniffi::Record)]
-pub struct PlanarComposeResult {
-    pub state: PlanarTrackerState,
-    pub anchor_id: u64,
-    pub inliers: u32,
-    /// Number of bytes the compositor wrote to `pending_display`.
-    /// `0` means no composite happened this frame (display dims
-    /// zero, frame buffer empty, etc.); Kotlin should skip the JNI
-    /// memcpy.
-    pub composite_byte_size: u32,
-    /// Detect-on-tracking-frame trigger: true when the session's
-    /// per-frame counter says it's time to fire a fresh detection
-    /// pass on this Locked frame. Caller should launch a worker that
-    /// invokes `run_refresh_pipeline` (deduping against
-    /// `acquireInFlight` so an initial-acquire and a refresh don't
-    /// fan out together). False on Idle / Acquiring / Lost.
-    pub should_refresh_detect: bool,
-}
-
-/// Outcome reported by `run_acquire_pipeline`. The pipeline either ran
-/// to completion (`canceled = false`, `error = None`), bailed out
-/// because the tracker's generation moved on while it was running
-/// (`canceled = true`), or hit a fatal error during one of its stages
-/// (`error = Some(...)`). Kotlin uses this for the debug pill +
-/// post-acquire decisions ("anchor produced zero usable text, hide
-/// the overlay" lives inside the pipeline now, so Kotlin's only job
-/// is to log the outcome).
-#[cfg(feature = "planar-tracker")]
-#[derive(uniffi::Record)]
-pub struct AcquirePipelineOutcome {
-    pub anchor_id: u64,
-    pub detected_count: u32,
-    pub rec_ok_count: u32,
-    pub rec_empty_count: u32,
-    /// Detections that hit the surface-map cache (no ppocr rec
-    /// call). On a held camera this should approach `detected_count`
-    /// — the diagnostic signal that the cache path is doing its job.
-    pub cache_hits: u32,
-    /// Detections that actually went through ppocr rec this run.
-    /// Sums with `cache_hits` to `detected_count` (minus cancels).
-    pub rec_called_count: u32,
-    pub total_ms: f64,
-    pub canceled: bool,
-    pub error: Option<String>,
-}
-
-#[cfg(feature = "planar-tracker")]
-impl AcquirePipelineOutcome {
-    fn canceled() -> Self {
-        Self {
-            anchor_id: 0,
-            detected_count: 0,
-            rec_ok_count: 0,
-            rec_empty_count: 0,
-            cache_hits: 0,
-            rec_called_count: 0,
-            total_ms: 0.0,
-            canceled: true,
-            error: None,
-        }
-    }
-    fn error(reason: &str) -> Self {
-        Self {
-            anchor_id: 0,
-            detected_count: 0,
-            rec_ok_count: 0,
-            rec_empty_count: 0,
-            cache_hits: 0,
-            rec_called_count: 0,
-            total_ms: 0.0,
-            canceled: false,
-            error: Some(reason.to_string()),
-        }
-    }
-}
-
-
-

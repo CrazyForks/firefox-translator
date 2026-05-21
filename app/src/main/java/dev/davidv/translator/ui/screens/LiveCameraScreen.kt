@@ -454,7 +454,6 @@ private fun CameraSurface(
     val mySession = analyzerSession.incrementAndGet()
     if (liveOverlayOn && engine != null) {
       imageAnalysis.setAnalyzer(analyzerExecutor) { proxy ->
-        val tConvert = System.nanoTime()
         val handle = engine.acquireFrameHandle()
         if (handle == null) {
           proxy.close()
@@ -466,23 +465,19 @@ private fun CameraSurface(
         val width = proxy.width
         val height = proxy.height
         val rotation = proxy.imageInfo.rotationDegrees
-        // Capture the sensor exposure timestamp BEFORE proxy.close()
-        // since accessing imageInfo on a closed proxy isn't guaranteed.
         val captureTs = proxy.imageInfo.timestamp
         val length = width * pixelStride * height
-        // Try the **zero-copy fast path** first: contiguous
-        // RGBA_8888 DirectByteBuffer → record the buffer's native
-        // address inside the FrameHandle without memcpying. The
-        // ImageProxy stays open for the duration of the worker's
-        // processAndComposite + compositeInto (typically <25 ms);
-        // the worker closes it after those return, at which point
-        // CameraX recycles the buffer back into its pool. Saves
-        // ~3 ms of memcpy per frame.
+        // Zero-copy fast path: contiguous RGBA_8888 DirectByteBuffer →
+        // record the camera buffer's native address inside the
+        // FrameHandle without memcpying. The ImageProxy stays open for
+        // the duration of `processFrame` below; the pipeline either
+        // materializes an owned copy (acquire/refresh) or drops the
+        // borrow (pure tracking frame) before returning, after which
+        // we close the proxy.
         //
         // Stride-padded fallback (rare): repack row-by-row through
         // uniffi (eager copy); proxy can close immediately.
         val ok: Boolean
-        val handoverProxy: androidx.camera.core.ImageProxy?
         if (rowStride == width * pixelStride) {
           plane.buffer.rewind()
           ok =
@@ -494,8 +489,6 @@ private fun CameraSurface(
               height,
               rotation,
             )
-          handoverProxy = if (ok) proxy else null
-          if (!ok) proxy.close()
         } else {
           val src = ByteArray(plane.buffer.remaining())
           plane.buffer.rewind()
@@ -507,31 +500,35 @@ private fun CameraSurface(
           }
           handle.resetViaUniffi(packed, width.toUInt(), height.toUInt(), rotation)
           ok = true
-          handoverProxy = null
           proxy.close()
         }
-        val convertMs = (System.nanoTime() - tConvert) / 1_000_000.0
         if (!ok || analyzerSession.get() != mySession) {
-          handoverProxy?.close()
+          if (ok) proxy.close()
           engine.releaseFrameHandle(handle)
           return@setAnalyzer
         }
-        val fx = cropFocusNormalized.x
-        val fy = cropFocusNormalized.y
-        engine.submitFrame(
-          handle,
-          width,
-          height,
-          rotation,
-          fx,
-          fy,
-          from,
-          to,
-          isAutoSource,
-          captureTs,
-          convertMs,
-          handoverProxy,
-        )
+        try {
+          engine.processFrame(
+            handle,
+            width,
+            height,
+            rotation,
+            cropFocusNormalized.x,
+            cropFocusNormalized.y,
+            from,
+            to,
+            isAutoSource,
+            captureTs,
+          )
+        } finally {
+          // Always close the ImageProxy (the borrow we set above is
+          // gone by this point — pipeline materialized or cleared it)
+          // and return the FrameHandle to the pool.
+          if (rowStride == width * pixelStride) {
+            proxy.close()
+          }
+          engine.releaseFrameHandle(handle)
+        }
       }
     } else {
       imageAnalysis.clearAnalyzer()

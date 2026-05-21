@@ -10,7 +10,7 @@ pub mod uniffi_catalog;
 mod live_frame_jni;
 
 #[cfg(all(feature = "planar-tracker", target_os = "android"))]
-mod planar_render_jni;
+mod live_pipeline_jni;
 
 /// Idempotent logger init. Called from the first uniffi entry point
 /// (`CatalogHandle::open`) because uniffi 0.29 for Kotlin loads the
