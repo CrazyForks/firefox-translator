@@ -313,6 +313,13 @@ private fun CameraSurface(
   val latestFocusedDistance =
     remember { kotlinx.coroutines.flow.MutableStateFlow<Float?>(null) }
 
+  // Tracks whether the tracker-driven focus lock (LENS_FOCUS_DISTANCE +
+  // AF_MODE=OFF, installed via Camera2 interop) is currently active.
+  // Hoisted out of the LaunchedEffect so tap-to-focus can clear it —
+  // otherwise the sticky interop bundle keeps AF_MODE=OFF on every
+  // capture request and startFocusAndMetering silently no-ops.
+  val focusLockedRef = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
+
   val imageAnalysis =
     remember {
       // Cap analyzer source at ~1.5 MP regardless of device. The bigger the source,
@@ -403,10 +410,9 @@ private fun CameraSurface(
   LaunchedEffect(camera, liveOcrEngine) {
     val engine = liveOcrEngine ?: return@LaunchedEffect
     val cam = camera ?: return@LaunchedEffect
-    var focusLocked = false
     engine.trackerStatus.collect { status ->
       val shouldLock = status.state == uniffi.bindings.PlanarTrackerState.LOCKED
-      if (shouldLock && !focusLocked) {
+      if (shouldLock && !focusLockedRef.get()) {
         val d = latestFocusedDistance.value ?: return@collect
         try {
           val ctrl = Camera2CameraControl.from(cam.cameraControl)
@@ -432,12 +438,12 @@ private fun CameraSurface(
               )
               .build()
           ctrl.captureRequestOptions = opts
-          focusLocked = true
+          focusLockedRef.set(true)
           Log.i(TAG, "AF locked at distance=$d (tracker LOCKED)")
         } catch (e: Throwable) {
           Log.w(TAG, "AF lock failed", e)
         }
-      } else if (!shouldLock && focusLocked) {
+      } else if (!shouldLock && focusLockedRef.get()) {
         try {
           val ctrl = Camera2CameraControl.from(cam.cameraControl)
           val opts =
@@ -448,7 +454,7 @@ private fun CameraSurface(
               )
               .build()
           ctrl.captureRequestOptions = opts
-          focusLocked = false
+          focusLockedRef.set(false)
           Log.i(TAG, "AF released (tracker state=${status.state})")
         } catch (e: Throwable) {
           Log.w(TAG, "AF release failed", e)
@@ -609,6 +615,21 @@ private fun CameraSurface(
                 (e.y / viewH).coerceIn(0f, 1f),
               )
             val cam = camera ?: return true
+            // If the tracker-driven lock is currently pinning focus via
+            // Camera2 interop (AF_MODE=OFF + fixed LENS_FOCUS_DISTANCE),
+            // startFocusAndMetering would be silently overridden on the
+            // next capture request. Clear the interop bundle first, drop
+            // the latched distance so the lock effect waits for AF to
+            // re-converge at the tapped point before re-pinning, and
+            // reset the lock flag so the next LOCKED emission can fire
+            // the lock path again.
+            if (focusLockedRef.getAndSet(false)) {
+              runCatching {
+                Camera2CameraControl.from(cam.cameraControl).captureRequestOptions =
+                  CaptureRequestOptions.Builder().build()
+              }.onFailure { Log.w(TAG, "clear interop options failed", it) }
+              latestFocusedDistance.value = null
+            }
             // Without a PreviewView there's no built-in
             // MeteringPointFactory, so we hand-build one against the
             // surface dimensions. Normalised coords are in [0, 1] over
@@ -661,7 +682,7 @@ private fun CameraSurface(
         // device step units, usually 1/3 EV per step. If a device's
         // range doesn't include -2 the API clamps silently.
         try {
-          boundCamera.cameraControl.setExposureCompensationIndex(-2)
+          boundCamera.cameraControl.setExposureCompensationIndex(-4)
         } catch (e: Exception) {
           Log.w(TAG, "exposure compensation not supported", e)
         }
