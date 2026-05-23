@@ -25,7 +25,8 @@ Language packs contain the full translation models, translation happens _on your
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png)
 
-<video src="https://github.com/DavidVentura/offline-translator/raw/master/screenshots/live_video.mp4" width="200px" controls></video>
+https://github.com/user-attachments/assets/bf774a4f-3d58-49b7-b4e2-cb30eb395b39
+
 
 ## Tech
 
