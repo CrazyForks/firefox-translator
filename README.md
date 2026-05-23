@@ -25,15 +25,17 @@ Language packs contain the full translation models, translation happens _on your
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/07_dictionary.png)
 
+<video src="https://github.com/DavidVentura/offline-translator/raw/master/screenshots/live_video.mp4" width="200px" controls></video>
+
 ## Tech
 
 - Translation models are Firefox' [translations models](https://github.com/mozilla/translations)
-- OCR models are [Tesseract](https://github.com/tesseract-ocr/tesseract)
+- OCR models are [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (with [Tesseract](https://github.com/tesseract-ocr/tesseract) for unsupported langs)
 - Automatic language detection is done via [cld2](https://github.com/CLD2Owners/cld2)
 - Dictionary is based on data from Wiktionary, exported by [Kaikki](https://kaikki.org/)
   - For Japanese specifically, there's a second "word dictionary" (Mecab) for transliterating Kanji
 - TTS uses [Piper](https://github.com/OHF-Voice/piper1-gpl), [Coqui](https://github.com/coqui-ai/tts), [Kokoro](https://github.com/hexgrad/kokoro), [MMS](https://huggingface.co/facebook/mms-tts), [Sherpa ONNX](https://github.com/k2-fsa/sherpa-onnx), [Mimic3](https://github.com/MycroftAI/mimic3) voices
-- PDF surgery uses [mupdf](https://github.com/ArtifexSoftware/mupdf) and [lopdf](https://github.com/J-F-Liu/lopdf).
+- PDF surgery uses [mupdf](https://github.com/ArtifexSoftware/mupdf) and [lopdf](https://github.com/J-F-Liu/lopdf)
 - Inference engines are:
   - Translation models: [slimt](https://github.com/jerinphilip/slimt)
   - Paddle OCR, Kokoro TTS: [MNN](https://github.com/alibaba/MNN/)
