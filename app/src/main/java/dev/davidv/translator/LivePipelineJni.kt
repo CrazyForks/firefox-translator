@@ -17,17 +17,14 @@
 
 package dev.davidv.translator
 
-import android.graphics.Bitmap
-
 /** Single-call JNI fast-path for the live-camera planar OCR pipeline.
  *
- *  Per-frame entry point: [processFrame] runs the tracker step,
- *  composites the camera frame + resident overlay **directly into the
- *  destination `Bitmap`'s pixel memory** (via `AndroidBitmap_lockPixels`),
- *  and dispatches an async acquire/refresh job inside Rust when needed —
- *  all in one JNI call. Returns a packed `jlong` carrying the per-frame
- *  result so Kotlin doesn't need to make a follow-up uniffi call for
- *  the common debug-pill update.
+ *  Per-frame entry point: [processFrameGl] runs the tracker step,
+ *  presents the camera frame + resident overlay straight to the bound
+ *  EGL surface via the native `GlesRenderer`, and dispatches an async
+ *  acquire/refresh job inside Rust when needed — all in one JNI call.
+ *  Returns a packed `jlong` carrying the per-frame result so Kotlin
+ *  doesn't need a follow-up uniffi call for the common debug-pill update.
  *
  *  Detailed async-job telemetry (rec counts, ms, cancel) is *not*
  *  packed into the per-frame return — poll
@@ -39,17 +36,28 @@ internal object LivePipelineJni {
     System.loadLibrary("bindings")
   }
 
-  /** Process one camera frame. The destination [bitmap] must be
-   *  `ARGB_8888` sized exactly to `visibleSensorWidth × visibleSensorHeight`
-   *  with a tight stride. Returns a packed `Long` (see [State.unpack]).
-   *  Returns 0 on any failure (bad pointer, wrong bitmap format,
-   *  composite math error).
-   */
+  /** Build a native `GlesRenderer` for the GPU present path. MUST be
+   *  called on the GL render thread with its EGL GLES2 context already
+   *  current. Returns a native pointer (`Long`), or 0 on failure.
+   *  Release with [destroyGlRenderer] on the same thread. */
   @JvmStatic
-  external fun processFrame(
+  external fun createGlRenderer(): Long
+
+  /** Free a renderer from [createGlRenderer]. Same-thread / context as
+   *  creation. */
+  @JvmStatic
+  external fun destroyGlRenderer(rendererPtr: Long)
+
+  /** Runs the tracker step and presents the composite into the bound EGL
+   *  surface. Call on the GL render thread; follow with `eglSwapBuffers`.
+   *  Returns a packed `Long` (see [FrameResult.unpack]); `compositeOk`
+   *  means a frame was drawn. */
+  @JvmStatic
+  external fun processFrameGl(
     pipelinePtr: Long,
     framePtr: Long,
-    bitmap: Bitmap,
+    rendererPtr: Long,
+    displayXform: FloatArray,
     displayCropLeft: Int,
     displayCropTop: Int,
     displayCropRight: Int,

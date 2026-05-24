@@ -104,7 +104,7 @@ import dev.davidv.translator.LivePlanarOcrEngine
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.ui.components.LanguageSelector
-import dev.davidv.translator.ui.components.LiveTranslatorSurfaceView
+import dev.davidv.translator.ui.components.LiveGlSurfaceView
 import java.io.File
 import java.util.concurrent.Executor
 import android.util.Size as AndroidSize
@@ -563,7 +563,7 @@ private fun CameraSurface(
   }
 
   val liveSurfaceView =
-    remember { LiveTranslatorSurfaceView(context) }
+    remember { LiveGlSurfaceView(context) }
 
   // Publish SurfaceView dims to the engine so its `display_crop`
   // matches the FILL_CENTER visible region. Surface dims arrive
@@ -574,6 +574,8 @@ private fun CameraSurface(
     val engine = liveOcrEngine
     if (engine != null) {
       liveSurfaceView.onSizeChanged = { w, h -> engine.setViewSize(w, h) }
+      // Route per-frame composites to the GL surface (GPU present).
+      engine.frameSink = liveSurfaceView
       // Push the current dims in case the surface was already sized
       // before the engine attached.
       if (liveSurfaceView.width > 0 && liveSurfaceView.height > 0) {
@@ -582,6 +584,7 @@ private fun CameraSurface(
     }
     onDispose {
       liveSurfaceView.onSizeChanged = null
+      liveOcrEngine?.frameSink = null
     }
   }
 
@@ -662,10 +665,11 @@ private fun CameraSurface(
       try {
         provider.unbindAll()
         // No `Preview` UseCase — the analyzer stream is our single
-        // source of pixels. `LiveTranslatorSurfaceView` draws the
-        // composited result (camera + overlay) produced by the engine
-        // per analyzer frame. This eliminates the preview-vs-overlay
-        // timing mismatch that the old two-surface architecture had.
+        // source of pixels. `LiveGlSurfaceView` presents the composited
+        // result (camera + overlay) produced by the engine per analyzer
+        // frame straight to the GL surface. This eliminates the
+        // preview-vs-overlay timing mismatch the old two-surface
+        // architecture had.
         val boundCamera =
           provider.bindToLifecycle(
             lifecycleOwner,
@@ -713,13 +717,10 @@ private fun CameraSurface(
     // this language aren't installed), the engine still receives
     // frames and composites camera-only — the tracker is held in
     // SUPPRESSED so no acquire/refresh worker runs.
-    val composited by
-      (liveOcrEngine?.compositedFrame ?: remember { kotlinx.coroutines.flow.MutableStateFlow(null) })
-        .collectAsState()
     AndroidView(
       factory = { liveSurfaceView },
       modifier = Modifier.fillMaxSize(),
-      update = { view -> view.update(composited) },
+      update = { },
     )
 
     if (DEBUG_SHOW_TRACKER_STATUS && liveOcrEngine != null) {

@@ -34,7 +34,7 @@ private const val MAX_RETAINED_FRAME_HANDLES_PLANAR: Int = 4
 private const val TAG_PLANAR = "LivePlanarOcrEngine"
 
 /** Compute the algorithm's `display_crop` from the SurfaceView's
- *  FILL_CENTER visible region. Mirrors `LiveTranslatorSurfaceView.drawComposited`
+ *  FILL_CENTER visible region. Mirrors `LiveGlSurfaceView.displayXform`
  *  scale math. */
 private fun computeDisplayCrop(
   sensorW: Int,
@@ -93,19 +93,11 @@ data class TrackerStatus(
   val lastAcquirePending: Int,
 )
 
-/** One per-camera-frame composited display image. */
-data class CompositedFrame(
-  val bitmap: android.graphics.Bitmap,
-  val width: Int,
-  val height: Int,
-  val rotationDegrees: Int,
-)
-
-/** Thin Kotlin host for the Rust `LiveTrackerPipeline`. Owns the
- *  display bitmap pool + frame handle pool + camera-side focus/AF
- *  state. Per-frame work — tracker step, composite, async acquire/
- *  refresh dispatch — all happens inside Rust via a single
- *  [LivePipelineJni.processFrame] call. */
+/** Thin Kotlin host for the Rust `LiveTrackerPipeline`. Owns the frame
+ *  handle pool + camera-side focus/AF state. Per-frame work — tracker
+ *  step, GPU present, async acquire/refresh dispatch — happens inside
+ *  Rust via a single [LivePipelineJni.processFrameGl] call routed through
+ *  [frameSink]. */
 class LivePlanarOcrEngine(
   private val catalog: LanguageCatalog,
   @Suppress("UNUSED_PARAMETER") workerScope: CoroutineScope,
@@ -118,14 +110,6 @@ class LivePlanarOcrEngine(
 
   private val liveViewWidth = AtomicInteger(0)
   private val liveViewHeight = AtomicInteger(0)
-
-  private val displayBitmaps = arrayOfNulls<android.graphics.Bitmap>(2)
-  private var displayBitmapIndex: Int = 0
-  private var displayBitmapWidth: Int = 0
-  private var displayBitmapHeight: Int = 0
-
-  private val _compositedFrame = MutableStateFlow<CompositedFrame?>(null)
-  val compositedFrame: StateFlow<CompositedFrame?> = _compositedFrame.asStateFlow()
 
   private val _trackerStatus =
     MutableStateFlow(
@@ -196,6 +180,11 @@ class LivePlanarOcrEngine(
     }
   }
 
+  /** When set, frames are presented on the GPU via this sink
+   *  ([LiveGlSurfaceView]) instead of the CPU `Bitmap` + StateFlow path. */
+  @Volatile
+  var frameSink: dev.davidv.translator.ui.components.LiveFrameSink? = null
+
   /** Per-frame entry. Called from the CameraX analyzer thread (single-
    *  threaded by construction). Runs the entire frame synchronously,
    *  including the JNI tracker+composite call. Acquire/refresh
@@ -264,7 +253,9 @@ class LivePlanarOcrEngine(
     lastFocusX = focusXNormalized
     lastFocusY = focusYNormalized
 
-    val bitmap = ensureDisplayBitmap(visibleSensorW, visibleSensorH) ?: return
+    // GPU present only — no CPU fallback. Frames are skipped until the
+    // GL surface wires its sink (set in LiveCameraScreen on surface up).
+    val sink = frameSink ?: return
     val pipelinePtr =
       try {
         tracker.rawAddressForJni().toLong()
@@ -279,12 +270,13 @@ class LivePlanarOcrEngine(
         Log.w(TAG_PLANAR, "handle.rawAddressForJni failed", e)
         return
       }
+    // The composite is rendered straight to the surface, blocking until
+    // presented so `handle`'s camera bytes stay valid for the render.
     val packed =
       try {
-        LivePipelineJni.processFrame(
+        sink.submitFrameBlocking(
           pipelinePtr,
           framePtr,
-          bitmap,
           cropRect.left.toInt(),
           cropRect.top.toInt(),
           cropRect.right.toInt(),
@@ -293,24 +285,15 @@ class LivePlanarOcrEngine(
           visibleSensorH,
           sensorWidth,
           sensorHeight,
+          rotationDegrees,
           true,
           captureTimestampNs,
         )
       } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "LivePipelineJni.processFrame failed", e)
+        Log.w(TAG_PLANAR, "processFrame failed", e)
         return
       }
     val result = LivePipelineJni.FrameResult.unpack(packed)
-    if (result != null && result.compositeOk) {
-      _compositedFrame.value =
-        CompositedFrame(
-          bitmap = bitmap,
-          width = visibleSensorW,
-          height = visibleSensorH,
-          rotationDegrees = rotationDegrees,
-        )
-      displayBitmapIndex = 1 - displayBitmapIndex
-    }
 
     // Tracker pill: state + inliers come back in the packed result;
     // detailed acquire/refresh outcome (only present after a worker
@@ -389,7 +372,6 @@ class LivePlanarOcrEngine(
     }
     lastFocusX = Float.NaN
     lastFocusY = Float.NaN
-    _compositedFrame.value = null
   }
 
   fun shutdown() {
@@ -397,39 +379,5 @@ class LivePlanarOcrEngine(
       val h = handlePool.pollFirst() ?: break
       h.close()
     }
-    for (i in 0..1) {
-      displayBitmaps[i]?.recycle()
-      displayBitmaps[i] = null
-    }
-  }
-
-  private fun ensureDisplayBitmap(
-    width: Int,
-    height: Int,
-  ): android.graphics.Bitmap? {
-    if (width != displayBitmapWidth || height != displayBitmapHeight) {
-      for (i in 0..1) {
-        displayBitmaps[i]?.recycle()
-        displayBitmaps[i] = null
-      }
-      displayBitmapIndex = 0
-      displayBitmapWidth = width
-      displayBitmapHeight = height
-    }
-    val slot = displayBitmapIndex
-    val existing = displayBitmaps[slot]
-    if (existing != null && existing.width == width && existing.height == height && !existing.isRecycled) {
-      return existing
-    }
-    existing?.recycle()
-    val fresh =
-      try {
-        android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
-      } catch (e: Throwable) {
-        Log.w(TAG_PLANAR, "createBitmap ${width}x$height failed", e)
-        return null
-      }
-    displayBitmaps[slot] = fresh
-    return fresh
   }
 }
