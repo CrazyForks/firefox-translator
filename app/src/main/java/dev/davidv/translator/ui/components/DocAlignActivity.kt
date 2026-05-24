@@ -435,16 +435,19 @@ private fun QuadEditorCanvas(
     val h = imgBottom - imgTop
     if (w < 64 || h < 64) return
     currentOnDetecting(true)
+    val source = currentOriginal
     val cropped =
       withContext(Dispatchers.IO) {
-        runCatching { Bitmap.createBitmap(currentOriginal, imgLeft, imgTop, w, h) }.getOrNull()
+        runCatching { Bitmap.createBitmap(source, imgLeft, imgTop, w, h) }.getOrNull()
       }
     if (cropped == null) {
       currentOnDetecting(false)
       return
     }
     val detection = runCatching { currentDetect(cropped) }.getOrNull()
-    cropped.recycle()
+    // createBitmap returns `source` unchanged when the crop covers the whole image (zoomed
+    // out); recycling it would destroy the bitmap still being drawn on the canvas.
+    if (cropped !== source) cropped.recycle()
     currentOnDetecting(false)
     if (detection != null) {
       val inOriginal =
