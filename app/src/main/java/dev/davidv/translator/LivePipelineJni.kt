@@ -66,7 +66,6 @@ internal object LivePipelineJni {
     visibleSensorHeight: Int,
     fullViewWidth: Int,
     fullViewHeight: Int,
-    imuStable: Boolean,
     timestampNs: Long,
   ): Long
 

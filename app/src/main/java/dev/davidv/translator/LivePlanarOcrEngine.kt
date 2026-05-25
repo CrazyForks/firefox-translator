@@ -286,7 +286,6 @@ class LivePlanarOcrEngine(
           sensorWidth,
           sensorHeight,
           rotationDegrees,
-          true,
           captureTimestampNs,
         )
       } catch (e: Throwable) {

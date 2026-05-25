@@ -48,7 +48,6 @@ interface LiveFrameSink {
     fullViewW: Int,
     fullViewH: Int,
     rotationDegrees: Int,
-    imuStable: Boolean,
     timestampNs: Long,
   ): Long
 }
@@ -102,14 +101,13 @@ class LiveGlSurfaceView(context: Context) :
     fullViewW: Int,
     fullViewH: Int,
     rotationDegrees: Int,
-    imuStable: Boolean,
     timestampNs: Long,
   ): Long {
     val req =
       Request(
         pipelinePtr, framePtr, cropLeft, cropTop, cropRight, cropBottom,
         visibleSensorW, visibleSensorH, fullViewW, fullViewH, rotationDegrees,
-        imuStable, timestampNs,
+        timestampNs,
       )
     return glThread?.render(req) ?: 0L
   }
@@ -126,7 +124,6 @@ class LiveGlSurfaceView(context: Context) :
     val fullViewW: Int,
     val fullViewH: Int,
     val rotationDegrees: Int,
-    val imuStable: Boolean,
     val timestampNs: Long,
   )
 
@@ -251,7 +248,6 @@ class LiveGlSurfaceView(context: Context) :
           req.visibleSensorH,
           req.fullViewW,
           req.fullViewH,
-          req.imuStable,
           req.timestampNs,
         )
       EGL14.eglSwapBuffers(eglDisplay, eglSurface)

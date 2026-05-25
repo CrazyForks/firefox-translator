@@ -2,7 +2,7 @@
 //!
 //! Per-frame Kotlin calls `LivePipelineJni.processFrameGl(pipelinePtr,
 //! framePtr, rendererPtr, displayXform, displayCrop, visibleSensorW/H,
-//! fullViewW/H, imuStable, tsNs)` on the GL render thread. We cast the
+//! fullViewW/H, tsNs)` on the GL render thread. We cast the
 //! pointers back, run `pipeline.process_frame(...)` with a `PresentTarget`
 //! that presents straight to the bound EGL surface, and return a packed
 //! `jlong` carrying the tracker state + anchor id + inliers + ok flag so
@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use jni::objects::JClass;
-use jni::sys::{jboolean, jint, jlong};
+use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 
 use translator::live_frame::LiveFrame;
@@ -171,7 +171,6 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processFrameGl
     visible_sensor_h: jint,
     full_view_w: jint,
     full_view_h: jint,
-    imu_stable: jboolean,
     timestamp_ns: jlong,
 ) -> jlong {
     if pipeline_ptr == 0 || frame_ptr == 0 || renderer_ptr == 0 {
@@ -222,7 +221,6 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processFrameGl
         visible_sensor_h as u32,
         full_view_w.max(0) as u32,
         full_view_h.max(0) as u32,
-        imu_stable != 0,
         timestamp_ns as u64,
     );
 
