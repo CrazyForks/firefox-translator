@@ -29,7 +29,7 @@ android {
   }
   defaultConfig {
     applicationId = "dev.davidv.translator"
-    minSdk = 21
+    minSdk = 23
     targetSdk = 34
     versionCode = 19
     versionName = "0.6.1"
@@ -104,7 +104,7 @@ val androidSdkRoot =
     ?: System.getenv("ANDROID_HOME")
     ?: throw GradleException("ANDROID_SDK_ROOT or ANDROID_HOME must be set")
 val ndk = "$androidSdkRoot/ndk/28.0.13004108"
-val bindingsAndroidApi = 28
+val bindingsAndroidApi = 23
 val onnxRuntimeRootDir = file("../third_party/onnxruntime")
 val onnxRuntimeSourceFingerprint =
   providers
