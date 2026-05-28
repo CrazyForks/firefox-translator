@@ -91,6 +91,7 @@ import dev.davidv.translator.parseVoiceOverride
 import dev.davidv.translator.ui.DocumentTranslationUiState
 import dev.davidv.translator.ui.TranslatorViewModel
 import dev.davidv.translator.ui.UiEvent
+import dev.davidv.translator.ui.components.DocumentConfigureSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.StateFlow
@@ -267,6 +268,7 @@ private fun DocumentTranslationDialog(
                 when (document.progressUnit) {
                   "page" -> "Page"
                   "image" -> "Image"
+                  "paragraph" -> "Paragraph"
                   else -> "Block"
                 }
               Text("$unit $displayCurrent/$total")
@@ -459,6 +461,32 @@ fun TranslatorApp(
   DisposableEffect(pcmAudioPlayer) {
     onDispose {
       pcmAudioPlayer.release()
+    }
+  }
+
+  val pendingDocument by viewModel.pendingDocument.collectAsState()
+  pendingDocument?.let { pending ->
+    val docCatalog = viewModel.languageStateManager.catalog.collectAsState().value
+    val docAvailableLanguages =
+      (languageState.translatorLanguages() + listOfNotNull(docCatalog?.english))
+        .distinctBy { it.code }
+    val initialFrom = from ?: docAvailableLanguages.firstOrNull()
+    val initialTo = to ?: docCatalog?.english ?: docAvailableLanguages.firstOrNull()
+    if (initialFrom != null && initialTo != null) {
+      DocumentConfigureSheet(
+        fileName = pending.displayName,
+        fileSizeBytes = pending.sizeBytes,
+        extension = pending.extension,
+        initialFrom = initialFrom,
+        initialTo = initialTo,
+        availableLanguages = docAvailableLanguages,
+        languageMetadata = languageMetadata,
+        defaultTranslatePdfImages = settings.translatePdfImages,
+        onDismiss = { viewModel.dismissPendingDocument() },
+        onTranslate = { selFrom, selTo, txtLayout, translatePdfImages ->
+          viewModel.startPendingDocumentTranslation(selFrom, selTo, txtLayout, translatePdfImages)
+        },
+      )
     }
   }
 

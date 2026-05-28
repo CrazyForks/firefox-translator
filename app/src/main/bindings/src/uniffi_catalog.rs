@@ -1,3 +1,4 @@
+use std::num::NonZeroU32;
 use std::sync::Arc;
 use std::{fs, path::Path};
 
@@ -74,6 +75,26 @@ pub enum DocumentProgressEvent {
     Writing,
 }
 
+
+/// Caller-chosen layout for `.txt` translation. `wrap` of `0` (or absent)
+/// means "do not re-wrap"; any positive value is the output column width.
+/// Ignored for non-txt documents.
+#[derive(Debug, Clone, uniffi::Enum)]
+pub enum TxtLayout {
+    Preserve,
+    Reflow { wrap: Option<u32> },
+}
+
+impl From<TxtLayout> for translator::txt::TxtLayout {
+    fn from(value: TxtLayout) -> Self {
+        match value {
+            TxtLayout::Preserve => Self::Preserve,
+            TxtLayout::Reflow { wrap } => Self::Reflow {
+                wrap: wrap.and_then(NonZeroU32::new),
+            },
+        }
+    }
+}
 
 #[uniffi::export(with_foreign)]
 pub trait DocumentProgressSink: Send + Sync {
@@ -224,6 +245,7 @@ fn translate_document_path_impl(
     target_code: String,
     available_language_codes: Vec<String>,
     translate_pdf_images: bool,
+    txt_layout: TxtLayout,
     mut on_progress: impl FnMut(DocumentProgressEvent),
     is_cancelled: impl Fn() -> bool + Send + Sync,
 ) -> Result<String, CatalogError> {
@@ -254,22 +276,38 @@ fn translate_document_path_impl(
             let text = String::from_utf8(input_bytes).map_err(|error| CatalogError::Other {
                 reason: format!("text document is not UTF-8: {error}"),
             })?;
-            on_progress(DocumentProgressEvent::Translating {
-                current: 0,
-                total: 1,
-                unit: "block".to_string(),
-            });
-            check_cancelled()?;
-            let translated = session
-                .translate_text(source_code, &target_code, &text)
-                .map_err(CatalogError::from)?;
-            check_cancelled()?;
-            on_progress(DocumentProgressEvent::Translating {
-                current: 1,
-                total: 1,
-                unit: "block".to_string(),
-            });
-            check_cancelled()?;
+            let translated = translator::txt::translate_txt_with_progress(
+                session,
+                &text,
+                source_code,
+                &target_code,
+                txt_layout.into(),
+                |progress| {
+                    if is_cancelled() {
+                        return Err(translator::txt::TxtTranslateError::Cancelled);
+                    }
+                    let translator::txt::TxtTranslateProgress::TranslatingParagraph {
+                        current,
+                        total,
+                    } = progress;
+                    on_progress(DocumentProgressEvent::Translating {
+                        current: current as u32,
+                        total: total as u32,
+                        unit: "paragraph".to_string(),
+                    });
+                    if is_cancelled() {
+                        Err(translator::txt::TxtTranslateError::Cancelled)
+                    } else {
+                        Ok(())
+                    }
+                },
+            )
+            .map_err(|error| match error {
+                translator::txt::TxtTranslateError::Cancelled => CatalogError::Cancelled,
+                translator::txt::TxtTranslateError::Translation(message) => CatalogError::Other {
+                    reason: format!("failed to translate text: {message}"),
+                },
+            })?;
             translated.into_bytes()
         }
         "odt" => {
@@ -821,6 +859,7 @@ impl CatalogHandle {
         target_code: String,
         available_language_codes: Vec<String>,
         translate_pdf_images: bool,
+        txt_layout: TxtLayout,
     ) -> Result<String, CatalogError> {
         translate_document_path_impl(
             &self.session,
@@ -830,6 +869,7 @@ impl CatalogHandle {
             target_code,
             available_language_codes,
             translate_pdf_images,
+            txt_layout,
             |_| {},
             || false,
         )
@@ -843,6 +883,7 @@ impl CatalogHandle {
         target_code: String,
         available_language_codes: Vec<String>,
         translate_pdf_images: bool,
+        txt_layout: TxtLayout,
         progress: Arc<dyn DocumentProgressSink>,
     ) -> Result<String, CatalogError> {
         translate_document_path_impl(
@@ -853,6 +894,7 @@ impl CatalogHandle {
             target_code,
             available_language_codes,
             translate_pdf_images,
+            txt_layout,
             |event| progress.on_progress(event),
             || progress.is_cancelled(),
         )

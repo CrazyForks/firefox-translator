@@ -153,6 +153,7 @@ class TranslationService(
     to: Language,
     availableLanguages: List<Language>,
     translatePdfImages: Boolean,
+    txtLayout: TxtLayoutChoice,
     onProgress: (DocumentTranslationProgress) -> Unit = {},
     isCancelled: () -> Boolean = { false },
   ): Result<String> =
@@ -162,7 +163,7 @@ class TranslationService(
           ?: return@withContext Result.failure(IllegalStateException("Catalog unavailable"))
       try {
         Result.success(
-          catalog.translateDocumentPath(inputPath, outputPath, from, to, availableLanguages, translatePdfImages, onProgress, isCancelled),
+          catalog.translateDocumentPath(inputPath, outputPath, from, to, availableLanguages, translatePdfImages, txtLayout, onProgress, isCancelled),
         )
       } catch (e: CatalogException.MissingAsset) {
         Result.failure(IllegalStateException("Language pair ${from.code} -> ${to.code} not installed", e))

@@ -45,6 +45,7 @@ import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationResult
 import dev.davidv.translator.TranslatorMessage
+import dev.davidv.translator.TxtLayoutChoice
 import dev.davidv.translator.WordWithTaggedEntries
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -141,6 +142,12 @@ class TranslatorViewModel(
   private val _documentTranslation = MutableStateFlow<DocumentTranslationUiState?>(null)
   val documentTranslation: StateFlow<DocumentTranslationUiState?> = _documentTranslation.asStateFlow()
   private var dismissedInProgressDocumentTaskId: Long? = null
+
+  // Picked-but-not-yet-started document. Drives the Configure sheet
+  // (source/dest + per-type options) before the translation service is
+  // launched; cleared once the user confirms or cancels.
+  private val _pendingDocument = MutableStateFlow<PendingDocument?>(null)
+  val pendingDocument: StateFlow<PendingDocument?> = _pendingDocument.asStateFlow()
 
   // One-shot UI events (Toast, errors, etc.)
   private val _uiEvents = MutableSharedFlow<UiEvent>()
@@ -666,12 +673,34 @@ class TranslatorViewModel(
     sizeBytes: Long,
     deleteAfterLoad: Boolean,
   ) {
-    if (_isAutoSource.value) {
-      viewModelScope.launch {
-        _uiEvents.emit(UiEvent.ShowToast("Please select source language first"))
-      }
-      return
+    Log.d("SetDocumentPath", "Selected document for translation: $displayName ($path)")
+    _pendingDocument.value =
+      PendingDocument(
+        path = path,
+        displayName = displayName,
+        sizeBytes = sizeBytes,
+        deleteAfterLoad = deleteAfterLoad,
+        extension = File(path).extension.lowercase(),
+      )
+  }
+
+  fun dismissPendingDocument() {
+    val pending = _pendingDocument.value ?: return
+    if (pending.deleteAfterLoad) {
+      runCatching { File(pending.path).delete() }
     }
+    _pendingDocument.value = null
+  }
+
+  fun startPendingDocumentTranslation(
+    from: Language,
+    to: Language,
+    txtLayout: TxtLayoutChoice,
+    translatePdfImages: Boolean,
+  ) {
+    val pending = _pendingDocument.value ?: return
+    _pendingDocument.value = null
+
     _displayImage.value = null
     _originalImage.value = null
     ocrCache = null
@@ -680,34 +709,19 @@ class TranslatorViewModel(
     _inputTransliterated.value = null
     _inputType.value = InputType.FILE
     _currentDetectedLanguage.value = null
-    Log.d("SetDocumentPath", "Selected document for translation: $displayName ($path)")
 
-    val fromLang = _from.value
-    val toLang = _to.value
-    if (fromLang == null || toLang == null) {
-      _documentTranslation.value =
-        DocumentTranslationUiState(
-          taskId = System.currentTimeMillis(),
-          fileName = displayName,
-          fileSizeBytes = sizeBytes,
-          errorMessage = "Languages are not ready yet",
-        )
-      viewModelScope.launch {
-        _uiEvents.emit(UiEvent.ShowToast("Languages are not ready yet"))
-      }
-      return
-    }
-
-    val outputFile = translatedDocumentOutputFile(displayName, fromLang, toLang)
+    val outputFile = translatedDocumentOutputFile(pending.displayName, from, to)
     DocumentTranslationService.startTranslation(
       context = appContext,
-      inputPath = path,
+      inputPath = pending.path,
       outputPath = outputFile.absolutePath,
-      displayName = displayName,
-      sizeBytes = sizeBytes,
-      from = fromLang,
-      to = toLang,
-      deleteAfterLoad = deleteAfterLoad,
+      displayName = pending.displayName,
+      sizeBytes = pending.sizeBytes,
+      from = from,
+      to = to,
+      deleteAfterLoad = pending.deleteAfterLoad,
+      translatePdfImages = translatePdfImages,
+      txtLayout = txtLayout,
     )
   }
 
@@ -884,6 +898,14 @@ sealed class UiEvent {
 
   data class PlayAudio(val audioChunks: Flow<PcmAudio>) : UiEvent()
 }
+
+data class PendingDocument(
+  val path: String,
+  val displayName: String,
+  val sizeBytes: Long,
+  val deleteAfterLoad: Boolean,
+  val extension: String,
+)
 
 data class DocumentTranslationUiState(
   val taskId: Long,

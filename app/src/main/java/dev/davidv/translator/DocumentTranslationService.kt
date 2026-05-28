@@ -93,6 +93,9 @@ class DocumentTranslationService : Service() {
     private const val EXTRA_FROM_CODE = "from_code"
     private const val EXTRA_TO_CODE = "to_code"
     private const val EXTRA_DELETE_AFTER_LOAD = "delete_after_load"
+    private const val EXTRA_TRANSLATE_PDF_IMAGES = "translate_pdf_images"
+    private const val EXTRA_TXT_LAYOUT_REFLOW = "txt_layout_reflow"
+    private const val EXTRA_TXT_WRAP_COLUMNS = "txt_wrap_columns"
 
     private const val CHANNEL_ID = "document_translation"
     private const val NOTIFICATION_ID = 1002
@@ -109,6 +112,8 @@ class DocumentTranslationService : Service() {
       from: Language,
       to: Language,
       deleteAfterLoad: Boolean,
+      translatePdfImages: Boolean,
+      txtLayout: TxtLayoutChoice,
     ) {
       val taskId = System.currentTimeMillis()
       _documentTranslationState.value =
@@ -129,6 +134,9 @@ class DocumentTranslationService : Service() {
           putExtra(EXTRA_FROM_CODE, from.code)
           putExtra(EXTRA_TO_CODE, to.code)
           putExtra(EXTRA_DELETE_AFTER_LOAD, deleteAfterLoad)
+          putExtra(EXTRA_TRANSLATE_PDF_IMAGES, translatePdfImages)
+          putExtra(EXTRA_TXT_LAYOUT_REFLOW, txtLayout is TxtLayoutChoice.Reflow)
+          putExtra(EXTRA_TXT_WRAP_COLUMNS, (txtLayout as? TxtLayoutChoice.Reflow)?.wrapColumns ?: -1)
         }
       ContextCompat.startForegroundService(context, intent)
     }
@@ -212,7 +220,8 @@ class DocumentTranslationService : Service() {
               from = from,
               to = to,
               availableLanguages = availableLanguages,
-              translatePdfImages = app.settingsManager.settings.value.translatePdfImages,
+              translatePdfImages = request.translatePdfImages,
+              txtLayout = request.txtLayout,
               onProgress = { progress ->
                 updateProgress(request.taskId, progress)
               },
@@ -429,6 +438,7 @@ class DocumentTranslationService : Service() {
         when (state.progressUnit) {
           "page" -> "Page"
           "image" -> "Image"
+          "paragraph" -> "Paragraph"
           else -> "Block"
         }
       return "$unit $displayCurrent/$total"
@@ -484,6 +494,13 @@ class DocumentTranslationService : Service() {
     if (taskId < 0 || inputPath == null || outputPath == null || fileName == null || fromCode == null || toCode == null) {
       return null
     }
+    val wrapColumns = getIntExtra(EXTRA_TXT_WRAP_COLUMNS, -1)
+    val txtLayout =
+      if (getBooleanExtra(EXTRA_TXT_LAYOUT_REFLOW, false)) {
+        TxtLayoutChoice.Reflow(wrapColumns = wrapColumns.takeIf { it > 0 })
+      } else {
+        TxtLayoutChoice.Preserve
+      }
     return DocumentTranslationRequest(
       taskId = taskId,
       inputPath = inputPath,
@@ -493,6 +510,8 @@ class DocumentTranslationService : Service() {
       fromCode = fromCode,
       toCode = toCode,
       deleteAfterLoad = getBooleanExtra(EXTRA_DELETE_AFTER_LOAD, false),
+      translatePdfImages = getBooleanExtra(EXTRA_TRANSLATE_PDF_IMAGES, false),
+      txtLayout = txtLayout,
     )
   }
 
@@ -513,4 +532,6 @@ private data class DocumentTranslationRequest(
   val fromCode: String,
   val toCode: String,
   val deleteAfterLoad: Boolean,
+  val translatePdfImages: Boolean,
+  val txtLayout: TxtLayoutChoice,
 )

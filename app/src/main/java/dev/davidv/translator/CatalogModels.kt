@@ -5,10 +5,25 @@ import uniffi.bindings.CatalogException
 import uniffi.bindings.CatalogHandle
 import uniffi.bindings.DocumentProgressEvent
 import uniffi.bindings.DocumentProgressSink
+import uniffi.bindings.TxtLayout
 import uniffi.bindings.sampleOverlayColorsRgba
 import java.nio.ByteBuffer
 
 typealias CatalogError = CatalogException
+
+// / Caller-chosen layout for `.txt` translation. Ignored for other
+// / document types. `Reflow.wrapColumns == null` means do not re-wrap.
+sealed class TxtLayoutChoice {
+  data object Preserve : TxtLayoutChoice()
+
+  data class Reflow(val wrapColumns: Int?) : TxtLayoutChoice()
+
+  fun toUniffi(): TxtLayout =
+    when (this) {
+      Preserve -> TxtLayout.Preserve
+      is Reflow -> TxtLayout.Reflow(wrap = wrapColumns?.toUInt())
+    }
+}
 
 sealed class DocumentTranslationProgress {
   data object Preparing : DocumentTranslationProgress()
@@ -439,6 +454,7 @@ class LanguageCatalog private constructor(
     to: Language,
     availableLanguages: List<Language>,
     translatePdfImages: Boolean,
+    txtLayout: TxtLayoutChoice,
     onProgress: (DocumentTranslationProgress) -> Unit = {},
     isCancelled: () -> Boolean = { false },
   ): String =
@@ -449,6 +465,7 @@ class LanguageCatalog private constructor(
       to.code,
       availableLanguages.map { it.code },
       translatePdfImages,
+      txtLayout.toUniffi(),
       object : DocumentProgressSink {
         override fun onProgress(event: DocumentProgressEvent) {
           onProgress(event.toDocumentTranslationProgress())
