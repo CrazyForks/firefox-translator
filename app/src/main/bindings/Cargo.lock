@@ -1658,7 +1658,7 @@ dependencies = [
 [[package]]
 name = "mupdf"
 version = "0.6.0"
-source = "git+https://github.com/DavidVentura/mupdf-rs#1448d6c788e1397f97db7ebb18b148c9cd4c0cf9"
+source = "git+https://github.com/DavidVentura/mupdf-rs#b68ee1f1c943ec79c74df448dd487a92ff56dcdd"
 dependencies = [
  "bitflags 2.11.1",
  "font-kit",
@@ -1671,7 +1671,7 @@ dependencies = [
 [[package]]
 name = "mupdf-sys"
 version = "0.6.0"
-source = "git+https://github.com/DavidVentura/mupdf-rs#1448d6c788e1397f97db7ebb18b148c9cd4c0cf9"
+source = "git+https://github.com/DavidVentura/mupdf-rs#b68ee1f1c943ec79c74df448dd487a92ff56dcdd"
 dependencies = [
  "bindgen 0.72.1",
  "cc",
@@ -2933,7 +2933,7 @@ dependencies = [
 [[package]]
 name = "translator"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#c4d9be9b0e5937e6400c0256a47620e546d13b44"
+source = "git+https://github.com/DavidVentura/translator-rs.git#0a99a238c425bf4644565482af23c53e0b85f725"
 dependencies = [
  "cld2",
  "fax",
