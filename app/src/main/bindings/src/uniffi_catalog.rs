@@ -1064,69 +1064,6 @@ impl CatalogHandle {
         }
     }
 
-    /// Allocate a Rust-side frame buffer with a pre-sized capacity. The
-    /// buffer is reusable: feed bytes in via either
-    /// [`FrameHandle::reset_via_uniffi`] or the `LiveFrameJni.writeFrom`
-    /// JNI fast-path. Pool the handle on the Kotlin side to amortise the
-    /// Rust allocation across many frames.
-    #[cfg(feature = "ppocr")]
-    fn make_frame_buffer(&self, capacity: u32) -> Arc<FrameHandle> {
-        Arc::new(FrameHandle::new(capacity as usize))
-    }
-}
-
-/// Uniffi-visible handle around a `translator::live_frame::LiveFrame`.
-/// Holds an `Arc<LiveFrame>` so the JNI shims can dereference the
-/// stable Rust-heap address while the pipeline (and any in-flight
-/// async worker job) keep additional `Arc` clones alive.
-#[cfg(feature = "ppocr")]
-#[derive(uniffi::Object)]
-pub struct FrameHandle {
-    pub(crate) inner: Arc<translator::live_frame::LiveFrame>,
-}
-
-#[cfg(feature = "ppocr")]
-impl FrameHandle {
-    pub(crate) fn new(initial_capacity: usize) -> Self {
-        FrameHandle {
-            inner: Arc::new(translator::live_frame::LiveFrame::new(initial_capacity)),
-        }
-    }
-}
-
-#[cfg(feature = "ppocr")]
-#[uniffi::export]
-impl FrameHandle {
-    /// Returns this handle's `LiveFrame` Rust-heap address as a `u64`.
-    /// Paired with `LiveFrameJni.{writeFrom,setExternalBuffer}` for
-    /// zero-JVM-copy byte transfer from a camera DirectByteBuffer into
-    /// this frame's storage, and with `LivePipelineJni.processFrame`
-    /// for the per-frame tracker+composite call.
-    fn raw_address_for_jni(&self) -> u64 {
-        self.inner.raw_address()
-    }
-
-    /// Fallback path that copies bytes in via uniffi's standard marshalling.
-    /// Slower than the JNI shim but useful when the camera's plane isn't
-    /// a contiguous DirectByteBuffer.
-    fn reset_via_uniffi(&self, rgba: Vec<u8>, width: u32, height: u32, rotation_degrees: i32) {
-        self.inner.reset_owned(rgba, width, height, rotation_degrees);
-    }
-
-    /// `true` while the pipeline (or its worker thread) still holds an
-    /// `Arc<LiveFrame>` clone of the underlying frame — i.e. an
-    /// in-flight acquire or refresh job is still reading from this
-    /// frame's state. The Kotlin frame pool uses this to skip
-    /// "busy" handles when picking the next ingest target so a new
-    /// `setExternalBuffer` doesn't race with an async pipeline read.
-    ///
-    /// Implementation note: checks `Arc::strong_count(&self.inner)`.
-    /// A count of 1 means only this wrapper holds it; > 1 means at
-    /// least one extra clone exists (most commonly the pipeline
-    /// worker's job-local Arc).
-    fn is_busy(&self) -> bool {
-        Arc::strong_count(&self.inner) > 1
-    }
 }
 
 // =========================================================================
@@ -1138,10 +1075,12 @@ impl FrameHandle {
 // uniffi `LivePlanarTracker` is a thin shim that holds an `Arc` to it
 // + forwards a handful of uniffi-facing methods (set config, reset,
 // telemetry getter). The hot per-frame entry is the JNI extern fn
-// `Java_..._LivePipelineJni_processFrame`, which dereferences the
-// raw address from `raw_address_for_jni` and calls
-// `LiveTrackerPipeline::process_frame` directly with a `&mut [u8]`
-// pointing at the Bitmap's pixel memory.
+// `Java_..._LivePipelineJni_processFrameGl`, which dereferences the
+// raw address from `raw_address_for_jni`, GPU-renders canonical luma
+// from the camera's external-OES texture into a fresh `LiveFrame`,
+// runs `LiveTrackerPipeline::process_frame` with an
+// `ExternalPresentTarget`, and on acquire reads back full-res RGBA
+// from the same texture.
 // =========================================================================
 
 #[cfg(feature = "planar-tracker")]

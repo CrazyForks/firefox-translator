@@ -32,23 +32,24 @@ thiserror = "2"
 log = "0.4"
 xml5ever = "0.38"
 markup5ever = "0.38"
-# Used for the live-OCR DirectByteBuffer fast-path: a hand-rolled JNI shim
-# that copies bytes from a camera DirectByteBuffer straight into a FrameHandle's
-# Rust-owned Vec<u8>, skipping the JVM ByteArray round-trip uniffi would
-# otherwise force on us.
+# Used for the live-OCR GPU per-frame fast path: a hand-rolled JNI entry
+# (`LivePipelineJni.processFrameGl`) takes the camera's external-OES
+# texture id + a couple of small float arrays and returns a packed
+# tracker-result `jlong`, avoiding uniffi's per-call marshalling
+# overhead on the 30 fps hot path.
 jni = { version = "0.21", default-features = false }
 
 [dependencies.translator]
 default-features = false
-git = "https://github.com/DavidVentura/translator-rs.git"
-# path = "/home/david/git/translator-rs"
+# git = "https://github.com/DavidVentura/translator-rs.git"
+path = "/home/david/git/translator-rs"
 features = ["uniffi", "html"]
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = { version = "0.14", default-features = false }
 
-# [patch."https://github.com/DavidVentura/slimt-sys"]
-# slimt-sys = { path = "/home/david/git/slimt-sys" }
+[patch."https://github.com/DavidVentura/slimt-sys"]
+slimt-sys = { path = "/home/david/git/slimt-sys" }
 
 # [patch."https://github.com/DavidVentura/piper-rs"]
 # piper-rs = { path = "/home/david/git/piper-rs" }

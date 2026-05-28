@@ -396,10 +396,6 @@ class LanguageCatalog private constructor(
     to: Language,
   ): uniffi.translator.PreparedImageOverlay = handle.retranslateImagePlan(prepared, from.code, to.code)
 
-  /** Allocate an empty Rust-side frame buffer with reserved `capacity` bytes,
-   *  to be filled later via JNI memcpy or `resetViaUniffi`. */
-  fun makeFrameBuffer(capacity: Int): uniffi.bindings.FrameHandle = handle.makeFrameBuffer(capacity.toUInt())
-
   /** Internal accessor for the raw uniffi `CatalogHandle`. The live-
    *  overlay pipeline constructor takes this so it can hold an Arc to
    *  the underlying TranslatorSession for its async acquire/refresh

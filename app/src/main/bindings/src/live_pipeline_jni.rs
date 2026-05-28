@@ -1,29 +1,31 @@
 //! Single-call JNI fast-path for the live-camera planar OCR pipeline.
 //!
 //! Per-frame Kotlin calls `LivePipelineJni.processFrameGl(pipelinePtr,
-//! framePtr, rendererPtr, displayXform, displayCrop, visibleSensorW/H,
-//! fullViewW/H, tsNs)` on the GL render thread. We cast the
-//! pointers back, run `pipeline.process_frame(...)` with a `PresentTarget`
-//! that presents straight to the bound EGL surface, and return a packed
-//! `jlong` carrying the tracker state + anchor id + inliers + ok flag so
-//! Kotlin doesn't need a follow-up uniffi call for the debug-pill update.
+//! rendererPtr, cameraTexId, canonicalW/H, surfaceW/H, uvXform,
+//! displayXform, tsNs)` on the GL render thread. The renderer borrows the
+//! camera's `GL_TEXTURE_EXTERNAL_OES` (from CameraX `Preview` →
+//! `SurfaceTexture`), GPU-renders the canonical luma into a small `Vec<u8>`
+//! to feed the tracker, then composites the external camera + overlay
+//! straight into the EGL surface. No CPU camera bytes cross the JNI seam;
+//! per-frame transfer is one ~650 KB R8 readback instead of a full-res
+//! RGBA copy + CPU luma walk.
 //!
-//! Detailed async-job telemetry (rec counts, ms, cancel) is *not*
-//! packed into the per-frame return — Kotlin polls
-//! `LivePlanarTracker.lastAcquireTelemetry()` for that whenever it
-//! wants to refresh the debug pill.
+//! Acquire/refresh path: when the tracker needs full-res RGBA, the shared
+//! [`translator::live_gpu_tick::run_tracker_with_acquire`] helper does a
+//! one-shot GPU readback inside this same JNI call and feeds the worker.
+//!
+//! Returns a packed `jlong` carrying tracker state + anchor id + inliers +
+//! ok flag so Kotlin doesn't need a follow-up uniffi call for the debug
+//! pill update. Detailed async-job telemetry is *not* packed in — Kotlin
+//! polls `LivePlanarTracker.lastAcquireTelemetry()` for that.
 
 #![cfg(feature = "planar-tracker")]
-
-use std::sync::Arc;
 
 use jni::objects::JClass;
 use jni::sys::{jint, jlong};
 use jni::JNIEnv;
 
-use translator::live_frame::LiveFrame;
 use translator::live_tracker_pipeline::{LiveTrackerPipeline, PlanarTrackerState};
-use translator::ocr::Rect as NativeRect;
 
 /// Pack the per-frame result into a single `jlong`. Layout (bit 63 →
 /// bit 0):
@@ -37,11 +39,15 @@ use translator::ocr::Rect as NativeRect;
 ///              past that but never blocks behavior)
 ///   - 28     : started_acquire
 ///   - 27     : started_refresh
-///   - 26..0  : reserved (0)
+///   - 20..0  : scale × 1024, fixed-point (21 bits, saturating) — the
+///              tracked plane's magnification vs acquire, used by the
+///              camera layer to drive focus distance without AF
+///   - 26..21 : reserved (0)
 fn pack_result(
     state: PlanarTrackerState,
     anchor_id: u64,
     inliers: u32,
+    scale: f32,
     composite_ok: bool,
     started_acquire: bool,
     started_refresh: bool,
@@ -54,26 +60,29 @@ fn pack_result(
     };
     let inliers_capped = inliers.min(0xFFFF) as u64;
     let anchor_lo = (anchor_id & 0xFFFF) as u64;
+    let scale_fixed = ((scale.max(0.0) * 1024.0).round() as u64).min(0x1F_FFFF);
     let packed: u64 = (state_bits << 62)
         | (if composite_ok { 1u64 << 61 } else { 0 })
         | (inliers_capped << 45)
         | (anchor_lo << 29)
         | (if started_acquire { 1u64 << 28 } else { 0 })
-        | (if started_refresh { 1u64 << 27 } else { 0 });
+        | (if started_refresh { 1u64 << 27 } else { 0 })
+        | scale_fixed;
     packed as jlong
 }
 
 // ---------------------------------------------------------------------
-// GPU present path. Runs the pipeline with a `PresentTarget` that renders
-// the composite straight into the bound EGL surface via `GlesRenderer`.
-// All three calls MUST run on the GL render thread Kotlin owns, with its
-// EGL context current.
+// GPU per-frame path. Camera arrives as a GL_TEXTURE_EXTERNAL_OES; all
+// three calls MUST run on the GL render thread Kotlin owns, with its EGL
+// context current.
 // ---------------------------------------------------------------------
 
 #[cfg(feature = "gpu")]
 use std::ffi::{c_char, c_void, CString};
 #[cfg(feature = "gpu")]
-use translator::gl_renderer::{GlesRenderer, PresentTarget};
+use translator::gl_renderer::GlesRenderer;
+#[cfg(feature = "gpu")]
+use translator::live_gpu_tick::{frame_from_camera_gray, run_tracker_with_acquire};
 
 #[cfg(feature = "gpu")]
 #[link(name = "EGL")]
@@ -108,7 +117,7 @@ fn gl_proc(libgles: *mut c_void, name: &str) -> *const c_void {
 }
 
 /// Build a `GlesRenderer` on the calling thread. The caller (Kotlin's GL
-/// render thread) must have created and made-current a GLES2 context on
+/// render thread) must have created and made-current a GLES3 context on
 /// the SurfaceView's surface first. Returns a raw `*mut GlesRenderer` as
 /// a `jlong`, or 0 on failure; release it with [`destroyGlRenderer`] on
 /// the same thread.
@@ -119,11 +128,19 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_createGlRender
     _class: JClass,
 ) -> jlong {
     let libgles = {
-        let name = CString::new("libGLESv2.so").unwrap();
-        unsafe { dlopen(name.as_ptr(), RTLD_NOW) }
+        // GLES3 first; fall back to GLES2 if libGLESv3.so isn't present
+        // (some older devices still ship it as libGLESv2.so only).
+        let v3 = CString::new("libGLESv3.so").unwrap();
+        let p = unsafe { dlopen(v3.as_ptr(), RTLD_NOW) };
+        if !p.is_null() {
+            p
+        } else {
+            let v2 = CString::new("libGLESv2.so").unwrap();
+            unsafe { dlopen(v2.as_ptr(), RTLD_NOW) }
+        }
     };
     if libgles.is_null() {
-        log::warn!("dlopen(libGLESv2.so) failed; relying on eglGetProcAddress only");
+        log::warn!("dlopen(libGLESv3/2.so) failed; relying on eglGetProcAddress only");
     }
     match GlesRenderer::new(|name| gl_proc(libgles, name)) {
         Ok(r) => Box::into_raw(Box::new(r)) as jlong,
@@ -148,11 +165,15 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_destroyGlRende
     }
 }
 
-/// GPU sibling of [`processFrame`]: runs the tracker step and presents
-/// the composite into the currently-bound framebuffer (the EGL window
-/// surface). Kotlin sets the viewport and calls `eglSwapBuffers` after.
-/// Returns the same packed result `jlong` (`composite_ok` reflects that a
-/// frame was drawn).
+/// Per-frame GPU path: borrow the camera's external-OES texture, GPU-render
+/// canonical luma into a small `Vec<u8>` for the tracker, then composite
+/// the camera + overlay into the EGL surface (FBO 0, sized
+/// `surface_w*surface_h`). On acquire/refresh, reads back full-res RGBA
+/// from the same texture and feeds the worker. Caller (Kotlin GL thread)
+/// follows with `eglSwapBuffers`.
+///
+/// Returns the packed result `jlong` (`composite_ok` reflects that a frame
+/// was drawn; 0 means the texture wasn't ready or process_frame failed).
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
@@ -160,75 +181,60 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processFrameGl
     env: JNIEnv,
     _class: JClass,
     pipeline_ptr: jlong,
-    frame_ptr: jlong,
     renderer_ptr: jlong,
+    camera_tex_id: jint,
+    canonical_w: jint,
+    canonical_h: jint,
+    surface_w: jint,
+    surface_h: jint,
+    uv_xform: jni::objects::JFloatArray,
     display_xform: jni::objects::JFloatArray,
-    display_crop_left: jint,
-    display_crop_top: jint,
-    display_crop_right: jint,
-    display_crop_bottom: jint,
-    visible_sensor_w: jint,
-    visible_sensor_h: jint,
-    full_view_w: jint,
-    full_view_h: jint,
     timestamp_ns: jlong,
 ) -> jlong {
-    if pipeline_ptr == 0 || frame_ptr == 0 || renderer_ptr == 0 {
+    if pipeline_ptr == 0
+        || renderer_ptr == 0
+        || camera_tex_id <= 0
+        || canonical_w <= 0
+        || canonical_h <= 0
+        || surface_w <= 0
+        || surface_h <= 0
+    {
         return 0;
     }
-    if visible_sensor_w <= 0 || visible_sensor_h <= 0 {
-        return 0;
-    }
-    // SAFETY: same contract as `processFrame` — Kotlin holds the wrapper
-    // Arcs alive across the call; the renderer ptr came from
-    // `createGlRenderer` and is used only on this (its owning) thread.
+    // SAFETY: Kotlin holds the wrapper Arc alive across the call; the
+    // renderer ptr came from `createGlRenderer` and is used only on this
+    // (its owning) thread.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveTrackerPipeline) };
-    let frame: Arc<LiveFrame> = unsafe {
-        Arc::increment_strong_count(frame_ptr as *const LiveFrame);
-        Arc::from_raw(frame_ptr as *const LiveFrame)
-    };
     let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
 
-    // Row-major 3x3 dst-pixel → clip transform (surface size + display
-    // rotation + FILL_CENTER scale), computed Kotlin-side per resize.
-    let mut display_xform_buf = [0f32; 9];
-    if env
-        .get_float_array_region(&display_xform, 0, &mut display_xform_buf)
-        .is_err()
+    let mut uv = [0f32; 9];
+    let mut dx = [0f32; 9];
+    if env.get_float_array_region(&uv_xform, 0, &mut uv).is_err()
+        || env
+            .get_float_array_region(&display_xform, 0, &mut dx)
+            .is_err()
     {
-        log::warn!("processFrameGl: bad display_xform array");
+        log::warn!("processFrameGl: bad xform array");
         return 0;
     }
 
-    let display_crop = NativeRect {
-        left: display_crop_left.max(0) as u32,
-        top: display_crop_top.max(0) as u32,
-        right: display_crop_right.max(0) as u32,
-        bottom: display_crop_bottom.max(0) as u32,
+    let cw = canonical_w as u32;
+    let ch = canonical_h as u32;
+
+    let Some(frame) = frame_from_camera_gray(renderer, camera_tex_id as u32, cw, ch, uv, dx) else {
+        return 0;
     };
 
-    let mut target = PresentTarget {
-        renderer,
-        display_xform: display_xform_buf,
-    };
-    let result = pipeline.process_frame(
-        &frame,
-        display_crop,
-        &mut target,
-        visible_sensor_w as u32,
-        visible_sensor_h as u32,
-        visible_sensor_w as u32,
-        visible_sensor_h as u32,
-        full_view_w.max(0) as u32,
-        full_view_h.max(0) as u32,
-        timestamp_ns as u64,
-    );
+    // read_camera_gray rebound its own R8 FBO. Re-target the EGL surface
+    // for the composite that's about to happen inside run_tracker_with_acquire.
+    renderer.bind_present_framebuffer(0, surface_w, surface_h);
 
-    match result {
+    match run_tracker_with_acquire(pipeline, renderer, &frame, cw, ch, dx, timestamp_ns as u64) {
         Ok(r) => pack_result(
             r.state,
             r.anchor_id,
             r.inliers,
+            r.scale,
             r.composite_bytes > 0,
             r.started_acquire,
             r.started_refresh,

@@ -6,9 +6,6 @@ pub mod bergamot;
 pub mod transliterate;
 pub mod uniffi_catalog;
 
-#[cfg(all(feature = "ppocr", target_os = "android"))]
-mod live_frame_jni;
-
 #[cfg(all(feature = "planar-tracker", target_os = "android"))]
 mod live_pipeline_jni;
 
@@ -26,11 +23,11 @@ pub(crate) fn init_logging() {
     // log at Debug ("got character l" per char) and bury anything
     // useful.
     let filter = android_logger::FilterBuilder::new()
-        .parse("info,translator=info,bindings=info")
+        .parse("info,translator=debug,bindings=info")
         .build();
     android_logger::init_once(
         android_logger::Config::default()
-            .with_max_level(log::LevelFilter::Info)
+            .with_max_level(log::LevelFilter::Debug)
             .with_filter(filter)
             .with_tag("rust-bindings"),
     );

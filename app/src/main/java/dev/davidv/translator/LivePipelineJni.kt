@@ -19,17 +19,17 @@ package dev.davidv.translator
 
 /** Single-call JNI fast-path for the live-camera planar OCR pipeline.
  *
- *  Per-frame entry point: [processFrameGl] runs the tracker step,
- *  presents the camera frame + resident overlay straight to the bound
- *  EGL surface via the native `GlesRenderer`, and dispatches an async
- *  acquire/refresh job inside Rust when needed — all in one JNI call.
- *  Returns a packed `jlong` carrying the per-frame result so Kotlin
- *  doesn't need a follow-up uniffi call for the common debug-pill update.
+ *  Per-frame entry point: [processFrameGl] borrows the camera's
+ *  `GL_TEXTURE_EXTERNAL_OES`, GPU-renders canonical luma into a small
+ *  `Vec<u8>` to feed the tracker, then presents the camera + overlay
+ *  composite straight to the bound EGL surface via the native
+ *  `GlesRenderer` — all in one JNI call. Acquire/refresh frames read
+ *  full-res RGBA back from the same texture inside the call.
  *
- *  Detailed async-job telemetry (rec counts, ms, cancel) is *not*
- *  packed into the per-frame return — poll
- *  `LivePlanarTracker.lastAcquireTelemetry()` when refreshing the
- *  debug pill.
+ *  Returns a packed `Long` so Kotlin doesn't need a follow-up uniffi
+ *  call for the debug-pill update. Detailed async-job telemetry (rec
+ *  counts, ms, cancel) is *not* packed in — poll
+ *  `LivePlanarTracker.lastAcquireTelemetry()` to refresh the pill.
  */
 internal object LivePipelineJni {
   init {
@@ -37,7 +37,7 @@ internal object LivePipelineJni {
   }
 
   /** Build a native `GlesRenderer` for the GPU present path. MUST be
-   *  called on the GL render thread with its EGL GLES2 context already
+   *  called on the GL render thread with its EGL GLES3 context already
    *  current. Returns a native pointer (`Long`), or 0 on failure.
    *  Release with [destroyGlRenderer] on the same thread. */
   @JvmStatic
@@ -48,30 +48,40 @@ internal object LivePipelineJni {
   @JvmStatic
   external fun destroyGlRenderer(rendererPtr: Long)
 
-  /** Runs the tracker step and presents the composite into the bound EGL
-   *  surface. Call on the GL render thread; follow with `eglSwapBuffers`.
-   *  Returns a packed `Long` (see [FrameResult.unpack]); `compositeOk`
-   *  means a frame was drawn. */
+  /** Per-frame GPU path. Call on the GL render thread; follow with
+   *  `eglSwapBuffers`. Returns a packed `Long` (see [FrameResult.unpack]);
+   *  `compositeOk` means a frame was drawn.
+   *
+   *  - `cameraTexId`: id of the `GL_TEXTURE_EXTERNAL_OES` the camera's
+   *    `SurfaceTexture` writes into. Must be valid for the duration of
+   *    the call.
+   *  - `canonicalWidth/Height`: small downscaled tracker frame size (the
+   *    R8 readback the GPU produces feeds the BRIEF tracker at these
+   *    dims). Capped to ~1000 on the long side; preserves surface aspect.
+   *  - `surfaceWidth/Height`: EGL window surface dims; viewport for the
+   *    final composite into FBO 0.
+   *  - `uvXform`: row-major 3×3 mapping display UV [0,1]² → external-OES
+   *    texture UV (sensor orientation). Derived from
+   *    `SurfaceTexture.getTransformMatrix`.
+   *  - `displayXform`: row-major 3×3 mapping canonical-pixel coords
+   *    (top-left origin, y-down) → clip space. */
   @JvmStatic
   external fun processFrameGl(
     pipelinePtr: Long,
-    framePtr: Long,
     rendererPtr: Long,
+    cameraTexId: Int,
+    canonicalWidth: Int,
+    canonicalHeight: Int,
+    surfaceWidth: Int,
+    surfaceHeight: Int,
+    uvXform: FloatArray,
     displayXform: FloatArray,
-    displayCropLeft: Int,
-    displayCropTop: Int,
-    displayCropRight: Int,
-    displayCropBottom: Int,
-    visibleSensorWidth: Int,
-    visibleSensorHeight: Int,
-    fullViewWidth: Int,
-    fullViewHeight: Int,
     timestampNs: Long,
   ): Long
 
   /** Decoded per-frame result (see Rust `pack_result` for the bit
-   *  layout). `compositeOk == false` means no bitmap was written; the
-   *  caller should not emit a new composited frame this tick. */
+   *  layout). `compositeOk == false` means no frame was drawn this
+   *  tick. */
   data class FrameResult(
     val state: uniffi.bindings.PlanarTrackerState,
     val anchorIdLow16: Long,
