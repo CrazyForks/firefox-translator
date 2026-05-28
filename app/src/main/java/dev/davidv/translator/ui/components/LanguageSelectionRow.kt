@@ -81,15 +81,10 @@ fun LanguageSelectionRow(
       showAutoOption = showAutoOption,
       onAutoSelected = { onMessage(TranslatorMessage.EnableAutoSource) },
     )
-    IconButton(
+    LanguageSwapButton(
       onClick = { onMessage(TranslatorMessage.SwapLanguages) },
       enabled = canSwap && !(isAutoSource && detectedInstalled == null),
-    ) {
-      Icon(
-        painterResource(id = R.drawable.compare),
-        contentDescription = "Reverse translation direction",
-      )
-    }
+    )
 
     LanguageSelector(
       selectedLanguage = to,
@@ -111,6 +106,19 @@ fun LanguageSelectionRow(
     } else {
       Spacer(modifier = Modifier.size(48.dp))
     }
+  }
+}
+
+@Composable
+fun LanguageSwapButton(
+  onClick: () -> Unit,
+  enabled: Boolean = true,
+) {
+  IconButton(onClick = onClick, enabled = enabled) {
+    Icon(
+      painterResource(id = R.drawable.compare),
+      contentDescription = "Reverse translation direction",
+    )
   }
 }
 

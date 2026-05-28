@@ -114,7 +114,13 @@ fun DocumentConfigureSheet(
           onLanguageSelected = { selectedFrom = it },
           modifier = Modifier.weight(1f),
         )
-        Text("→", modifier = Modifier.padding(horizontal = 8.dp))
+        LanguageSwapButton(
+          onClick = {
+            val previousFrom = selectedFrom
+            selectedFrom = selectedTo
+            selectedTo = previousFrom
+          },
+        )
         LanguageSelector(
           selectedLanguage = selectedTo,
           availableLanguages = availableLanguages,
