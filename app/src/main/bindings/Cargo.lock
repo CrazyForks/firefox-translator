@@ -2933,7 +2933,7 @@ dependencies = [
 [[package]]
 name = "translator"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#0a99a238c425bf4644565482af23c53e0b85f725"
+source = "git+https://github.com/DavidVentura/translator-rs.git#486afe72e42dee41017d3136a31d77f2605a8a6d"
 dependencies = [
  "cld2",
  "fax",

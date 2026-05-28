@@ -221,6 +221,13 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processFrameGl
     let cw = canonical_w as u32;
     let ch = canonical_h as u32;
 
+    // Overlay glyphs rasterize at half the display footprint: the canonical
+    // frame (tracker + OCR) stays cheap while the overlay renders near
+    // display res, with the composite warp absorbing the residual ~2x.
+    let canonical_long = cw.max(ch).max(1) as f32;
+    let surface_long = surface_w.max(surface_h).max(1) as f32;
+    pipeline.set_overlay_oversample(0.5 * surface_long / canonical_long);
+
     let Some(frame) = frame_from_camera_gray(renderer, camera_tex_id as u32, cw, ch, uv, dx) else {
         return 0;
     };
