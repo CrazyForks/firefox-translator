@@ -21,6 +21,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCaptureSession
+import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
 import android.hardware.camera2.CaptureResult
@@ -35,6 +36,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.camera2.interop.Camera2CameraControl
+import androidx.camera.camera2.interop.Camera2CameraInfo
 import androidx.camera.camera2.interop.Camera2Interop
 import androidx.camera.camera2.interop.CaptureRequestOptions
 import androidx.camera.core.Camera
@@ -112,6 +114,36 @@ import android.util.Size as AndroidSize
 private const val TAG = "LiveCameraScreen"
 private val TARGET_RESOLUTION = AndroidSize(1080, 1920)
 private val ANALYZER_RESOLUTION = AndroidSize(1080, 1920)
+
+/** Minimum change in target focus (diopters, 1/m) before we re-issue a
+ *  capture request. A deadband: holding the camera still leaves scale
+ *  essentially constant, so without it we'd churn `setCaptureRequestOptions`
+ *  every frame and chase sub-pixel scale jitter into focus jitter. */
+private const val FOCUS_UPDATE_DEADBAND_DIOPTERS = 0.5f
+
+/** EMA weight applied to the raw tracker `scale` before it drives focus.
+ *  Handheld jitter pushes per-frame scale around by a few % even on a
+ *  static scene; smoothing it absorbs that without adding meaningful lag
+ *  for real zoom-in/out motion. */
+private const val FOCUS_SCALE_EMA_ALPHA = 0.25f
+
+/** Minimum interval between focus-distance writes. Caps how often we
+ *  rebuild the repeating capture request from the steer path even when
+ *  the deadband is repeatedly crossed (slow drift across many frames). */
+private const val FOCUS_UPDATE_MIN_INTERVAL_MS = 750L
+
+/** Reference captured when the tracker-driven focus lock is established:
+ *  the focus distance ([refDiopters], 1/m) the lens was at and the
+ *  tracker scale ([refScale]) at that instant, tagged with the chain
+ *  [rootAnchorId] they belong to. Target focus for a later frame with
+ *  scale `s` is `refDiopters * s / refScale` — image scale is inversely
+ *  proportional to subject distance, and focus distance is in diopters
+ *  (1/m), so diopters track scale linearly. */
+private data class FocusBaseline(
+  val rootAnchorId: Long,
+  val refDiopters: Float,
+  val refScale: Float,
+)
 
 /** Show a small overlay pill in the corner reporting tracker state
  *  (Idle/Acquiring/Locked/Lost + inliers + last acquire's det/rec
@@ -320,6 +352,17 @@ private fun CameraSurface(
   // capture request and startFocusAndMetering silently no-ops.
   val focusLockedRef = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
 
+  // Reference scale/distance the focus lock was seeded from, plus the
+  // last focus distance we actually pushed to the lens. Both written
+  // from the trackerStatus collector and reset by tap-to-focus (all on
+  // the main thread, but held in atomics to keep the cross-effect reads
+  // honest). `null` baseline = not yet seeded; once seeded we stay in
+  // AF_MODE=OFF and steer focus from tracker scale until the next tap.
+  val focusBaselineRef =
+    remember { java.util.concurrent.atomic.AtomicReference<FocusBaseline?>(null) }
+  val heldFocusDiopters =
+    remember { java.util.concurrent.atomic.AtomicReference<Float?>(null) }
+
   val imageAnalysis =
     remember {
       // Cap analyzer source at ~1.5 MP regardless of device. The bigger the source,
@@ -400,64 +443,111 @@ private fun CameraSurface(
     }
   }
 
-  // Lock focus to the AF-converged distance once the tracker reaches
-  // LOCKED, release on any other state. Avoids AF excursions blurring
-  // frames mid-track (which kills BRIEF descriptors → tracker drops).
-  // The trade-off is accepted by design: progressive blur as the user
-  // physically moves the camera, OCR still works on slightly blurry
-  // frames, tracking stays glued. AF re-fires implicitly on the next
-  // re-acquire / tap-to-focus.
+  // Pin focus when the tracker first locks, then *steer* it from the
+  // tracked plane's scale instead of ever handing control back to AF.
+  // Autofocus excursions blur frames mid-track, which kills BRIEF
+  // descriptors and drops the tracker — and the old policy re-enabled
+  // continuous AF on every drop, so the camera hunted in a loop even on a
+  // perfectly still scene. Here AF stays OFF after the first lock: as the
+  // user nears/recedes the plane its scale changes, and we move
+  // LENS_FOCUS_DISTANCE to match (image scale ∝ 1/distance ∝ diopters).
+  // Focus is handed back to AF only on an explicit tap (see the tap
+  // handler). A full re-acquire restarts the scale baseline (new chain
+  // root) but the camera hasn't teleported, so we re-baseline at the
+  // focus distance we're already holding — no hunt, no jump.
   LaunchedEffect(camera, liveOcrEngine) {
     val engine = liveOcrEngine ?: return@LaunchedEffect
     val cam = camera ?: return@LaunchedEffect
+    // Closest the lens can focus, in diopters (1/m); 0 = infinity. Caps
+    // the steered distance so we never command past the optics.
+    val minFocusDiopters =
+      runCatching {
+        Camera2CameraInfo
+          .from(cam.cameraInfo)
+          .getCameraCharacteristic(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE)
+      }.getOrNull() ?: 10f
+
+    fun applyFocus(diopters: Float) {
+      // Explicitly hold AE = ON in the same bundle. Empirically some
+      // Camera2 implementations couple AF and AE state; if
+      // setCaptureRequestOptions replaces the bundle and AE wasn't named,
+      // AE can transiently destabilise. Tiny exposure shifts kill BRIEF
+      // descriptor matches (256 sign-bit comparisons; pixels near a
+      // comparison's zero crossing flip on sub-1/3-EV shifts), which
+      // manifested as sudden inlier collapses on frames where nothing
+      // actually moved.
+      Log.i(TAG, "applyFocus d=$diopters")
+      val opts =
+        CaptureRequestOptions.Builder()
+          .setCaptureRequestOption(
+            CaptureRequest.CONTROL_AF_MODE,
+            CameraMetadata.CONTROL_AF_MODE_OFF,
+          )
+          .setCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE, diopters)
+          .setCaptureRequestOption(
+            CaptureRequest.CONTROL_AE_MODE,
+            CameraMetadata.CONTROL_AE_MODE_ON,
+          )
+          .build()
+      Camera2CameraControl.from(cam.cameraControl).captureRequestOptions = opts
+    }
+
+    var smoothedScale = Float.NaN
+    var lastSeenRoot = -1L
+    var lastFocusUpdateMs = 0L
     engine.trackerStatus.collect { status ->
-      val shouldLock = status.state == uniffi.bindings.PlanarTrackerState.LOCKED
-      if (shouldLock && !focusLockedRef.get()) {
-        val d = latestFocusedDistance.value ?: return@collect
-        try {
-          val ctrl = Camera2CameraControl.from(cam.cameraControl)
-          // Explicitly hold AE = ON in the same bundle. Empirically
-          // some Camera2 implementations couple AF and AE state; if
-          // `setCaptureRequestOptions` replaces the bundle and AE
-          // wasn't named, AE can transiently destabilise. Tiny
-          // exposure shifts kill BRIEF descriptor matches (256
-          // sign-bit comparisons; pixels near a comparison's zero
-          // crossing flip on sub-1/3-EV shifts), which manifested as
-          // sudden inlier collapses on frames where nothing actually
-          // moved.
-          val opts =
-            CaptureRequestOptions.Builder()
-              .setCaptureRequestOption(
-                CaptureRequest.CONTROL_AF_MODE,
-                CameraMetadata.CONTROL_AF_MODE_OFF,
-              )
-              .setCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE, d)
-              .setCaptureRequestOption(
-                CaptureRequest.CONTROL_AE_MODE,
-                CameraMetadata.CONTROL_AE_MODE_ON,
-              )
-              .build()
-          ctrl.captureRequestOptions = opts
-          focusLockedRef.set(true)
-          Log.i(TAG, "AF locked at distance=$d (tracker LOCKED)")
-        } catch (e: Throwable) {
-          Log.w(TAG, "AF lock failed", e)
+      if (status.state != uniffi.bindings.PlanarTrackerState.LOCKED) {
+        smoothedScale = Float.NaN
+        lastSeenRoot = -1L
+        return@collect
+      }
+      val raw = if (status.scale > 0f) status.scale else 1f
+      smoothedScale =
+        if (smoothedScale.isNaN() || status.rootAnchorId != lastSeenRoot) {
+          raw
+        } else {
+          smoothedScale + FOCUS_SCALE_EMA_ALPHA * (raw - smoothedScale)
         }
-      } else if (!shouldLock && focusLockedRef.get()) {
-        try {
-          val ctrl = Camera2CameraControl.from(cam.cameraControl)
-          val opts =
-            CaptureRequestOptions.Builder()
-              .setCaptureRequestOption(
-                CaptureRequest.CONTROL_AF_MODE,
-                CameraMetadata.CONTROL_AF_MODE_CONTINUOUS_PICTURE,
-              )
-              .build()
-          ctrl.captureRequestOptions = opts
-          focusLockedRef.set(false)
-          Log.i(TAG, "AF released (tracker state=${status.state})")
-        } catch (e: Throwable) {
-          Log.w(TAG, "AF release failed", e)
+      lastSeenRoot = status.rootAnchorId
+      val scale = smoothedScale
+
+      val existing = focusBaselineRef.get()
+      if (existing == null) {
+        // First lock since startup or a tap: seed from whatever distance
+        // AF converged to while it was still running. Wait for it.
+        val d0 = latestFocusedDistance.value ?: return@collect
+        runCatching {
+          applyFocus(d0)
+          focusBaselineRef.set(FocusBaseline(status.rootAnchorId, d0, scale))
+          heldFocusDiopters.set(d0)
+          focusLockedRef.set(true)
+          Log.i(TAG, "focus pinned d0=$d0 s0=$scale root=${status.rootAnchorId}")
+        }.onFailure { Log.w(TAG, "focus pin failed", it) }
+        return@collect
+      }
+
+      val baseline =
+        if (status.rootAnchorId != existing.rootAnchorId) {
+          val held = heldFocusDiopters.get() ?: existing.refDiopters
+          FocusBaseline(status.rootAnchorId, held, scale).also {
+            focusBaselineRef.set(it)
+            Log.i(TAG, "focus re-baseline root=${status.rootAnchorId} held=$held s0=$scale")
+          }
+        } else {
+          existing
+        }
+
+      val target =
+        (baseline.refDiopters * scale / baseline.refScale).coerceIn(0f, minFocusDiopters)
+      val prev = heldFocusDiopters.get()
+      if (prev == null || kotlin.math.abs(target - prev) > FOCUS_UPDATE_DEADBAND_DIOPTERS) {
+        val nowMs = android.os.SystemClock.uptimeMillis()
+        if (nowMs - lastFocusUpdateMs >= FOCUS_UPDATE_MIN_INTERVAL_MS) {
+          lastFocusUpdateMs = nowMs
+          runCatching {
+            applyFocus(target)
+            heldFocusDiopters.set(target)
+          }.onFailure { Log.w(TAG, "focus steer failed", it) }
         }
       }
     }
@@ -619,19 +709,20 @@ private fun CameraSurface(
               )
             val cam = camera ?: return true
             // If the tracker-driven lock is currently pinning focus via
-            // Camera2 interop (AF_MODE=OFF + fixed LENS_FOCUS_DISTANCE),
+            // Camera2 interop (AF_MODE=OFF + steered LENS_FOCUS_DISTANCE),
             // startFocusAndMetering would be silently overridden on the
             // next capture request. Clear the interop bundle first, drop
-            // the latched distance so the lock effect waits for AF to
-            // re-converge at the tapped point before re-pinning, and
-            // reset the lock flag so the next LOCKED emission can fire
-            // the lock path again.
+            // the latched distance and the scale baseline so the focus
+            // controller waits for AF to re-converge at the tapped point
+            // before re-seeding, and reset the lock flag.
             if (focusLockedRef.getAndSet(false)) {
               runCatching {
                 Camera2CameraControl.from(cam.cameraControl).captureRequestOptions =
                   CaptureRequestOptions.Builder().build()
               }.onFailure { Log.w(TAG, "clear interop options failed", it) }
               latestFocusedDistance.value = null
+              focusBaselineRef.set(null)
+              heldFocusDiopters.set(null)
             }
             // Without a PreviewView there's no built-in
             // MeteringPointFactory, so we hand-build one against the
@@ -679,17 +770,6 @@ private fun CameraSurface(
           )
         camera = boundCamera
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
-        // Bias auto-exposure toward shorter exposure / lower ISO. The
-        // camera's AE algorithm sees this as "user wants ~2/3 stop
-        // darker" and tends to shorten shutter (less motion blur on
-        // handheld pans) without us going full manual. -2 here is in
-        // device step units, usually 1/3 EV per step. If a device's
-        // range doesn't include -2 the API clamps silently.
-        try {
-          boundCamera.cameraControl.setExposureCompensationIndex(-4)
-        } catch (e: Exception) {
-          Log.w(TAG, "exposure compensation not supported", e)
-        }
       } catch (e: Exception) {
         Log.e(TAG, "Failed to bind camera", e)
       }

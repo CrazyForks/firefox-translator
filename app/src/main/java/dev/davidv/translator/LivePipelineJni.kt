@@ -76,6 +76,7 @@ internal object LivePipelineJni {
     val state: uniffi.bindings.PlanarTrackerState,
     val anchorIdLow16: Long,
     val inliers: Int,
+    val scale: Float,
     val compositeOk: Boolean,
     val startedAcquire: Boolean,
     val startedRefresh: Boolean,
@@ -95,7 +96,16 @@ internal object LivePipelineJni {
         val anchorLo = (packed ushr 29) and 0xFFFFL
         val startedAcquire = ((packed ushr 28) and 0x1L) != 0L
         val startedRefresh = ((packed ushr 27) and 0x1L) != 0L
-        return FrameResult(state, anchorLo, inliers, compositeOk, startedAcquire, startedRefresh)
+        val scale = (packed and 0x1FFFFFL).toFloat() / 1024f
+        return FrameResult(
+          state,
+          anchorLo,
+          inliers,
+          scale,
+          compositeOk,
+          startedAcquire,
+          startedRefresh,
+        )
       }
     }
   }

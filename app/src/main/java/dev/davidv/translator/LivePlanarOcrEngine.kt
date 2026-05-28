@@ -86,7 +86,17 @@ private const val FOCUS_RESET_THRESHOLD: Float = 0.05f
 data class TrackerStatus(
   val state: PlanarTrackerState,
   val anchorId: Long,
+  /** Low-16 id of the chain root, straight from the per-frame result
+   *  and never overwritten by acquire telemetry (unlike [anchorId],
+   *  which the debug pill repoints at the last acquired anchor). The
+   *  focus controller watches this to detect a full re-acquire — a new
+   *  root means the scale baseline reset and focus must re-baseline. */
+  val rootAnchorId: Long,
   val inliers: Int,
+  /** Magnification of the tracked plane vs the chain root's acquire
+   *  frame; `1.0` at acquire, larger as the camera nears the plane.
+   *  `0` when not LOCKED. Drives the focus-distance estimate. */
+  val scale: Float,
   val lastAcquireDet: Int,
   val lastAcquireRecOk: Int,
   val lastAcquireRecEmpty: Int,
@@ -116,7 +126,9 @@ class LivePlanarOcrEngine(
       TrackerStatus(
         state = PlanarTrackerState.IDLE,
         anchorId = 0L,
+        rootAnchorId = 0L,
         inliers = 0,
+        scale = 0f,
         lastAcquireDet = -1,
         lastAcquireRecOk = 0,
         lastAcquireRecEmpty = 0,
@@ -302,7 +314,9 @@ class LivePlanarOcrEngine(
         _trackerStatus.value.copy(
           state = result.state,
           anchorId = result.anchorIdLow16,
+          rootAnchorId = result.anchorIdLow16,
           inliers = result.inliers,
+          scale = result.scale,
         )
       val telemetry =
         try {
