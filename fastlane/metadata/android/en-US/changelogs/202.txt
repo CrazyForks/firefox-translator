@@ -1,0 +1,4 @@
+- Fix image cropping crash
+- Fix for Android 6 crashing
+- Improve performance of live translation
+- Improve UI/UX for document translation

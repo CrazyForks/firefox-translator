@@ -31,8 +31,8 @@ android {
     applicationId = "dev.davidv.translator"
     minSdk = 23
     targetSdk = 34
-    versionCode = 19
-    versionName = "0.6.1"
+    versionCode = 20
+    versionName = "0.6.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
