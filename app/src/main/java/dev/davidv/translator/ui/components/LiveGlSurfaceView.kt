@@ -64,6 +64,21 @@ class LiveGlSurfaceView(context: Context) :
   @Volatile
   var pipelinePtr: Long = 0L
 
+  /** Sensor → display rotation in CW 90° quadrants (0/1/2/3 =
+   *  0°/90°/180°/270°), derived from `CameraInfo.sensorRotationDegrees`
+   *  once the camera is bound. Defaults to 1 (90°), matching the
+   *  common back-camera-on-portrait-phone case so the very first few
+   *  frames before the camera binds still render upright. */
+  @Volatile
+  var rotQuadrant: Int = 1
+
+  /** Set the sensor mount rotation from a degrees value (0/90/180/270).
+   *  Bound to CameraInfo.sensorRotationDegrees in LiveCameraScreen. */
+  fun setCameraOrientationDegrees(degrees: Int) {
+    val norm = ((degrees % 360) + 360) % 360
+    rotQuadrant = norm / 90
+  }
+
   private var glThread: GlThread? = null
 
   init {
@@ -250,7 +265,7 @@ class LiveGlSurfaceView(context: Context) :
         val cbh = camBufH
         if (sw <= 0 || sh <= 0 || pipeline == 0L || cbw <= 0 || cbh <= 0) continue
         val (cw, ch) = canonicalDims(sw, sh)
-        val uv = computeUvMat(cbw, cbh, cw, ch)
+        val uv = computeUvMat(cbw, cbh, cw, ch, rotQuadrant)
         val dx = displayXform(cw, ch)
         val packed =
           LivePipelineJni.processFrameGl(
@@ -408,7 +423,8 @@ class LiveGlSurfaceView(context: Context) :
      *  vertex space (0..1, 0..1) to the external-OES texture's sensor uv,
      *  encoding:
      *
-     *    - sensor → display rotation ([ROT_QUADRANT]: 0/90/180/270 CW)
+     *    - sensor → display rotation (`rotQuadrant`: 0/90/180/270 CW),
+     *      from `CameraInfo.sensorRotationDegrees` once the camera binds
      *    - aspect-fill cropping (canonical aspect vs camera aspect): the
      *      narrower axis is shown 100%, the wider axis is cropped to
      *      match canonical aspect
@@ -425,8 +441,9 @@ class LiveGlSurfaceView(context: Context) :
       camH: Int,
       canonicalW: Int,
       canonicalH: Int,
+      rotQuadrant: Int,
     ): FloatArray {
-      val q = ((ROT_QUADRANT % 4) + 4) % 4
+      val q = ((rotQuadrant % 4) + 4) % 4
       val odd = q == 1 || q == 3
       val cw = camW.toFloat().coerceAtLeast(1f)
       val ch = camH.toFloat().coerceAtLeast(1f)
@@ -498,11 +515,6 @@ class LiveGlSurfaceView(context: Context) :
       )
     }
 
-    /** Sensor → display rotation, in CW 90° quadrants (0/1/2/3 =
-     *  0°/90°/180°/270°). Back cameras on portrait phones are usually
-     *  mounted at 90° CW, matching the Linux default. Per-device tuning
-     *  via `Camera.sensorOrientation` if needed. */
-    private const val ROT_QUADRANT: Int = 1
     private const val FLIP_U: Boolean = true
     private const val FLIP_V: Boolean = false
   }

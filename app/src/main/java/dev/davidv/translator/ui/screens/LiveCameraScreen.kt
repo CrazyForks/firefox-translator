@@ -690,6 +690,11 @@ private fun CameraSurface(
           )
         camera = boundCamera
         hasFlashUnit = boundCamera.cameraInfo.hasFlashUnit()
+        // Sensor mount angle (CW degrees the sensor is rotated vs the
+        // natural display orientation). Plumbed into the UV xform so the
+        // composite is upright on devices with a non-90° mount, instead
+        // of hard-coding the back-camera-on-portrait-phone case.
+        liveSurfaceView.setCameraOrientationDegrees(boundCamera.cameraInfo.sensorRotationDegrees)
       } catch (e: Exception) {
         Log.e(TAG, "Failed to bind camera", e)
       }
