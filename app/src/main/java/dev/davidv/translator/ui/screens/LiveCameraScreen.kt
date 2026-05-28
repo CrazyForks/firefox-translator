@@ -670,6 +670,7 @@ private fun CameraSurface(
         // consumer; no `ImageAnalysis` stream, no per-frame CPU bytes.
         preview.setSurfaceProvider(cameraSurfaceExecutor) { request ->
           val resolution = request.resolution
+          Log.i(TAG, "Preview SurfaceRequest resolution=${resolution.width}x${resolution.height}")
           liveSurfaceView.setCameraBufferSize(resolution.width, resolution.height)
           val surface = liveSurfaceView.awaitCameraSurface()
           if (surface == null) {

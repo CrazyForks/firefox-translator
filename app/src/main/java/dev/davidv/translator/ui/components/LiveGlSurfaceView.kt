@@ -160,6 +160,14 @@ class LiveGlSurfaceView(context: Context) :
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var rendererPtr: Long = 0L
     private var cameraTexId: Int = 0
+
+    // Guards the (surfaceTexture, camBufW, camBufH) trio so the camera's
+    // default buffer size is applied exactly once whichever thread wins:
+    // CameraX's SurfaceProvider thread (`setCameraBufferSize`) or the GL
+    // thread that mints the SurfaceTexture. If `setDefaultBufferSize` is
+    // missed, the camera HAL falls back to its minimum stream size (176x144)
+    // and the whole preview + OCR readback come through as garbage.
+    private val stLock = Object()
     private var surfaceTexture: SurfaceTexture? = null
 
     @Volatile
@@ -192,11 +200,14 @@ class LiveGlSurfaceView(context: Context) :
       w: Int,
       h: Int,
     ) {
-      camBufW = w
-      camBufH = h
       // SurfaceTexture must be touched after creation, on any thread (it's
-      // documented thread-safe for setDefaultBufferSize).
-      surfaceTexture?.setDefaultBufferSize(w, h)
+      // documented thread-safe for setDefaultBufferSize). If the GL thread
+      // hasn't minted it yet, `run()` applies these dims when it does.
+      synchronized(stLock) {
+        camBufW = w
+        camBufH = h
+        surfaceTexture?.setDefaultBufferSize(w, h)
+      }
     }
 
     fun shutdown() {
@@ -233,7 +244,11 @@ class LiveGlSurfaceView(context: Context) :
         teardownEgl()
         return
       }
-      val st = SurfaceTexture(cameraTexId).also { surfaceTexture = it }
+      val st = SurfaceTexture(cameraTexId)
+      synchronized(stLock) {
+        surfaceTexture = st
+        if (camBufW > 0 && camBufH > 0) st.setDefaultBufferSize(camBufW, camBufH)
+      }
       // Frame-available wakes the GL loop. We pass `null` for the handler
       // so it fires on a binder thread; the callback just flips a flag.
       st.setOnFrameAvailableListener {
