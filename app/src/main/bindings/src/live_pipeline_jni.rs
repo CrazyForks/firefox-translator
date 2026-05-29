@@ -84,7 +84,9 @@ use std::sync::Arc;
 #[cfg(feature = "gpu")]
 use translator::gl_renderer::{ExternalPresentTarget, GlesRenderer, PresentContent};
 #[cfg(feature = "gpu")]
-use translator::live_frame::LiveFrame;
+use translator::live_frame::{aligned_det_dims, LiveFrame, OrientedImage};
+#[cfg(feature = "gpu")]
+use translator::ocr::Rect;
 #[cfg(feature = "gpu")]
 use translator::live_screen::{LiveScreenPipeline, MonitorAction, ScreenFrameResult};
 #[cfg(feature = "gpu")]
@@ -210,6 +212,16 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_setRendererOve
     renderer.set_overlay_alpha(alpha);
 }
 
+/// Row-major 3×3 mapping `w×h` dst-pixel coords → clip `[-1,1]` (the
+/// resolution-independent normalize `read_camera_*` wants as `dst_to_clip`;
+/// orientation/crop live in the `uv` transform, not here).
+#[cfg(feature = "gpu")]
+fn clip_xform(w: u32, h: u32) -> [f32; 9] {
+    let w = w.max(1) as f32;
+    let h = h.max(1) as f32;
+    [2.0 / w, 0.0, -1.0, 0.0, 2.0 / h, -1.0, 0.0, 0.0, 1.0]
+}
+
 /// Pack a [`ScreenFrameResult`] into a jlong: `[did_detect:1][rec_ok:16][detected:16][overlay:16]`.
 #[cfg(feature = "gpu")]
 fn pack_screen_result(r: &ScreenFrameResult) -> jlong {
@@ -278,22 +290,48 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenF
     // per present pixel (no extra 0.5 like the camera, whose canonical ≪ surface).
     pipeline.set_overlay_oversample(surface_long / canonical_long);
 
-    // Read the captured canonical RGBA off the external texture for OCR — at
-    // full capture res so recognition crops full-res strips (detection
-    // internally downsamples to det_max_pixels).
+    // Render the two OCR inputs directly on the GPU (one shader pass each), at
+    // the sizes detection and recognition actually want — no full-res RGBA
+    // readback + CPU resize/convert chain. Detector gray at the 32-aligned size
+    // (its `resize_to_det_aligned` becomes a no-op); recognition RGBA at half
+    // canonical. `display_xform(w,h)` just sizes the FBO; orientation is in `uv`.
     renderer.set_camera_external(camera_tex_id as u32, uv);
+    let (det_w, det_h) = aligned_det_dims(cw, ch, pipeline.det_max_pixels());
+    let (rec_w, rec_h) = ((cw / 2).max(1), (ch / 2).max(1));
     let t_readback = std::time::Instant::now();
-    let Some(rgba) = renderer.read_camera_rgba(cw, ch, &dx) else {
+    let Some(det_gray) = renderer.read_camera_gray(det_w, det_h, &clip_xform(det_w, det_h))
+    else {
         return 0;
     };
+    let Some(rec_rgba) = renderer.read_camera_rgba(rec_w, rec_h, &clip_xform(rec_w, rec_h))
+    else {
+        return 0;
+    };
+    let crop = Rect {
+        left: 0,
+        top: 0,
+        right: cw,
+        bottom: ch,
+    };
+    let oriented = match OrientedImage::from_gpu_split(
+        det_gray, det_w, det_h, &rec_rgba, rec_w, rec_h, cw, ch, crop,
+    ) {
+        Ok(o) => o,
+        Err(e) => {
+            log::warn!("[screen] from_gpu_split failed: {e:?}");
+            return 0;
+        }
+    };
     log::info!(
-        "[screen] readback {}x{} {:.0}ms",
-        cw,
-        ch,
+        "[screen] readback det {}x{} + rec {}x{} {:.0}ms",
+        det_w,
+        det_h,
+        rec_w,
+        rec_h,
         t_readback.elapsed().as_secs_f64() * 1000.0,
     );
     let frame = Arc::new(LiveFrame::new(0));
-    frame.reset_owned(rgba, cw, ch, 0);
+    frame.reset_oriented_split(oriented, None);
 
     // Present overlay-only into the bound framebuffer (the caller's half-res
     // PBuffer).
