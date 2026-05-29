@@ -24,9 +24,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.projection.MediaProjection
@@ -35,11 +33,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.DisplayMetrics
 import android.util.Log
-import android.view.Gravity
-import android.view.View
 import android.view.WindowManager
-import android.widget.FrameLayout
-import android.widget.ImageView
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorApplication
 import kotlinx.coroutines.CoroutineScope
@@ -65,7 +59,6 @@ class ScreenTranslateService : Service() {
   private var virtualDisplay: VirtualDisplay? = null
   private var screenTracker: uniffi.bindings.LiveScreenTracker? = null
   private var overlayView: ScreenOverlayView? = null
-  private var acquireButton: View? = null
   private var worker: ScreenCaptureGlWorker? = null
   private var windowManager: WindowManager? = null
   private var stopped = false
@@ -205,7 +198,6 @@ class ScreenTranslateService : Service() {
       params.alpha = 0.79f
     }
     wm.addView(view, params)
-    addAcquireButton(wm, overlayType)
 
     val pipelinePtr = tracker.rawAddressForJni().toLong()
     val captureWorker =
@@ -243,49 +235,6 @@ class ScreenTranslateService : Service() {
         )
       Log.i(TAG, "VirtualDisplay created ${w}x$h, surface=$surface")
     }
-  }
-
-  /** Bottom-center manual acquire button (test harness). FLAG_SECURE so it's
-   *  excluded from the capture; touchable, but NOT_TOUCH_MODAL so touches
-   *  outside it pass through to the app. */
-  private fun addAcquireButton(
-    wm: WindowManager,
-    overlayType: Int,
-  ) {
-    val density = resources.displayMetrics.density
-    val sizePx = (56 * density).toInt()
-    val padPx = (12 * density).toInt()
-    val icon =
-      ImageView(this).apply {
-        setImageResource(R.drawable.activity_zone)
-        setColorFilter(Color.WHITE)
-        setPadding(padPx, padPx, padPx, padPx)
-      }
-    val button =
-      FrameLayout(this).apply {
-        background =
-          GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.argb(220, 0, 0, 0))
-          }
-        addView(icon, FrameLayout.LayoutParams(sizePx, sizePx))
-        setOnClickListener { worker?.requestAcquire() }
-      }
-    val params =
-      WindowManager.LayoutParams(
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        overlayType,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-          WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-          WindowManager.LayoutParams.FLAG_SECURE,
-        PixelFormat.TRANSLUCENT,
-      )
-    params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-    params.y = (24 * density).toInt()
-    wm.addView(button, params)
-    acquireButton = button
   }
 
   private fun startForegroundNotification() {
@@ -345,8 +294,6 @@ class ScreenTranslateService : Service() {
     val wm = windowManager
     overlayView?.let { runCatching { wm?.removeView(it) } }
     overlayView = null
-    acquireButton?.let { runCatching { wm?.removeView(it) } }
-    acquireButton = null
     runCatching { screenTracker?.clearOverlay() }
     runCatching { screenTracker?.destroy() }
     screenTracker = null

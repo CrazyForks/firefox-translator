@@ -56,23 +56,18 @@ class ScreenCaptureGlWorker(
   @Volatile
   var onFrameResult: ((Long) -> Unit)? = null
 
-  // OCR canonical == present == half the display. read_camera_rgba renders
-  // into a half-res FBO (cheap ~4.6MB readback) which rec crops from (det
-  // downsamples further); the overlay is presented at the same res, so the
-  // Canvas view does a single clean 2× upscale to the display rather than a
-  // non-integer double-rescale (sharper, less blur).
+  // OCR canonical is half the display: read_camera_rgba renders into a half-res
+  // FBO (cheap ~4.6MB readback) which rec crops from (det downsamples further).
+  // The overlay PRESENT, though, runs at full display res (pw/ph) so glyphs
+  // rasterize at oversample=2 and the Canvas draws the pill bitmap 1:1 instead
+  // of upscaling a half-res render (which looked pixelated). The present
+  // readback is full-res but happens once per acquire, not per frame.
   private val cw = (displayWidth / 2).coerceAtLeast(1)
   private val ch = (displayHeight / 2).coerceAtLeast(1)
-  private val pw = cw
-  private val ph = ch
+  private val pw = displayWidth.coerceAtLeast(1)
+  private val ph = displayHeight.coerceAtLeast(1)
 
   private var glThread: GlThread? = null
-
-  /** Manual trigger: run one clear → wait-for-clean-frame → acquire/rec cycle.
-   *  (Test harness; the auto cadence is off.) */
-  fun requestAcquire() {
-    glThread?.requestAcquire()
-  }
 
   @Volatile
   private var sourceSurface: Surface? = null
@@ -151,16 +146,6 @@ class ScreenCaptureGlWorker(
       )
     private var bitmapIdx = 0
 
-    @Volatile
-    private var acquireRequested = false
-
-    fun requestAcquire() {
-      synchronized(lock) {
-        acquireRequested = true
-        lock.notifyAll()
-      }
-    }
-
     fun setSourceBufferSize(
       w: Int,
       h: Int,
@@ -223,27 +208,25 @@ class ScreenCaptureGlWorker(
       Log.i(TAG, "screen-translate GL ready, canonical ${cw}x$ch, pipelinePtr=$pipelinePtr")
 
       val dx = LiveGlSurfaceView.displayXform(cw, ch)
-      // Manual single-shot acquire: on request, clear the overlay, drain a few
-      // frames so the overlay-free composition reaches the capture, then run
-      // one detect+rec on that clean frame and present the new overlay.
-      var acquiring = false
-      var clearDeadlineNs = 0L
+      // Auto change detection (SCREEN_CHANGE_DETECTION.md v1): per captured frame
+      // the native monitor computes a coarse-gray diff (pill regions masked out)
+      // and decides hide (movement) / acquire (settled) / nothing. On acquire we
+      // detect/rec/present synchronously right here. `wantsTick` means a settle
+      // deadline is armed, so we poll on a timer (the mirror stops emitting frames
+      // once motion stops).
+      var wantsTick = false
       while (true) {
         var hadFrame = false
-        var startAcquire = false
         synchronized(lock) {
-          if (acquiring) {
-            // Timed wait while settling: the VirtualDisplay only emits frames on
-            // change, so the clear yields ~one frame and then nothing. Wake
-            // periodically to hit the settle deadline instead of stalling.
-            if (running && !frameAvailable && !acquireRequested) {
+          if (wantsTick) {
+            if (running && !frameAvailable) {
               try {
-                lock.wait(20)
+                lock.wait(POLL_MS)
               } catch (_: InterruptedException) {
               }
             }
           } else {
-            while (running && !frameAvailable && !acquireRequested) {
+            while (running && !frameAvailable) {
               try {
                 lock.wait()
               } catch (_: InterruptedException) {
@@ -253,10 +236,6 @@ class ScreenCaptureGlWorker(
           if (!running) return@synchronized
           hadFrame = frameAvailable
           frameAvailable = false
-          if (acquireRequested && !acquiring) {
-            acquireRequested = false
-            startAcquire = true
-          }
         }
         if (!running) break
 
@@ -268,48 +247,76 @@ class ScreenCaptureGlWorker(
         val pipeline = pipelinePtr
         if (pipeline == 0L) continue
 
-        if (startAcquire) {
-          // Clear the displayed overlay, then settle for a fixed time so the
-          // overlay-free composition reaches the VirtualDisplay (frame-count
-          // waits stall: the producer only emits on change).
-          acquiring = true
-          clearDeadlineNs = System.nanoTime() + SETTLE_NS
-          onClearOverlay()
-          Log.i(TAG, "acquire: overlay cleared, settling")
-          continue
-        }
-        if (!acquiring) continue
-        if (System.nanoTime() < clearDeadlineNs) continue
+        // Feed the native change-detector a captured frame (coarse gray diff) or
+        // a timed tick, and act on its decision.
+        val now = System.nanoTime()
+        val ret =
+          if (hadFrame) {
+            val uv = uvFromSurfaceTexture(stMatrix)
+            LivePipelineJni.screenMonitorFrameGl(pipeline, rendererPtr, sourceTexId, cw, ch, uv, now)
+          } else {
+            LivePipelineJni.screenMonitorTick(pipeline, now)
+          }
+        wantsTick = (ret and MONITOR_WANTS_TICK) != 0
+        when (ret and MONITOR_ACTION_MASK) {
+          MONITOR_ACTION_HIDE -> onClearOverlay()
+          MONITOR_ACTION_ACQUIRE -> {
+            // Settled: the overlay is already hidden (we hid it on movement, or
+            // it was never shown), so the current texture is a clean, settled
+            // frame — detect/rec/translate on it and composite into the PBuffer.
+            val uv = uvFromSurfaceTexture(stMatrix)
+            val packed =
+              LivePipelineJni.processScreenFrameGl(
+                pipeline,
+                rendererPtr,
+                sourceTexId,
+                cw,
+                ch,
+                pw,
+                ph,
+                uv,
+                dx,
+                st.timestamp,
+              )
+            readBuffer.position(0)
+            GLES20.glReadPixels(0, 0, pw, ph, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, readBuffer)
+            readBuffer.position(0)
+            val bmp = bitmaps[bitmapIdx]
+            bmp.copyPixelsFromBuffer(readBuffer)
+            bitmapIdx = bitmapIdx xor 1
 
-        // The texture now holds an overlay-free frame → detect/rec on it and
-        // present the new overlay into the PBuffer.
-        val uv = uvFromSurfaceTexture(stMatrix)
-        val packed =
-          LivePipelineJni.processScreenFrameGl(
-            pipeline,
-            rendererPtr,
-            sourceTexId,
-            cw,
-            ch,
-            pw,
-            ph,
-            uv,
-            dx,
-            st.timestamp,
-          )
-        // The overlay-only present drew into the half-res PBuffer (FBO 0). Read
-        // it back and hand it to the Canvas view. glReadPixels is bottom-up; the
-        // view flips it vertically when drawing.
-        readBuffer.position(0)
-        GLES20.glReadPixels(0, 0, pw, ph, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, readBuffer)
-        readBuffer.position(0)
-        val bmp = bitmaps[bitmapIdx]
-        bmp.copyPixelsFromBuffer(readBuffer)
-        bitmapIdx = bitmapIdx xor 1
-        onOverlayBitmap(bmp)
-        acquiring = false
-        Log.i(TAG, "acquire done packed=$packed")
-        onFrameResult?.invoke(packed)
+            // The OCR blocked this thread for seconds; the screen may have moved
+            // underneath us (frames queued while we were busy). Drain to the
+            // latest frame — still pill-free, the new overlay isn't shown yet —
+            // and validate against the frame the OCR ran on. If it changed, drop
+            // the stale overlay and re-acquire instead of flashing it on.
+            if (frameAvailable) {
+              synchronized(lock) { frameAvailable = false }
+              st.updateTexImage()
+              st.getTransformMatrix(stMatrix)
+            }
+            val uvNow = uvFromSurfaceTexture(stMatrix)
+            val valid =
+              LivePipelineJni.screenMonitorValidateClean(
+                pipeline,
+                rendererPtr,
+                sourceTexId,
+                cw,
+                ch,
+                uvNow,
+                System.nanoTime(),
+              )
+            wantsTick = (valid and MONITOR_WANTS_TICK) != 0
+            if ((valid and MONITOR_ACTION_MASK) == MONITOR_ACTION_HIDE) {
+              onClearOverlay()
+              Log.i(TAG, "acquire stale (screen moved during OCR) → re-acquire")
+            } else {
+              onOverlayBitmap(bmp)
+              Log.i(TAG, "settled → acquire done packed=$packed")
+              onFrameResult?.invoke(packed)
+            }
+          }
+        }
       }
 
       surfaceTexture?.release()
@@ -406,11 +413,17 @@ class ScreenCaptureGlWorker(
      *  alpha). 1.0 = as opaque as the touch cap allows; lower for see-through. */
     private const val OVERLAY_ALPHA = 1.0f
 
-    /** Settle time after clearing the overlay before grabbing the clean frame
-     *  for an acquire — covers SurfaceFlinger → VirtualDisplay latency. A fixed
-     *  time, not a frame count: the mirror only emits frames on change, so the
-     *  clear yields ~one frame and a frame-count wait would stall. */
-    private const val SETTLE_NS = 150_000_000L
+    /** Poll interval while a settle deadline is armed (the monitor wants ticks):
+     *  the mirror stops emitting frames once motion stops, so we wake on a timer
+     *  to hit the deadline. */
+    private const val POLL_MS = 30L
+
+    // Packed result of the native screen monitor (see LivePipelineJni).
+    private const val MONITOR_ACTION_MASK = 0x3
+    private const val MONITOR_ACTION_HIDE = 1
+    private const val MONITOR_ACTION_ACQUIRE = 2
+    private const val MONITOR_WANTS_TICK = 0x100
+
     private const val GL_TEXTURE_EXTERNAL_OES: Int = 0x8D65
     private const val EGL_OPENGL_ES3_BIT: Int = 0x40
 

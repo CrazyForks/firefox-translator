@@ -86,7 +86,7 @@ use translator::gl_renderer::{ExternalPresentTarget, GlesRenderer, PresentConten
 #[cfg(feature = "gpu")]
 use translator::live_frame::LiveFrame;
 #[cfg(feature = "gpu")]
-use translator::live_screen::{LiveScreenPipeline, ScreenFrameResult};
+use translator::live_screen::{LiveScreenPipeline, MonitorAction, ScreenFrameResult};
 #[cfg(feature = "gpu")]
 use translator::live_gpu_tick::{frame_from_camera_gray, run_tracker_with_acquire};
 
@@ -304,6 +304,156 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenF
     };
     let result = pipeline.process_frame_overlay(&frame, &mut target, cw, ch);
     pack_screen_result(&result)
+}
+
+/// Pack a [`MonitorAction`] + `wants_tick` into a jint for the GL worker:
+/// bits 0-1 = action (None=0, Hide=1, Acquire=2), bit 8 = wants_tick.
+#[cfg(feature = "gpu")]
+fn pack_monitor(action: MonitorAction, wants_tick: bool) -> jint {
+    let a = match action {
+        MonitorAction::None => 0,
+        MonitorAction::Hide => 1,
+        MonitorAction::Acquire => 2,
+    };
+    let tick = if wants_tick { 1 << 8 } else { 0 };
+    a | tick
+}
+
+/// Screen-translate change detection: GPU-read a coarse gray off the captured
+/// external texture and feed it to the [`LiveScreenPipeline`] monitor, which
+/// decides whether the screen moved (hide), settled (acquire), or is unchanged.
+/// Returns the packed action + `wants_tick` (see [`pack_monitor`]). No overlay
+/// readback — the heavy detect/rec only runs on the worker's follow-up
+/// `processScreenFrameGl` once an `Acquire` is decided.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorFrameGl(
+    env: JNIEnv,
+    _class: JClass,
+    pipeline_ptr: jlong,
+    renderer_ptr: jlong,
+    camera_tex_id: jint,
+    canonical_w: jint,
+    canonical_h: jint,
+    uv_xform: jni::objects::JFloatArray,
+    now_ns: jlong,
+) -> jint {
+    if pipeline_ptr == 0
+        || renderer_ptr == 0
+        || camera_tex_id <= 0
+        || canonical_w <= 0
+        || canonical_h <= 0
+    {
+        return 0;
+    }
+    // SAFETY: see `processScreenFrameGl` — same ownership contract.
+    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+
+    let mut uv = [0f32; 9];
+    if env.get_float_array_region(&uv_xform, 0, &mut uv).is_err() {
+        return 0;
+    }
+    let cw = canonical_w as u32;
+    let ch = canonical_h as u32;
+    let (gw, gh) = pipeline.coarse_dims(cw, ch);
+    // The `displayXform` matrix for the coarse dims: maps the gw×gh dst quad to
+    // the full clip [-1,1] (resolution-independent normalize), so the coarse
+    // gray samples the whole frame, oriented exactly like the present.
+    let dst_to_clip = [
+        2.0 / gw as f32,
+        0.0,
+        -1.0,
+        0.0,
+        2.0 / gh as f32,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+    ];
+    renderer.set_camera_external(camera_tex_id as u32, uv);
+    let Some(gray) = renderer.read_camera_gray(gw, gh, &dst_to_clip) else {
+        return 0;
+    };
+    let action = pipeline.monitor_frame(&gray, gw, gh, cw, ch, now_ns);
+    pack_monitor(action, pipeline.wants_tick())
+}
+
+/// Timed tick for the screen monitor (no new frame): fires a pending settle so
+/// the screen settles even when the mirror stops emitting frames. Returns the
+/// packed action + `wants_tick`.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorTick(
+    _env: JNIEnv,
+    _class: JClass,
+    pipeline_ptr: jlong,
+    now_ns: jlong,
+) -> jint {
+    if pipeline_ptr == 0 {
+        return 0;
+    }
+    // SAFETY: see `processScreenFrameGl`.
+    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
+    let action = pipeline.monitor_tick(now_ns);
+    pack_monitor(action, pipeline.wants_tick())
+}
+
+/// Pre-present staleness check: after the synchronous OCR, the GL worker drains
+/// the latest captured frame (still pill-free — the new overlay isn't shown yet)
+/// and calls this. Reads a coarse gray off the external texture and asks the
+/// monitor whether the screen changed during OCR. Packed result: `Hide` (bit
+/// 0..1 = 1) → drop the stale overlay + re-acquire (do not present); `None` →
+/// safe to present.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorValidateClean(
+    env: JNIEnv,
+    _class: JClass,
+    pipeline_ptr: jlong,
+    renderer_ptr: jlong,
+    camera_tex_id: jint,
+    canonical_w: jint,
+    canonical_h: jint,
+    uv_xform: jni::objects::JFloatArray,
+    now_ns: jlong,
+) -> jint {
+    if pipeline_ptr == 0
+        || renderer_ptr == 0
+        || camera_tex_id <= 0
+        || canonical_w <= 0
+        || canonical_h <= 0
+    {
+        return 0;
+    }
+    // SAFETY: see `processScreenFrameGl`.
+    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+
+    let mut uv = [0f32; 9];
+    if env.get_float_array_region(&uv_xform, 0, &mut uv).is_err() {
+        return 0;
+    }
+    let (gw, gh) = pipeline.coarse_dims(canonical_w as u32, canonical_h as u32);
+    let dst_to_clip = [
+        2.0 / gw as f32,
+        0.0,
+        -1.0,
+        0.0,
+        2.0 / gh as f32,
+        -1.0,
+        0.0,
+        0.0,
+        1.0,
+    ];
+    renderer.set_camera_external(camera_tex_id as u32, uv);
+    let Some(gray) = renderer.read_camera_gray(gw, gh, &dst_to_clip) else {
+        return 0;
+    };
+    let action = pipeline.monitor_validate_clean(&gray, now_ns);
+    pack_monitor(action, pipeline.wants_tick())
 }
 
 /// DEBUG: read back the canonical RGBA frame (top-down) for on-device

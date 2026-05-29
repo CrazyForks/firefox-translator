@@ -83,6 +83,47 @@ internal object LivePipelineJni {
     timestampNs: Long,
   ): Long
 
+  /** Screen-translate change detection: GPU-reads a coarse gray off the captured
+   *  external texture and feeds the `LiveScreenPipeline` monitor. Returns a
+   *  packed `Int`: bits 0-1 = action (0=none, 1=hide, 2=acquire), bit 8 =
+   *  wants-tick (a settle deadline is armed → poll on a timer). Cheap (no overlay
+   *  readback); the heavy detect/rec only runs on a follow-up
+   *  [processScreenFrameGl] once an acquire is decided. */
+  @JvmStatic
+  external fun screenMonitorFrameGl(
+    pipelinePtr: Long,
+    rendererPtr: Long,
+    cameraTexId: Int,
+    canonicalWidth: Int,
+    canonicalHeight: Int,
+    uvXform: FloatArray,
+    nowNs: Long,
+  ): Int
+
+  /** Timed tick for the screen monitor (no new frame): fires a pending settle so
+   *  the screen settles even when the mirror stops emitting frames. Same packed
+   *  `Int` as [screenMonitorFrameGl]. */
+  @JvmStatic
+  external fun screenMonitorTick(
+    pipelinePtr: Long,
+    nowNs: Long,
+  ): Int
+
+  /** Pre-present staleness check: after the synchronous OCR, drain the latest
+   *  (still pill-free) captured frame and call this to ask whether the screen
+   *  changed during OCR. Packed `Int`: action bit 1 (hide) → the overlay is
+   *  stale, don't present + re-acquire; action 0 (none) → safe to present. */
+  @JvmStatic
+  external fun screenMonitorValidateClean(
+    pipelinePtr: Long,
+    rendererPtr: Long,
+    cameraTexId: Int,
+    canonicalWidth: Int,
+    canonicalHeight: Int,
+    uvXform: FloatArray,
+    nowNs: Long,
+  ): Int
+
   /** DEBUG: read back the canonical RGBA frame (top-down, `cw*ch*4` bytes) the
    *  tracker/recognizer sees, for on-device inspection. Call on the GL thread
    *  after a [processFrameGl] (so the external source + uv are set). Empty on
