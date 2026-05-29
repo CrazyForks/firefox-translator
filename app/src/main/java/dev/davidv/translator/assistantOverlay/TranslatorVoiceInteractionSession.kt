@@ -982,6 +982,7 @@ class TranslatorVoiceInteractionSession(
         forcedTargetLanguage = forcedTargetLanguage,
         defaultTargetLanguage = langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: langStateManager.languageByCode("en")!!,
         onClose = { hide() },
+        onTranslateScreenClick = { startScreenTranslate() },
         onSourceClick = { showLanguagePicker(true) },
         onSwap = { swapLanguages() },
         onTargetClick = { showLanguagePicker(false) },
@@ -1006,6 +1007,20 @@ class TranslatorVoiceInteractionSession(
     wandIconView = toolbarViews.wandIcon
     OverlayChromeFactory.setWandButtonEnabled(wandButtonView, wandIconView, false)
     return toolbarViews.root
+  }
+
+  /** Hand off to the live MediaProjection screen-translate experience: launch
+   *  the consent flow (overlay grant + capture token), which starts
+   *  [dev.davidv.translator.screenTranslate.ScreenTranslateService], then
+   *  dismiss this session so the frozen screenshot overlay is removed and the
+   *  real screen shows through for capture. */
+  private fun startScreenTranslate() {
+    runCatching {
+      context.startActivity(
+        dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(context),
+      )
+    }.onFailure { Log.w(tag, "failed to launch screen-translate consent", it) }
+    hide()
   }
 
   private fun triggerFullScreenOcr() {

@@ -48,6 +48,7 @@ object OverlayChromeFactory {
     forcedTargetLanguage: Language?,
     defaultTargetLanguage: Language,
     onClose: () -> Unit,
+    onTranslateScreenClick: (() -> Unit)? = null,
     onSourceClick: () -> Unit,
     onSwap: () -> Unit,
     onTargetClick: () -> Unit,
@@ -80,6 +81,26 @@ object OverlayChromeFactory {
       },
     )
 
+    val hasTranslateScreen = onTranslateScreenClick != null
+    onTranslateScreenClick?.let {
+      val screenBtn =
+        ImageView(context).apply {
+          setImageResource(R.drawable.swipe_vert)
+          setColorFilter(Color.WHITE)
+          setPadding(iconPad, iconPad, iconPad, iconPad)
+          setOnClickListener { onTranslateScreenClick() }
+          contentDescription = "Translate screen"
+        }
+      val screenPill = makePill(context, dpToPx, screenBtn)
+      toolbar.addView(
+        screenPill,
+        FrameLayout.LayoutParams(btnSize, btnSize).apply {
+          gravity = Gravity.START or Gravity.CENTER_VERTICAL
+          leftMargin = btnSize + dpToPx(6)
+        },
+      )
+    }
+
     var readingOrderIcon: ImageView? = null
     val readingOrderPill =
       onReadingOrderClick?.let {
@@ -101,7 +122,7 @@ object OverlayChromeFactory {
             pill,
             FrameLayout.LayoutParams(btnSize, btnSize).apply {
               gravity = Gravity.START or Gravity.CENTER_VERTICAL
-              leftMargin = btnSize + dpToPx(6)
+              leftMargin = (btnSize + dpToPx(6)) * (if (hasTranslateScreen) 2 else 1)
             },
           )
         }

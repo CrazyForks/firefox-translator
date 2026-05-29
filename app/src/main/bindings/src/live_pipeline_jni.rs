@@ -80,7 +80,7 @@ fn pack_result(
 #[cfg(feature = "gpu")]
 use std::ffi::{c_char, c_void, CString};
 #[cfg(feature = "gpu")]
-use translator::gl_renderer::GlesRenderer;
+use translator::gl_renderer::{GlesRenderer, PresentContent};
 #[cfg(feature = "gpu")]
 use translator::live_gpu_tick::{frame_from_camera_gray, run_tracker_with_acquire};
 
@@ -163,6 +163,64 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_destroyGlRende
         // dropped exactly once, on the GL thread that owns the context.
         unsafe { drop(Box::from_raw(renderer_ptr as *mut GlesRenderer)) };
     }
+}
+
+/// Switch a renderer to overlay-only present: subsequent `processFrameGl`
+/// calls draw only the overlays over a transparent clear, skipping the camera
+/// passthrough, for a translucent window floating over live content (the
+/// MediaProjection screen-translate overlay). Call once on the GL thread after
+/// [`createGlRenderer`]. The tracker gray/RGBA readbacks are unaffected.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_setRendererOverlayOnly(
+    _env: JNIEnv,
+    _class: JClass,
+    renderer_ptr: jlong,
+) {
+    if renderer_ptr == 0 {
+        return;
+    }
+    // SAFETY: ptr came from `createGlRenderer`; used only on its owning thread.
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+    renderer.set_present_content(PresentContent::OverlayOnly);
+}
+
+/// DEBUG: read back the canonical RGBA frame (top-down) for on-device
+/// inspection of orientation / mirror / text size. Returns an empty array on
+/// failure. Must run on the GL thread after a `processFrameGl` so the external
+/// source + uv transform are set on the renderer.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_debugReadCanonicalRgba<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    renderer_ptr: jlong,
+    canonical_w: jint,
+    canonical_h: jint,
+    display_xform: jni::objects::JFloatArray<'local>,
+) -> jni::objects::JByteArray<'local> {
+    if renderer_ptr == 0 || canonical_w <= 0 || canonical_h <= 0 {
+        return env.new_byte_array(0).unwrap_or_default();
+    }
+    // SAFETY: ptr came from `createGlRenderer`; used only on its owning thread.
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+    let mut dx = [0f32; 9];
+    if env
+        .get_float_array_region(&display_xform, 0, &mut dx)
+        .is_err()
+    {
+        return env.new_byte_array(0).unwrap_or_default();
+    }
+    let Some(rgba) = renderer.read_camera_rgba(canonical_w as u32, canonical_h as u32, &dx) else {
+        return env.new_byte_array(0).unwrap_or_default();
+    };
+    let Ok(arr) = env.new_byte_array(rgba.len() as i32) else {
+        return env.new_byte_array(0).unwrap_or_default();
+    };
+    let signed: &[i8] =
+        unsafe { std::slice::from_raw_parts(rgba.as_ptr() as *const i8, rgba.len()) };
+    let _ = env.set_byte_array_region(&arr, 0, signed);
+    arr
 }
 
 /// Per-frame GPU path: borrow the camera's external-OES texture, GPU-render

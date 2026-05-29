@@ -48,6 +48,26 @@ internal object LivePipelineJni {
   @JvmStatic
   external fun destroyGlRenderer(rendererPtr: Long)
 
+  /** Switch a renderer to overlay-only present: [processFrameGl] then draws
+   *  only the overlays over a transparent clear (premultiplied), skipping the
+   *  camera passthrough — for a translucent FLAG_SECURE window floating over
+   *  the live screen (the MediaProjection screen-translate path). Call once on
+   *  the GL thread after [createGlRenderer]. Tracker readbacks are unaffected. */
+  @JvmStatic
+  external fun setRendererOverlayOnly(rendererPtr: Long)
+
+  /** DEBUG: read back the canonical RGBA frame (top-down, `cw*ch*4` bytes) the
+   *  tracker/recognizer sees, for on-device inspection. Call on the GL thread
+   *  after a [processFrameGl] (so the external source + uv are set). Empty on
+   *  failure. */
+  @JvmStatic
+  external fun debugReadCanonicalRgba(
+    rendererPtr: Long,
+    canonicalWidth: Int,
+    canonicalHeight: Int,
+    displayXform: FloatArray,
+  ): ByteArray
+
   /** Per-frame GPU path. Call on the GL render thread; follow with
    *  `eglSwapBuffers`. Returns a packed `Long` (see [FrameResult.unpack]);
    *  `compositeOk` means a frame was drawn.
