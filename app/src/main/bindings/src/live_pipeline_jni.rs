@@ -80,7 +80,13 @@ fn pack_result(
 #[cfg(feature = "gpu")]
 use std::ffi::{c_char, c_void, CString};
 #[cfg(feature = "gpu")]
-use translator::gl_renderer::{GlesRenderer, PresentContent};
+use std::sync::Arc;
+#[cfg(feature = "gpu")]
+use translator::gl_renderer::{ExternalPresentTarget, GlesRenderer, PresentContent};
+#[cfg(feature = "gpu")]
+use translator::live_frame::LiveFrame;
+#[cfg(feature = "gpu")]
+use translator::live_screen::{LiveScreenPipeline, ScreenFrameResult};
 #[cfg(feature = "gpu")]
 use translator::live_gpu_tick::{frame_from_camera_gray, run_tracker_with_acquire};
 
@@ -183,6 +189,121 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_setRendererOve
     // SAFETY: ptr came from `createGlRenderer`; used only on its owning thread.
     let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
     renderer.set_present_content(PresentContent::OverlayOnly);
+}
+
+/// Set the renderer's parametric overlay opacity (0..1). Camera leaves it at
+/// the 1.0 default; the screen path sets it to control overlay opacity
+/// independently of the touch-capped window alpha. Call on the GL thread.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_setRendererOverlayAlpha(
+    _env: JNIEnv,
+    _class: JClass,
+    renderer_ptr: jlong,
+    alpha: f32,
+) {
+    if renderer_ptr == 0 {
+        return;
+    }
+    // SAFETY: ptr came from `createGlRenderer`; used only on its owning thread.
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+    renderer.set_overlay_alpha(alpha);
+}
+
+/// Pack a [`ScreenFrameResult`] into a jlong: `[did_detect:1][rec_ok:16][detected:16][overlay:16]`.
+#[cfg(feature = "gpu")]
+fn pack_screen_result(r: &ScreenFrameResult) -> jlong {
+    let overlay = (r.overlay_count.min(0xFFFF)) as u64;
+    let detected = (r.detected_count.min(0xFFFF)) as u64;
+    let rec_ok = (r.rec_ok_count.min(0xFFFF)) as u64;
+    let did = if r.did_detect { 1u64 } else { 0 };
+    ((did << 48) | (rec_ok << 32) | (detected << 16) | overlay) as jlong
+}
+
+/// Per-frame screen-translate path: borrow the captured screen's external-OES
+/// texture, GPU-read its canonical RGBA, run the no-tracker
+/// [`LiveScreenPipeline`] (detect/rec on cadence, overlays composited at
+/// identity), and present overlay-only into the bound framebuffer. Mirrors
+/// [`processFrameGl`] but for the static screen pipeline. Caller follows with
+/// the framebuffer readback (PBuffer) it owns.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenFrameGl(
+    env: JNIEnv,
+    _class: JClass,
+    pipeline_ptr: jlong,
+    renderer_ptr: jlong,
+    camera_tex_id: jint,
+    canonical_w: jint,
+    canonical_h: jint,
+    surface_w: jint,
+    surface_h: jint,
+    uv_xform: jni::objects::JFloatArray,
+    display_xform: jni::objects::JFloatArray,
+    timestamp_ns: jlong,
+) -> jlong {
+    if pipeline_ptr == 0
+        || renderer_ptr == 0
+        || camera_tex_id <= 0
+        || canonical_w <= 0
+        || canonical_h <= 0
+        || surface_w <= 0
+        || surface_h <= 0
+    {
+        return 0;
+    }
+    // SAFETY: ptr came from `LiveScreenTracker::raw_address_for_jni`; the Kotlin
+    // wrapper holds the Arc alive across the call. Renderer is used only on its
+    // owning (GL) thread.
+    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+
+    let mut uv = [0f32; 9];
+    let mut dx = [0f32; 9];
+    if env.get_float_array_region(&uv_xform, 0, &mut uv).is_err()
+        || env
+            .get_float_array_region(&display_xform, 0, &mut dx)
+            .is_err()
+    {
+        return 0;
+    }
+    let _ = timestamp_ns; // cadence is gated by the GL worker, not here
+    let cw = canonical_w as u32;
+    let ch = canonical_h as u32;
+    let canonical_long = cw.max(ch).max(1) as f32;
+    let surface_long = surface_w.max(surface_h).max(1) as f32;
+    // Overlays are authored in canonical (full-capture) coords and presented
+    // into the half-res PBuffer; oversample = present/canonical gives ~1 texel
+    // per present pixel (no extra 0.5 like the camera, whose canonical ≪ surface).
+    pipeline.set_overlay_oversample(surface_long / canonical_long);
+
+    // Read the captured canonical RGBA off the external texture for OCR — at
+    // full capture res so recognition crops full-res strips (detection
+    // internally downsamples to det_max_pixels).
+    renderer.set_camera_external(camera_tex_id as u32, uv);
+    let t_readback = std::time::Instant::now();
+    let Some(rgba) = renderer.read_camera_rgba(cw, ch, &dx) else {
+        return 0;
+    };
+    log::info!(
+        "[screen] readback {}x{} {:.0}ms",
+        cw,
+        ch,
+        t_readback.elapsed().as_secs_f64() * 1000.0,
+    );
+    let frame = Arc::new(LiveFrame::new(0));
+    frame.reset_owned(rgba, cw, ch, 0);
+
+    // Present overlay-only into the bound framebuffer (the caller's half-res
+    // PBuffer).
+    renderer.bind_present_framebuffer(0, surface_w, surface_h);
+    let mut target = ExternalPresentTarget {
+        renderer,
+        display_xform: dx,
+    };
+    let result = pipeline.process_frame_overlay(&frame, &mut target, cw, ch);
+    pack_screen_result(&result)
 }
 
 /// DEBUG: read back the canonical RGBA frame (top-down) for on-device

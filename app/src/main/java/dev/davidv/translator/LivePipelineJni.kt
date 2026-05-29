@@ -56,6 +56,33 @@ internal object LivePipelineJni {
   @JvmStatic
   external fun setRendererOverlayOnly(rendererPtr: Long)
 
+  /** Set the renderer's parametric overlay opacity (0..1). The screen path
+   *  uses this to control overlay opacity independently of the touch-capped
+   *  window alpha; camera leaves it at the 1.0 default. */
+  @JvmStatic
+  external fun setRendererOverlayAlpha(
+    rendererPtr: Long,
+    alpha: Float,
+  )
+
+  /** Per-frame screen-translate path. Like [processFrameGl] but drives the
+   *  no-tracker `LiveScreenPipeline` (detect/rec on a cadence, overlays at
+   *  identity) and presents overlay-only into the bound framebuffer. Returns a
+   *  packed `Long`: `[didDetect:1][recOk:16][detected:16][overlay:16]`. */
+  @JvmStatic
+  external fun processScreenFrameGl(
+    pipelinePtr: Long,
+    rendererPtr: Long,
+    cameraTexId: Int,
+    canonicalWidth: Int,
+    canonicalHeight: Int,
+    surfaceWidth: Int,
+    surfaceHeight: Int,
+    uvXform: FloatArray,
+    displayXform: FloatArray,
+    timestampNs: Long,
+  ): Long
+
   /** DEBUG: read back the canonical RGBA frame (top-down, `cw*ch*4` bytes) the
    *  tracker/recognizer sees, for on-device inspection. Call on the GL thread
    *  after a [processFrameGl] (so the external source + uv are set). Empty on

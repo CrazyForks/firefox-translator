@@ -48,6 +48,13 @@ class ScreenOverlayView(context: Context) : View(context) {
     postInvalidate()
   }
 
+  /** Drop the overlay so the window draws nothing (transparent) — used to give
+   *  the screen capture a clean, overlay-free frame before an acquire. */
+  fun clearOverlay() {
+    overlay = null
+    postInvalidate()
+  }
+
   override fun onDraw(canvas: Canvas) {
     val bmp = overlay ?: return
     // The readback is a GL framebuffer (bottom-up), so scale to fill and flip

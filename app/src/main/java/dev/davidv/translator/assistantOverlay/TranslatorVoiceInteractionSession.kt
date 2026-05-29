@@ -1015,9 +1015,20 @@ class TranslatorVoiceInteractionSession(
    *  dismiss this session so the frozen screenshot overlay is removed and the
    *  real screen shows through for capture. */
   private fun startScreenTranslate() {
+    val targetCode =
+      (
+        forcedTargetLanguage
+          ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
+      )?.code
+    val sourceCode = if (isAutoSource) null else forcedSourceLanguage?.code
     runCatching {
       context.startActivity(
-        dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(context),
+        dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(
+          context,
+          sourceCode,
+          targetCode,
+          isAutoSource,
+        ),
       )
     }.onFailure { Log.w(tag, "failed to launch screen-translate consent", it) }
     hide()

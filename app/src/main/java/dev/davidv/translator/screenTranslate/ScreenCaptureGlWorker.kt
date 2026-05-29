@@ -47,7 +47,7 @@ import java.nio.ByteOrder
 class ScreenCaptureGlWorker(
   displayWidth: Int,
   displayHeight: Int,
-  private val debugDumpDir: java.io.File?,
+  private val onClearOverlay: () -> Unit,
   private val onOverlayBitmap: (Bitmap) -> Unit,
 ) {
   @Volatile
@@ -56,11 +56,23 @@ class ScreenCaptureGlWorker(
   @Volatile
   var onFrameResult: ((Long) -> Unit)? = null
 
-  private val canonical = LiveGlSurfaceView.canonicalDims(displayWidth, displayHeight)
-  private val cw = canonical.first
-  private val ch = canonical.second
+  // OCR canonical == present == half the display. read_camera_rgba renders
+  // into a half-res FBO (cheap ~4.6MB readback) which rec crops from (det
+  // downsamples further); the overlay is presented at the same res, so the
+  // Canvas view does a single clean 2× upscale to the display rather than a
+  // non-integer double-rescale (sharper, less blur).
+  private val cw = (displayWidth / 2).coerceAtLeast(1)
+  private val ch = (displayHeight / 2).coerceAtLeast(1)
+  private val pw = cw
+  private val ph = ch
 
   private var glThread: GlThread? = null
+
+  /** Manual trigger: run one clear → wait-for-clean-frame → acquire/rec cycle.
+   *  (Test harness; the auto cadence is off.) */
+  fun requestAcquire() {
+    glThread?.requestAcquire()
+  }
 
   @Volatile
   private var sourceSurface: Surface? = null
@@ -128,14 +140,26 @@ class ScreenCaptureGlWorker(
     private var frameAvailable = false
     private val stMatrix = FloatArray(16)
 
-    private val readBuffer = ByteBuffer.allocateDirect(cw * ch * 4).order(ByteOrder.nativeOrder())
+    // Overlay readback is the half-res present (PBuffer), not the full OCR res.
+    private val readBuffer = ByteBuffer.allocateDirect(pw * ph * 4).order(ByteOrder.nativeOrder())
+
     // Ping-pong so the View can draw the last frame while we fill the next.
     private val bitmaps =
       arrayOf(
-        Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888),
-        Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888),
+        Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888),
+        Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888),
       )
     private var bitmapIdx = 0
+
+    @Volatile
+    private var acquireRequested = false
+
+    fun requestAcquire() {
+      synchronized(lock) {
+        acquireRequested = true
+        lock.notifyAll()
+      }
+    }
 
     fun setSourceBufferSize(
       w: Int,
@@ -172,6 +196,10 @@ class ScreenCaptureGlWorker(
         return
       }
       LivePipelineJni.setRendererOverlayOnly(rendererPtr)
+      // Modal overlay opacity for the screen path. On-screen opacity is
+      // OVERLAY_ALPHA × window-alpha (0.79); 1.0 keeps pills as opaque as the
+      // touch cap allows. Lower it for a more see-through overlay.
+      LivePipelineJni.setRendererOverlayAlpha(rendererPtr, OVERLAY_ALPHA)
       sourceTexId = createExternalOesTexture()
       if (sourceTexId == 0) {
         Log.e(TAG, "createExternalOesTexture failed")
@@ -195,51 +223,92 @@ class ScreenCaptureGlWorker(
       Log.i(TAG, "screen-translate GL ready, canonical ${cw}x$ch, pipelinePtr=$pipelinePtr")
 
       val dx = LiveGlSurfaceView.displayXform(cw, ch)
-      var frameCount = 0L
+      // Manual single-shot acquire: on request, clear the overlay, drain a few
+      // frames so the overlay-free composition reaches the capture, then run
+      // one detect+rec on that clean frame and present the new overlay.
+      var acquiring = false
+      var clearDeadlineNs = 0L
       while (true) {
+        var hadFrame = false
+        var startAcquire = false
         synchronized(lock) {
-          while (running && !frameAvailable) {
-            try {
-              lock.wait()
-            } catch (_: InterruptedException) {
+          if (acquiring) {
+            // Timed wait while settling: the VirtualDisplay only emits frames on
+            // change, so the clear yields ~one frame and then nothing. Wake
+            // periodically to hit the settle deadline instead of stalling.
+            if (running && !frameAvailable && !acquireRequested) {
+              try {
+                lock.wait(20)
+              } catch (_: InterruptedException) {
+              }
+            }
+          } else {
+            while (running && !frameAvailable && !acquireRequested) {
+              try {
+                lock.wait()
+              } catch (_: InterruptedException) {
+              }
             }
           }
           if (!running) return@synchronized
+          hadFrame = frameAvailable
           frameAvailable = false
+          if (acquireRequested && !acquiring) {
+            acquireRequested = false
+            startAcquire = true
+          }
         }
         if (!running) break
 
-        st.updateTexImage()
-        st.getTransformMatrix(stMatrix)
+        // Always drain the producer so its BufferQueue keeps flowing.
+        if (hadFrame) {
+          st.updateTexImage()
+          st.getTransformMatrix(stMatrix)
+        }
         val pipeline = pipelinePtr
         if (pipeline == 0L) continue
+
+        if (startAcquire) {
+          // Clear the displayed overlay, then settle for a fixed time so the
+          // overlay-free composition reaches the VirtualDisplay (frame-count
+          // waits stall: the producer only emits on change).
+          acquiring = true
+          clearDeadlineNs = System.nanoTime() + SETTLE_NS
+          onClearOverlay()
+          Log.i(TAG, "acquire: overlay cleared, settling")
+          continue
+        }
+        if (!acquiring) continue
+        if (System.nanoTime() < clearDeadlineNs) continue
+
+        // The texture now holds an overlay-free frame → detect/rec on it and
+        // present the new overlay into the PBuffer.
         val uv = uvFromSurfaceTexture(stMatrix)
         val packed =
-          LivePipelineJni.processFrameGl(
+          LivePipelineJni.processScreenFrameGl(
             pipeline,
             rendererPtr,
             sourceTexId,
             cw,
             ch,
-            cw,
-            ch,
+            pw,
+            ph,
             uv,
             dx,
             st.timestamp,
           )
-        // The overlay-only present drew into the PBuffer (FBO 0). Read it back
-        // and hand it to the Canvas view. glReadPixels is bottom-up; the view
-        // flips it vertically when drawing.
+        // The overlay-only present drew into the half-res PBuffer (FBO 0). Read
+        // it back and hand it to the Canvas view. glReadPixels is bottom-up; the
+        // view flips it vertically when drawing.
         readBuffer.position(0)
-        GLES20.glReadPixels(0, 0, cw, ch, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, readBuffer)
+        GLES20.glReadPixels(0, 0, pw, ph, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, readBuffer)
         readBuffer.position(0)
         val bmp = bitmaps[bitmapIdx]
         bmp.copyPixelsFromBuffer(readBuffer)
         bitmapIdx = bitmapIdx xor 1
         onOverlayBitmap(bmp)
-        frameCount++
-        if (frameCount % 60 == 1L) Log.i(TAG, "tick #$frameCount packed=$packed")
-        if (debugDumpDir != null && frameCount == 120L) dumpOcrFrame(dx)
+        acquiring = false
+        Log.i(TAG, "acquire done packed=$packed")
         onFrameResult?.invoke(packed)
       }
 
@@ -254,27 +323,6 @@ class ScreenCaptureGlWorker(
         rendererPtr = 0L
       }
       teardownEgl()
-    }
-
-    /** DEBUG: dump the actual OCR input (read_camera_rgba, top-down) so we can
-     *  see exactly what the recognizer is fed. */
-    private fun dumpOcrFrame(dx: FloatArray) {
-      val dir = debugDumpDir ?: return
-      val rgba = LivePipelineJni.debugReadCanonicalRgba(rendererPtr, cw, ch, dx)
-      if (rgba.isEmpty()) {
-        Log.w(TAG, "debugReadCanonicalRgba empty")
-        return
-      }
-      try {
-        val bmp = Bitmap.createBitmap(cw, ch, Bitmap.Config.ARGB_8888)
-        bmp.copyPixelsFromBuffer(ByteBuffer.wrap(rgba))
-        val f = java.io.File(dir, "ocr_frame.png")
-        java.io.FileOutputStream(f).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        bmp.recycle()
-        Log.i(TAG, "dumped OCR frame ${cw}x$ch -> ${f.absolutePath}")
-      } catch (e: Exception) {
-        Log.w(TAG, "dump failed", e)
-      }
     }
 
     private fun createExternalOesTexture(): Int {
@@ -326,7 +374,7 @@ class ScreenCaptureGlWorker(
         EGL14.eglCreatePbufferSurface(
           eglDisplay,
           cfg,
-          intArrayOf(EGL14.EGL_WIDTH, cw, EGL14.EGL_HEIGHT, ch, EGL14.EGL_NONE),
+          intArrayOf(EGL14.EGL_WIDTH, pw, EGL14.EGL_HEIGHT, ph, EGL14.EGL_NONE),
           0,
         )
       if (eglSurface == EGL14.EGL_NO_SURFACE) return false
@@ -353,6 +401,16 @@ class ScreenCaptureGlWorker(
 
   companion object {
     private const val TAG = "ScreenCaptureGlWorker"
+
+    /** Overlay opacity multiplier for the screen path (× the 0.79 window
+     *  alpha). 1.0 = as opaque as the touch cap allows; lower for see-through. */
+    private const val OVERLAY_ALPHA = 1.0f
+
+    /** Settle time after clearing the overlay before grabbing the clean frame
+     *  for an acquire — covers SurfaceFlinger → VirtualDisplay latency. A fixed
+     *  time, not a frame count: the mirror only emits frames on change, so the
+     *  clear yields ~one frame and a frame-count wait would stall. */
+    private const val SETTLE_NS = 150_000_000L
     private const val GL_TEXTURE_EXTERNAL_OES: Int = 0x8D65
     private const val EGL_OPENGL_ES3_BIT: Int = 0x40
 

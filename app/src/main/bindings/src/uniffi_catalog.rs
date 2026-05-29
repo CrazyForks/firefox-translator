@@ -1261,6 +1261,48 @@ impl LivePlanarTracker {
     }
 }
 
+/// No-tracker screen-translate pipeline (flat fronto-parallel capture →
+/// identity placement). Thin uniffi shim over
+/// `translator::live_screen::LiveScreenPipeline`, mirroring
+/// [`LivePlanarTracker`]: the per-frame fast path grabs the raw address from
+/// `raw_address_for_jni` and calls `processScreenFrameGl`.
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Object)]
+pub struct LiveScreenTracker {
+    pub(crate) pipeline: Arc<translator::live_screen::LiveScreenPipeline>,
+}
+
+#[cfg(feature = "planar-tracker")]
+#[uniffi::export]
+impl LiveScreenTracker {
+    #[uniffi::constructor]
+    fn new(catalog: Arc<CatalogHandle>) -> Arc<Self> {
+        let session = catalog.session_arc();
+        let provider: Arc<dyn translator::font_provider::FontProvider + Send + Sync> =
+            Arc::new(crate::android_font_provider::AndroidFontProvider);
+        Arc::new(Self {
+            pipeline: translator::live_screen::LiveScreenPipeline::new(session, provider),
+        })
+    }
+
+    fn raw_address_for_jni(&self) -> u64 {
+        Arc::as_ptr(&self.pipeline) as u64
+    }
+
+    fn set_languages(&self, from_code: String, to_code: String, is_auto_source: bool) {
+        self.pipeline
+            .set_languages(&from_code, &to_code, is_auto_source);
+    }
+
+    fn reset(&self) {
+        self.pipeline.reset();
+    }
+
+    fn clear_overlay(&self) {
+        self.pipeline.clear_overlay();
+    }
+}
+
 #[cfg(feature = "ppocr")]
 impl CatalogHandle {
     pub(crate) fn session_arc(&self) -> Arc<translator::TranslatorSession> {

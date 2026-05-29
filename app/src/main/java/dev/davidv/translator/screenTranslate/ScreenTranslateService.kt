@@ -24,7 +24,9 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.projection.MediaProjection
@@ -33,8 +35,11 @@ import android.os.Build
 import android.os.IBinder
 import android.util.DisplayMetrics
 import android.util.Log
+import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
-import dev.davidv.translator.LivePlanarOcrEngine
+import android.widget.FrameLayout
+import android.widget.ImageView
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorApplication
 import kotlinx.coroutines.CoroutineScope
@@ -58,8 +63,9 @@ class ScreenTranslateService : Service() {
 
   private var projection: MediaProjection? = null
   private var virtualDisplay: VirtualDisplay? = null
-  private var engine: LivePlanarOcrEngine? = null
+  private var screenTracker: uniffi.bindings.LiveScreenTracker? = null
   private var overlayView: ScreenOverlayView? = null
+  private var acquireButton: View? = null
   private var worker: ScreenCaptureGlWorker? = null
   private var windowManager: WindowManager? = null
   private var stopped = false
@@ -112,31 +118,44 @@ class ScreenTranslateService : Service() {
     proj.registerCallback(projectionCallback, null)
     projection = proj
 
-    val ocrEngine = LivePlanarOcrEngine(catalog, scope)
-    engine = ocrEngine
-    configureLanguages(ocrEngine, app)
+    val tracker = uniffi.bindings.LiveScreenTracker(catalog.planarHandle())
+    screenTracker = tracker
+    configureLanguages(
+      tracker,
+      app,
+      sourceCode = intent.getStringExtra(EXTRA_SOURCE_LANG),
+      targetCode = intent.getStringExtra(EXTRA_TARGET_LANG),
+      isAutoSource = intent.getBooleanExtra(EXTRA_AUTO_SOURCE, true),
+    )
 
-    setupOverlayAndCapture(ocrEngine, proj)
+    setupOverlayAndCapture(tracker, proj)
 
     return START_NOT_STICKY
   }
 
   private fun configureLanguages(
-    ocrEngine: LivePlanarOcrEngine,
+    tracker: uniffi.bindings.LiveScreenTracker,
     app: TranslatorApplication,
+    sourceCode: String?,
+    targetCode: String?,
+    isAutoSource: Boolean,
   ) {
     val catalog = app.languageCatalog ?: return
     val settings = app.settingsManager.settings.value
+    // Target: the caller's choice (assistant selection) → app default → en.
     val to =
-      catalog.languageByCode(settings.defaultTargetLanguageCode)
+      catalog.languageByCode(targetCode ?: settings.defaultTargetLanguageCode)
         ?: catalog.languageByCode("en")
         ?: return
-    val from = catalog.languageByCode("en") ?: to
-    ocrEngine.setLanguages(from, to, isAutoSource = true)
+    // Source: forced code skips the script classifier; auto leaves it on (the
+    // `from` value is then just a hint).
+    val from = if (isAutoSource) to else (sourceCode?.let { catalog.languageByCode(it) } ?: to)
+    tracker.setLanguages(from.code, to.code, isAutoSource)
+    Log.i(TAG, "languages: from=${from.code} to=${to.code} auto=$isAutoSource")
   }
 
   private fun setupOverlayAndCapture(
-    ocrEngine: LivePlanarOcrEngine,
+    tracker: uniffi.bindings.LiveScreenTracker,
     proj: MediaProjection,
   ) {
     val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -186,14 +205,19 @@ class ScreenTranslateService : Service() {
       params.alpha = 0.79f
     }
     wm.addView(view, params)
+    addAcquireButton(wm, overlayType)
 
+    val pipelinePtr = tracker.rawAddressForJni().toLong()
     val captureWorker =
-      ScreenCaptureGlWorker(w, h, getExternalFilesDir(null)) { bmp -> view.setOverlayBitmap(bmp) }
-    captureWorker.pipelinePtr = ocrEngine.pipelinePtr
-    captureWorker.onFrameResult = { packed -> ocrEngine.onFrameResult(packed) }
+      ScreenCaptureGlWorker(
+        w,
+        h,
+        onClearOverlay = { view.clearOverlay() },
+      ) { bmp -> view.setOverlayBitmap(bmp) }
+    captureWorker.pipelinePtr = pipelinePtr
     worker = captureWorker
     captureWorker.start()
-    Log.i(TAG, "setup: ${w}x$h @${dpi}dpi, pipelinePtr=${ocrEngine.pipelinePtr}")
+    Log.i(TAG, "setup: ${w}x$h @${dpi}dpi, pipelinePtr=$pipelinePtr")
 
     scope.launch {
       val surface = withContext(Dispatchers.IO) { captureWorker.awaitSourceSurface() }
@@ -219,6 +243,49 @@ class ScreenTranslateService : Service() {
         )
       Log.i(TAG, "VirtualDisplay created ${w}x$h, surface=$surface")
     }
+  }
+
+  /** Bottom-center manual acquire button (test harness). FLAG_SECURE so it's
+   *  excluded from the capture; touchable, but NOT_TOUCH_MODAL so touches
+   *  outside it pass through to the app. */
+  private fun addAcquireButton(
+    wm: WindowManager,
+    overlayType: Int,
+  ) {
+    val density = resources.displayMetrics.density
+    val sizePx = (56 * density).toInt()
+    val padPx = (12 * density).toInt()
+    val icon =
+      ImageView(this).apply {
+        setImageResource(R.drawable.activity_zone)
+        setColorFilter(Color.WHITE)
+        setPadding(padPx, padPx, padPx, padPx)
+      }
+    val button =
+      FrameLayout(this).apply {
+        background =
+          GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(Color.argb(220, 0, 0, 0))
+          }
+        addView(icon, FrameLayout.LayoutParams(sizePx, sizePx))
+        setOnClickListener { worker?.requestAcquire() }
+      }
+    val params =
+      WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        overlayType,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+          WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+          WindowManager.LayoutParams.FLAG_SECURE,
+        PixelFormat.TRANSLUCENT,
+      )
+    params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+    params.y = (24 * density).toInt()
+    wm.addView(button, params)
+    acquireButton = button
   }
 
   private fun startForegroundNotification() {
@@ -278,8 +345,11 @@ class ScreenTranslateService : Service() {
     val wm = windowManager
     overlayView?.let { runCatching { wm?.removeView(it) } }
     overlayView = null
-    runCatching { engine?.clear() }
-    engine = null
+    acquireButton?.let { runCatching { wm?.removeView(it) } }
+    acquireButton = null
+    runCatching { screenTracker?.clearOverlay() }
+    runCatching { screenTracker?.destroy() }
+    screenTracker = null
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
       stopForeground(STOP_FOREGROUND_REMOVE)
     } else {
@@ -300,16 +370,25 @@ class ScreenTranslateService : Service() {
     private const val NOTIFICATION_ID = 0x5C12
     const val EXTRA_RESULT_CODE = "result_code"
     const val EXTRA_DATA = "data"
+    const val EXTRA_SOURCE_LANG = "source_lang"
+    const val EXTRA_TARGET_LANG = "target_lang"
+    const val EXTRA_AUTO_SOURCE = "auto_source"
     const val ACTION_STOP = "dev.davidv.translator.STOP_SCREEN_TRANSLATE"
 
     fun startIntent(
       context: Context,
       resultCode: Int,
       data: Intent,
+      sourceCode: String?,
+      targetCode: String?,
+      isAutoSource: Boolean,
     ): Intent =
       Intent(context, ScreenTranslateService::class.java).apply {
         putExtra(EXTRA_RESULT_CODE, resultCode)
         putExtra(EXTRA_DATA, data)
+        sourceCode?.let { putExtra(EXTRA_SOURCE_LANG, it) }
+        targetCode?.let { putExtra(EXTRA_TARGET_LANG, it) }
+        putExtra(EXTRA_AUTO_SOURCE, isAutoSource)
       }
   }
 }

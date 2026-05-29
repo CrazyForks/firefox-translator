@@ -47,8 +47,7 @@ class ScreenCaptureRequestActivity : Activity() {
     requestProjection()
   }
 
-  private fun canDrawOverlays(): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
+  private fun canDrawOverlays(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
 
   private fun requestOverlayPermission() {
     val intent =
@@ -93,7 +92,14 @@ class ScreenCaptureRequestActivity : Activity() {
         if (resultCode == RESULT_OK && data != null) {
           ContextCompat.startForegroundService(
             this,
-            ScreenTranslateService.startIntent(this, resultCode, data),
+            ScreenTranslateService.startIntent(
+              this,
+              resultCode,
+              data,
+              sourceCode = intent.getStringExtra(ScreenTranslateService.EXTRA_SOURCE_LANG),
+              targetCode = intent.getStringExtra(ScreenTranslateService.EXTRA_TARGET_LANG),
+              isAutoSource = intent.getBooleanExtra(ScreenTranslateService.EXTRA_AUTO_SOURCE, true),
+            ),
           )
         } else {
           Log.i(tag, "Screen capture consent denied")
@@ -107,9 +113,17 @@ class ScreenCaptureRequestActivity : Activity() {
     private const val REQ_OVERLAY = 1
     private const val REQ_PROJECTION = 2
 
-    fun intent(context: Context): Intent =
+    fun intent(
+      context: Context,
+      sourceCode: String?,
+      targetCode: String?,
+      isAutoSource: Boolean,
+    ): Intent =
       Intent(context, ScreenCaptureRequestActivity::class.java).apply {
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        sourceCode?.let { putExtra(ScreenTranslateService.EXTRA_SOURCE_LANG, it) }
+        targetCode?.let { putExtra(ScreenTranslateService.EXTRA_TARGET_LANG, it) }
+        putExtra(ScreenTranslateService.EXTRA_AUTO_SOURCE, isAutoSource)
       }
   }
 }
