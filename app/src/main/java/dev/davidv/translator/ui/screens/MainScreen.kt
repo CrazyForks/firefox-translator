@@ -17,15 +17,19 @@
 
 package dev.davidv.translator.ui.screens
 
+import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.speech.RecognizerIntent
 import android.util.Log
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -356,13 +360,12 @@ fun MainScreen(
                       modifier = Modifier.align(Alignment.TopEnd),
                       horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                      Row {
-                        if (input.isNotEmpty()) {
-                          ClearInput(onMessage)
-                        } else {
-                          PasteButton(onMessage)
-                        }
+                      if (input.isNotEmpty()) {
+                        ClearInput(onMessage)
+                      } else {
+                        PasteButton(onMessage)
                       }
+                      SpeechInputButton(input, from, onMessage, modifier = Modifier.padding(top = 6.dp))
                       val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isInputAudioPlaying && !isInputAudioLoading
                       if (input.isNotBlank() && languageState.availabilityFor(from)?.ttsFiles == true && !isOtherAudioActive) {
                         SpeechPlaybackButton(
@@ -612,14 +615,62 @@ fun PasteButton(
 }
 
 @Composable
+fun SpeechInputButton(
+  input: String,
+  from: Language,
+  onMessage: (TranslatorMessage) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  val context = LocalContext.current
+  val isAvailable =
+    remember {
+      Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).resolveActivity(context.packageManager) != null
+    }
+  if (!isAvailable) {
+    return
+  }
+
+  val launcher =
+    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+      if (result.resultCode != Activity.RESULT_OK) {
+        return@rememberLauncherForActivityResult
+      }
+      val spoken =
+        result.data
+          ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+          ?.firstOrNull()
+      if (!spoken.isNullOrBlank()) {
+        val appended = if (input.isBlank()) spoken else "${input.trimEnd()} $spoken"
+        onMessage(TranslatorMessage.TextInput(appended))
+      }
+    }
+
+  ActionPillButton(
+    iconRes = R.drawable.mic,
+    contentDescription = "Voice input",
+    modifier = modifier,
+    onClick = {
+      val intent =
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+          putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+          putExtra(RecognizerIntent.EXTRA_LANGUAGE, from.code)
+        }
+      launcher.launch(intent)
+    },
+  )
+}
+
+@Composable
 private fun ActionPillButton(
   iconRes: Int,
   contentDescription: String,
   showBackdrop: Boolean = false,
+  modifier: Modifier = Modifier,
   onClick: () -> Unit,
 ) {
   if (showBackdrop) {
     Surface(
+      modifier = modifier,
       shape = CircleShape,
       color = Color(0xCC303030),
     ) {
@@ -637,7 +688,7 @@ private fun ActionPillButton(
   } else {
     IconButton(
       onClick = onClick,
-      modifier = Modifier.size(36.dp),
+      modifier = modifier.size(36.dp),
     ) {
       Icon(
         painterResource(id = iconRes),
