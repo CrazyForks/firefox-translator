@@ -88,7 +88,7 @@ use translator::live_frame::{aligned_det_dims, LiveFrame, OrientedImage};
 #[cfg(feature = "gpu")]
 use translator::ocr::Rect;
 #[cfg(feature = "gpu")]
-use translator::live_screen::{LiveScreenPipeline, MonitorAction, ScreenFrameResult};
+use translator::live_screen::{LiveScreenPipeline, MonitorAction};
 #[cfg(feature = "gpu")]
 use translator::live_gpu_tick::{frame_from_camera_gray, run_tracker_with_acquire};
 
@@ -222,26 +222,16 @@ fn clip_xform(w: u32, h: u32) -> [f32; 9] {
     [2.0 / w, 0.0, -1.0, 0.0, 2.0 / h, -1.0, 0.0, 0.0, 1.0]
 }
 
-/// Pack a [`ScreenFrameResult`] into a jlong: `[did_detect:1][rec_ok:16][detected:16][overlay:16]`.
-#[cfg(feature = "gpu")]
-fn pack_screen_result(r: &ScreenFrameResult) -> jlong {
-    let overlay = (r.overlay_count.min(0xFFFF)) as u64;
-    let detected = (r.detected_count.min(0xFFFF)) as u64;
-    let rec_ok = (r.rec_ok_count.min(0xFFFF)) as u64;
-    let did = if r.did_detect { 1u64 } else { 0 };
-    ((did << 48) | (rec_ok << 32) | (detected << 16) | overlay) as jlong
-}
-
-/// Per-frame screen-translate path: borrow the captured screen's external-OES
-/// texture, GPU-read its canonical RGBA, run the no-tracker
-/// [`LiveScreenPipeline`] (detect/rec on cadence, overlays composited at
-/// identity), and present overlay-only into the bound framebuffer. Mirrors
-/// [`processFrameGl`] but for the static screen pipeline. Caller follows with
-/// the framebuffer readback (PBuffer) it owns.
+/// Screen-translate acquire dispatch: GPU-render the two OCR inputs (detector
+/// gray at the 32-aligned size, recognition RGBA at half canonical) off the
+/// captured external texture, then hand the frame to the background worker —
+/// non-blocking. The heavy detect/rec/translate runs off the GL thread; results
+/// land in the session and are picked up by [`screenPresentOverlay`] when
+/// [`screenAcquireState`] reports a new overlay version. Returns 1 if dispatched.
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenFrameGl(
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenDispatchAcquire(
     env: JNIEnv,
     _class: JClass,
     pipeline_ptr: jlong,
@@ -252,9 +242,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenF
     surface_w: jint,
     surface_h: jint,
     uv_xform: jni::objects::JFloatArray,
-    display_xform: jni::objects::JFloatArray,
-    timestamp_ns: jlong,
-) -> jlong {
+) -> jint {
     if pipeline_ptr == 0
         || renderer_ptr == 0
         || camera_tex_id <= 0
@@ -265,36 +253,28 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenF
     {
         return 0;
     }
-    // SAFETY: ptr came from `LiveScreenTracker::raw_address_for_jni`; the Kotlin
-    // wrapper holds the Arc alive across the call. Renderer is used only on its
-    // owning (GL) thread.
+    // SAFETY: ptr from `LiveScreenTracker::raw_address_for_jni`; Kotlin holds the
+    // Arc across the call. Renderer used only on its owning (GL) thread.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
     let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
 
-    let mut uv = [0f32; 9];
-    let mut dx = [0f32; 9];
-    if env.get_float_array_region(&uv_xform, 0, &mut uv).is_err()
-        || env
-            .get_float_array_region(&display_xform, 0, &mut dx)
-            .is_err()
-    {
+    // The worker is still draining a prior (likely just-aborted) job — skip the
+    // readback entirely and let the monitor retry next tick (it stays Settling).
+    if pipeline.acquire_busy() {
         return 0;
     }
-    let _ = timestamp_ns; // cadence is gated by the GL worker, not here
+    let mut uv = [0f32; 9];
+    if env.get_float_array_region(&uv_xform, 0, &mut uv).is_err() {
+        return 0;
+    }
     let cw = canonical_w as u32;
     let ch = canonical_h as u32;
     let canonical_long = cw.max(ch).max(1) as f32;
     let surface_long = surface_w.max(surface_h).max(1) as f32;
-    // Overlays are authored in canonical (full-capture) coords and presented
-    // into the half-res PBuffer; oversample = present/canonical gives ~1 texel
-    // per present pixel (no extra 0.5 like the camera, whose canonical ≪ surface).
+    // Set before dispatch: the worker bakes this oversample into the rendered
+    // canvas (overlays authored in canonical coords, presented at full res).
     pipeline.set_overlay_oversample(surface_long / canonical_long);
 
-    // Render the two OCR inputs directly on the GPU (one shader pass each), at
-    // the sizes detection and recognition actually want — no full-res RGBA
-    // readback + CPU resize/convert chain. Detector gray at the 32-aligned size
-    // (its `resize_to_det_aligned` becomes a no-op); recognition RGBA at half
-    // canonical. `display_xform(w,h)` just sizes the FBO; orientation is in `uv`.
     renderer.set_camera_external(camera_tex_id as u32, uv);
     let (det_w, det_h) = aligned_det_dims(cw, ch, pipeline.det_max_pixels());
     let (rec_w, rec_h) = ((cw / 2).max(1), (ch / 2).max(1));
@@ -323,7 +303,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenF
         }
     };
     log::info!(
-        "[screen] readback det {}x{} + rec {}x{} {:.0}ms",
+        "[screen] dispatch det {}x{} + rec {}x{} readback {:.0}ms",
         det_w,
         det_h,
         rec_w,
@@ -332,16 +312,87 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processScreenF
     );
     let frame = Arc::new(LiveFrame::new(0));
     frame.reset_oriented_split(oriented, None);
+    if pipeline.dispatch_acquire(frame) {
+        1
+    } else {
+        0
+    }
+}
 
-    // Present overlay-only into the bound framebuffer (the caller's half-res
-    // PBuffer).
+/// Composite the screen pipeline's resident overlays (provisional or full) into
+/// the bound framebuffer — present-only, no OCR. Run on the GL thread when
+/// [`screenAcquireState`] reports a new overlay version. Caller follows with the
+/// PBuffer readback it owns. Returns the composited overlay count.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentOverlay(
+    env: JNIEnv,
+    _class: JClass,
+    pipeline_ptr: jlong,
+    renderer_ptr: jlong,
+    canonical_w: jint,
+    canonical_h: jint,
+    surface_w: jint,
+    surface_h: jint,
+    display_xform: jni::objects::JFloatArray,
+) -> jint {
+    if pipeline_ptr == 0 || renderer_ptr == 0 || canonical_w <= 0 || canonical_h <= 0 {
+        return 0;
+    }
+    // SAFETY: see `screenDispatchAcquire`.
+    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+    let mut dx = [0f32; 9];
+    if env
+        .get_float_array_region(&display_xform, 0, &mut dx)
+        .is_err()
+    {
+        return 0;
+    }
     renderer.bind_present_framebuffer(0, surface_w, surface_h);
     let mut target = ExternalPresentTarget {
         renderer,
         display_xform: dx,
     };
-    let result = pipeline.process_frame_overlay(&frame, &mut target, cw, ch);
-    pack_screen_result(&result)
+    pipeline.composite_current(&mut target, canonical_w as u32, canonical_h as u32) as jint
+}
+
+/// Acquire state for the GL worker's poll loop: `(busy << 32) | overlay_version`.
+/// `busy` = an acquire is in flight; `overlay_version` bumps each time the worker
+/// upserts overlays (provisional, then full) so the worker knows to re-present.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenAcquireState(
+    _env: JNIEnv,
+    _class: JClass,
+    pipeline_ptr: jlong,
+) -> jlong {
+    if pipeline_ptr == 0 {
+        return 0;
+    }
+    // SAFETY: see `screenDispatchAcquire`.
+    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
+    let busy = if pipeline.acquire_busy() { 1u64 } else { 0 };
+    let version = pipeline.overlay_version() & 0xFFFF_FFFF;
+    ((busy << 32) | version) as jlong
+}
+
+/// Abort an in-flight screen acquire (the screen moved): bumps the generation so
+/// the worker bails at the next rec batch.
+#[cfg(feature = "gpu")]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenAbortAcquire(
+    _env: JNIEnv,
+    _class: JClass,
+    pipeline_ptr: jlong,
+) {
+    if pipeline_ptr == 0 {
+        return;
+    }
+    // SAFETY: see `screenDispatchAcquire`.
+    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
+    pipeline.abort_acquire();
 }
 
 /// Pack a [`MonitorAction`] + `wants_tick` into a jint for the GL worker:
@@ -362,7 +413,7 @@ fn pack_monitor(action: MonitorAction, wants_tick: bool) -> jint {
 /// decides whether the screen moved (hide), settled (acquire), or is unchanged.
 /// Returns the packed action + `wants_tick` (see [`pack_monitor`]). No overlay
 /// readback — the heavy detect/rec only runs on the worker's follow-up
-/// `processScreenFrameGl` once an `Acquire` is decided.
+/// the worker (`screenDispatchAcquire`) once an `Acquire` is decided.
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
@@ -385,7 +436,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorF
     {
         return 0;
     }
-    // SAFETY: see `processScreenFrameGl` — same ownership contract.
+    // SAFETY: see `screenDispatchAcquire` — same ownership contract.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
     let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
 
@@ -432,65 +483,9 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorT
     if pipeline_ptr == 0 {
         return 0;
     }
-    // SAFETY: see `processScreenFrameGl`.
+    // SAFETY: see `screenDispatchAcquire`.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
     let action = pipeline.monitor_tick(now_ns);
-    pack_monitor(action, pipeline.wants_tick())
-}
-
-/// Pre-present staleness check: after the synchronous OCR, the GL worker drains
-/// the latest captured frame (still pill-free — the new overlay isn't shown yet)
-/// and calls this. Reads a coarse gray off the external texture and asks the
-/// monitor whether the screen changed during OCR. Packed result: `Hide` (bit
-/// 0..1 = 1) → drop the stale overlay + re-acquire (do not present); `None` →
-/// safe to present.
-#[cfg(feature = "gpu")]
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorValidateClean(
-    env: JNIEnv,
-    _class: JClass,
-    pipeline_ptr: jlong,
-    renderer_ptr: jlong,
-    camera_tex_id: jint,
-    canonical_w: jint,
-    canonical_h: jint,
-    uv_xform: jni::objects::JFloatArray,
-    now_ns: jlong,
-) -> jint {
-    if pipeline_ptr == 0
-        || renderer_ptr == 0
-        || camera_tex_id <= 0
-        || canonical_w <= 0
-        || canonical_h <= 0
-    {
-        return 0;
-    }
-    // SAFETY: see `processScreenFrameGl`.
-    let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
-    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
-
-    let mut uv = [0f32; 9];
-    if env.get_float_array_region(&uv_xform, 0, &mut uv).is_err() {
-        return 0;
-    }
-    let (gw, gh) = pipeline.coarse_dims(canonical_w as u32, canonical_h as u32);
-    let dst_to_clip = [
-        2.0 / gw as f32,
-        0.0,
-        -1.0,
-        0.0,
-        2.0 / gh as f32,
-        -1.0,
-        0.0,
-        0.0,
-        1.0,
-    ];
-    renderer.set_camera_external(camera_tex_id as u32, uv);
-    let Some(gray) = renderer.read_camera_gray(gw, gh, &dst_to_clip) else {
-        return 0;
-    };
-    let action = pipeline.monitor_validate_clean(&gray, now_ns);
     pack_monitor(action, pipeline.wants_tick())
 }
 

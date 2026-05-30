@@ -65,12 +65,13 @@ internal object LivePipelineJni {
     alpha: Float,
   )
 
-  /** Per-frame screen-translate path. Like [processFrameGl] but drives the
-   *  no-tracker `LiveScreenPipeline` (detect/rec on a cadence, overlays at
-   *  identity) and presents overlay-only into the bound framebuffer. Returns a
-   *  packed `Long`: `[didDetect:1][recOk:16][detected:16][overlay:16]`. */
+  /** Dispatch a screen acquire: GPU-render the detector gray + recognition RGBA
+   *  off the captured texture and hand the frame to the background OCR worker.
+   *  Non-blocking — detect/rec/translate runs off the GL thread; poll
+   *  [screenAcquireState] and call [screenPresentOverlay] when the version bumps.
+   *  Returns 1 if dispatched. */
   @JvmStatic
-  external fun processScreenFrameGl(
+  external fun screenDispatchAcquire(
     pipelinePtr: Long,
     rendererPtr: Long,
     cameraTexId: Int,
@@ -79,16 +80,38 @@ internal object LivePipelineJni {
     surfaceWidth: Int,
     surfaceHeight: Int,
     uvXform: FloatArray,
+  ): Int
+
+  /** Composite the screen pipeline's resident overlays (provisional or full)
+   *  into the bound framebuffer — present-only, no OCR. Caller reads the PBuffer
+   *  back afterward. Returns the composited overlay count. */
+  @JvmStatic
+  external fun screenPresentOverlay(
+    pipelinePtr: Long,
+    rendererPtr: Long,
+    canonicalWidth: Int,
+    canonicalHeight: Int,
+    surfaceWidth: Int,
+    surfaceHeight: Int,
     displayXform: FloatArray,
-    timestampNs: Long,
-  ): Long
+  ): Int
+
+  /** Acquire state for the poll loop: `(busy shl 32) or overlayVersion`. `busy`
+   *  = an acquire is in flight; `overlayVersion` bumps each time the worker
+   *  upserts overlays (provisional, then full). */
+  @JvmStatic
+  external fun screenAcquireState(pipelinePtr: Long): Long
+
+  /** Abort an in-flight screen acquire (the screen moved). */
+  @JvmStatic
+  external fun screenAbortAcquire(pipelinePtr: Long)
 
   /** Screen-translate change detection: GPU-reads a coarse gray off the captured
    *  external texture and feeds the `LiveScreenPipeline` monitor. Returns a
    *  packed `Int`: bits 0-1 = action (0=none, 1=hide, 2=acquire), bit 8 =
-   *  wants-tick (a settle deadline is armed → poll on a timer). Cheap (no overlay
-   *  readback); the heavy detect/rec only runs on a follow-up
-   *  [processScreenFrameGl] once an acquire is decided. */
+   *  wants-tick (a settle deadline is armed / an acquire is in flight → poll on a
+   *  timer). Cheap (no overlay readback); the heavy detect/rec runs on the worker
+   *  via [screenDispatchAcquire] once an acquire is decided. */
   @JvmStatic
   external fun screenMonitorFrameGl(
     pipelinePtr: Long,
@@ -106,21 +129,6 @@ internal object LivePipelineJni {
   @JvmStatic
   external fun screenMonitorTick(
     pipelinePtr: Long,
-    nowNs: Long,
-  ): Int
-
-  /** Pre-present staleness check: after the synchronous OCR, drain the latest
-   *  (still pill-free) captured frame and call this to ask whether the screen
-   *  changed during OCR. Packed `Int`: action bit 1 (hide) → the overlay is
-   *  stale, don't present + re-acquire; action 0 (none) → safe to present. */
-  @JvmStatic
-  external fun screenMonitorValidateClean(
-    pipelinePtr: Long,
-    rendererPtr: Long,
-    cameraTexId: Int,
-    canonicalWidth: Int,
-    canonicalHeight: Int,
-    uvXform: FloatArray,
     nowNs: Long,
   ): Int
 
