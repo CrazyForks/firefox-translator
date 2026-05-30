@@ -82,18 +82,20 @@ internal object LivePipelineJni {
     uvXform: FloatArray,
   ): Int
 
-  /** Composite the screen pipeline's resident overlays (provisional or full)
-   *  into the bound framebuffer — present-only, no OCR. Caller reads the PBuffer
-   *  back afterward. Returns the composited overlay count. */
+  /** Hand the screen pipeline's resident overlay canvas (CPU-rendered RGBA)
+   *  straight into the direct `dst` buffer — no GPU composite/readback. Fills
+   *  `geom = [bitmapW, bitmapH, destLeft, destTop]` (the on-screen sub-region the
+   *  Canvas view draws 1:1, top-down). Returns the byte count written (0 if
+   *  nothing to show). `dst` must be a direct ByteBuffer ≥ full-screen RGBA. */
   @JvmStatic
-  external fun screenPresentOverlay(
+  external fun screenReadOverlay(
     pipelinePtr: Long,
-    rendererPtr: Long,
+    dst: java.nio.ByteBuffer,
+    geom: IntArray,
     canonicalWidth: Int,
     canonicalHeight: Int,
     surfaceWidth: Int,
     surfaceHeight: Int,
-    displayXform: FloatArray,
   ): Int
 
   /** Acquire state for the poll loop: `(busy shl 32) or overlayVersion`. `busy`

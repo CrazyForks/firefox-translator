@@ -28,7 +28,6 @@ import android.opengl.GLES20
 import android.util.Log
 import android.view.Surface
 import dev.davidv.translator.LivePipelineJni
-import dev.davidv.translator.ui.components.LiveGlSurfaceView
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -48,7 +47,7 @@ class ScreenCaptureGlWorker(
   displayWidth: Int,
   displayHeight: Int,
   private val onClearOverlay: () -> Unit,
-  private val onOverlayBitmap: (Bitmap) -> Unit,
+  private val onOverlayBitmap: (Bitmap, Int, Int) -> Unit,
 ) {
   @Volatile
   var pipelinePtr: Long = 0L
@@ -132,16 +131,13 @@ class ScreenCaptureGlWorker(
     private var frameAvailable = false
     private val stMatrix = FloatArray(16)
 
-    // Overlay readback is the half-res present (PBuffer), not the full OCR res.
+    // Direct buffer the native side copies the CPU-rendered overlay canvas into.
+    // Sized to full screen; the canvas covers only its (smaller) union-AABB.
     private val readBuffer = ByteBuffer.allocateDirect(pw * ph * 4).order(ByteOrder.nativeOrder())
+    private val overlayGeom = IntArray(4) // [bitmapW, bitmapH, destLeft, destTop]
 
-    // Ping-pong so the View can draw the last frame while we fill the next.
-    private val bitmaps =
-      arrayOf(
-        Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888),
-        Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888),
-      )
-    private var bitmapIdx = 0
+    // Reused overlay Bitmap (sized to the canvas sub-region); realloc on size change.
+    private var overlayBmp: Bitmap? = null
 
     fun setSourceBufferSize(
       w: Int,
@@ -204,7 +200,6 @@ class ScreenCaptureGlWorker(
       publishSourceSurface(Surface(st))
       Log.i(TAG, "screen-translate GL ready, canonical ${cw}x$ch, pipelinePtr=$pipelinePtr")
 
-      val dx = LiveGlSurfaceView.displayXform(cw, ch)
       // Auto change detection (SCREEN_CHANGE_DETECTION.md): per captured frame the
       // native monitor computes a coarse-gray diff (pill regions masked out) and
       // decides hide (movement) / acquire (settled) / nothing. On settle we
@@ -300,15 +295,26 @@ class ScreenCaptureGlWorker(
           val busy = (state ushr 32) != 0L
           if (version != lastVersion) {
             val tPresent = System.nanoTime()
-            LivePipelineJni.screenPresentOverlay(pipeline, rendererPtr, cw, ch, pw, ph, dx)
+            // Native renders the overlay canvas (CPU) and copies it into
+            // readBuffer; no GPU composite/readback. geom = [W, H, left, top].
             readBuffer.position(0)
-            GLES20.glReadPixels(0, 0, pw, ph, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, readBuffer)
-            readBuffer.position(0)
-            val bmp = bitmaps[bitmapIdx]
-            bmp.copyPixelsFromBuffer(readBuffer)
-            bitmapIdx = bitmapIdx xor 1
-            onOverlayBitmap(bmp)
-            Log.i(TAG, "present v=$version (${(System.nanoTime() - tPresent) / 1_000_000}ms)")
+            val bytes =
+              LivePipelineJni.screenReadOverlay(pipeline, readBuffer, overlayGeom, cw, ch, pw, ph)
+            if (bytes > 0) {
+              val bw = overlayGeom[0]
+              val bh = overlayGeom[1]
+              var bmp = overlayBmp
+              if (bmp == null || bmp.width != bw || bmp.height != bh) {
+                bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
+                overlayBmp = bmp
+              }
+              readBuffer.position(0)
+              readBuffer.limit(bytes)
+              bmp.copyPixelsFromBuffer(readBuffer)
+              readBuffer.clear()
+              onOverlayBitmap(bmp, overlayGeom[2], overlayGeom[3])
+              Log.i(TAG, "present v=$version (${(System.nanoTime() - tPresent) / 1_000_000}ms)")
+            }
             lastVersion = version
           }
           if (!busy) acquiring = false

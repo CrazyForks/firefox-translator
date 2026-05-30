@@ -205,7 +205,7 @@ class ScreenTranslateService : Service() {
         w,
         h,
         onClearOverlay = { view.clearOverlay() },
-      ) { bmp -> view.setOverlayBitmap(bmp) }
+      ) { bmp, left, top -> view.setOverlayBitmap(bmp, left, top) }
     captureWorker.pipelinePtr = pipelinePtr
     worker = captureWorker
     captureWorker.start()

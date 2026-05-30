@@ -226,7 +226,7 @@ fn clip_xform(w: u32, h: u32) -> [f32; 9] {
 /// gray at the 32-aligned size, recognition RGBA at half canonical) off the
 /// captured external texture, then hand the frame to the background worker —
 /// non-blocking. The heavy detect/rec/translate runs off the GL thread; results
-/// land in the session and are picked up by [`screenPresentOverlay`] when
+/// land in the session and are picked up by [`screenReadOverlay`] when
 /// [`screenAcquireState`] reports a new overlay version. Returns 1 if dispatched.
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
@@ -319,43 +319,53 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenDispatch
     }
 }
 
-/// Composite the screen pipeline's resident overlays (provisional or full) into
-/// the bound framebuffer — present-only, no OCR. Run on the GL thread when
-/// [`screenAcquireState`] reports a new overlay version. Caller follows with the
-/// PBuffer readback it owns. Returns the composited overlay count.
+/// Hand the screen pipeline's resident overlay canvas (provisional or full)
+/// straight to the caller — CPU-rendered RGBA, no GPU composite/readback. Renders
+/// the canvas if a deferred upsert left it stale, copies it into the direct
+/// `dst` buffer, and fills `geom = [bitmapW, bitmapH, destLeft, destTop]` (the
+/// on-screen sub-region the Canvas view draws 1:1, top-down). Returns the byte
+/// count written (0 if there's nothing to show). The overlay covers only its
+/// union-AABB, so it's ≤ the full-screen `dst`.
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
 #[allow(clippy::too_many_arguments)]
-pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentOverlay(
-    env: JNIEnv,
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenReadOverlay(
+    mut env: JNIEnv,
     _class: JClass,
     pipeline_ptr: jlong,
-    renderer_ptr: jlong,
+    dst: jni::objects::JByteBuffer,
+    geom: jni::objects::JIntArray,
     canonical_w: jint,
     canonical_h: jint,
     surface_w: jint,
     surface_h: jint,
-    display_xform: jni::objects::JFloatArray,
 ) -> jint {
-    if pipeline_ptr == 0 || renderer_ptr == 0 || canonical_w <= 0 || canonical_h <= 0 {
+    if pipeline_ptr == 0 || canonical_w <= 0 || canonical_h <= 0 {
         return 0;
     }
     // SAFETY: see `screenDispatchAcquire`.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
-    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
-    let mut dx = [0f32; 9];
-    if env
-        .get_float_array_region(&display_xform, 0, &mut dx)
-        .is_err()
-    {
+    let (Ok(addr), Ok(cap)) = (
+        env.get_direct_buffer_address(&dst),
+        env.get_direct_buffer_capacity(&dst),
+    ) else {
+        return 0;
+    };
+    // SAFETY: Kotlin allocated this direct ByteBuffer (full-screen) and keeps it
+    // alive for the call; we write at most `cap` bytes.
+    let dst_slice = unsafe { std::slice::from_raw_parts_mut(addr, cap) };
+    let Some((w, h, ox, oy)) = pipeline.overlay_canvas_into(dst_slice) else {
+        return 0;
+    };
+    // Canonical → display: the canvas is at oversample = surface/canonical, so its
+    // texel dims already equal display px; just translate the origin.
+    let dest_left = (ox * surface_w as f32 / canonical_w as f32) as i32;
+    let dest_top = (oy * surface_h as f32 / canonical_h as f32) as i32;
+    let g = [w as i32, h as i32, dest_left, dest_top];
+    if env.set_int_array_region(&geom, 0, &g).is_err() {
         return 0;
     }
-    renderer.bind_present_framebuffer(0, surface_w, surface_h);
-    let mut target = ExternalPresentTarget {
-        renderer,
-        display_xform: dx,
-    };
-    pipeline.composite_current(&mut target, canonical_w as u32, canonical_h as u32) as jint
+    (w * h * 4) as jint
 }
 
 /// Acquire state for the GL worker's poll loop: `(busy << 32) | overlay_version`.

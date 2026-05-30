@@ -20,7 +20,6 @@ package dev.davidv.translator.screenTranslate
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.view.View
 
@@ -34,17 +33,27 @@ import android.view.View
  *  and get dimmed, which is what lets the host window sit just under the
  *  untrusted-touch opacity cap (~0.8) and pass taps through.
  *
- *  The bitmap is the GL renderer's overlay readback (canonical size); we
- *  scale it to the view bounds at draw time.
+ *  The bitmap is the CPU-rendered overlay canvas (already display-resolution,
+ *  top-down), covering only its union-AABB sub-region; we draw it 1:1 at the
+ *  given on-screen origin — no GPU readback, no scale, no flip.
  */
 class ScreenOverlayView(context: Context) : View(context) {
   @Volatile
   private var overlay: Bitmap? = null
-  private val matrix = Matrix()
+  private var overlayLeft = 0f
+  private var overlayTop = 0f
   private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
 
-  fun setOverlayBitmap(bitmap: Bitmap) {
+  /** Draw `bitmap` (display-res, top-down) with its top-left at (`left`,`top`)
+   *  on screen. */
+  fun setOverlayBitmap(
+    bitmap: Bitmap,
+    left: Int,
+    top: Int,
+  ) {
     overlay = bitmap
+    overlayLeft = left.toFloat()
+    overlayTop = top.toFloat()
     postInvalidate()
   }
 
@@ -57,11 +66,6 @@ class ScreenOverlayView(context: Context) : View(context) {
 
   override fun onDraw(canvas: Canvas) {
     val bmp = overlay ?: return
-    // The readback is a GL framebuffer (bottom-up), so scale to fill and flip
-    // vertically to match the on-screen (top-down) orientation.
-    matrix.reset()
-    matrix.setScale(width.toFloat() / bmp.width, -height.toFloat() / bmp.height)
-    matrix.postTranslate(0f, height.toFloat())
-    canvas.drawBitmap(bmp, matrix, paint)
+    canvas.drawBitmap(bmp, overlayLeft, overlayTop, paint)
   }
 }
