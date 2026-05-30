@@ -28,8 +28,6 @@ import android.opengl.GLES20
 import android.util.Log
 import android.view.Surface
 import dev.davidv.translator.LivePipelineJni
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 /**
  *  Off-screen GPU worker for screen-translate. A `VirtualDisplay` writes the
@@ -131,9 +129,6 @@ class ScreenCaptureGlWorker(
     private var frameAvailable = false
     private val stMatrix = FloatArray(16)
 
-    // Direct buffer the native side copies the CPU-rendered overlay canvas into.
-    // Sized to full screen; the canvas covers only its (smaller) union-AABB.
-    private val readBuffer = ByteBuffer.allocateDirect(pw * ph * 4).order(ByteOrder.nativeOrder())
     private val overlayGeom = IntArray(4) // [bitmapW, bitmapH, destLeft, destTop]
 
     // Reused overlay Bitmap (sized to the canvas sub-region); realloc on size change.
@@ -295,23 +290,25 @@ class ScreenCaptureGlWorker(
           val busy = (state ushr 32) != 0L
           if (version != lastVersion) {
             val tPresent = System.nanoTime()
-            // Native renders the overlay canvas (CPU) and copies it into
-            // readBuffer; no GPU composite/readback. geom = [W, H, left, top].
-            readBuffer.position(0)
-            val bytes =
-              LivePipelineJni.screenReadOverlay(pipeline, readBuffer, overlayGeom, cw, ch, pw, ph)
-            if (bytes > 0) {
+            // Native renders the overlay canvas (CPU) and writes it straight into
+            // the Bitmap (AndroidBitmap_lockPixels) — one copy, no GPU readback.
+            // geom = [W, H, left, top]. A negative return means the Bitmap is null
+            // or the wrong size; geom[0,1] carries the needed dims — (re)allocate
+            // and call once more (the re-render is free, canvas is current).
+            var bytes =
+              LivePipelineJni.screenReadOverlay(pipeline, overlayBmp, overlayGeom, cw, ch, pw, ph)
+            if (bytes < 0) {
               val bw = overlayGeom[0]
               val bh = overlayGeom[1]
-              var bmp = overlayBmp
-              if (bmp == null || bmp.width != bw || bmp.height != bh) {
-                bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
+              if (bw > 0 && bh > 0) {
+                val bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
                 overlayBmp = bmp
+                bytes =
+                  LivePipelineJni.screenReadOverlay(pipeline, bmp, overlayGeom, cw, ch, pw, ph)
               }
-              readBuffer.position(0)
-              readBuffer.limit(bytes)
-              bmp.copyPixelsFromBuffer(readBuffer)
-              readBuffer.clear()
+            }
+            val bmp = overlayBmp
+            if (bytes > 0 && bmp != null) {
               onOverlayBitmap(bmp, overlayGeom[2], overlayGeom[3])
               Log.i(TAG, "present v=$version (${(System.nanoTime() - tPresent) / 1_000_000}ms)")
             }

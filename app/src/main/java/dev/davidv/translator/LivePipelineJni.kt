@@ -82,15 +82,17 @@ internal object LivePipelineJni {
     uvXform: FloatArray,
   ): Int
 
-  /** Hand the screen pipeline's resident overlay canvas (CPU-rendered RGBA)
-   *  straight into the direct `dst` buffer — no GPU composite/readback. Fills
-   *  `geom = [bitmapW, bitmapH, destLeft, destTop]` (the on-screen sub-region the
-   *  Canvas view draws 1:1, top-down). Returns the byte count written (0 if
-   *  nothing to show). `dst` must be a direct ByteBuffer ≥ full-screen RGBA. */
+  /** Render the screen pipeline's resident overlay canvas (CPU RGBA) and write it
+   *  straight into `bitmap` via AndroidBitmap_lockPixels — one copy, no ByteBuffer.
+   *  Fills `geom = [bitmapW, bitmapH, destLeft, destTop]` (the on-screen sub-region
+   *  the Canvas view draws 1:1, top-down). Returns: bytes written (>0) on success;
+   *  0 if nothing to show / Bitmap error; a negative value when `bitmap` is null or
+   *  the wrong size — `geom[0,1]` then carries the required (w, h); reallocate the
+   *  Bitmap and call again (the retry re-render is free). */
   @JvmStatic
   external fun screenReadOverlay(
     pipelinePtr: Long,
-    dst: java.nio.ByteBuffer,
+    bitmap: android.graphics.Bitmap?,
     geom: IntArray,
     canonicalWidth: Int,
     canonicalHeight: Int,
