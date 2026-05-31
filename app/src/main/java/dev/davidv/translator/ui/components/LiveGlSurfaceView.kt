@@ -20,7 +20,6 @@ package dev.davidv.translator.ui.components
 import android.content.Context
 import android.graphics.SurfaceTexture
 import android.opengl.EGL14
-import android.opengl.EGLConfig
 import android.opengl.EGLContext
 import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
@@ -29,6 +28,7 @@ import android.util.Log
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import dev.davidv.translator.GlEgl
 import dev.davidv.translator.LivePipelineJni
 import kotlin.math.max
 
@@ -236,7 +236,7 @@ class LiveGlSurfaceView(context: Context) :
         teardownEgl()
         return
       }
-      cameraTexId = createExternalOesTexture()
+      cameraTexId = GlEgl.createExternalOesTexture()
       if (cameraTexId == 0) {
         Log.e(TAG, "createExternalOesTexture failed")
         LivePipelineJni.destroyGlRenderer(rendererPtr)
@@ -312,68 +312,46 @@ class LiveGlSurfaceView(context: Context) :
       teardownEgl()
     }
 
-    private fun createExternalOesTexture(): Int {
-      val ids = IntArray(1)
-      GLES20.glGenTextures(1, ids, 0)
-      val id = ids[0]
-      if (id == 0) return 0
-      val target = GL_TEXTURE_EXTERNAL_OES
-      GLES20.glBindTexture(target, id)
-      GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
-      GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
-      GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
-      GLES20.glTexParameteri(target, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
-      GLES20.glBindTexture(target, 0)
-      return id
-    }
-
     private fun setupEgl(): Boolean {
-      eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
-      if (eglDisplay == EGL14.EGL_NO_DISPLAY) return false
-      val ver = IntArray(2)
-      if (!EGL14.eglInitialize(eglDisplay, ver, 0, ver, 1)) return false
-      val cfgAttribs =
-        intArrayOf(
-          EGL14.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-          EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT,
-          EGL14.EGL_RED_SIZE, 8,
-          EGL14.EGL_GREEN_SIZE, 8,
-          EGL14.EGL_BLUE_SIZE, 8,
-          EGL14.EGL_ALPHA_SIZE, 0,
-          EGL14.EGL_NONE,
-        )
-      val cfgs = arrayOfNulls<EGLConfig>(1)
-      val num = IntArray(1)
-      if (!EGL14.eglChooseConfig(eglDisplay, cfgAttribs, 0, cfgs, 0, 1, num, 0) || num[0] <= 0) {
-        return false
-      }
-      val cfg = cfgs[0] ?: return false
-      eglContext =
-        EGL14.eglCreateContext(
+      // Window surface, no alpha — the camera composite is opaque.
+      val core =
+        GlEgl.initContext(
+          intArrayOf(
+            EGL14.EGL_RENDERABLE_TYPE, GlEgl.EGL_OPENGL_ES3_BIT,
+            EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT,
+            EGL14.EGL_RED_SIZE, 8,
+            EGL14.EGL_GREEN_SIZE, 8,
+            EGL14.EGL_BLUE_SIZE, 8,
+            EGL14.EGL_ALPHA_SIZE, 0,
+            EGL14.EGL_NONE,
+          ),
+        ) ?: return false
+      eglDisplay = core.display
+      eglContext = core.context
+      eglSurface =
+        EGL14.eglCreateWindowSurface(
           eglDisplay,
-          cfg,
-          EGL14.EGL_NO_CONTEXT,
-          intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 3, EGL14.EGL_NONE),
+          core.config,
+          surface,
+          intArrayOf(EGL14.EGL_NONE),
           0,
         )
-      if (eglContext == EGL14.EGL_NO_CONTEXT) return false
-      eglSurface =
-        EGL14.eglCreateWindowSurface(eglDisplay, cfg, surface, intArrayOf(EGL14.EGL_NONE), 0)
       if (eglSurface == EGL14.EGL_NO_SURFACE) return false
       return EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
     }
 
     private fun teardownEgl() {
       if (eglDisplay != EGL14.EGL_NO_DISPLAY) {
-        EGL14.eglMakeCurrent(
-          eglDisplay,
-          EGL14.EGL_NO_SURFACE,
-          EGL14.EGL_NO_SURFACE,
-          EGL14.EGL_NO_CONTEXT,
-        )
-        if (eglSurface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, eglSurface)
-        if (eglContext != EGL14.EGL_NO_CONTEXT) EGL14.eglDestroyContext(eglDisplay, eglContext)
-        EGL14.eglTerminate(eglDisplay)
+        if (eglSurface != EGL14.EGL_NO_SURFACE) {
+          EGL14.eglMakeCurrent(
+            eglDisplay,
+            EGL14.EGL_NO_SURFACE,
+            EGL14.EGL_NO_SURFACE,
+            EGL14.EGL_NO_CONTEXT,
+          )
+          EGL14.eglDestroySurface(eglDisplay, eglSurface)
+        }
+        GlEgl.destroyContext(eglDisplay, eglContext)
       }
       eglDisplay = EGL14.EGL_NO_DISPLAY
       eglContext = EGL14.EGL_NO_CONTEXT
@@ -383,14 +361,6 @@ class LiveGlSurfaceView(context: Context) :
 
   companion object {
     private const val TAG = "LiveGlSurfaceView"
-
-    // android.opengl.GLES11Ext.GL_TEXTURE_EXTERNAL_OES — using the literal
-    // avoids the GLES11Ext import (which only exists for this one constant).
-    private const val GL_TEXTURE_EXTERNAL_OES: Int = 0x8D65
-
-    // EGL10.EGL_OPENGL_ES3_BIT_KHR; EGL14 doesn't expose it as a named
-    // constant despite being defined since API 18.
-    private const val EGL_OPENGL_ES3_BIT: Int = 0x40
 
     /** Cap canonical (tracker/composite) frame at 1000 px on the long
      *  side, preserving display aspect — same rule the Linux GPU path
