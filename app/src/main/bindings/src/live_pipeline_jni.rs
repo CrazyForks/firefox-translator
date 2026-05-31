@@ -319,13 +319,12 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
     let dl_ms = t_dl.elapsed().as_secs_f64() * 1000.0;
     let (n_pills, n_glyphs) = (dl.pills.len(), dl.glyphs.instances.len());
     let t_bake = std::time::Instant::now();
-    if !renderer.render_overlay_to_texture(&dl, SCREEN_PILL_ALPHA, SCREEN_TEXT_ALPHA) {
+    if !renderer.render_overlay_to_texture(&dl, SCREEN_PILL_ALPHA, SCREEN_TEXT_ALPHA, false) {
         return 0;
     }
     let bake_ms = t_bake.elapsed().as_secs_f64() * 1000.0;
     let t_present = std::time::Instant::now();
     let drawn = renderer.present_screen_overlay_fbo(
-        &dl,
         canonical_w as u32,
         canonical_h as u32,
         surface_w as u32,
@@ -477,7 +476,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorT
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_debugReadCanonicalRgba<'local>(
-    mut env: JNIEnv<'local>,
+    env: JNIEnv<'local>,
     _class: JClass<'local>,
     renderer_ptr: jlong,
     canonical_w: jint,
@@ -575,11 +574,20 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_processFrameGl
         return 0;
     };
 
-    // read_camera_gray rebound its own R8 FBO. Re-target the EGL surface
-    // for the composite that's about to happen inside run_tracker_with_acquire.
-    renderer.bind_present_framebuffer(0, surface_w, surface_h);
-
-    match run_tracker_with_acquire(pipeline, renderer, &frame, cw, ch, dx, timestamp_ns as u64) {
+    // run_tracker_with_acquire presents on the GPU (it binds the window surface
+    // itself), so no pre-bind here — read_camera_gray's R8 FBO is left bound and the
+    // present re-targets FBO 0.
+    match run_tracker_with_acquire(
+        pipeline,
+        renderer,
+        &frame,
+        cw,
+        ch,
+        surface_w as u32,
+        surface_h as u32,
+        dx,
+        timestamp_ns as u64,
+    ) {
         Ok(r) => pack_result(
             r.state,
             r.anchor_id,
