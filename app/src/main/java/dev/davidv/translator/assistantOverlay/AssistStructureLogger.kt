@@ -66,7 +66,7 @@ class AssistStructureLogger(
         tag,
         "Window[$windowIndex] left=${window.left} top=${window.top} width=${window.width} height=${window.height} title=${window.title}",
       )
-      logViewNode(window.rootViewNode, window.left, window.top, depth = 0)
+      // logViewNode(window.rootViewNode, window.left, window.top, depth = 0)
     }
 
     val parsedFragments = parser.parse(structure)
@@ -133,7 +133,7 @@ class AssistStructureLogger(
 
     for (childIndex in 0 until node.childCount) {
       val child = node.getChildAt(childIndex) ?: continue
-      logViewNode(child, left, top, depth + 1)
+      // logViewNode(child, left, top, depth + 1)
     }
   }
 
