@@ -80,17 +80,13 @@ fn pack_result(
 #[cfg(feature = "gpu")]
 use std::ffi::{c_char, c_void, CString};
 #[cfg(feature = "gpu")]
-use std::sync::Arc;
-#[cfg(feature = "gpu")]
-use translator::gl_renderer::{ExternalPresentTarget, GlesRenderer, PresentContent};
-#[cfg(feature = "gpu")]
-use translator::live_frame::{aligned_det_dims, LiveFrame, OrientedImage};
-#[cfg(feature = "gpu")]
-use translator::ocr::Rect;
+use translator::gl_renderer::{GlesRenderer, PresentContent};
 #[cfg(feature = "gpu")]
 use translator::live_screen::{LiveScreenPipeline, MonitorAction};
 #[cfg(feature = "gpu")]
-use translator::live_gpu_tick::{frame_from_camera_gray, run_tracker_with_acquire};
+use translator::live_gpu_tick::{
+    clip_xform, frame_from_camera_gray, run_tracker_with_acquire, screen_acquire_frame,
+};
 
 #[cfg(feature = "gpu")]
 #[link(name = "EGL")]
@@ -212,16 +208,6 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_setRendererOve
     renderer.set_overlay_alpha(alpha);
 }
 
-/// Row-major 3×3 mapping `w×h` dst-pixel coords → clip `[-1,1]` (the
-/// resolution-independent normalize `read_camera_*` wants as `dst_to_clip`;
-/// orientation/crop live in the `uv` transform, not here).
-#[cfg(feature = "gpu")]
-fn clip_xform(w: u32, h: u32) -> [f32; 9] {
-    let w = w.max(1) as f32;
-    let h = h.max(1) as f32;
-    [2.0 / w, 0.0, -1.0, 0.0, 2.0 / h, -1.0, 0.0, 0.0, 1.0]
-}
-
 /// Screen-translate acquire dispatch: GPU-render the two OCR inputs (detector
 /// gray at the 32-aligned size, recognition RGBA at half canonical) off the
 /// captured external texture, then hand the frame to the background worker —
@@ -275,43 +261,11 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenDispatch
     // canvas (overlays authored in canonical coords, presented at full res).
     pipeline.set_overlay_oversample(surface_long / canonical_long);
 
-    renderer.set_camera_external(camera_tex_id as u32, uv);
-    let (det_w, det_h) = aligned_det_dims(cw, ch, pipeline.det_max_pixels());
-    let (rec_w, rec_h) = ((cw / 2).max(1), (ch / 2).max(1));
-    let t_readback = std::time::Instant::now();
-    let Some(det_gray) = renderer.read_camera_gray(det_w, det_h, &clip_xform(det_w, det_h))
+    let Some(frame) =
+        screen_acquire_frame(renderer, camera_tex_id as u32, cw, ch, uv, pipeline.det_max_pixels())
     else {
         return 0;
     };
-    let Some(rec_rgba) = renderer.read_camera_rgba(rec_w, rec_h, &clip_xform(rec_w, rec_h))
-    else {
-        return 0;
-    };
-    let crop = Rect {
-        left: 0,
-        top: 0,
-        right: cw,
-        bottom: ch,
-    };
-    let oriented = match OrientedImage::from_gpu_split(
-        det_gray, det_w, det_h, &rec_rgba, rec_w, rec_h, cw, ch, crop,
-    ) {
-        Ok(o) => o,
-        Err(e) => {
-            log::warn!("[screen] from_gpu_split failed: {e:?}");
-            return 0;
-        }
-    };
-    log::info!(
-        "[screen] dispatch det {}x{} + rec {}x{} readback {:.0}ms",
-        det_w,
-        det_h,
-        rec_w,
-        rec_h,
-        t_readback.elapsed().as_secs_f64() * 1000.0,
-    );
-    let frame = Arc::new(LiveFrame::new(0));
-    frame.reset_oriented_split(oriented, None);
     if pipeline.dispatch_acquire(frame) {
         1
     } else {
@@ -351,21 +305,19 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
     // is used only on its owning (GL) thread.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
     let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
-    // Build the GPU draw list (pills + per-block text tiles), bake it into the
-    // overlay texture on the GPU (rounded pills opaque, then text), and present
+    // Build the GPU draw list (pills + per-glyph instance data), bake it into the
+    // overlay texture on the GPU (rounded pills opaque, then glyph quads), and present
     // that texture into the window surface — no CPU canvas raster. Screen pills
     // are opaque (the window alpha dims them) and text is opaque.
     //
-    // Phase timing: `dl` includes the CPU glyph raster (render_block_tiles for
-    // changed blocks); `bake` is the GPU tile upload + two-pass composite;
-    // `present` is the final window blit. Logged so we can see where present time
-    // goes (glyph raster vs GPU) — see the present-cost breakdown.
+    // Phase timing: `dl` = collect_overlay_glyphs (CPU text shaping + glyph mask
+    // collection); `bake` = atlas upload + two-pass GPU composite; `present` = window blit.
     let t_dl = std::time::Instant::now();
     let Some(dl) = pipeline.overlay_draw_list() else {
         return 0;
     };
     let dl_ms = t_dl.elapsed().as_secs_f64() * 1000.0;
-    let (n_pills, n_tiles) = (dl.pills.len(), dl.tiles.len());
+    let (n_pills, n_glyphs) = (dl.pills.len(), dl.glyphs.instances.len());
     let t_bake = std::time::Instant::now();
     if !renderer.render_overlay_to_texture(&dl, SCREEN_PILL_ALPHA, SCREEN_TEXT_ALPHA) {
         return 0;
@@ -381,7 +333,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
     );
     let present_ms = t_present.elapsed().as_secs_f64() * 1000.0;
     log::info!(
-        "[screen-present] dl={dl_ms:.1}ms({n_pills}p/{n_tiles}t) bake={bake_ms:.1} present={present_ms:.1}"
+        "[screen-present] dl={dl_ms:.1}ms({n_pills}p/{n_glyphs}g) bake={bake_ms:.1} present={present_ms:.1}"
     );
     if drawn {
         1
@@ -486,20 +438,10 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorF
     let cw = canonical_w as u32;
     let ch = canonical_h as u32;
     let (gw, gh) = pipeline.coarse_dims(cw, ch);
-    // The `displayXform` matrix for the coarse dims: maps the gw×gh dst quad to
-    // the full clip [-1,1] (resolution-independent normalize), so the coarse
-    // gray samples the whole frame, oriented exactly like the present.
-    let dst_to_clip = [
-        2.0 / gw as f32,
-        0.0,
-        -1.0,
-        0.0,
-        2.0 / gh as f32,
-        -1.0,
-        0.0,
-        0.0,
-        1.0,
-    ];
+    // Maps the gw×gh dst quad to the full clip [-1,1] (resolution-independent
+    // normalize), so the coarse gray samples the whole frame, oriented exactly
+    // like the present (orientation lives in `uv`).
+    let dst_to_clip = clip_xform(gw, gh);
     renderer.set_camera_external(camera_tex_id as u32, uv);
     let Some(gray) = renderer.read_camera_gray(gw, gh, &dst_to_clip) else {
         return 0;
