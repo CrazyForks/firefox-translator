@@ -27,34 +27,6 @@ use jni::JNIEnv;
 
 use translator::live_tracker_pipeline::{LiveTrackerPipeline, PlanarTrackerState};
 
-/// `AndroidBitmapInfo` from `<android/bitmap.h>` (libjnigraphics). Only the fields
-/// up to `flags` are stable; we read `width`/`height`/`stride`.
-#[cfg(feature = "gpu")]
-#[repr(C)]
-#[derive(Default)]
-struct AndroidBitmapInfo {
-    width: u32,
-    height: u32,
-    stride: u32,
-    format: i32,
-    flags: u32,
-}
-
-#[cfg(feature = "gpu")]
-unsafe extern "C" {
-    fn AndroidBitmap_getInfo(
-        env: *mut jni::sys::JNIEnv,
-        bitmap: jni::sys::jobject,
-        info: *mut AndroidBitmapInfo,
-    ) -> i32;
-    fn AndroidBitmap_lockPixels(
-        env: *mut jni::sys::JNIEnv,
-        bitmap: jni::sys::jobject,
-        addr: *mut *mut core::ffi::c_void,
-    ) -> i32;
-    fn AndroidBitmap_unlockPixels(env: *mut jni::sys::JNIEnv, bitmap: jni::sys::jobject) -> i32;
-}
-
 /// Pack the per-frame result into a single `jlong`. Layout (bit 63 →
 /// bit 0):
 ///
@@ -254,7 +226,7 @@ fn clip_xform(w: u32, h: u32) -> [f32; 9] {
 /// gray at the 32-aligned size, recognition RGBA at half canonical) off the
 /// captured external texture, then hand the frame to the background worker —
 /// non-blocking. The heavy detect/rec/translate runs off the GL thread; results
-/// land in the session and are picked up by [`screenReadOverlay`] when
+/// land in the session and are presented by [`screenPresentOverlayGl`] when
 /// [`screenAcquireState`] reports a new overlay version. Returns 1 if dispatched.
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
@@ -347,86 +319,83 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenDispatch
     }
 }
 
-/// Render the screen pipeline's resident overlay canvas (provisional or full) if a
-/// deferred upsert left it stale, then write it **straight into `bitmap`** via
-/// `AndroidBitmap_lockPixels` — one copy, no intermediate ByteBuffer (the phone is
-/// memory-bandwidth bound, and the old path copied the canvas twice). Fills
-/// `geom = [bitmapW, bitmapH, destLeft, destTop]` (the on-screen sub-region the
-/// Canvas view draws 1:1, top-down).
-///
-/// Returns: bytes written (`>0`) on success; `0` when there's nothing to show or on
-/// a Bitmap error; a **negative** value when `bitmap` is absent or the wrong size —
-/// `geom` then carries the required `(w, h)` so Kotlin (re)allocates the Bitmap and
-/// calls again (the re-render on retry is free: the canvas is already current).
+/// Present the screen pipeline's resident overlay canvas straight into the bound
+/// EGL window surface (the overlay `TextureView`): render it first if a deferred
+/// upsert left it stale, then upload it to a texture and draw one premultiplied
+/// quad — no Bitmap, no CPU readback. The caller (the GL worker) must have made
+/// the window surface current; it swaps after. `canonical_*` is the OCR frame
+/// size the overlay origin is in, `surface_*` the display/window size. Returns 1
+/// if a frame was drawn, 0 when there's nothing to show.
 #[cfg(feature = "gpu")]
 #[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)]
-pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenReadOverlay(
-    env: JNIEnv,
+pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentOverlayGl(
+    _env: JNIEnv,
     _class: JClass,
     pipeline_ptr: jlong,
-    bitmap: jni::objects::JObject,
-    geom: jni::objects::JIntArray,
+    renderer_ptr: jlong,
     canonical_w: jint,
     canonical_h: jint,
     surface_w: jint,
     surface_h: jint,
 ) -> jint {
-    if pipeline_ptr == 0 || canonical_w <= 0 || canonical_h <= 0 {
+    if pipeline_ptr == 0
+        || renderer_ptr == 0
+        || canonical_w <= 0
+        || canonical_h <= 0
+        || surface_w <= 0
+        || surface_h <= 0
+    {
         return 0;
     }
-    // SAFETY: see `screenDispatchAcquire`.
+    // SAFETY: see `screenDispatchAcquire` — same ownership contract; the renderer
+    // is used only on its owning (GL) thread.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
-    // Render (if stale) and learn the canvas size before touching the Bitmap.
-    let Some((w, h, ox, oy)) = pipeline.ensure_overlay_dims() else {
+    let renderer = unsafe { &mut *(renderer_ptr as *mut GlesRenderer) };
+    // Build the GPU draw list (pills + per-block text tiles), bake it into the
+    // overlay texture on the GPU (rounded pills opaque, then text), and present
+    // that texture into the window surface — no CPU canvas raster. Screen pills
+    // are opaque (the window alpha dims them) and text is opaque.
+    //
+    // Phase timing: `dl` includes the CPU glyph raster (render_block_tiles for
+    // changed blocks); `bake` is the GPU tile upload + two-pass composite;
+    // `present` is the final window blit. Logged so we can see where present time
+    // goes (glyph raster vs GPU) — see the present-cost breakdown.
+    let t_dl = std::time::Instant::now();
+    let Some(dl) = pipeline.overlay_draw_list() else {
         return 0;
     };
-    // Canonical → display: the canvas is at oversample = surface/canonical, so its
-    // texel dims already equal display px; just translate the origin. Reported first
-    // so the resize path still learns the required size.
-    let dest_left = (ox * surface_w as f32 / canonical_w as f32) as i32;
-    let dest_top = (oy * surface_h as f32 / canonical_h as f32) as i32;
-    let g = [w as i32, h as i32, dest_left, dest_top];
-    if env.set_int_array_region(&geom, 0, &g).is_err() {
+    let dl_ms = t_dl.elapsed().as_secs_f64() * 1000.0;
+    let (n_pills, n_tiles) = (dl.pills.len(), dl.tiles.len());
+    let t_bake = std::time::Instant::now();
+    if !renderer.render_overlay_to_texture(&dl, SCREEN_PILL_ALPHA, SCREEN_TEXT_ALPHA) {
         return 0;
     }
-    let env_raw = env.get_raw();
-    let bmp_raw = bitmap.as_raw();
-    if bmp_raw.is_null() {
-        return -((w * h * 4) as jint);
-    }
-    let mut info = AndroidBitmapInfo::default();
-    // SAFETY: `bmp_raw` is the live `Bitmap` jobject Kotlin passed; `env_raw` is this
-    // call's env. `getInfo` only reads.
-    if unsafe { AndroidBitmap_getInfo(env_raw, bmp_raw, &mut info) } != 0 {
-        return 0;
-    }
-    if info.width != w || info.height != h {
-        return -((w * h * 4) as jint);
-    }
-    let mut addr: *mut core::ffi::c_void = core::ptr::null_mut();
-    // SAFETY: locks the Bitmap's pixels for the duration below; unlocked before return.
-    if unsafe { AndroidBitmap_lockPixels(env_raw, bmp_raw, &mut addr) } != 0 || addr.is_null() {
-        return 0;
-    }
-    // SAFETY: `addr` points to `stride * height` bytes of the locked Bitmap, valid
-    // until `unlockPixels`. We write within that range (rows of `width * 4`).
-    let dst = unsafe {
-        std::slice::from_raw_parts_mut(addr as *mut u8, (info.stride * info.height) as usize)
-    };
-    let copied = pipeline
-        .copy_overlay_strided(dst, info.stride as usize)
-        .is_some();
-    // SAFETY: pairs the lock above.
-    unsafe {
-        AndroidBitmap_unlockPixels(env_raw, bmp_raw);
-    }
-    if copied {
-        (w * h * 4) as jint
+    let bake_ms = t_bake.elapsed().as_secs_f64() * 1000.0;
+    let t_present = std::time::Instant::now();
+    let drawn = renderer.present_screen_overlay_fbo(
+        &dl,
+        canonical_w as u32,
+        canonical_h as u32,
+        surface_w as u32,
+        surface_h as u32,
+    );
+    let present_ms = t_present.elapsed().as_secs_f64() * 1000.0;
+    log::info!(
+        "[screen-present] dl={dl_ms:.1}ms({n_pills}p/{n_tiles}t) bake={bake_ms:.1} present={present_ms:.1}"
+    );
+    if drawn {
+        1
     } else {
         0
     }
 }
+
+/// Screen overlay opacities baked into the overlay texture. Pills opaque (the
+/// touch-capped window alpha does the dimming); text opaque for crispness.
+#[cfg(feature = "gpu")]
+const SCREEN_PILL_ALPHA: f32 = 1.0;
+#[cfg(feature = "gpu")]
+const SCREEN_TEXT_ALPHA: f32 = 1.0;
 
 /// Acquire state for the GL worker's poll loop: `(busy << 32) | overlay_version`.
 /// `busy` = an acquire is in flight; `overlay_version` bumps each time the worker

@@ -58,7 +58,7 @@ class ScreenTranslateService : Service() {
   private var projection: MediaProjection? = null
   private var virtualDisplay: VirtualDisplay? = null
   private var screenTracker: uniffi.bindings.LiveScreenTracker? = null
-  private var overlayView: ScreenOverlayView? = null
+  private var overlayView: GpuOverlayTextureView? = null
   private var worker: ScreenCaptureGlWorker? = null
   private var windowManager: WindowManager? = null
   private var stopped = false
@@ -161,7 +161,7 @@ class ScreenTranslateService : Service() {
     val h = metrics.heightPixels
     val dpi = metrics.densityDpi
 
-    val view = ScreenOverlayView(this)
+    val view = GpuOverlayTextureView(this)
     overlayView = view
 
     val overlayType =
@@ -191,23 +191,23 @@ class ScreenTranslateService : Service() {
     // Android 12+ untrusted-touch rule: a tap passing through an overlay owned
     // by another app is discarded if the overlay's opacity exceeds ~0.8
     // (maximum_obscuring_opacity_for_touch). Sit just under the cap — and
-    // because this is a Canvas view composited through the window (not a
-    // SurfaceView, which is a separate full-opacity layer), the window alpha
-    // actually governs it, so taps fall through.
+    // because the TextureView composites through the window (not a SurfaceView,
+    // a separate full-opacity layer), the window alpha governs it, so taps fall
+    // through. With an accessibility service the app is trusted and the cap
+    // lifts; the only change is raising WINDOW_ALPHA — the GPU render path is
+    // identical, so there is no second code path for that state.
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      params.alpha = 0.79f
+      params.alpha = WINDOW_ALPHA
     }
     wm.addView(view, params)
 
     val pipelinePtr = tracker.rawAddressForJni().toLong()
-    val captureWorker =
-      ScreenCaptureGlWorker(
-        w,
-        h,
-        onClearOverlay = { view.clearOverlay() },
-      ) { bmp, left, top -> view.setOverlayBitmap(bmp, left, top) }
+    val captureWorker = ScreenCaptureGlWorker(w, h)
     captureWorker.pipelinePtr = pipelinePtr
     worker = captureWorker
+    // The worker turns the TextureView's SurfaceTexture into the EGL window
+    // surface it presents into; hand each lifecycle edge straight to it.
+    view.onSurfaceTexture = { st -> captureWorker.setOutputSurfaceTexture(st) }
     captureWorker.start()
     Log.i(TAG, "setup: ${w}x$h @${dpi}dpi, pipelinePtr=$pipelinePtr")
 
@@ -315,6 +315,12 @@ class ScreenTranslateService : Service() {
   companion object {
     private const val TAG = "ScreenTranslateSvc"
     private const val NOTIFICATION_ID = 0x5C12
+
+    /** Overlay window opacity. Sits just under the Android 12+ untrusted-touch
+     *  cap (~0.8) so taps fall through to the app below; the GPU overlay is
+     *  dimmed by this. With an accessibility service the cap lifts and this can
+     *  go to 1.0 — the only change for that state, no separate render path. */
+    private const val WINDOW_ALPHA = 0.79f
     const val EXTRA_RESULT_CODE = "result_code"
     const val EXTRA_DATA = "data"
     const val EXTRA_SOURCE_LANG = "source_lang"

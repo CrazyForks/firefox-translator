@@ -82,18 +82,16 @@ internal object LivePipelineJni {
     uvXform: FloatArray,
   ): Int
 
-  /** Render the screen pipeline's resident overlay canvas (CPU RGBA) and write it
-   *  straight into `bitmap` via AndroidBitmap_lockPixels — one copy, no ByteBuffer.
-   *  Fills `geom = [bitmapW, bitmapH, destLeft, destTop]` (the on-screen sub-region
-   *  the Canvas view draws 1:1, top-down). Returns: bytes written (>0) on success;
-   *  0 if nothing to show / Bitmap error; a negative value when `bitmap` is null or
-   *  the wrong size — `geom[0,1]` then carries the required (w, h); reallocate the
-   *  Bitmap and call again (the retry re-render is free). */
+  /** Present the screen pipeline's resident overlay canvas straight into the
+   *  currently-bound EGL window surface (the overlay TextureView): renders it if a
+   *  deferred upsert left it stale, then uploads it to a texture and draws one
+   *  premultiplied quad — no Bitmap, no CPU readback. Make the window surface
+   *  current before calling and `eglSwapBuffers` after. Returns 1 if a frame was
+   *  drawn, 0 when there's nothing to show. */
   @JvmStatic
-  external fun screenReadOverlay(
+  external fun screenPresentOverlayGl(
     pipelinePtr: Long,
-    bitmap: android.graphics.Bitmap?,
-    geom: IntArray,
+    rendererPtr: Long,
     canonicalWidth: Int,
     canonicalHeight: Int,
     surfaceWidth: Int,

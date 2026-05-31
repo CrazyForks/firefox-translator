@@ -17,7 +17,6 @@
 
 package dev.davidv.translator.screenTranslate
 
-import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.opengl.EGL14
 import android.opengl.EGLConfig
@@ -32,30 +31,31 @@ import dev.davidv.translator.LivePipelineJni
 /**
  *  Off-screen GPU worker for screen-translate. A `VirtualDisplay` writes the
  *  captured screen into a `GL_TEXTURE_EXTERNAL_OES`; per frame this drives the
- *  same native overlay-only `GlesRenderer` the camera path uses, but renders
- *  into a PBuffer (no window surface), reads the canonical overlay back, and
- *  hands it to [onOverlayBitmap] for a Canvas `View` to draw.
+ *  same native overlay-only `GlesRenderer` the camera path uses to read back the
+ *  monitor gray / OCR inputs. When the overlay updates it is composited **on the
+ *  GPU straight into the overlay TextureView's EGL window surface** — no CPU
+ *  canvas readback, no Canvas view. See [GpuOverlayTextureView] for why a
+ *  TextureView (in-window, dimmed by the window alpha, taps pass through) and not
+ *  a SurfaceView (separate full-opacity layer that blocks taps).
  *
- *  The display is decoupled from a SurfaceView on purpose: the overlay window
- *  must composite through the View hierarchy so its `LayoutParams.alpha` can
- *  sit under the untrusted-touch cap and pass taps through (a SurfaceView is a
- *  separate full-opacity layer that blocks them). See [ScreenOverlayView].
+ *  The GL context is created on a PBuffer surface so it is valid before the
+ *  TextureView's SurfaceTexture exists; the window surface is created lazily from
+ *  [setOutputSurfaceTexture] and kept current once available (the monitor
+ *  readbacks render to their own FBOs, so the bound surface is irrelevant to
+ *  them — only present/clear touch the window's back buffer and swap).
  */
 class ScreenCaptureGlWorker(
   displayWidth: Int,
   displayHeight: Int,
-  private val onClearOverlay: () -> Unit,
-  private val onOverlayBitmap: (Bitmap, Int, Int) -> Unit,
 ) {
   @Volatile
   var pipelinePtr: Long = 0L
 
   // OCR canonical is half the display: read_camera_rgba renders into a half-res
   // FBO (cheap ~4.6MB readback) which rec crops from (det downsamples further).
-  // The overlay PRESENT, though, runs at full display res (pw/ph) so glyphs
-  // rasterize at oversample=2 and the Canvas draws the pill bitmap 1:1 instead
-  // of upscaling a half-res render (which looked pixelated). The present
-  // readback is full-res but happens once per acquire, not per frame.
+  // The overlay PRESENT runs at full display res (pw/ph): the canvas rasterizes
+  // glyphs at oversample=2 and is drawn 1:1, so present canonical=cw/ch and
+  // surface=pw/ph (the canvas origin is in canonical coords, scaled to display).
   private val cw = (displayWidth / 2).coerceAtLeast(1)
   private val ch = (displayHeight / 2).coerceAtLeast(1)
   private val pw = displayWidth.coerceAtLeast(1)
@@ -66,6 +66,12 @@ class ScreenCaptureGlWorker(
   @Volatile
   private var sourceSurface: Surface? = null
   private val sourceSurfaceLock = Object()
+
+  // The overlay TextureView's SurfaceTexture, handed off to the GL thread which
+  // turns it into an EGL window surface. `dirty` is consumed once per change.
+  private val outputLock = Object()
+  private var pendingOutputSt: SurfaceTexture? = null
+  private var outputDirty = false
 
   fun start() {
     glThread = GlThread().also { it.start() }
@@ -99,6 +105,16 @@ class ScreenCaptureGlWorker(
     glThread?.setSourceBufferSize(width, height)
   }
 
+  /** Hand the overlay TextureView's SurfaceTexture (or `null` on destroy) to the
+   *  GL thread, which (re)creates the EGL window surface it presents into. */
+  fun setOutputSurfaceTexture(st: SurfaceTexture?) {
+    synchronized(outputLock) {
+      pendingOutputSt = st
+      outputDirty = true
+    }
+    glThread?.wake()
+  }
+
   private fun publishSourceSurface(s: Surface) {
     synchronized(sourceSurfaceLock) {
       sourceSurface = s
@@ -109,7 +125,9 @@ class ScreenCaptureGlWorker(
   private inner class GlThread : Thread("screen-translate-gl") {
     private var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
-    private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
+    private var eglConfig: EGLConfig? = null
+    private var eglPbuffer: EGLSurface = EGL14.EGL_NO_SURFACE
+    private var eglWindowSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var rendererPtr: Long = 0L
     private var sourceTexId: Int = 0
 
@@ -129,11 +147,6 @@ class ScreenCaptureGlWorker(
     private var frameAvailable = false
     private val stMatrix = FloatArray(16)
 
-    private val overlayGeom = IntArray(4) // [bitmapW, bitmapH, destLeft, destTop]
-
-    // Reused overlay Bitmap (sized to the canvas sub-region); realloc on size change.
-    private var overlayBmp: Bitmap? = null
-
     fun setSourceBufferSize(
       w: Int,
       h: Int,
@@ -142,6 +155,13 @@ class ScreenCaptureGlWorker(
         srcBufW = w
         srcBufH = h
         surfaceTexture?.setDefaultBufferSize(w, h)
+      }
+    }
+
+    /** Wake the loop from an idle `wait` (a new output surface, or shutdown). */
+    fun wake() {
+      synchronized(lock) {
+        lock.notifyAll()
       }
     }
 
@@ -159,7 +179,7 @@ class ScreenCaptureGlWorker(
     override fun run() {
       android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_DISPLAY)
       if (!setupEgl()) {
-        Log.e(TAG, "EGL PBuffer setup failed")
+        Log.e(TAG, "EGL setup failed")
         return
       }
       rendererPtr = LivePipelineJni.createGlRenderer()
@@ -170,8 +190,8 @@ class ScreenCaptureGlWorker(
       }
       LivePipelineJni.setRendererOverlayOnly(rendererPtr)
       // Modal overlay opacity for the screen path. On-screen opacity is
-      // OVERLAY_ALPHA × window-alpha (0.79); 1.0 keeps pills as opaque as the
-      // touch cap allows. Lower it for a more see-through overlay.
+      // OVERLAY_ALPHA × window-alpha; 1.0 keeps pills as opaque as the window
+      // allows. Lower it for a more see-through overlay.
       LivePipelineJni.setRendererOverlayAlpha(rendererPtr, OVERLAY_ALPHA)
       sourceTexId = createExternalOesTexture()
       if (sourceTexId == 0) {
@@ -230,6 +250,9 @@ class ScreenCaptureGlWorker(
         }
         if (!running) break
 
+        // Pick up a new/destroyed output surface before touching it below.
+        applyPendingOutputSurface()
+
         // Always drain the producer so its BufferQueue keeps flowing.
         if (hadFrame) {
           st.updateTexImage()
@@ -251,7 +274,7 @@ class ScreenCaptureGlWorker(
         wantsTick = (ret and MONITOR_WANTS_TICK) != 0
         when (ret and MONITOR_ACTION_MASK) {
           MONITOR_ACTION_HIDE -> {
-            onClearOverlay()
+            clearOutput()
             if (acquiring) {
               LivePipelineJni.screenAbortAcquire(pipeline)
               acquiring = false
@@ -282,42 +305,23 @@ class ScreenCaptureGlWorker(
           }
         }
 
-        // Poll the worker: present new overlays (provisional, then full) as they
-        // land, and clear `acquiring` once it's done.
+        // Poll the worker: present new overlays (provisional, then full) on the
+        // GPU as they land, and clear `acquiring` once it's done.
         if (acquiring) {
           val state = LivePipelineJni.screenAcquireState(pipeline)
           val version = state and 0xFFFFFFFFL
           val busy = (state ushr 32) != 0L
           if (version != lastVersion) {
             val tPresent = System.nanoTime()
-            // Native renders the overlay canvas (CPU) and writes it straight into
-            // the Bitmap (AndroidBitmap_lockPixels) — one copy, no GPU readback.
-            // geom = [W, H, left, top]. A negative return means the Bitmap is null
-            // or the wrong size; geom[0,1] carries the needed dims — (re)allocate
-            // and call once more (the re-render is free, canvas is current).
-            var bytes =
-              LivePipelineJni.screenReadOverlay(pipeline, overlayBmp, overlayGeom, cw, ch, pw, ph)
-            if (bytes < 0) {
-              val bw = overlayGeom[0]
-              val bh = overlayGeom[1]
-              if (bw > 0 && bh > 0) {
-                val bmp = Bitmap.createBitmap(bw, bh, Bitmap.Config.ARGB_8888)
-                overlayBmp = bmp
-                bytes =
-                  LivePipelineJni.screenReadOverlay(pipeline, bmp, overlayGeom, cw, ch, pw, ph)
-              }
-            }
-            val bmp = overlayBmp
-            if (bytes > 0 && bmp != null) {
-              onOverlayBitmap(bmp, overlayGeom[2], overlayGeom[3])
-              Log.i(TAG, "present v=$version (${(System.nanoTime() - tPresent) / 1_000_000}ms)")
-            }
+            presentOverlay(pipeline)
+            Log.i(TAG, "present v=$version (${(System.nanoTime() - tPresent) / 1_000_000}ms)")
             lastVersion = version
           }
           if (!busy) acquiring = false
         }
       }
 
+      releaseWindowSurface()
       surfaceTexture?.release()
       surfaceTexture = null
       if (sourceTexId != 0) {
@@ -329,6 +333,62 @@ class ScreenCaptureGlWorker(
         rendererPtr = 0L
       }
       teardownEgl()
+    }
+
+    /** Render the resident overlay into the window surface and swap it on. */
+    private fun presentOverlay(pipeline: Long) {
+      if (eglWindowSurface == EGL14.EGL_NO_SURFACE || pipeline == 0L) return
+      val drawn = LivePipelineJni.screenPresentOverlayGl(pipeline, rendererPtr, cw, ch, pw, ph)
+      if (drawn != 0) EGL14.eglSwapBuffers(eglDisplay, eglWindowSurface)
+    }
+
+    /** Clear the window surface to transparent (the screen behind shows through)
+     *  and swap — the GPU equivalent of dropping the Canvas overlay on movement. */
+    private fun clearOutput() {
+      if (eglWindowSurface == EGL14.EGL_NO_SURFACE) return
+      GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0)
+      GLES20.glViewport(0, 0, pw, ph)
+      GLES20.glClearColor(0f, 0f, 0f, 0f)
+      GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+      EGL14.eglSwapBuffers(eglDisplay, eglWindowSurface)
+    }
+
+    private fun applyPendingOutputSurface() {
+      val st: SurfaceTexture?
+      synchronized(outputLock) {
+        if (!outputDirty) return
+        outputDirty = false
+        st = pendingOutputSt
+      }
+      updateOutputSurface(st)
+    }
+
+    private fun updateOutputSurface(st: SurfaceTexture?) {
+      releaseWindowSurface()
+      val cfg = eglConfig ?: return
+      if (st == null) return
+      val ws =
+        EGL14.eglCreateWindowSurface(eglDisplay, cfg, st, intArrayOf(EGL14.EGL_NONE), 0)
+      if (ws == EGL14.EGL_NO_SURFACE) {
+        Log.e(TAG, "eglCreateWindowSurface failed: ${EGL14.eglGetError()}")
+        return
+      }
+      eglWindowSurface = ws
+      EGL14.eglMakeCurrent(eglDisplay, ws, ws, eglContext)
+      // Initial transparent frame so the TextureView never composites an
+      // undefined back buffer, then show whatever overlay is already resident.
+      clearOutput()
+      presentOverlay(pipelinePtr)
+      Log.i(TAG, "output window surface ready ${pw}x$ph")
+    }
+
+    /** Destroy the window surface (if any), making the PBuffer current again so
+     *  the context stays valid for monitor readbacks. */
+    private fun releaseWindowSurface() {
+      if (eglWindowSurface == EGL14.EGL_NO_SURFACE) return
+      EGL14.eglMakeCurrent(eglDisplay, eglPbuffer, eglPbuffer, eglContext)
+      EGL14.eglDestroySurface(eglDisplay, eglWindowSurface)
+      eglWindowSurface = EGL14.EGL_NO_SURFACE
     }
 
     private fun createExternalOesTexture(): Int {
@@ -351,10 +411,12 @@ class ScreenCaptureGlWorker(
       if (eglDisplay == EGL14.EGL_NO_DISPLAY) return false
       val ver = IntArray(2)
       if (!EGL14.eglInitialize(eglDisplay, ver, 0, ver, 1)) return false
+      // One config that serves both the startup PBuffer (context-current before
+      // the TextureView exists) and the window surface we present into.
       val cfgAttribs =
         intArrayOf(
           EGL14.EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-          EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT,
+          EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT or EGL14.EGL_PBUFFER_BIT,
           EGL14.EGL_RED_SIZE, 8,
           EGL14.EGL_GREEN_SIZE, 8,
           EGL14.EGL_BLUE_SIZE, 8,
@@ -367,6 +429,7 @@ class ScreenCaptureGlWorker(
         return false
       }
       val cfg = cfgs[0] ?: return false
+      eglConfig = cfg
       eglContext =
         EGL14.eglCreateContext(
           eglDisplay,
@@ -376,15 +439,15 @@ class ScreenCaptureGlWorker(
           0,
         )
       if (eglContext == EGL14.EGL_NO_CONTEXT) return false
-      eglSurface =
+      eglPbuffer =
         EGL14.eglCreatePbufferSurface(
           eglDisplay,
           cfg,
           intArrayOf(EGL14.EGL_WIDTH, pw, EGL14.EGL_HEIGHT, ph, EGL14.EGL_NONE),
           0,
         )
-      if (eglSurface == EGL14.EGL_NO_SURFACE) return false
-      return EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext)
+      if (eglPbuffer == EGL14.EGL_NO_SURFACE) return false
+      return EGL14.eglMakeCurrent(eglDisplay, eglPbuffer, eglPbuffer, eglContext)
     }
 
     private fun teardownEgl() {
@@ -395,21 +458,26 @@ class ScreenCaptureGlWorker(
           EGL14.EGL_NO_SURFACE,
           EGL14.EGL_NO_CONTEXT,
         )
-        if (eglSurface != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, eglSurface)
+        if (eglWindowSurface != EGL14.EGL_NO_SURFACE) {
+          EGL14.eglDestroySurface(eglDisplay, eglWindowSurface)
+        }
+        if (eglPbuffer != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(eglDisplay, eglPbuffer)
         if (eglContext != EGL14.EGL_NO_CONTEXT) EGL14.eglDestroyContext(eglDisplay, eglContext)
         EGL14.eglTerminate(eglDisplay)
       }
+      eglWindowSurface = EGL14.EGL_NO_SURFACE
+      eglPbuffer = EGL14.EGL_NO_SURFACE
       eglDisplay = EGL14.EGL_NO_DISPLAY
       eglContext = EGL14.EGL_NO_CONTEXT
-      eglSurface = EGL14.EGL_NO_SURFACE
+      eglConfig = null
     }
   }
 
   companion object {
     private const val TAG = "ScreenCaptureGlWorker"
 
-    /** Overlay opacity multiplier for the screen path (× the 0.79 window
-     *  alpha). 1.0 = as opaque as the touch cap allows; lower for see-through. */
+    /** Overlay opacity multiplier for the screen path (× the window alpha).
+     *  1.0 = as opaque as the window allows; lower for see-through. */
     private const val OVERLAY_ALPHA = 1.0f
 
     /** Poll interval while a settle deadline is armed (the monitor wants ticks):
