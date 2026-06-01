@@ -328,11 +328,6 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
         spacing: pipeline.lattice_spacing() as f32,
         radius: hole_radius,
         alpha: hole_alpha,
-        // Holes through the translated glyphs are smaller than the pill holes so
-        // the text isn't shredded, while still exposing the screen under our label
-        // to the recovery probe (else the box locks onto its own glyphs → immortal
-        // pill). Tune for legibility vs recovery reliability.
-        glyph_radius: hole_radius * SCREEN_GLYPH_HOLE_RADIUS_FRAC,
     };
     if !renderer.render_overlay_to_texture(
         &dl,
@@ -366,14 +361,6 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
 /// touch-capped window alpha does the dimming); text opaque for crispness.
 #[cfg(feature = "gpu")]
 const SCREEN_PILL_ALPHA: f32 = 1.0;
-/// Glyph hole radius as a fraction of the pill hole radius. At the pill radius
-/// (1.25 canonical) holes are ~2.5 display px and visibly shred the text; 0.2
-/// gives ~0.25 canonical = half a bitmap pixel (overlay bakes at oversample 2),
-/// which discards exactly the single nearest pixel to each lattice point — a true
-/// 1×1 px hole that still can't vanish, since the recovery samples that same
-/// pixel NEAREST at full res.
-#[cfg(feature = "gpu")]
-const SCREEN_GLYPH_HOLE_RADIUS_FRAC: f32 = 0.2;
 #[cfg(feature = "gpu")]
 const SCREEN_TEXT_ALPHA: f32 = 1.0;
 /// The overlay window's View alpha (touch-passthrough dimming). Must match
