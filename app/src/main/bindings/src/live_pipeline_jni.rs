@@ -319,7 +319,28 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
     let dl_ms = t_dl.elapsed().as_secs_f64() * 1000.0;
     let (n_pills, n_glyphs) = (dl.pills.len(), dl.glyphs.instances.len());
     let t_bake = std::time::Instant::now();
-    if !renderer.render_overlay_to_texture(&dl, SCREEN_PILL_ALPHA, SCREEN_TEXT_ALPHA, false) {
+    // Punch the pinhole hole grid so the captured mirror exposes screen_est under
+    // the pills for the v2 under-pill change detector. The hole's baked alpha is
+    // sized against the effective opaque alpha (pill_alpha × window alpha).
+    let (hole_radius, hole_alpha) =
+        pipeline.hole_params(SCREEN_PILL_ALPHA * SCREEN_WINDOW_ALPHA);
+    let holes = translator::gl_renderer::HoleGrid {
+        spacing: pipeline.lattice_spacing() as f32,
+        radius: hole_radius,
+        alpha: hole_alpha,
+        // Holes through the translated glyphs are smaller than the pill holes so
+        // the text isn't shredded, while still exposing the screen under our label
+        // to the recovery probe (else the box locks onto its own glyphs → immortal
+        // pill). Tune for legibility vs recovery reliability.
+        glyph_radius: hole_radius * SCREEN_GLYPH_HOLE_RADIUS_FRAC,
+    };
+    if !renderer.render_overlay_to_texture(
+        &dl,
+        SCREEN_PILL_ALPHA,
+        SCREEN_TEXT_ALPHA,
+        false,
+        Some(holes),
+    ) {
         return 0;
     }
     let bake_ms = t_bake.elapsed().as_secs_f64() * 1000.0;
@@ -345,8 +366,21 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
 /// touch-capped window alpha does the dimming); text opaque for crispness.
 #[cfg(feature = "gpu")]
 const SCREEN_PILL_ALPHA: f32 = 1.0;
+/// Glyph hole radius as a fraction of the pill hole radius. At the pill radius
+/// (1.25 canonical) holes are ~2.5 display px and visibly shred the text; 0.2
+/// gives ~0.25 canonical = half a bitmap pixel (overlay bakes at oversample 2),
+/// which discards exactly the single nearest pixel to each lattice point — a true
+/// 1×1 px hole that still can't vanish, since the recovery samples that same
+/// pixel NEAREST at full res.
+#[cfg(feature = "gpu")]
+const SCREEN_GLYPH_HOLE_RADIUS_FRAC: f32 = 0.2;
 #[cfg(feature = "gpu")]
 const SCREEN_TEXT_ALPHA: f32 = 1.0;
+/// The overlay window's View alpha (touch-passthrough dimming). Must match
+/// `ScreenTranslateService.WINDOW_ALPHA`; used to size the pinhole hole alpha so
+/// the captured blend at a hole lands at the recovery's fixed fraction.
+#[cfg(feature = "gpu")]
+const SCREEN_WINDOW_ALPHA: f32 = 0.79;
 
 /// Acquire state for the GL worker's poll loop: `(busy << 32) | overlay_version`.
 /// `busy` = an acquire is in flight; `overlay_version` bumps each time the worker
@@ -436,16 +470,21 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorF
     }
     let cw = canonical_w as u32;
     let ch = canonical_h as u32;
-    let (gw, gh) = pipeline.coarse_dims(cw, ch);
-    // Maps the gw×gh dst quad to the full clip [-1,1] (resolution-independent
-    // normalize), so the coarse gray samples the whole frame, oriented exactly
-    // like the present (orientation lives in `uv`).
-    let dst_to_clip = clip_xform(gw, gh);
+    // v2 per-box detector is the sole authority for the screen path: recover
+    // screen_est through the pinhole holes and let the monitor decide. It ignores
+    // background motion (text-stable → None), drops + re-acquires a box whose text
+    // changed (→ Acquire), and clears + re-acquires on a whole-screen change /
+    // navigation (→ Hide, then a settle-delayed Acquire). No coarse global diff, so
+    // a video in one region no longer tears the whole overlay down.
+    let (cols, rows) = pipeline.lattice_dims(cw, ch);
+    let pills = pipeline.monitor_pill_aabbs();
+    let (pill_luma, screen_frac) = pipeline.recovery_params();
+    let spacing = pipeline.lattice_spacing() as f32;
     renderer.set_camera_external(camera_tex_id as u32, uv);
-    let Some(gray) = renderer.read_camera_gray(gw, gh, &dst_to_clip) else {
-        return 0;
-    };
-    let action = pipeline.monitor_frame(&gray, gw, gh, cw, ch, now_ns);
+    let action = renderer
+        .read_lattice_screen_est(cols, rows, cw, ch, spacing, &pills, pill_luma, screen_frac)
+        .map(|samples| pipeline.monitor_screen_v2(&samples, cw, ch, now_ns))
+        .unwrap_or(MonitorAction::None);
     pack_monitor(action, pipeline.wants_tick())
 }
 
@@ -465,7 +504,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorT
     }
     // SAFETY: see `screenDispatchAcquire`.
     let pipeline = unsafe { &*(pipeline_ptr as *const LiveScreenPipeline) };
-    let action = pipeline.monitor_tick(now_ns);
+    let action = pipeline.monitor_screen_v2_tick(now_ns);
     pack_monitor(action, pipeline.wants_tick())
 }
 

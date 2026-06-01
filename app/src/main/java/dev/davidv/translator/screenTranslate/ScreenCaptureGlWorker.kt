@@ -268,7 +268,15 @@ class ScreenCaptureGlWorker(
         val ret =
           if (hadFrame) {
             val uv = uvFromSurfaceTexture(stMatrix)
-            LivePipelineJni.screenMonitorFrameGl(pipeline, rendererPtr, sourceTexId, cw, ch, uv, now)
+            LivePipelineJni.screenMonitorFrameGl(
+              pipeline,
+              rendererPtr,
+              sourceTexId,
+              cw,
+              ch,
+              uv,
+              now,
+            )
           } else {
             LivePipelineJni.screenMonitorTick(pipeline, now)
           }
@@ -283,8 +291,10 @@ class ScreenCaptureGlWorker(
             }
           }
           MONITOR_ACTION_ACQUIRE -> {
-            // Settled: dispatch OCR to the worker (non-blocking). The overlay is
-            // already hidden, so the current texture is the clean settled frame.
+            // Settled: dispatch OCR to the worker (non-blocking). The monitor only
+            // returns Acquire once any post-drop settle has elapsed, so dropped
+            // pills have left the captured frame; resident pills that stayed are
+            // masked out of detection natively by their strip rects.
             val uv = uvFromSurfaceTexture(stMatrix)
             val dispatched =
               LivePipelineJni.screenDispatchAcquire(
@@ -306,20 +316,23 @@ class ScreenCaptureGlWorker(
           }
         }
 
-        // Poll the worker: present new overlays (provisional, then full) on the
-        // GPU as they land, and clear `acquiring` once it's done.
-        if (acquiring) {
-          val state = LivePipelineJni.screenAcquireState(pipeline)
-          val version = state and 0xFFFFFFFFL
-          val busy = (state ushr 32) != 0L
-          if (version != lastVersion) {
-            val tPresent = System.nanoTime()
-            presentOverlay(pipeline)
-            Log.i(TAG, "present v=$version (${(System.nanoTime() - tPresent) / 1_000_000}ms)")
-            lastVersion = version
-          }
-          if (!busy) acquiring = false
+        // Present any overlay content change — the streamed provisional/full
+        // overlays during an acquire, *and* a drop/clear the monitor made with no
+        // acquire in flight. Gating this behind `acquiring` stranded a dropped pill
+        // (never re-presented), so it must run on every version bump.
+        val state = LivePipelineJni.screenAcquireState(pipeline)
+        val version = state and 0xFFFFFFFFL
+        val busy = (state ushr 32) != 0L
+        if (version != lastVersion) {
+          val tPresent = System.nanoTime()
+          // An emptied overlay (last pill dropped) draws nothing — clear the window
+          // so the stale pill leaves the screen.
+          val drawn = presentOverlay(pipeline)
+          if (!drawn) clearOutput()
+          Log.i(TAG, "present v=$version drawn=$drawn (${(System.nanoTime() - tPresent) / 1_000_000}ms)")
+          lastVersion = version
         }
+        if (acquiring && !busy) acquiring = false
       }
 
       releaseWindowSurface()
@@ -337,10 +350,14 @@ class ScreenCaptureGlWorker(
     }
 
     /** Render the resident overlay into the window surface and swap it on. */
-    private fun presentOverlay(pipeline: Long) {
-      if (eglWindowSurface == EGL14.EGL_NO_SURFACE || pipeline == 0L) return
+    private fun presentOverlay(pipeline: Long): Boolean {
+      if (eglWindowSurface == EGL14.EGL_NO_SURFACE || pipeline == 0L) return false
       val drawn = LivePipelineJni.screenPresentOverlayGl(pipeline, rendererPtr, cw, ch, pw, ph)
-      if (drawn != 0) EGL14.eglSwapBuffers(eglDisplay, eglWindowSurface)
+      if (drawn != 0) {
+        EGL14.eglSwapBuffers(eglDisplay, eglWindowSurface)
+        return true
+      }
+      return false
     }
 
     /** Clear the window surface to transparent (the screen behind shows through)
