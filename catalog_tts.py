@@ -74,6 +74,8 @@ BANNED_TTS_VOICES = {
 VOICE_RANK_PREFERENCES: dict[str, int] = {
     # amy sounds pretty good, fine to default
     "en_US-amy-medium": -1,
+    # keep thorsten as the German default; glados is a novelty voice
+    "de_DE-thorsten-medium": -1,
     # sam sounds like a robot
     "en_US-sam-medium": 1,
 }
@@ -103,6 +105,35 @@ EXTRA_TTS_VOICES = {
             "pl/pl_PL/jarvis_wg_glos/medium/pl_PL-jarvis_wg_glos-medium.onnx.json": {
                 "size_bytes": 7104,
                 "url": "https://huggingface.co/WitoldG/polish_piper_models/resolve/main/pl_PL-jarvis_wg_glos-medium.onnx.json",
+            },
+        },
+        "aliases": [],
+    },
+    # External German Piper voice (GLaDOS), finetuned from the Portal voice.
+    # https://huggingface.co/systemofapwne/piper-de-glados/tree/main/de/de_DE
+    "de_DE-glados-medium": {
+        "engine": "piper",
+        "key": "de_DE-glados-medium",
+        "name": "glados",
+        "language": {
+            "code": "de_DE",
+            "family": "de",
+            "region": "DE",
+            "name_native": "Deutsch",
+            "name_english": "German",
+            "country_english": "Germany",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "de/de_DE/glados/medium/de_DE-glados-medium.onnx": {
+                "size_bytes": 63153773,
+                "url": f"{COQUI_VITS_BASE_URL}/de/de_DE/glados/medium/de_DE-glados-medium.onnx",
+            },
+            "de/de_DE/glados/medium/de_DE-glados-medium.onnx.json": {
+                "size_bytes": 7100,
+                "url": f"{COQUI_VITS_BASE_URL}/de/de_DE/glados/medium/de_DE-glados-medium.onnx.json",
             },
         },
         "aliases": [],

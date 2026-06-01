@@ -1,10 +1,10 @@
 {
   "formatVersion": 3,
-  "generatedAt": 1779352498,
+  "generatedAt": 1780326938,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1779352498,
+    "languageIndexUpdatedAt": 1780326938,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -316,9 +316,9 @@
             "displayName": "Germany",
             "voices": [
               "tts-piper-de-de-thorsten-medium",
+              "tts-piper-de-de-glados-medium",
               "tts-piper-de-de-thorsten-emotional-medium",
-              "tts-piper-de-de-karlsson-low",
-              "tts-piper-de-de-kerstin-low"
+              "tts-piper-de-de-karlsson-low"
             ]
           }
         },
@@ -7450,6 +7450,34 @@
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/thorsten_medium.opus"
     },
+    "tts-piper-de-de-glados-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "language": "de",
+      "locale": "de_DE",
+      "region": "DE",
+      "voice": "glados",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "de_DE-glados-medium.onnx",
+          "sizeBytes": 63153773,
+          "installPath": "bin/piper/de/de_DE/glados/medium/de_DE-glados-medium.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/glados/medium/de_DE-glados-medium.onnx"
+        },
+        {
+          "name": "de_DE-glados-medium.onnx.json",
+          "sizeBytes": 7100,
+          "installPath": "bin/piper/de/de_DE/glados/medium/de_DE-glados-medium.onnx.json",
+          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/glados/medium/de_DE-glados-medium.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-de"
+      ]
+    },
     "tts-piper-de-de-thorsten-emotional-medium": {
       "feature": "tts",
       "engine": "piper",
@@ -7510,37 +7538,6 @@
         "tts-espeak-dict-de"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/karlsson_low.opus"
-    },
-    "tts-piper-de-de-kerstin-low": {
-      "feature": "tts",
-      "engine": "piper",
-      "language": "de",
-      "locale": "de_DE",
-      "region": "DE",
-      "voice": "kerstin",
-      "quality": "low",
-      "numSpeakers": 1,
-      "aliases": [
-        "de-kerstin-low"
-      ],
-      "files": [
-        {
-          "name": "de_DE-kerstin-low.onnx",
-          "sizeBytes": 63104526,
-          "installPath": "bin/piper/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx",
-          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx"
-        },
-        {
-          "name": "de_DE-kerstin-low.onnx.json",
-          "sizeBytes": 4158,
-          "installPath": "bin/piper/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx.json",
-          "url": "https://offline-translator.davidv.dev/tts/1/de/de_DE/kerstin/low/de_DE-kerstin-low.onnx.json"
-        }
-      ],
-      "dependsOn": [
-        "tts-espeak-dict-de"
-      ],
-      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/kerstin_low.opus"
     },
     "tts-piper-el-gr-rapunzelina-medium": {
       "feature": "tts",
