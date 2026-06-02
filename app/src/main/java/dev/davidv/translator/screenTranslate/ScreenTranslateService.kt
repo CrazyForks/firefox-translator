@@ -30,9 +30,12 @@ import android.hardware.display.VirtualDisplay
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
+import android.view.Display
 import android.view.WindowManager
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorApplication
@@ -62,6 +65,35 @@ class ScreenTranslateService : Service() {
   private var worker: ScreenCaptureGlWorker? = null
   private var windowManager: WindowManager? = null
   private var stopped = false
+
+  private var displayManager: DisplayManager? = null
+
+  // Display size the current capture was built for; a rotation changes these and
+  // triggers an in-place resize (the VirtualDisplay is fixed to its creation
+  // dimensions, so a stale portrait capture letterboxes a landscape screen to an
+  // unreadable strip — but on Android 14+ it can't be recreated, only resized).
+  private var lastW = 0
+  private var lastH = 0
+
+  private val displayListener =
+    object : DisplayManager.DisplayListener {
+      override fun onDisplayAdded(displayId: Int) {}
+
+      override fun onDisplayRemoved(displayId: Int) {}
+
+      override fun onDisplayChanged(displayId: Int) {
+        if (stopped || displayId != Display.DEFAULT_DISPLAY) return
+        val wm = windowManager ?: return
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION")
+        wm.defaultDisplay.getRealMetrics(metrics)
+        val w = metrics.widthPixels
+        val h = metrics.heightPixels
+        if (w == lastW && h == lastH) return
+        Log.i(TAG, "display changed (${lastW}x$lastH → ${w}x$h) → resize capture")
+        resizeCapture(w, h, metrics.densityDpi)
+      }
+    }
 
   private val projectionCallback =
     object : MediaProjection.Callback() {
@@ -123,6 +155,12 @@ class ScreenTranslateService : Service() {
 
     setupOverlayAndCapture(tracker, proj)
 
+    if (displayManager == null) {
+      val dm = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+      displayManager = dm
+      dm.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
+    }
+
     return START_NOT_STICKY
   }
 
@@ -160,6 +198,8 @@ class ScreenTranslateService : Service() {
     val w = metrics.widthPixels
     val h = metrics.heightPixels
     val dpi = metrics.densityDpi
+    lastW = w
+    lastH = h
 
     val view = GpuOverlayTextureView(this)
     overlayView = view
@@ -213,12 +253,12 @@ class ScreenTranslateService : Service() {
 
     scope.launch {
       val surface = withContext(Dispatchers.IO) { captureWorker.awaitSourceSurface() }
+      if (stopped) return@launch
       if (surface == null) {
         Log.e(TAG, "GL capture surface never became ready; stopping")
         stopEverything()
         return@launch
       }
-      if (stopped) return@launch
       // Size the SurfaceTexture now that it exists; a VirtualDisplay won't
       // produce frames into a 0×0 buffer.
       captureWorker.setSourceBufferSize(w, h)
@@ -279,9 +319,31 @@ class ScreenTranslateService : Service() {
     }
   }
 
+  /** Rotation / display-geometry change: resize the capture **in place**. On
+   *  Android 14+ a [MediaProjection] permits only one `createVirtualDisplay`, so
+   *  the VirtualDisplay must never be recreated — `resize` it and the worker
+   *  instead. The overlay window is MATCH_PARENT, so it follows the rotation and
+   *  re-hands its SurfaceTexture (→ the worker recreates its present surface).
+   *  Old portrait overlays are dropped; the native monitor rebuilds its lattice
+   *  when the canonical dimensions change. */
+  private fun resizeCapture(
+    w: Int,
+    h: Int,
+    dpi: Int,
+  ) {
+    worker?.resize(w, h)
+    runCatching { virtualDisplay?.resize(w, h, dpi) }
+    runCatching { screenTracker?.clearOverlay() }
+    lastW = w
+    lastH = h
+    Log.i(TAG, "capture resized to ${w}x$h @${dpi}dpi")
+  }
+
   private fun stopEverything() {
     if (stopped) return
     stopped = true
+    runCatching { displayManager?.unregisterDisplayListener(displayListener) }
+    displayManager = null
     runCatching { virtualDisplay?.release() }
     virtualDisplay = null
     runCatching {

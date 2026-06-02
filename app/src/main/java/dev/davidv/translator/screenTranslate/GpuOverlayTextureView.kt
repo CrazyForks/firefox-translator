@@ -59,7 +59,11 @@ class GpuOverlayTextureView(context: Context) :
     surface: SurfaceTexture,
     width: Int,
     height: Int,
-  ) {}
+  ) {
+    // On rotation the window (MATCH_PARENT) resizes; re-hand the surface so the GL
+    // worker recreates its EGL window surface at the new size and presents correctly.
+    onSurfaceTexture?.invoke(surface)
+  }
 
   override fun onSurfaceTextureUpdated(surface: SurfaceTexture) {}
 }

@@ -57,10 +57,21 @@ class ScreenCaptureGlWorker(
   // The overlay PRESENT runs at full display res (pw/ph): the canvas rasterizes
   // glyphs at oversample=2 and is drawn 1:1, so present canonical=cw/ch and
   // surface=pw/ph (the canvas origin is in canonical coords, scaled to display).
-  private val cw = (displayWidth / 2).coerceAtLeast(1)
-  private val ch = (displayHeight / 2).coerceAtLeast(1)
-  private val pw = displayWidth.coerceAtLeast(1)
-  private val ph = displayHeight.coerceAtLeast(1)
+  // `@Volatile var` (not val): a rotation resizes these in place via [resize] —
+  // the GL loop reads them fresh each iteration. (The VirtualDisplay can't be
+  // recreated on Android 14+, so resize is the only path; the loop also passes
+  // these to the native present/readback, so updating them is sufficient.)
+  @Volatile
+  private var cw = (displayWidth / 2).coerceAtLeast(1)
+
+  @Volatile
+  private var ch = (displayHeight / 2).coerceAtLeast(1)
+
+  @Volatile
+  private var pw = displayWidth.coerceAtLeast(1)
+
+  @Volatile
+  private var ph = displayHeight.coerceAtLeast(1)
 
   private var glThread: GlThread? = null
 
@@ -104,6 +115,23 @@ class ScreenCaptureGlWorker(
     height: Int,
   ) {
     glThread?.setSourceBufferSize(width, height)
+  }
+
+  /** Rotation / display resize: update the canonical (OCR) and present (surface)
+   *  dimensions in place and resize the capture buffer. The GL loop reads the new
+   *  dims on its next iteration and passes them to the native present/readback;
+   *  the EGL window surface is recreated separately when the overlay TextureView
+   *  re-hands its (now-resized) SurfaceTexture. The caller resizes the
+   *  VirtualDisplay to match. */
+  fun resize(
+    displayWidth: Int,
+    displayHeight: Int,
+  ) {
+    cw = (displayWidth / 2).coerceAtLeast(1)
+    ch = (displayHeight / 2).coerceAtLeast(1)
+    pw = displayWidth.coerceAtLeast(1)
+    ph = displayHeight.coerceAtLeast(1)
+    setSourceBufferSize(displayWidth, displayHeight)
   }
 
   /** Hand the overlay TextureView's SurfaceTexture (or `null` on destroy) to the

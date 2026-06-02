@@ -7476,7 +7476,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-de"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/de/glados_medium.opus"
     },
     "tts-piper-de-de-thorsten-emotional-medium": {
       "feature": "tts",
