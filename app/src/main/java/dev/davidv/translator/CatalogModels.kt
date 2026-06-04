@@ -387,7 +387,7 @@ class LanguageCatalog private constructor(
     sourceSelection: uniffi.translator.OcrSourceSelection,
     to: Language,
     minConfidence: Int,
-    readingOrder: ReadingOrder,
+    readingOrder: ReadingOrder?,
     backgroundMode: BackgroundMode,
     preferredOcrEngine: PreferredOcrEngine,
   ): uniffi.translator.PreparedImageOverlay =

@@ -182,7 +182,7 @@ class TranslationCoordinator(
     to: Language,
     finalBitmap: Bitmap,
     onMessage: (TranslatorMessage.ImageTextDetected) -> Unit,
-    readingOrder: ReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
+    readingOrder: ReadingOrder? = null,
     isAutoSource: Boolean = false,
     onMissingDetectedLanguage: (Language) -> Unit = {},
   ): ProcessedImageResult? =

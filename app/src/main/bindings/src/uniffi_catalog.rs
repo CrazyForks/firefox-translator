@@ -841,7 +841,7 @@ impl CatalogHandle {
         source_selection: translator::OcrSourceSelection,
         target_code: String,
         min_confidence: u32,
-        reading_order: translator::ReadingOrder,
+        reading_order: Option<translator::ReadingOrder>,
         background_mode: translator::BackgroundMode,
         preferred_engine: translator::PreferredOcrEngine,
     ) -> Result<translator::PreparedImageOverlay, CatalogError> {

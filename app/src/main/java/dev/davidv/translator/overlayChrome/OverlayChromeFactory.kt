@@ -53,7 +53,7 @@ object OverlayChromeFactory {
     onSwap: () -> Unit,
     onTargetClick: () -> Unit,
     showReadingOrderButton: Boolean = false,
-    readingOrder: ReadingOrder = ReadingOrder.LEFT_TO_RIGHT,
+    readingOrder: ReadingOrder? = null,
     onReadingOrderClick: (() -> Unit)? = null,
     showOcrButton: Boolean = false,
     onOcrClick: (() -> Unit)? = null,
@@ -257,14 +257,19 @@ object OverlayChromeFactory {
     readingButton: View?,
     readingIcon: ImageView?,
     visible: Boolean,
-    readingOrder: ReadingOrder,
+    readingOrder: ReadingOrder?,
   ) {
     readingButton?.visibility = if (visible) View.VISIBLE else View.GONE
     readingIcon?.apply {
-      val isVertical = readingOrder == ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT
-      setImageResource(if (isVertical) R.drawable.text_rotate_vertical else R.drawable.text_rotation_none)
+      val (iconRes, description) =
+        when (readingOrder) {
+          null -> R.drawable.text_rotation_auto to "Japanese OCR auto mode"
+          ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT -> R.drawable.text_rotate_vertical to "Japanese OCR vertical mode"
+          ReadingOrder.LEFT_TO_RIGHT -> R.drawable.text_rotation_none to "Japanese OCR horizontal mode"
+        }
+      setImageResource(iconRes)
       setColorFilter(Color.WHITE)
-      contentDescription = if (isVertical) "Japanese OCR vertical mode" else "Japanese OCR horizontal mode"
+      contentDescription = description
     }
   }
 

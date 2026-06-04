@@ -45,7 +45,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
   private lateinit var settingsManager: SettingsManager
   private lateinit var imageProcessor: ImageProcessor
   private lateinit var translationCoordinator: TranslationCoordinator
-  private var ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT
+  private var ocrReadingOrder: ReadingOrder? = null
   private var lastOcrBitmap: Bitmap? = null
   private var lastOcrRegion: Rect? = null
   var lastOriginalText: String = ""
@@ -222,8 +222,9 @@ class TranslatorAccessibilityService : AccessibilityService() {
     if (forcedSourceLanguage?.code != "ja") return
     ocrReadingOrder =
       when (ocrReadingOrder) {
-        ReadingOrder.LEFT_TO_RIGHT -> ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT
-        ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT -> ReadingOrder.LEFT_TO_RIGHT
+        null -> ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT
+        ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT -> ReadingOrder.LEFT_TO_RIGHT
+        ReadingOrder.LEFT_TO_RIGHT -> null
       }
     ui.updateToolbarState(forcedSourceLanguage, forcedTargetLanguage, ocrReadingOrder, isAutoSource)
     if (active) {
@@ -409,16 +410,16 @@ class TranslatorAccessibilityService : AccessibilityService() {
       langStateManager.languageByCode(it)
     }
 
-  private fun currentReadingOrderFor(language: Language?): ReadingOrder =
+  private fun currentReadingOrderFor(language: Language?): ReadingOrder? =
     if (language?.code == "ja") {
       ocrReadingOrder
     } else {
-      ReadingOrder.LEFT_TO_RIGHT
+      null
     }
 
   private fun syncReadingOrderForSource() {
     if (forcedSourceLanguage?.code != "ja") {
-      ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT
+      ocrReadingOrder = null
     }
   }
 

@@ -108,14 +108,14 @@ class TranslatorViewModel(
     val imageRef: Bitmap,
     val sourceCode: String,
     val sourceScript: String,
-    val readingOrder: ReadingOrder,
+    val readingOrder: ReadingOrder?,
     val engine: PreferredOcrEngine,
   )
 
   private var ocrCache: OcrCacheEntry? = null
 
-  private val _ocrReadingOrder = MutableStateFlow(ReadingOrder.LEFT_TO_RIGHT)
-  val ocrReadingOrder: StateFlow<ReadingOrder> = _ocrReadingOrder.asStateFlow()
+  private val _ocrReadingOrder = MutableStateFlow<ReadingOrder?>(null)
+  val ocrReadingOrder: StateFlow<ReadingOrder?> = _ocrReadingOrder.asStateFlow()
 
   private val _inputType = MutableStateFlow(InputType.TEXT)
   val inputType: StateFlow<InputType> = _inputType.asStateFlow()
@@ -419,8 +419,9 @@ class TranslatorViewModel(
       TranslatorMessage.ToggleJapaneseOcrMode -> {
         _ocrReadingOrder.value =
           when (_ocrReadingOrder.value) {
-            ReadingOrder.LEFT_TO_RIGHT -> ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT
-            ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT -> ReadingOrder.LEFT_TO_RIGHT
+            null -> ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT
+            ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT -> ReadingOrder.LEFT_TO_RIGHT
+            ReadingOrder.LEFT_TO_RIGHT -> null
           }
         val fromLang = _from.value
         if (_inputType.value == InputType.IMAGE && fromLang?.code == "ja") {
@@ -749,11 +750,11 @@ class TranslatorViewModel(
     )
   }
 
-  private fun currentReadingOrderFor(fromLang: Language): ReadingOrder =
+  private fun currentReadingOrderFor(fromLang: Language): ReadingOrder? =
     if (fromLang.code == "ja") {
       _ocrReadingOrder.value
     } else {
-      ReadingOrder.LEFT_TO_RIGHT
+      null
     }
 
   private suspend fun autoTranslateInitialText(

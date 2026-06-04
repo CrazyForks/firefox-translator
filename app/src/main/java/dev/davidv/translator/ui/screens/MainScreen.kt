@@ -127,7 +127,7 @@ fun MainScreen(
   detectedLanguage: Language?,
   displayImage: Bitmap?,
   originalImage: Bitmap?,
-  ocrReadingOrder: ReadingOrder,
+  ocrReadingOrder: ReadingOrder?,
   isTranslating: StateFlow<Boolean>,
   isOcrInProgress: StateFlow<Boolean>,
   dictionaryWord: WordWithTaggedEntries?,
@@ -554,13 +554,18 @@ fun ShareImage(onMessage: (TranslatorMessage) -> Unit) {
 
 @Composable
 fun JapaneseOcrModeToggle(
-  readingOrder: ReadingOrder,
+  readingOrder: ReadingOrder?,
   onMessage: (TranslatorMessage) -> Unit,
 ) {
-  val isVertical = readingOrder == ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT
+  val (iconRes, description) =
+    when (readingOrder) {
+      null -> R.drawable.text_rotation_auto to "Japanese OCR auto mode"
+      ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT -> R.drawable.text_rotate_vertical to "Japanese OCR vertical mode"
+      ReadingOrder.LEFT_TO_RIGHT -> R.drawable.text_rotation_none to "Japanese OCR horizontal mode"
+    }
   ActionPillButton(
-    iconRes = if (isVertical) R.drawable.text_rotate_vertical else R.drawable.text_rotation_none,
-    contentDescription = if (isVertical) "Japanese OCR vertical mode" else "Japanese OCR horizontal mode",
+    iconRes = iconRes,
+    contentDescription = description,
     showBackdrop = true,
     onClick = { onMessage(TranslatorMessage.ToggleJapaneseOcrMode) },
   )

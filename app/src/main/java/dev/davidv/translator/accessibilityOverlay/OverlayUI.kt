@@ -202,7 +202,7 @@ class OverlayUI(
   fun showToolbar(
     forcedSourceLanguage: Language?,
     forcedTargetLanguage: Language?,
-    readingOrder: ReadingOrder,
+    readingOrder: ReadingOrder?,
     isAutoSource: Boolean,
   ) {
     if (toolbarView != null) return
@@ -274,7 +274,7 @@ class OverlayUI(
   fun updateToolbarState(
     forcedSourceLanguage: Language?,
     forcedTargetLanguage: Language?,
-    readingOrder: ReadingOrder,
+    readingOrder: ReadingOrder?,
     isAutoSource: Boolean,
   ) {
     sourceLabelView?.text = OverlayChromeFactory.formatSourceLabel(forcedSourceLanguage, isAutoSource)

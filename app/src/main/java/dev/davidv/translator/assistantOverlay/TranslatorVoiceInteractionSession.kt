@@ -109,7 +109,7 @@ class TranslatorVoiceInteractionSession(
   private var forcedSourceLanguage: Language? = null
   private var isAutoSource: Boolean = true
   private var forcedTargetLanguage: Language? = null
-  private var ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT
+  private var ocrReadingOrder: ReadingOrder? = null
   private var lastOcrBitmap: Bitmap? = null
   private var lastOcrRegion: Rect? = null
   private var lastOriginalText: String = ""
@@ -1157,23 +1157,24 @@ class TranslatorVoiceInteractionSession(
     if (forcedSourceLanguage?.code != "ja") return
     ocrReadingOrder =
       when (ocrReadingOrder) {
-        ReadingOrder.LEFT_TO_RIGHT -> ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT
-        ReadingOrder.TOP_TO_BOTTOM_LEFT_TO_RIGHT -> ReadingOrder.LEFT_TO_RIGHT
+        null -> ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT
+        ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT -> ReadingOrder.LEFT_TO_RIGHT
+        ReadingOrder.LEFT_TO_RIGHT -> null
       }
     updateToolbarLabels()
     retranslate()
   }
 
-  private fun currentReadingOrderFor(language: Language?): ReadingOrder =
+  private fun currentReadingOrderFor(language: Language?): ReadingOrder? =
     if (language?.code == "ja") {
       ocrReadingOrder
     } else {
-      ReadingOrder.LEFT_TO_RIGHT
+      null
     }
 
   private fun syncReadingOrderForSource() {
     if (forcedSourceLanguage?.code != "ja") {
-      ocrReadingOrder = ReadingOrder.LEFT_TO_RIGHT
+      ocrReadingOrder = null
     }
   }
 
