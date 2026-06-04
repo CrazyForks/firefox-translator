@@ -23,7 +23,6 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import android.provider.OpenableColumns
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -59,6 +58,10 @@ import androidx.core.content.FileProvider
 import com.yalantis.ucrop.UCrop
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorMessage
+import dev.davidv.translator.copyDocumentUriToCache
+import dev.davidv.translator.displayNameForUri
+import dev.davidv.translator.isImageUri
+import dev.davidv.translator.sizeBytesForUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -111,75 +114,6 @@ private fun deleteTemporaryImageUri(
     Log.w("ImageCapture", "Failed to delete temporary image URI: $uri", e)
     false
   }
-
-private fun displayNameForUri(
-  context: Context,
-  uri: Uri,
-): String? =
-  context.contentResolver
-    .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-    ?.use { cursor ->
-      if (cursor.moveToFirst()) {
-        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-        if (index >= 0) cursor.getString(index) else null
-      } else {
-        null
-      }
-    }
-
-private fun sizeBytesForUri(
-  context: Context,
-  uri: Uri,
-): Long? =
-  context.contentResolver
-    .query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
-    ?.use { cursor ->
-      if (cursor.moveToFirst()) {
-        val index = cursor.getColumnIndex(OpenableColumns.SIZE)
-        if (index >= 0 && !cursor.isNull(index)) cursor.getLong(index) else null
-      } else {
-        null
-      }
-    }
-
-private fun documentFileExtension(
-  context: Context,
-  uri: Uri,
-): String {
-  val displayName = displayNameForUri(context, uri)
-  val displayExtension =
-    displayName
-      ?.substringAfterLast('.', missingDelimiterValue = "")
-      ?.takeIf { it.isNotBlank() && it.length <= 8 }
-  if (displayExtension != null) return ".$displayExtension"
-
-  return when (context.contentResolver.getType(uri)) {
-    "application/pdf" -> ".pdf"
-    "text/plain" -> ".txt"
-    "application/vnd.oasis.opendocument.text" -> ".odt"
-    "application/epub+zip" -> ".epub"
-    else -> ".bin"
-  }
-}
-
-private fun copyDocumentUriToCache(
-  context: Context,
-  uri: Uri,
-): File {
-  val outputFile = File.createTempFile("input_document_", documentFileExtension(context, uri), context.cacheDir)
-  context.contentResolver.openInputStream(uri).use { input ->
-    requireNotNull(input) { "Unable to open selected document" }
-    outputFile.outputStream().use { output ->
-      input.copyTo(output)
-    }
-  }
-  return outputFile
-}
-
-private fun isImageUri(
-  context: Context,
-  uri: Uri,
-): Boolean = context.contentResolver.getType(uri)?.startsWith("image/") == true
 
 private fun isRemoteUri(uri: Uri): Boolean = uri.scheme.equals("http", ignoreCase = true) || uri.scheme.equals("https", ignoreCase = true)
 
