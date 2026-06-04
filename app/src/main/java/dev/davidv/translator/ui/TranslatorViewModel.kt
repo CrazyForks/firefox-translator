@@ -47,6 +47,10 @@ import dev.davidv.translator.TranslationResult
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.TxtLayoutChoice
 import dev.davidv.translator.WordWithTaggedEntries
+import dev.davidv.translator.copyDocumentUriToCache
+import dev.davidv.translator.displayNameForUri
+import dev.davidv.translator.sizeBytesForUri
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -59,6 +63,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class TranslatorViewModel(
@@ -487,6 +492,25 @@ class TranslatorViewModel(
 
   fun setSharedImageUri(uri: Uri) {
     _pendingSharedImage.tryEmit(uri)
+  }
+
+  // A shared document (pdf/odt/txt/epub) reaches the same drawer as a picked one:
+  // copy the content URI into cache off the main thread, then drive the pending
+  // document state the file picker also feeds.
+  fun setSharedDocumentUri(uri: Uri) {
+    viewModelScope.launch {
+      try {
+        val file = withContext(Dispatchers.IO) { copyDocumentUriToCache(appContext, uri) }
+        handleDocumentPath(
+          path = file.absolutePath,
+          displayName = displayNameForUri(appContext, uri) ?: file.name,
+          sizeBytes = sizeBytesForUri(appContext, uri) ?: file.length(),
+          deleteAfterLoad = true,
+        )
+      } catch (e: Exception) {
+        Log.e("SharedDocument", "Failed to import shared document: $uri", e)
+      }
+    }
   }
 
   fun setModalVisible(visible: Boolean) {

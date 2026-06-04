@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
   private var textToTranslate: String = ""
   private var launchMode: LaunchMode = LaunchMode.Normal
   private var sharedImageUri: Uri? = null
+  private var sharedDocumentUri: Uri? = null
   private var openLanguageManager: Boolean = false
   private lateinit var viewModel: TranslatorViewModel
   private var downloadService: DownloadService? = null
@@ -77,8 +78,9 @@ class MainActivity : ComponentActivity() {
         ),
       )[TranslatorViewModel::class.java]
 
-    // Set shared image if present
+    // Deliver any shared input now that the ViewModel exists.
     sharedImageUri?.let { viewModel.setSharedImageUri(it) }
+    sharedDocumentUri?.let { viewModel.setSharedDocumentUri(it) }
 
     setContent {
       TranslatorTheme {
@@ -123,6 +125,18 @@ class MainActivity : ComponentActivity() {
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     handleIntent(intent)
+    // Warm start (activity already created): deliver straight to the ViewModel,
+    // since onCreate's one-shot delivery has already run.
+    if (::viewModel.isInitialized) {
+      sharedImageUri?.let {
+        viewModel.setSharedImageUri(it)
+        sharedImageUri = null
+      }
+      sharedDocumentUri?.let {
+        viewModel.setSharedDocumentUri(it)
+        sharedDocumentUri = null
+      }
+    }
   }
 
   private fun handleIntent(intent: Intent?) {
@@ -131,7 +145,7 @@ class MainActivity : ComponentActivity() {
     when (intent?.action) {
       Intent.ACTION_SEND -> {
         val text = intent.getStringExtra(Intent.EXTRA_TEXT)
-        val imageUri =
+        val streamUri =
           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
           } else {
@@ -151,8 +165,15 @@ class MainActivity : ComponentActivity() {
           } else {
             textToTranslate = text
           }
-        } else if (imageUri != null) {
-          sharedImageUri = imageUri
+        } else if (streamUri != null) {
+          // EXTRA_STREAM carries both shared images (→ crop) and shared documents
+          // (→ the document drawer); route by MIME so a pdf/odt/txt/epub doesn't
+          // get sent to the image cropper.
+          if (isImageUri(this, streamUri)) {
+            sharedImageUri = streamUri
+          } else {
+            sharedDocumentUri = streamUri
+          }
           textToTranslate = ""
         }
       }
