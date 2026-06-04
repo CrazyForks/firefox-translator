@@ -190,7 +190,7 @@ internal const val SUPPORTED_DOCUMENT_URL_TOAST = "Download the document and ope
 
 private val SUPPORTED_DOCUMENT_URL_EXTENSIONS =
   setOf(
-    "pdf", "odt",
+    "pdf", "odt", "epub",
     "png", "jpg", "jpeg", "webp", "gif", "bmp", "heic", "heif", "tiff", "tif", "avif",
   )
 

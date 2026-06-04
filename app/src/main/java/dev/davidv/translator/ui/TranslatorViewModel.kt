@@ -953,6 +953,7 @@ private fun mimeTypeForDocumentPath(path: String): String =
   when (File(path).extension.lowercase()) {
     "pdf" -> "application/pdf"
     "odt" -> "application/vnd.oasis.opendocument.text"
+    "epub" -> "application/epub+zip"
     "txt" -> "text/plain"
     else -> "application/octet-stream"
   }

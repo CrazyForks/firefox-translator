@@ -75,7 +75,6 @@ pub enum DocumentProgressEvent {
     Writing,
 }
 
-
 /// Caller-chosen layout for `.txt` translation. `wrap` of `0` (or absent)
 /// means "do not re-wrap"; any positive value is the output column width.
 /// Ignored for non-txt documents.
@@ -351,6 +350,50 @@ fn translate_document_path_impl(
                 let _ = (forced_source_code, target_code, available);
                 return Err(CatalogError::Other {
                     reason: "odt feature disabled".to_string(),
+                });
+            }
+        }
+        "epub" => {
+            #[cfg(feature = "epub")]
+            {
+                translator::epub::translate_epub_with_progress(
+                    session,
+                    &input_bytes,
+                    forced_source_code.as_deref(),
+                    &target_code,
+                    &available,
+                    |progress| {
+                        if is_cancelled() {
+                            return Err(translator::epub::EpubTranslateError::Cancelled);
+                        }
+                        let translator::epub::EpubTranslateProgress::TranslatingBlock {
+                            current,
+                            total,
+                        } = progress;
+                        on_progress(DocumentProgressEvent::Translating {
+                            current: current as u32,
+                            total: total as u32,
+                            unit: "block".to_string(),
+                        });
+                        if is_cancelled() {
+                            Err(translator::epub::EpubTranslateError::Cancelled)
+                        } else {
+                            Ok(())
+                        }
+                    },
+                )
+                .map_err(|error| match error {
+                    translator::epub::EpubTranslateError::Cancelled => CatalogError::Cancelled,
+                    other => CatalogError::Other {
+                        reason: format!("failed to translate EPUB: {other}"),
+                    },
+                })?
+            }
+            #[cfg(not(feature = "epub"))]
+            {
+                let _ = (forced_source_code, target_code, available);
+                return Err(CatalogError::Other {
+                    reason: "epub feature disabled".to_string(),
                 });
             }
         }
@@ -1105,7 +1148,6 @@ impl CatalogHandle {
             })
         }
     }
-
 }
 
 // =========================================================================
@@ -1233,7 +1275,8 @@ impl LivePlanarTracker {
     }
 
     fn set_languages(&self, from_code: String, to_code: String, is_auto_source: bool) {
-        self.pipeline.set_languages(&from_code, &to_code, is_auto_source);
+        self.pipeline
+            .set_languages(&from_code, &to_code, is_auto_source);
     }
 
     fn set_target_mode(&self, mode: PipelineTargetMode) {

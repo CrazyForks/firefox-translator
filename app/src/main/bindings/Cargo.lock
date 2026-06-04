@@ -2965,6 +2965,7 @@ dependencies = [
  "unicode-linebreak",
  "unicode-script",
  "uniffi",
+ "xml5ever",
  "zeno",
  "zip",
 ]

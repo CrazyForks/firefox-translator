@@ -71,6 +71,7 @@ private val filePickerMimeTypes =
     "application/pdf",
     "text/plain",
     "application/vnd.oasis.opendocument.text",
+    "application/epub+zip",
   )
 
 private data class PendingImageImport(
@@ -156,6 +157,7 @@ private fun documentFileExtension(
     "application/pdf" -> ".pdf"
     "text/plain" -> ".txt"
     "application/vnd.oasis.opendocument.text" -> ".odt"
+    "application/epub+zip" -> ".epub"
     else -> ".bin"
   }
 }

@@ -9,7 +9,7 @@ name = "bindings"
 path = "src/lib.rs"
 
 [features]
-default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "transliterate", "image-render", "pdf-image-translate", "doc-align", "ppocr", "planar-tracker", "gpu"]
+default = ["dictionary", "mucab", "tesseract", "tts", "pdf", "odt", "epub", "transliterate", "image-render", "pdf-image-translate", "doc-align", "ppocr", "planar-tracker", "gpu"]
 dictionary = ["translator/dictionary"]
 gpu = ["translator/gpu"]
 mucab = ["translator/mucab"]
@@ -17,6 +17,7 @@ tesseract = ["translator/tesseract"]
 tts = ["translator/tts"]
 pdf = ["translator/pdf"]
 odt = ["translator/odt"]
+epub = ["translator/epub"]
 transliterate = ["translator/transliterate"]
 image-render = ["translator/image-render"]
 pdf-image-translate = ["translator/pdf-image-translate"]
