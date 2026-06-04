@@ -1,0 +1,5 @@
+repository: https://github.com/DavidVentura/offline-translator
+pubkey: npub136ar9469eapzhprs6382v3xzkysn7mnt7y0ns0zs9jq44ku6tzxq2w5m3f
+metadata_sources:
+    - github
+    - fdroid
