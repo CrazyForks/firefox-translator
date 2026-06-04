@@ -1,0 +1,6 @@
+- Implement experimental 'screen translation' mode via assistant UI
+- Fix handling for vertical Japanese text
+- Keep screen on when camera is running
+- Expose 'share' of documents into app (PDF, ODT, TXT, EPUB)
+- Improve performance of live-camera mode
+- Implement voice input (if you already have a keyboard or app that does dictation, this uses it)
