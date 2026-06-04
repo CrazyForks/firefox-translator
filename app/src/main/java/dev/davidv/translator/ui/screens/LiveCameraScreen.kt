@@ -566,7 +566,7 @@ private fun CameraSurface(
   }
 
   val liveSurfaceView =
-    remember { LiveGlSurfaceView(context) }
+    remember { LiveGlSurfaceView(context).apply { keepScreenOn = true } }
 
   // Hand the tracker pointer + per-frame result callback to the GL
   // thread. The GL render loop, driven by `SurfaceTexture.onFrameAvailable`
