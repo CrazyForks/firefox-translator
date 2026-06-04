@@ -2944,6 +2944,7 @@ dependencies = [
  "imageproc",
  "log",
  "lopdf",
+ "markup5ever",
  "markup5ever_rcdom",
  "mnn-sys",
  "mucab",
