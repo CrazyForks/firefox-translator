@@ -21,9 +21,9 @@
 
 #![cfg(feature = "planar-tracker")]
 
+use jni::JNIEnv;
 use jni::objects::JClass;
 use jni::sys::{jint, jlong};
-use jni::JNIEnv;
 
 use translator::live_tracker_pipeline::{LiveTrackerPipeline, PlanarTrackerState};
 
@@ -78,15 +78,15 @@ fn pack_result(
 // ---------------------------------------------------------------------
 
 #[cfg(feature = "gpu")]
-use std::ffi::{c_char, c_void, CString};
+use std::ffi::{CString, c_char, c_void};
 #[cfg(feature = "gpu")]
 use translator::gl_renderer::{GlesRenderer, PresentContent};
-#[cfg(feature = "gpu")]
-use translator::live_screen::{LiveScreenPipeline, MonitorAction};
 #[cfg(feature = "gpu")]
 use translator::live_gpu_tick::{
     clip_xform, frame_from_camera_gray, run_tracker_with_acquire, screen_acquire_frame,
 };
+#[cfg(feature = "gpu")]
+use translator::live_screen::{LiveScreenPipeline, MonitorAction};
 
 #[cfg(feature = "gpu")]
 #[link(name = "EGL")]
@@ -261,9 +261,14 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenDispatch
     // canvas (overlays authored in canonical coords, presented at full res).
     pipeline.set_overlay_oversample(surface_long / canonical_long);
 
-    let Some(frame) =
-        screen_acquire_frame(renderer, camera_tex_id as u32, cw, ch, uv, pipeline.det_max_pixels())
-    else {
+    let Some(frame) = screen_acquire_frame(
+        renderer,
+        camera_tex_id as u32,
+        cw,
+        ch,
+        uv,
+        pipeline.det_max_pixels(),
+    ) else {
         return 0;
     };
     if pipeline.dispatch_acquire(frame) {
@@ -322,10 +327,9 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
     // Punch the pinhole hole grid so the captured mirror exposes screen_est under
     // the pills for the v2 under-pill change detector. The hole's baked alpha is
     // sized against the effective opaque alpha (pill_alpha × window alpha).
-    let (hole_radius, hole_alpha) =
-        pipeline.hole_params(SCREEN_PILL_ALPHA * SCREEN_WINDOW_ALPHA);
+    let (hole_radius, hole_alpha) = pipeline.hole_params(SCREEN_PILL_ALPHA * SCREEN_WINDOW_ALPHA);
     let holes = translator::gl_renderer::HoleGrid {
-        spacing: pipeline.lattice_spacing() as f32,
+        spacing: pipeline.lattice_spacing(),
         radius: hole_radius,
         alpha: hole_alpha,
     };
@@ -350,11 +354,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenPresentO
     log::info!(
         "[screen-present] dl={dl_ms:.1}ms({n_pills}p/{n_glyphs}g) bake={bake_ms:.1} present={present_ms:.1}"
     );
-    if drawn {
-        1
-    } else {
-        0
-    }
+    if drawn { 1 } else { 0 }
 }
 
 /// Screen overlay opacities baked into the overlay texture. Pills opaque (the
@@ -466,7 +466,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenMonitorF
     let (cols, rows) = pipeline.lattice_dims(cw, ch);
     let pills = pipeline.monitor_pill_aabbs();
     let (pill_luma, screen_frac) = pipeline.recovery_params();
-    let spacing = pipeline.lattice_spacing() as f32;
+    let spacing = pipeline.lattice_spacing();
     renderer.set_camera_external(camera_tex_id as u32, uv);
     let action = renderer
         .read_lattice_screen_est(cols, rows, cw, ch, spacing, &pills, pill_luma, screen_frac)
