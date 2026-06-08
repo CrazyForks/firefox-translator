@@ -36,12 +36,22 @@ import android.os.Looper
 import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
+import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
+import dev.davidv.translator.Language
+import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorApplication
+import dev.davidv.translator.overlayChrome.FloatingBubble
+import dev.davidv.translator.overlayChrome.NormalizedRegion
+import dev.davidv.translator.overlayChrome.OverlayMenuHost
+import dev.davidv.translator.overlayChrome.OverlayMenuManager
+import dev.davidv.translator.overlayChrome.RegionSelectView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -67,6 +77,18 @@ class ScreenTranslateService : Service() {
   private var stopped = false
 
   private var displayManager: DisplayManager? = null
+
+  // Live control state, mutated from the bubble menu and re-applied to the tracker.
+  private var currentFrom: Language? = null
+  private var currentTo: Language? = null
+  private var currentIsAutoSource = true
+  private var currentRegion: NormalizedRegion? = null
+  private var userPaused = false
+
+  private var langStateManager: LanguageStateManager? = null
+  private var menuManager: OverlayMenuManager? = null
+  private var bubble: FloatingBubble? = null
+  private var regionView: View? = null
 
   // Display size the current capture was built for; a rotation changes these and
   // triggers an in-place resize (the VirtualDisplay is fixed to its creation
@@ -178,12 +200,32 @@ class ScreenTranslateService : Service() {
       catalog.languageByCode(targetCode ?: settings.defaultTargetLanguageCode)
         ?: catalog.languageByCode("en")
         ?: return
-    // Source: forced code skips the script classifier; auto leaves it on (the
-    // `from` value is then just a hint).
-    val from = if (isAutoSource) to else (sourceCode?.let { catalog.languageByCode(it) } ?: to)
-    tracker.setLanguages(from.code, to.code, isAutoSource)
-    Log.i(TAG, "languages: from=${from.code} to=${to.code} auto=$isAutoSource")
+    currentTo = to
+    currentIsAutoSource = isAutoSource
+    // A forced source skips the script classifier; auto leaves it off (the `from`
+    // value is then just a hint, so we keep it null and fall back to `to`).
+    currentFrom = if (isAutoSource) null else sourceCode?.let { catalog.languageByCode(it) }
+    applyLanguages()
   }
+
+  /** Push the current language selection into the tracker (live, no restart). */
+  private fun applyLanguages() {
+    val tracker = screenTracker ?: return
+    val to = currentTo ?: return
+    val from = if (currentIsAutoSource) to else (currentFrom ?: to)
+    tracker.setLanguages(from.code, to.code, currentIsAutoSource)
+    Log.i(TAG, "languages: from=${from.code} to=${to.code} auto=$currentIsAutoSource")
+  }
+
+  private fun overlayWindowType(): Int =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+    } else {
+      @Suppress("DEPRECATION")
+      WindowManager.LayoutParams.TYPE_PHONE
+    }
+
+  private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
 
   private fun setupOverlayAndCapture(
     tracker: uniffi.bindings.LiveScreenTracker,
@@ -204,19 +246,11 @@ class ScreenTranslateService : Service() {
     val view = GpuOverlayTextureView(this)
     overlayView = view
 
-    val overlayType =
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-      } else {
-        @Suppress("DEPRECATION")
-        WindowManager.LayoutParams.TYPE_PHONE
-      }
-
     val params =
       WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.MATCH_PARENT,
-        overlayType,
+        overlayWindowType(),
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
           WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
           WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -240,6 +274,7 @@ class ScreenTranslateService : Service() {
       params.alpha = WINDOW_ALPHA
     }
     wm.addView(view, params)
+    setupControls()
 
     val pipelinePtr = tracker.rawAddressForJni().toLong()
     val captureWorker = ScreenCaptureGlWorker(w, h)
@@ -275,6 +310,183 @@ class ScreenTranslateService : Service() {
         )
       Log.i(TAG, "VirtualDisplay created ${w}x$h, surface=$surface")
     }
+  }
+
+  /** The draggable bubble + its popup menu, pickers and region editor. One shared
+   *  control surface (the `overlayChrome` widgets) over touchable overlay windows;
+   *  the render overlay stays pass-through. */
+  private fun setupControls() {
+    val wm = windowManager ?: return
+    val type = overlayWindowType()
+
+    menuManager =
+      OverlayMenuManager(
+        this,
+        ::dpToPx,
+        object : OverlayMenuHost {
+          override fun addDismissLayer(view: View) {
+            val params =
+              WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT,
+              )
+            params.windowAnimations = 0
+            wm.addView(view, params)
+          }
+
+          override fun addMenuView(view: View) {
+            // Open on the bubble's side, vertically near it (the window manager
+            // clamps it back on-screen if the bubble sits near an edge).
+            val onRight = bubble?.isOnRightSide() ?: true
+            val params =
+              WindowManager.LayoutParams(
+                dpToPx(200),
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT,
+              )
+            params.gravity = Gravity.TOP or (if (onRight) Gravity.END else Gravity.START)
+            params.x = dpToPx(8)
+            params.y = ((bubble?.anchorTop() ?: dpToPx(120)) - dpToPx(20)).coerceAtLeast(dpToPx(8))
+            params.windowAnimations = 0
+            wm.addView(view, params)
+          }
+
+          override fun addPickerView(view: View) {
+            val params =
+              WindowManager.LayoutParams(
+                dpToPx(250),
+                dpToPx(400),
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT,
+              )
+            params.gravity = Gravity.CENTER
+            params.windowAnimations = 0
+            wm.addView(view, params)
+          }
+
+          override fun removeMenuChild(view: View) {
+            runCatching { wm.removeView(view) }
+          }
+        },
+      )
+
+    bubble = FloatingBubble(this, wm, type, ::dpToPx) { showMenu() }.also { it.show() }
+
+    val app = applicationContext as TranslatorApplication
+    langStateManager = LanguageStateManager(scope, app.filePathManager)
+  }
+
+  private fun showMenu() {
+    val mm = menuManager ?: return
+    bubble?.restore()
+    val pauseLabel = getString(if (userPaused) R.string.resume else R.string.pause)
+    mm.showDotsMenu(
+      listOf(
+        "Source language" to { showPicker(isSource = true) },
+        "Target language" to { showPicker(isSource = false) },
+        getString(R.string.region_select_menu) to { showRegionEditor() },
+        pauseLabel to { toggleUserPause() },
+        getString(R.string.stop) to { stopEverything() },
+      ),
+    )
+  }
+
+  /** Manual pause/resume: freezes OCR + clears the on-screen overlays, without
+   *  changing region/languages. Resuming re-acquires from scratch. */
+  private fun toggleUserPause() {
+    userPaused = !userPaused
+    if (userPaused) {
+      screenTracker?.clearOverlay()
+      worker?.setPaused(true)
+      worker?.clearOverlayOutput()
+    } else {
+      worker?.setPaused(false)
+    }
+  }
+
+  private fun showPicker(isSource: Boolean) {
+    val mm = menuManager ?: return
+    val lsm = langStateManager ?: return
+    scope.launch {
+      lsm.refreshLanguageAvailability()
+      lsm.languageState.first { !it.isChecking }
+      val langs =
+        lsm.languageState.value
+          .translatorLanguages(requireOcr = isSource)
+          .sortedBy { it.displayName }
+      bubble?.restore()
+      // Live screen translate never runs in auto-source mode, so no Auto option.
+      mm.showLanguagePicker(isSource, langs, allowAuto = false) { lang ->
+        if (isSource) {
+          if (lang != null) currentFrom = lang
+        } else if (lang != null) {
+          currentTo = lang
+        }
+        applyLanguages()
+      }
+    }
+  }
+
+  private fun showRegionEditor() {
+    val wm = windowManager ?: return
+    if (regionView != null) return
+    bubble?.restore()
+    // Freeze live translation while picking the area — otherwise OCR runs on the
+    // dimmed editor + our own UI.
+    worker?.setPaused(true)
+    val view =
+      RegionSelectView(
+        this,
+        ::dpToPx,
+        currentRegion,
+        onConfirm = { r ->
+          currentRegion = r
+          screenTracker?.setRegion(uniffi.bindings.ScreenRegion(r.left, r.top, r.right, r.bottom))
+          removeRegionEditor()
+        },
+        onReset = {
+          currentRegion = null
+          screenTracker?.setRegion(null)
+          removeRegionEditor()
+        },
+        onCancel = { removeRegionEditor() },
+      )
+    val params =
+      WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        overlayWindowType(),
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT,
+      )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      params.layoutInDisplayCutoutMode =
+        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+    }
+    params.windowAnimations = 0
+    wm.addView(view, params)
+    regionView = view
+  }
+
+  private fun removeRegionEditor() {
+    regionView?.let { runCatching { windowManager?.removeView(it) } }
+    regionView = null
+    // Resume unless a manual pause is in effect (then stay paused).
+    worker?.setPaused(userPaused)
+  }
+
+  private fun teardownControls() {
+    runCatching { menuManager?.dismiss() }
+    menuManager = null
+    bubble?.remove()
+    bubble = null
+    removeRegionEditor()
   }
 
   private fun startForegroundNotification() {
@@ -342,6 +554,7 @@ class ScreenTranslateService : Service() {
   private fun stopEverything() {
     if (stopped) return
     stopped = true
+    teardownControls()
     runCatching { displayManager?.unregisterDisplayListener(displayListener) }
     displayManager = null
     runCatching { virtualDisplay?.release() }

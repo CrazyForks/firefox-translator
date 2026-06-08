@@ -117,6 +117,17 @@ class ScreenCaptureGlWorker(
     glThread?.setSourceBufferSize(width, height)
   }
 
+  /** Pause/resume OCR + translation without tearing down the capture (used while
+   *  the region editor is open, or for a manual pause). */
+  fun setPaused(paused: Boolean) {
+    glThread?.setPaused(paused)
+  }
+
+  /** Clear the on-screen overlay window once (used when manually pausing). */
+  fun clearOverlayOutput() {
+    glThread?.requestClearOutput()
+  }
+
   /** Rotation / display resize: update the canonical (OCR) and present (surface)
    *  dimensions in place and resize the capture buffer. The GL loop reads the new
    *  dims on its next iteration and passes them to the native present/readback;
@@ -166,6 +177,17 @@ class ScreenCaptureGlWorker(
     @Volatile
     private var running = true
 
+    // Pause OCR/translation (e.g. while the region editor is up) without tearing
+    // the capture down: the loop keeps draining frames but skips monitor/dispatch/
+    // present, so the overlay freezes and we don't OCR our own editor UI.
+    @Volatile
+    private var paused = false
+
+    // One-shot: clear the overlay window on the GL thread even while paused (a
+    // manual pause clears the on-screen overlays without resuming OCR).
+    @Volatile
+    private var clearRequested = false
+
     @Volatile
     private var srcBufW = 0
 
@@ -189,6 +211,20 @@ class ScreenCaptureGlWorker(
 
     /** Wake the loop from an idle `wait` (a new output surface, or shutdown). */
     fun wake() {
+      synchronized(lock) {
+        lock.notifyAll()
+      }
+    }
+
+    fun setPaused(p: Boolean) {
+      paused = p
+      synchronized(lock) {
+        lock.notifyAll()
+      }
+    }
+
+    fun requestClearOutput() {
+      clearRequested = true
       synchronized(lock) {
         lock.notifyAll()
       }
@@ -289,6 +325,26 @@ class ScreenCaptureGlWorker(
         }
         val pipeline = pipelinePtr
         if (pipeline == 0L) continue
+
+        // Honour a one-shot output clear even while paused (a manual pause wipes the
+        // on-screen overlays without resuming OCR).
+        if (clearRequested) {
+          clearRequested = false
+          clearOutput()
+          lastVersion = LivePipelineJni.screenAcquireState(pipeline) and 0xFFFFFFFFL
+        }
+
+        // Paused (region editor up, or a manual pause): drained the frame above to
+        // keep the queue flowing, now skip all OCR/present and abort anything in
+        // flight so the overlay freezes. Frames from the editor add/remove still wake
+        // the loop; it resumes on the next frame after unpausing.
+        if (paused) {
+          if (acquiring) {
+            LivePipelineJni.screenAbortAcquire(pipeline)
+            acquiring = false
+          }
+          continue
+        }
 
         // Monitor movement/settle — runs even while acquiring, so movement during
         // an in-flight OCR aborts it.

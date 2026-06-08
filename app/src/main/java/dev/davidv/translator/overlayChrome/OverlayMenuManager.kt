@@ -48,6 +48,7 @@ class OverlayMenuManager(
   fun showLanguagePicker(
     isSource: Boolean,
     availableLangs: List<Language>,
+    allowAuto: Boolean = true,
     onPick: (Language?) -> Unit,
   ) {
     dismiss()
@@ -66,6 +67,7 @@ class OverlayMenuManager(
         dpToPx = dpToPx,
         isSource = isSource,
         availableLangs = availableLangs,
+        allowAuto = allowAuto,
       ) { language ->
         onPick(language)
         dismiss()

@@ -12,6 +12,7 @@ import android.util.Log
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
+import android.widget.Toast
 import dev.davidv.translator.FilePathManager
 import dev.davidv.translator.ImageProcessor
 import dev.davidv.translator.Language
@@ -19,6 +20,7 @@ import dev.davidv.translator.LanguageDetector
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.OverlayTextTranslationHelper
+import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.SpeechService
@@ -182,12 +184,18 @@ class TranslatorAccessibilityService : AccessibilityService() {
   }
 
   fun startScreenTranslate() {
+    // Live screen translate needs a fixed source language (no script classifier
+    // per-frame) — gate it off in auto mode and tell the user to pick one.
+    if (isAutoSource || forcedSourceLanguage == null) {
+      Toast.makeText(this, getString(R.string.screen_translate_needs_source), Toast.LENGTH_LONG).show()
+      return
+    }
     val targetCode =
       (
         forcedTargetLanguage
           ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
       )?.code
-    val sourceCode = if (isAutoSource) null else forcedSourceLanguage?.code
+    val sourceCode = forcedSourceLanguage?.code
     runCatching {
       startActivity(
         ScreenCaptureRequestActivity.intent(this, sourceCode, targetCode, isAutoSource),

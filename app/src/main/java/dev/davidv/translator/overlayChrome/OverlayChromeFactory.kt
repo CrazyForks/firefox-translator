@@ -299,6 +299,7 @@ object OverlayChromeFactory {
     dpToPx: (Int) -> Int,
     isSource: Boolean,
     availableLangs: List<Language>,
+    allowAuto: Boolean = true,
     onPick: (Language?) -> Unit,
   ): ScrollView {
     val scroll = ScrollView(context)
@@ -311,7 +312,7 @@ object OverlayChromeFactory {
     val listPad = dpToPx(8)
     list.setPadding(listPad, listPad, listPad, listPad)
 
-    if (isSource) {
+    if (isSource && allowAuto) {
       addMenuItem(context, list, dpToPx, "\u2728  Auto-detect") {
         onPick(null)
       }

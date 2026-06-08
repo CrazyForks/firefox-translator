@@ -27,6 +27,7 @@ import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.MainActivity
 import dev.davidv.translator.OverlayTextTranslationHelper
+import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.StructuredFragmentTranslationOutput
@@ -1015,12 +1016,19 @@ class TranslatorVoiceInteractionSession(
    *  dismiss this session so the frozen screenshot overlay is removed and the
    *  real screen shows through for capture. */
   private fun startScreenTranslate() {
+    // Live screen translate needs a fixed source language — gate it off in auto
+    // mode and tell the user to pick one. A Toast doesn't surface from the
+    // assistant's window, so use the overlay's own status line.
+    if (isAutoSource || forcedSourceLanguage == null) {
+      showStatus(context.getString(R.string.screen_translate_needs_source), autoHideAfterMs = 3000)
+      return
+    }
     val targetCode =
       (
         forcedTargetLanguage
           ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
       )?.code
-    val sourceCode = if (isAutoSource) null else forcedSourceLanguage?.code
+    val sourceCode = forcedSourceLanguage?.code
     runCatching {
       context.startActivity(
         dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(

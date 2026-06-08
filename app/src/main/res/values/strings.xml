@@ -1,5 +1,10 @@
 <resources>
     <string name="app_name">Translator</string>
+    <string name="stop">Stop</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="region_select_menu">Set translation area</string>
+    <string name="screen_translate_needs_source">Specify source language</string>
     <string name="translate_text">Translate</string>
     <string name="translate_link">Translate link</string>
     <string name="accessibility_service_description">Enable this service to translate text on screen. Tap the floating translate button, then tap any text to translate it in place.</string>

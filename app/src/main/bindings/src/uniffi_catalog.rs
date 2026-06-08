@@ -1344,6 +1344,34 @@ impl LiveScreenTracker {
     fn clear_overlay(&self) {
         self.pipeline.clear_overlay();
     }
+
+    /// Restrict OCR + the motion monitor to a normalized `[0,1]` region, or pass
+    /// `None` to translate the whole screen.
+    fn set_region(&self, region: Option<ScreenRegion>) {
+        self.pipeline.set_region(region.map(Into::into));
+    }
+}
+
+/// A capture region in normalized `[0,1]` coordinates (origin top-left).
+#[cfg(feature = "planar-tracker")]
+#[derive(uniffi::Record, Clone, Copy, Debug)]
+pub struct ScreenRegion {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+#[cfg(feature = "planar-tracker")]
+impl From<ScreenRegion> for translator::live_screen::NormRect {
+    fn from(r: ScreenRegion) -> Self {
+        translator::live_screen::NormRect {
+            left: r.left,
+            top: r.top,
+            right: r.right,
+            bottom: r.bottom,
+        }
+    }
 }
 
 #[cfg(feature = "ppocr")]

@@ -268,6 +268,7 @@ pub extern "system" fn Java_dev_davidv_translator_LivePipelineJni_screenDispatch
         ch,
         uv,
         pipeline.det_max_pixels(),
+        pipeline.region(),
     ) else {
         return 0;
     };
