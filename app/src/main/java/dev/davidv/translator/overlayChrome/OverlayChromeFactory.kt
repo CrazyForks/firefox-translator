@@ -22,6 +22,7 @@ data class LanguageToolbarViews(
   val targetLabel: TextView,
   val readingOrderButton: View? = null,
   val readingOrderIcon: ImageView? = null,
+  val pauseIcon: ImageView? = null,
 )
 
 object OverlayChromeFactory {
@@ -50,7 +51,10 @@ object OverlayChromeFactory {
     readingOrder: ReadingOrder? = null,
     onReadingOrderClick: (() -> Unit)? = null,
     onRefreshClick: (() -> Unit)? = null,
-    onMenuClick: () -> Unit,
+    onRegionClick: (() -> Unit)? = null,
+    onPauseClick: (() -> Unit)? = null,
+    isPaused: Boolean = false,
+    onMenuClick: (() -> Unit)? = null,
     isAutoSource: Boolean = false,
   ): LanguageToolbarViews {
     val toolbar = FrameLayout(context)
@@ -185,12 +189,52 @@ object OverlayChromeFactory {
       )
     }
 
-    val menuBtn = ImageView(context)
-    menuBtn.setImageResource(R.drawable.more_vert)
-    menuBtn.setPadding(iconPad, iconPad, iconPad, iconPad)
-    menuBtn.setOnClickListener { onMenuClick() }
-    val menuPill = makePill(context, dpToPx, menuBtn)
-    rightActions.addView(menuPill, LinearLayout.LayoutParams(btnSize, btnSize))
+    onRegionClick?.let {
+      val regionBtn =
+        ImageView(context).apply {
+          setImageResource(R.drawable.activity_zone)
+          setColorFilter(Color.WHITE)
+          setPadding(iconPad, iconPad, iconPad, iconPad)
+          setOnClickListener { onRegionClick() }
+          contentDescription = "Set translation area"
+        }
+      val regionPill = makePill(context, dpToPx, regionBtn)
+      rightActions.addView(
+        regionPill,
+        LinearLayout.LayoutParams(btnSize, btnSize).apply {
+          marginEnd = dpToPx(6)
+        },
+      )
+    }
+
+    var pauseIcon: ImageView? = null
+    onPauseClick?.let {
+      val pauseBtn =
+        ImageView(context).apply {
+          setImageResource(if (isPaused) R.drawable.play_arrow else R.drawable.pause)
+          setColorFilter(Color.WHITE)
+          setPadding(iconPad, iconPad, iconPad, iconPad)
+          setOnClickListener { onPauseClick() }
+          contentDescription = "Pause or resume"
+        }
+      pauseIcon = pauseBtn
+      val pausePill = makePill(context, dpToPx, pauseBtn)
+      rightActions.addView(
+        pausePill,
+        LinearLayout.LayoutParams(btnSize, btnSize).apply {
+          marginEnd = dpToPx(6)
+        },
+      )
+    }
+
+    onMenuClick?.let {
+      val menuBtn = ImageView(context)
+      menuBtn.setImageResource(R.drawable.more_vert)
+      menuBtn.setPadding(iconPad, iconPad, iconPad, iconPad)
+      menuBtn.setOnClickListener { onMenuClick() }
+      val menuPill = makePill(context, dpToPx, menuBtn)
+      rightActions.addView(menuPill, LinearLayout.LayoutParams(btnSize, btnSize))
+    }
     toolbar.addView(
       rightActions,
       FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
@@ -204,7 +248,16 @@ object OverlayChromeFactory {
       targetLabel = targetLabel,
       readingOrderButton = readingOrderPill,
       readingOrderIcon = readingOrderIcon,
+      pauseIcon = pauseIcon,
     )
+  }
+
+  fun setPauseIconState(
+    pauseIcon: ImageView?,
+    isPaused: Boolean,
+  ) {
+    pauseIcon?.setImageResource(if (isPaused) R.drawable.play_arrow else R.drawable.pause)
+    pauseIcon?.setColorFilter(Color.WHITE)
   }
 
   fun updateReadingOrderButtonState(

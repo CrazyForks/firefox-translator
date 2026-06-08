@@ -17,7 +17,6 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
-import dev.davidv.translator.ImageProcessor
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.MainActivity
@@ -43,7 +42,6 @@ import kotlinx.coroutines.withContext
 class TranslatorVoiceInteractionSession(
   context: Context,
   private val settingsManager: SettingsManager,
-  private val imageProcessor: ImageProcessor,
   private val translationCoordinator: TranslationCoordinator,
   private val overlayTextTranslationHelper: OverlayTextTranslationHelper,
   private val langStateManager: LanguageStateManager,

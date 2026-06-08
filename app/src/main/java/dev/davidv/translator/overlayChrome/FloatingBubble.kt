@@ -154,6 +154,12 @@ class FloatingBubble(
   /** The bubble's current top in px, for vertically aligning the menu near it. */
   fun anchorTop(): Int = params?.y ?: dpToPx(120)
 
+  /** Hide/show the bubble view without losing its dragged position — used while
+   *  the expanded toolbar is open (the toolbar is the un-collapsed form). */
+  fun setShown(shown: Boolean) {
+    view?.visibility = if (shown) View.VISIBLE else View.GONE
+  }
+
   /** Bring the bubble fully back on-screen at full opacity (e.g. when the menu opens). */
   fun restore() {
     val v = view ?: return

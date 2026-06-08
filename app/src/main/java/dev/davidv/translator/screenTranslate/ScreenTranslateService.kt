@@ -39,12 +39,15 @@ import android.view.Display
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.ImageView
+import android.widget.TextView
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.R
 import dev.davidv.translator.TranslatorApplication
 import dev.davidv.translator.overlayChrome.FloatingBubble
 import dev.davidv.translator.overlayChrome.NormalizedRegion
+import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
 import dev.davidv.translator.overlayChrome.RegionSelectView
@@ -89,6 +92,11 @@ class ScreenTranslateService : Service() {
   private var menuManager: OverlayMenuManager? = null
   private var bubble: FloatingBubble? = null
   private var regionView: View? = null
+  private var toolbarView: View? = null
+  private var toolbarDismissLayer: View? = null
+  private var sourceLabelView: TextView? = null
+  private var targetLabelView: TextView? = null
+  private var pauseIconView: ImageView? = null
 
   // Display size the current capture was built for; a rotation changes these and
   // triggers an in-place resize (the VirtualDisplay is fixed to its creation
@@ -376,25 +384,104 @@ class ScreenTranslateService : Service() {
         },
       )
 
-    bubble = FloatingBubble(this, wm, type, ::dpToPx) { showMenu() }.also { it.show() }
+    bubble = FloatingBubble(this, wm, type, ::dpToPx) { showToolbar() }.also { it.show() }
 
     val app = applicationContext as TranslatorApplication
     langStateManager = LanguageStateManager(scope, app.filePathManager)
   }
 
-  private fun showMenu() {
-    val mm = menuManager ?: return
-    bubble?.restore()
-    val pauseLabel = getString(if (userPaused) R.string.resume else R.string.pause)
-    mm.showDotsMenu(
-      listOf(
-        "Source language" to { showPicker(isSource = true) },
-        "Target language" to { showPicker(isSource = false) },
-        getString(R.string.region_select_menu) to { showRegionEditor() },
-        pauseLabel to { toggleUserPause() },
-        getString(R.string.stop) to { stopEverything() },
-      ),
-    )
+  /** Tap-the-bubble expands the collapsed dot into the shared flat toolbar (the
+   *  same widget the still paths use): both language pills, region, pause, and ✕
+   *  (stop). Tapping outside collapses back to the dot without stopping. */
+  private fun showToolbar() {
+    val wm = windowManager ?: return
+    if (toolbarView != null) return
+    val to = currentTo ?: return
+    bubble?.setShown(false)
+
+    val dismiss =
+      View(this).apply { setOnClickListener { hideToolbar() } }
+    val dismissParams =
+      WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        overlayWindowType(),
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT,
+      )
+    dismissParams.windowAnimations = 0
+    wm.addView(dismiss, dismissParams)
+    toolbarDismissLayer = dismiss
+
+    val views =
+      OverlayChromeFactory.createLanguageToolbar(
+        context = this,
+        dpToPx = ::dpToPx,
+        forcedSourceLanguage = currentFrom,
+        forcedTargetLanguage = currentTo,
+        defaultTargetLanguage = to,
+        onClose = { stopEverything() },
+        onSourceClick = { showPicker(isSource = true) },
+        onSwap = { swapLiveLanguages() },
+        onTargetClick = { showPicker(isSource = false) },
+        onRegionClick = {
+          hideToolbar()
+          showRegionEditor()
+        },
+        onPauseClick = {
+          toggleUserPause()
+          OverlayChromeFactory.setPauseIconState(pauseIconView, userPaused)
+        },
+        isPaused = userPaused,
+        isAutoSource = false,
+      )
+    sourceLabelView = views.sourceLabel
+    targetLabelView = views.targetLabel
+    pauseIconView = views.pauseIcon
+
+    val params =
+      WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        overlayWindowType(),
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT,
+      )
+    params.gravity = Gravity.TOP or Gravity.START
+    params.y = statusBarHeight()
+    params.windowAnimations = 0
+    wm.addView(views.root, params)
+    toolbarView = views.root
+  }
+
+  private fun hideToolbar() {
+    toolbarView?.let { runCatching { windowManager?.removeView(it) } }
+    toolbarView = null
+    toolbarDismissLayer?.let { runCatching { windowManager?.removeView(it) } }
+    toolbarDismissLayer = null
+    sourceLabelView = null
+    targetLabelView = null
+    pauseIconView = null
+    bubble?.setShown(true)
+  }
+
+  private fun swapLiveLanguages() {
+    val from = currentFrom ?: return
+    val to = currentTo ?: return
+    currentFrom = to
+    currentTo = from
+    applyLanguages()
+    updateLiveToolbarLabels()
+  }
+
+  private fun updateLiveToolbarLabels() {
+    sourceLabelView?.text = OverlayChromeFactory.formatSourceLabel(currentFrom, isAutoSource = false)
+    targetLabelView?.text = currentTo?.shortDisplayName ?: "?"
+  }
+
+  private fun statusBarHeight(): Int {
+    val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+    return if (id > 0) resources.getDimensionPixelSize(id) else dpToPx(24)
   }
 
   /** Manual pause/resume: freezes OCR + clears the on-screen overlays, without
@@ -420,7 +507,6 @@ class ScreenTranslateService : Service() {
         lsm.languageState.value
           .translatorLanguages(requireOcr = isSource)
           .sortedBy { it.displayName }
-      bubble?.restore()
       // Live screen translate never runs in auto-source mode, so no Auto option.
       mm.showLanguagePicker(isSource, langs, allowAuto = false) { lang ->
         if (isSource) {
@@ -429,6 +515,7 @@ class ScreenTranslateService : Service() {
           currentTo = lang
         }
         applyLanguages()
+        updateLiveToolbarLabels()
       }
     }
   }
@@ -436,7 +523,6 @@ class ScreenTranslateService : Service() {
   private fun showRegionEditor() {
     val wm = windowManager ?: return
     if (regionView != null) return
-    bubble?.restore()
     // Freeze live translation while picking the area — otherwise OCR runs on the
     // dimmed editor + our own UI.
     worker?.setPaused(true)
@@ -484,6 +570,7 @@ class ScreenTranslateService : Service() {
   private fun teardownControls() {
     runCatching { menuManager?.dismiss() }
     menuManager = null
+    hideToolbar()
     bubble?.remove()
     bubble = null
     removeRegionEditor()

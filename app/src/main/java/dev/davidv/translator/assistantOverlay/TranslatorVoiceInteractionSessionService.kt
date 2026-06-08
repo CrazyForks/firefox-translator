@@ -60,7 +60,6 @@ class TranslatorVoiceInteractionSessionService : VoiceInteractionSessionService(
     TranslatorVoiceInteractionSession(
       context = this,
       settingsManager = settingsManager,
-      imageProcessor = imageProcessor,
       translationCoordinator = translationCoordinator,
       overlayTextTranslationHelper = overlayTextTranslationHelper,
       langStateManager = langStateManager,
