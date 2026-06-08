@@ -135,6 +135,9 @@ fun ImageCaptureHandler(
   showImageSourceSheet: Boolean,
   onDismissImageSourceSheet: () -> Unit,
   onCameraClick: () -> Unit,
+  from: dev.davidv.translator.Language,
+  to: dev.davidv.translator.Language,
+  isAutoSource: Boolean,
   pendingSharedImage: SharedFlow<Uri>? = null,
 ) {
   val context = LocalContext.current
@@ -322,6 +325,22 @@ fun ImageCaptureHandler(
   if (showImageSourceSheet) {
     ImageSourceBottomSheet(
       onDismiss = onDismissImageSourceSheet,
+      screenLiveEnabled = !isAutoSource,
+      onScreenLiveClick = {
+        if (isAutoSource) {
+          Toast.makeText(context, context.getString(R.string.screen_translate_needs_source), Toast.LENGTH_LONG).show()
+        } else {
+          onDismissImageSourceSheet()
+          context.startActivity(
+            dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(
+              context,
+              sourceCode = from.code,
+              targetCode = to.code,
+              isAutoSource = false,
+            ),
+          )
+        }
+      },
       onCameraClick = {
         onDismissImageSourceSheet()
         onCameraClick()
@@ -347,6 +366,8 @@ fun ImageCaptureHandler(
 @Composable
 fun ImageSourceBottomSheet(
   onDismiss: () -> Unit,
+  screenLiveEnabled: Boolean,
+  onScreenLiveClick: () -> Unit,
   onCameraClick: () -> Unit,
   onMediaPickerClick: () -> Unit,
   onGalleryClick: () -> Unit,
@@ -371,6 +392,35 @@ fun ImageSourceBottomSheet(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
       ) {
+        // Live screen translate (leftmost). Disabled when the source is auto —
+        // live can't run the per-frame script classifier.
+        Column(
+          horizontalAlignment = Alignment.CenterHorizontally,
+          modifier = Modifier.clickable { onScreenLiveClick() },
+        ) {
+          val screenTint =
+            if (screenLiveEnabled) {
+              MaterialTheme.colorScheme.onSurface
+            } else {
+              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            }
+          Icon(
+            painter = painterResource(id = R.drawable.videocam),
+            contentDescription = "Translate screen live",
+            modifier =
+              Modifier
+                .size(48.dp)
+                .padding(bottom = 8.dp),
+            tint = screenTint,
+          )
+          Text(
+            text = "Screen",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = screenTint,
+          )
+        }
+
         // File picker
         Column(
           horizontalAlignment = Alignment.CenterHorizontally,

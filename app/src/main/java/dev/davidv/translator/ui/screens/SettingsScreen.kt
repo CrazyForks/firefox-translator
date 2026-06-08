@@ -558,26 +558,17 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
 
+          Text(
+            text = "Grant screen access through the assistant gesture or the accessibility floating button — either works.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Device Assistant",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
-              Text(
-                text =
-                  "Requires assistant gesture.\n" +
-                    "Higher quality.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-
             TextButton(
               onClick = {
                 if (shouldLaunchAssistantRoleRequest(context)) {
@@ -590,28 +581,7 @@ fun SettingsScreen(
                 }
               },
             ) {
-              Text(if (assistantRoleHeld) "Manage" else "Request")
-            }
-          }
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Floating shortcut",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
-              Text(
-                text =
-                  "Requires accessibility permissions\n" +
-                    "Quality depends on target app.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
+              Text(if (assistantRoleHeld) "Assistant ✓" else "Assistant")
             }
 
             TextButton(
@@ -619,85 +589,49 @@ fun SettingsScreen(
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
               },
             ) {
-              Text("Manage")
+              Text("Accessibility")
             }
           }
 
-          Row(
+          var assistantActionExpanded by remember { mutableStateOf(false) }
+
+          Text(
+            text = "On assistant invocation",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+
+          ExposedDropdownMenuBox(
+            expanded = assistantActionExpanded,
+            onExpandedChange = { assistantActionExpanded = it },
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
           ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "On assistant invocation",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
-              Text(
-                text = "What the assistant gesture does.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-
-            TextButton(
-              onClick = {
-                val next =
-                  if (settings.assistantAction == dev.davidv.translator.AssistantAction.LIVE_SCREEN) {
-                    dev.davidv.translator.AssistantAction.STILL_IMAGE
-                  } else {
-                    dev.davidv.translator.AssistantAction.LIVE_SCREEN
-                  }
-                onSettingsChange(settings.copy(assistantAction = next))
+            OutlinedTextField(
+              value = settings.assistantAction.displayName,
+              onValueChange = {},
+              readOnly = true,
+              trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = assistantActionExpanded)
               },
+              modifier =
+                Modifier
+                  .menuAnchor()
+                  .fillMaxWidth(),
+              colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+            )
+            ExposedDropdownMenu(
+              expanded = assistantActionExpanded,
+              onDismissRequest = { assistantActionExpanded = false },
             ) {
-              Text(
-                if (settings.assistantAction == dev.davidv.translator.AssistantAction.LIVE_SCREEN) "Live screen" else "Still image",
-              )
-            }
-          }
-
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Translate screen live",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
-              Text(
-                text = "Start a live screen translation now (needs a default source language).",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-
-            TextButton(
-              onClick = {
-                val sourceCode = settings.defaultSourceLanguageCode
-                if (sourceCode == null) {
-                  android.widget.Toast.makeText(
-                    context,
-                    context.getString(R.string.screen_translate_needs_source),
-                    android.widget.Toast.LENGTH_LONG,
-                  ).show()
-                } else {
-                  context.startActivity(
-                    dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(
-                      context,
-                      sourceCode = sourceCode,
-                      targetCode = settings.defaultTargetLanguageCode,
-                      isAutoSource = false,
-                    ),
-                  )
-                }
-              },
-            ) {
-              Text("Start")
+              dev.davidv.translator.AssistantAction.entries.forEach { action ->
+                DropdownMenuItem(
+                  text = { Text(action.displayName) },
+                  onClick = {
+                    onSettingsChange(settings.copy(assistantAction = action))
+                    assistantActionExpanded = false
+                  },
+                )
+              }
             }
           }
         }

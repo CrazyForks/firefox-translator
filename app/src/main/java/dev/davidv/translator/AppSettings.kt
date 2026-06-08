@@ -21,9 +21,11 @@ object Constants {
   const val DEFAULT_CATALOG_INDEX_URL = "https://offline-translator.davidv.dev/index_v3.json"
 }
 
-enum class AssistantAction {
-  STILL_IMAGE,
-  LIVE_SCREEN,
+enum class AssistantAction(
+  val displayName: String,
+) {
+  STILL_IMAGE("Still image"),
+  LIVE_SCREEN("Live screen"),
 }
 
 data class AppSettings(

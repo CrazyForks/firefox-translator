@@ -509,6 +509,9 @@ fun MainScreen(
     showImageSourceSheet = showImageSourceSheet,
     onDismissImageSourceSheet = { showImageSourceSheet = false },
     onCameraClick = onLiveCamera,
+    from = from,
+    to = to,
+    isAutoSource = isAutoSource,
     pendingSharedImage = pendingSharedImage,
   )
 
