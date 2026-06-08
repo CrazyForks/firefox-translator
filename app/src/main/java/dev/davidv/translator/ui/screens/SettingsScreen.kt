@@ -65,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -492,7 +493,8 @@ fun SettingsScreen(
               modifier =
                 Modifier
                   .menuAnchor()
-                  .fillMaxWidth(),
+                  .fillMaxWidth()
+                  .testTag("export-options:Popup position"),
               colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             )
             ExposedDropdownMenu(
@@ -662,7 +664,8 @@ fun SettingsScreen(
               modifier =
                 Modifier
                   .menuAnchor()
-                  .fillMaxWidth(),
+                  .fillMaxWidth()
+                  .testTag("export-options:Preferred Engine"),
               colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             )
             ExposedDropdownMenu(
@@ -703,7 +706,8 @@ fun SettingsScreen(
               modifier =
                 Modifier
                   .menuAnchor()
-                  .fillMaxWidth(),
+                  .fillMaxWidth()
+                  .testTag("export-options:Background Mode"),
               colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             )
             ExposedDropdownMenu(

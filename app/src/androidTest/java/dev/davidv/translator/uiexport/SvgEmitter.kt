@@ -63,6 +63,41 @@ object SvgEmitter {
     return sb.toString()
   }
 
+  /**
+   * A standalone panel listing a dropdown's options as editable labels. Used because the real popup
+   * is a separate window we can't draw; each option carries `data-key="{keyBase}:option:{i}"`.
+   */
+  fun emitOptionsPanel(
+    title: String,
+    keyBase: String,
+    options: List<String>,
+  ): String {
+    val width = 760
+    val pad = 36
+    val titleSize = 50f
+    val rowSize = 44f
+    val rowH = 96
+    val height = pad + 70 + options.size * rowH + pad
+
+    val sb = StringBuilder()
+    sb.append("""<?xml version="1.0" encoding="UTF-8"?>""").append('\n')
+    sb.append("""<svg xmlns="http://www.w3.org/2000/svg" width="$width" height="$height" """)
+    sb.append("""viewBox="0 0 $width $height" font-family="sans-serif">""").append('\n')
+    sb.appendLine("""  <rect x="0" y="0" width="$width" height="$height" fill="#14121c"/>""")
+    sb.appendLine(
+      """  <text x="$pad" y="${pad + titleSize.toInt()}" font-size="${num(titleSize)}" fill="#c9beff">${esc(title)}</text>""",
+    )
+    options.forEachIndexed { i, option ->
+      val y = pad + 70 + i * rowH + rowSize.toInt()
+      sb.appendLine(
+        """  <text data-key="$keyBase:option:$i" data-source="${esc(option)}" x="$pad" y="$y"""" +
+          """ font-size="${num(rowSize)}" fill="#e5e0ef">${esc(option)}</text>""",
+      )
+    }
+    sb.append("</svg>").append('\n')
+    return sb.toString()
+  }
+
   private fun text(
     op: DrawOp.TextRun,
     key: String,

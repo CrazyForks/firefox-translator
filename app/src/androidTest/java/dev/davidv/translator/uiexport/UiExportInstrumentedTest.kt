@@ -29,6 +29,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -87,6 +88,7 @@ class UiExportInstrumentedTest {
     composeTestRule.onNodeWithText("Advanced Settings").performScrollTo().performClick()
     composeTestRule.waitForIdle()
     captureRoute("settings")
+    captureDropdownOptions("settings")
 
     composeTestRule.onAllNodesWithText("Manage").onFirst().performScrollTo().performClick()
     composeTestRule.waitForIdle()
@@ -175,6 +177,61 @@ class UiExportInstrumentedTest {
 
   private fun textSignature(ops: List<DrawOp>): String =
     ops.filterIsInstance<DrawOp.TextRun>().joinToString("|") { "${it.text}@${it.baselineY.toInt()}" }
+
+  /**
+   * For each dropdown opted in with `Modifier.testTag("export-options:<Name>")`, open it, read its
+   * option texts from the popup's semantics, and write a small per-dropdown options panel. The popup
+   * is a separate window we can't draw, so we synthesize the panel from text only.
+   */
+  private fun captureDropdownOptions(route: String) {
+    val tags =
+      composeTestRule
+        .onAllNodes(SemanticsMatcher("export-options tag") { node -> textTag(node).startsWith("export-options:") })
+        .fetchSemanticsNodes()
+        .mapNotNull { it.config.getOrNull(SemanticsProperties.TestTag) }
+        .distinct()
+
+    for (tag in tags) {
+      val name = tag.substringAfter("export-options:")
+      composeTestRule.onNodeWithTag(tag).performScrollTo()
+      composeTestRule.waitForIdle()
+
+      val selected = nodeText(composeTestRule.onNodeWithTag(tag).fetchSemanticsNode())
+      val before = visibleTexts()
+      composeTestRule.onNodeWithTag(tag).performClick()
+      composeTestRule.waitForIdle()
+
+      val newOptions =
+        composeTestRule
+          .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text))
+          .fetchSemanticsNodes()
+          .mapNotNull { node -> nodeText(node)?.takeIf { it.isNotBlank() && it !in before }?.let { node to it } }
+          .sortedBy { it.first.boundsInRoot.top }
+          .map { it.second }
+      val options = (listOfNotNull(selected) + newOptions).distinct()
+
+      composeTestRule.onNodeWithTag(tag).performClick()
+      composeTestRule.waitForIdle()
+
+      val slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+      val svg = SvgEmitter.emitOptionsPanel(name, "$route:$slug", options)
+      File(File(outputDir(), "ui-export"), "$route.$slug.svg").writeText(svg)
+      Log.i("UiExport", "wrote $route.$slug.svg (${options.size} options: $options)")
+    }
+  }
+
+  private fun textTag(node: SemanticsNode): String = node.config.getOrNull(SemanticsProperties.TestTag) ?: ""
+
+  private fun nodeText(node: SemanticsNode): String? =
+    node.config.getOrNull(SemanticsProperties.EditableText)?.text
+      ?: node.config.getOrNull(SemanticsProperties.Text)?.joinToString("") { it.text }
+
+  private fun visibleTexts(): Set<String> =
+    composeTestRule
+      .onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text))
+      .fetchSemanticsNodes()
+      .mapNotNull { nodeText(it) }
+      .toSet()
 
   /**
    * Block until the rendered draw ops stop changing between samples, so transient animations
