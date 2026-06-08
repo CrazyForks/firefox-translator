@@ -226,6 +226,7 @@ class OverlayUI(
         onOcrLongClick = { service.handleFullScreenOcr() },
         showWandButton = true,
         onWandClick = { service.handleTranslateVisible() },
+        onTranslateScreenClick = { service.startScreenTranslate() },
         onMenuClick = { service.showDotsMenu() },
         isAutoSource = isAutoSource,
       )

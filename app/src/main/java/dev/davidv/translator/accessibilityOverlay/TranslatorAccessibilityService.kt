@@ -26,6 +26,7 @@ import dev.davidv.translator.StructuredFragmentTranslationOutput
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
 import dev.davidv.translator.bounds
+import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -178,6 +179,21 @@ class TranslatorAccessibilityService : AccessibilityService() {
     input.removeSelectionRect()
     ui.dismissMenu()
     ui.restoreFloatingButton()
+  }
+
+  fun startScreenTranslate() {
+    val targetCode =
+      (
+        forcedTargetLanguage
+          ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
+      )?.code
+    val sourceCode = if (isAutoSource) null else forcedSourceLanguage?.code
+    runCatching {
+      startActivity(
+        ScreenCaptureRequestActivity.intent(this, sourceCode, targetCode, isAutoSource),
+      )
+    }.onFailure { Log.w(tag, "failed to launch screen-translate consent", it) }
+    deactivate()
   }
 
   fun swapLanguages() {
