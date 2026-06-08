@@ -22,15 +22,9 @@ data class LanguageToolbarViews(
   val targetLabel: TextView,
   val readingOrderButton: View? = null,
   val readingOrderIcon: ImageView? = null,
-  val ocrButton: View? = null,
-  val ocrIcon: ImageView? = null,
-  val wandButton: View? = null,
-  val wandIcon: ImageView? = null,
 )
 
 object OverlayChromeFactory {
-  private const val ACTIVE_OCR_BLUE = "#4488FF"
-
   fun formatSourceLabel(
     forcedSourceLanguage: Language?,
     isAutoSource: Boolean,
@@ -55,11 +49,7 @@ object OverlayChromeFactory {
     showReadingOrderButton: Boolean = false,
     readingOrder: ReadingOrder? = null,
     onReadingOrderClick: (() -> Unit)? = null,
-    showOcrButton: Boolean = false,
-    onOcrClick: (() -> Unit)? = null,
-    onOcrLongClick: (() -> Unit)? = null,
-    showWandButton: Boolean = false,
-    onWandClick: (() -> Unit)? = null,
+    onRefreshClick: (() -> Unit)? = null,
     onMenuClick: () -> Unit,
     isAutoSource: Boolean = false,
   ): LanguageToolbarViews {
@@ -85,11 +75,11 @@ object OverlayChromeFactory {
     onTranslateScreenClick?.let {
       val screenBtn =
         ImageView(context).apply {
-          setImageResource(R.drawable.swipe_vert)
+          setImageResource(R.drawable.videocam)
           setColorFilter(Color.WHITE)
           setPadding(iconPad, iconPad, iconPad, iconPad)
           setOnClickListener { onTranslateScreenClick() }
-          contentDescription = "Translate screen"
+          contentDescription = "Translate screen live"
         }
       val screenPill = makePill(context, dpToPx, screenBtn)
       toolbar.addView(
@@ -177,55 +167,23 @@ object OverlayChromeFactory {
         gravity = Gravity.CENTER_VERTICAL
       }
 
-    var wandIcon: ImageView? = null
-    val wandPill =
-      onWandClick?.let {
-        val wandBtn =
-          ImageView(context).apply {
-            setImageResource(R.drawable.auto_awesome)
-            setColorFilter(Color.WHITE)
-            setPadding(iconPad, iconPad, iconPad, iconPad)
-            setOnClickListener { onWandClick() }
-          }
-        wandIcon = wandBtn
-        makePill(context, dpToPx, wandBtn).also { pill ->
-          pill.visibility = if (showWandButton) View.VISIBLE else View.GONE
-          rightActions.addView(
-            pill,
-            LinearLayout.LayoutParams(btnSize, btnSize).apply {
-              marginEnd = dpToPx(6)
-            },
-          )
+    onRefreshClick?.let {
+      val refreshBtn =
+        ImageView(context).apply {
+          setImageResource(R.drawable.refresh)
+          setColorFilter(Color.WHITE)
+          setPadding(iconPad, iconPad, iconPad, iconPad)
+          setOnClickListener { onRefreshClick() }
+          contentDescription = "Refresh"
         }
-      }
-
-    var ocrIcon: ImageView? = null
-    val ocrPill =
-      onOcrClick?.let {
-        val ocrBtn =
-          ImageView(context).apply {
-            setImageResource(R.drawable.activity_zone)
-            setColorFilter(Color.WHITE)
-            setPadding(iconPad, iconPad, iconPad, iconPad)
-            setOnClickListener { onOcrClick() }
-            if (onOcrLongClick != null) {
-              setOnLongClickListener {
-                onOcrLongClick()
-                true
-              }
-            }
-          }
-        ocrIcon = ocrBtn
-        makePill(context, dpToPx, ocrBtn).also { pill ->
-          pill.visibility = if (showOcrButton) View.VISIBLE else View.GONE
-          rightActions.addView(
-            pill,
-            LinearLayout.LayoutParams(btnSize, btnSize).apply {
-              marginEnd = dpToPx(6)
-            },
-          )
-        }
-      }
+      val refreshPill = makePill(context, dpToPx, refreshBtn)
+      rightActions.addView(
+        refreshPill,
+        LinearLayout.LayoutParams(btnSize, btnSize).apply {
+          marginEnd = dpToPx(6)
+        },
+      )
+    }
 
     val menuBtn = ImageView(context)
     menuBtn.setImageResource(R.drawable.more_vert)
@@ -246,10 +204,6 @@ object OverlayChromeFactory {
       targetLabel = targetLabel,
       readingOrderButton = readingOrderPill,
       readingOrderIcon = readingOrderIcon,
-      ocrButton = ocrPill,
-      ocrIcon = ocrIcon,
-      wandButton = wandPill,
-      wandIcon = wandIcon,
     )
   }
 
@@ -271,27 +225,6 @@ object OverlayChromeFactory {
       setColorFilter(Color.WHITE)
       contentDescription = description
     }
-  }
-
-  fun setOcrButtonActive(
-    ocrButton: View?,
-    ocrIcon: ImageView?,
-    active: Boolean,
-  ) {
-    ocrIcon?.setColorFilter(Color.parseColor(if (active) ACTIVE_OCR_BLUE else "#FFFFFF"))
-    if (ocrButton != null && !active) {
-      ocrButton.alpha = 1f
-    }
-  }
-
-  fun setWandButtonEnabled(
-    wandButton: View?,
-    wandIcon: ImageView?,
-    enabled: Boolean,
-  ) {
-    wandButton?.isEnabled = enabled
-    wandButton?.alpha = if (enabled) 1f else 0.35f
-    wandIcon?.isEnabled = enabled
   }
 
   fun createLanguagePicker(

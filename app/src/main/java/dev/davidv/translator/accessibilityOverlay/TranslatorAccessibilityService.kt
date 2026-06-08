@@ -24,10 +24,8 @@ import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.SpeechService
-import dev.davidv.translator.StructuredFragmentTranslationOutput
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
-import dev.davidv.translator.bounds
 import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,8 +47,6 @@ class TranslatorAccessibilityService : AccessibilityService() {
   private lateinit var imageProcessor: ImageProcessor
   private lateinit var translationCoordinator: TranslationCoordinator
   private var ocrReadingOrder: ReadingOrder? = null
-  private var lastOcrBitmap: Bitmap? = null
-  private var lastOcrRegion: Rect? = null
   var lastOriginalText: String = ""
     private set
   var lastTranslatedText: String = ""
@@ -60,8 +56,6 @@ class TranslatorAccessibilityService : AccessibilityService() {
     private set
 
   lateinit var ui: OverlayUI
-    private set
-  lateinit var input: OverlayInput
     private set
 
   private val disableReceiver =
@@ -108,7 +102,6 @@ class TranslatorAccessibilityService : AccessibilityService() {
     }
 
     ui = OverlayUI(this, windowManager, settingsManager)
-    input = OverlayInput(this, windowManager, ui, settingsManager)
 
     androidx.core.content.ContextCompat.registerReceiver(
       this,
@@ -151,6 +144,10 @@ class TranslatorAccessibilityService : AccessibilityService() {
 
   fun activate() {
     if (active) return
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+      Toast.makeText(this, getString(R.string.a11y_still_needs_r), Toast.LENGTH_LONG).show()
+      return
+    }
     active = true
     serviceInfo =
       serviceInfo.apply {
@@ -159,11 +156,8 @@ class TranslatorAccessibilityService : AccessibilityService() {
     langStateManager.refreshLanguageAvailability()
     ui.removeFloatingButton()
     ui.removeTranslationOverlays()
-    input.showInteractionOverlay()
     ui.showBorderWave()
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-      ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
-    }
+    ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
     android.os.Handler(android.os.Looper.getMainLooper()).post {
       if (active) {
         handleFullScreenOcr()
@@ -176,9 +170,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     serviceInfo = serviceInfo.apply { eventTypes = 0 }
     ui.removeBorderWave()
     ui.removeToolbar()
-    input.removeTouchInterceptOverlay()
     ui.removeTranslationOverlays()
-    input.removeSelectionRect()
     ui.dismissMenu()
     ui.restoreFloatingButton()
   }
@@ -214,7 +206,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     syncReadingOrderForSource()
     ui.updateToolbarState(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
     if (active) {
-      retranslate()
+      handleFullScreenOcr()
     }
   }
 
@@ -236,7 +228,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
         }
         ui.updateToolbarState(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
         if (active) {
-          retranslate()
+          handleFullScreenOcr()
         }
       }
     }
@@ -252,16 +244,6 @@ class TranslatorAccessibilityService : AccessibilityService() {
       }
     ui.updateToolbarState(forcedSourceLanguage, forcedTargetLanguage, ocrReadingOrder, isAutoSource)
     if (active) {
-      retranslate()
-    }
-  }
-
-  private fun retranslate() {
-    val bitmap = lastOcrBitmap
-    val region = lastOcrRegion
-    if (bitmap != null && region != null) {
-      serviceScope.launch { translateRegionBitmap(bitmap, region) }
-    } else {
       handleFullScreenOcr()
     }
   }
@@ -270,45 +252,16 @@ class TranslatorAccessibilityService : AccessibilityService() {
     ui.showDotsMenu()
   }
 
-  fun startManualOcrSelection() {
-    ui.removeTranslationOverlays()
-    ui.setOcrButtonVisible(true)
-    ui.setOcrButtonActive(true)
-    input.startRegionSelection()
-  }
-
-  fun stopManualOcrSelection() {
-    ui.setOcrButtonActive(false)
-  }
-
-  fun handleTranslateVisible() {
-    lastOcrBitmap = null
-    lastOcrRegion = null
-    val root = rootInActiveWindow
-    if (root == null) {
-      ui.showOverlayMessage("No active window. Try OCR.")
-      return
-    }
-
-    input.dumpA11yTree(root)
-    val fragments = input.collectVisibleStyledFragments(root)
-    if (fragments.isEmpty()) {
-      ui.setOcrButtonVisible(true)
-      ui.showOverlayMessage("No visible text found. Try OCR.")
-      return
-    }
-
-    withOptionalScreenshot { screenshot -> translateAndShowBlocks(fragments, screenshot) }
-  }
-
   fun handleFullScreenOcr() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-      handleTranslateVisible()
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+    ui.removeTranslationOverlays()
+
+    val sourceLang = ocrSourceLanguage()
+    if (!isAutoSource && sourceLang == null) {
+      ui.showOverlayMessage("Set source language first")
       return
     }
-    lastOcrBitmap = null
-    lastOcrRegion = null
-    ui.removeTranslationOverlays()
+
     val dm = resources.displayMetrics
     val region =
       Rect(
@@ -317,84 +270,41 @@ class TranslatorAccessibilityService : AccessibilityService() {
         dm.widthPixels,
         dm.heightPixels - ui.getNavBarHeight(),
       )
-    handleRegionCapture(region, isFullScreen = true)
-  }
 
-  fun handleRegionCapture(
-    region: Rect,
-    isFullScreen: Boolean = false,
-  ) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-    ui.setOcrButtonActive(false)
-    ui.removeTranslationOverlays()
+    takeScreenshot(
+      Display.DEFAULT_DISPLAY,
+      mainExecutor,
+      object : TakeScreenshotCallback {
+        override fun onSuccess(screenshot: ScreenshotResult) {
+          val hwBitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
+          screenshot.hardwareBuffer.close()
+          if (hwBitmap == null) return
+          val fullBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
+          hwBitmap.recycle()
 
-    val sourceLang = ocrSourceLanguage()
-    if (!isAutoSource && sourceLang == null) {
-      ui.setOcrButtonVisible(true)
-      ui.showOverlayMessage("Set source language first")
-      return
-    }
+          val cropLeft = region.left.coerceIn(0, fullBitmap.width - 1)
+          val cropTop = region.top.coerceIn(0, fullBitmap.height - 1)
+          val cropWidth = region.width().coerceAtMost(fullBitmap.width - cropLeft)
+          val cropHeight = region.height().coerceAtMost(fullBitmap.height - cropTop)
+          if (cropWidth <= 0 || cropHeight <= 0) {
+            fullBitmap.recycle()
+            return
+          }
 
-    val needsRenderFlush = ui.hasToolbar()
-    input.removeTouchInterceptOverlay()
-    ui.removeToolbar()
-    ui.dismissMenu()
+          val croppedBitmap = Bitmap.createBitmap(fullBitmap, cropLeft, cropTop, cropWidth, cropHeight)
+          fullBitmap.recycle()
 
-    val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    val captureRunnable =
-      Runnable {
-        takeScreenshot(
-          Display.DEFAULT_DISPLAY,
-          mainExecutor,
-          object : TakeScreenshotCallback {
-            override fun onSuccess(screenshot: ScreenshotResult) {
-              input.showInteractionOverlay()
-              ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
+          ui.showCenteredLoading()
+          serviceScope.launch {
+            translateRegionBitmap(croppedBitmap, region)
+          }
+        }
 
-              val hwBitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
-              screenshot.hardwareBuffer.close()
-              if (hwBitmap == null) return
-              val fullBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
-              hwBitmap.recycle()
-
-              val cropLeft = region.left.coerceIn(0, fullBitmap.width - 1)
-              val cropTop = region.top.coerceIn(0, fullBitmap.height - 1)
-              val cropWidth = region.width().coerceAtMost(fullBitmap.width - cropLeft)
-              val cropHeight = region.height().coerceAtMost(fullBitmap.height - cropTop)
-              if (cropWidth <= 0 || cropHeight <= 0) {
-                fullBitmap.recycle()
-                return
-              }
-
-              val croppedBitmap = Bitmap.createBitmap(fullBitmap, cropLeft, cropTop, cropWidth, cropHeight)
-              fullBitmap.recycle()
-
-              if (!isFullScreen) {
-                lastOcrBitmap = croppedBitmap
-                lastOcrRegion = region
-              }
-
-              ui.showCenteredLoading()
-
-              serviceScope.launch {
-                translateRegionBitmap(croppedBitmap, region)
-              }
-            }
-
-            override fun onFailure(errorCode: Int) {
-              Log.w(tag, "Screenshot failed: $errorCode")
-              input.showInteractionOverlay()
-              ui.showToolbar(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
-              ui.setOcrButtonVisible(true)
-            }
-          },
-        )
-      }
-    if (needsRenderFlush) {
-      handler.postDelayed(captureRunnable, 100)
-    } else {
-      handler.post(captureRunnable)
-    }
+        override fun onFailure(errorCode: Int) {
+          Log.w(tag, "Screenshot failed: $errorCode")
+        }
+      },
+    )
   }
 
   private suspend fun translateRegionBitmap(
@@ -417,15 +327,11 @@ class TranslatorAccessibilityService : AccessibilityService() {
         )
       }
 
+    ui.removeTranslationOverlays()
     if (result != null) {
       lastOriginalText = result.extractedText
       lastTranslatedText = result.translatedText
-      ui.removeTranslationOverlays()
-      ui.setOcrButtonVisible(true)
       ui.showBitmapOverlay(result.correctedBitmap, region)
-    } else {
-      ui.removeTranslationOverlays()
-      ui.setOcrButtonVisible(true)
     }
   }
 
@@ -445,134 +351,5 @@ class TranslatorAccessibilityService : AccessibilityService() {
     if (forcedSourceLanguage?.code != "ja") {
       ocrReadingOrder = null
     }
-  }
-
-  fun handleTouchAtPoint(
-    x: Int,
-    y: Int,
-  ) {
-    val root = rootInActiveWindow
-    if (root == null) {
-      Log.w(tag, "No active window")
-      return
-    }
-
-    input.dumpA11yTree(root)
-    val fragments = input.extractStyledFragmentsAtPoint(root, x, y)
-    Log.d(tag, "extractStyledFragmentsAtPoint($x, $y) returned ${fragments.size} fragments")
-    for ((idx, f) in fragments.withIndex()) {
-      Log.d(
-        tag,
-        "  Fragment[$idx] text='${f.text.take(50)}' bounds=[${f.bounds.left},${f.bounds.top},${f.bounds.right},${f.bounds.bottom}]",
-      )
-    }
-    if (fragments.isEmpty()) {
-      Log.d(tag, "No text block at ($x, $y)")
-      ui.setOcrButtonVisible(true)
-      ui.showOverlayMessage("No element found at position. Try OCR.")
-      return
-    }
-
-    withOptionalScreenshot { screenshot -> translateAndShowBlocks(fragments, screenshot) }
-  }
-
-  private fun translateAndShowBlocks(
-    fragments: List<dev.davidv.translator.StyledFragment>,
-    screenshot: Bitmap?,
-  ) {
-    ui.removeTranslationOverlays()
-    ui.showCenteredLoading()
-
-    serviceScope.launch {
-      val targetLanguage = overlayTextTranslationHelper.awaitTargetLanguage(forcedTargetLanguage)
-      val availableLanguages = overlayTextTranslationHelper.awaitAvailableLanguages(isSource = false)
-
-      if (isAutoSource) {
-        val combinedText = fragments.joinToString(" ") { it.text }
-        val translatorLanguages = langStateManager.languageState.value.translatorLanguages()
-        val detected =
-          translationCoordinator.detectLanguageRobust(
-            text = combinedText,
-            hint = forcedSourceLanguage,
-            availableLanguages = translatorLanguages,
-          )
-        if (detected != null && detected != forcedSourceLanguage) {
-          forcedSourceLanguage = detected
-          syncReadingOrderForSource()
-          ui.updateToolbarState(forcedSourceLanguage, forcedTargetLanguage, currentReadingOrderFor(forcedSourceLanguage), isAutoSource)
-        }
-      }
-
-      when (
-        val result =
-          translationCoordinator.translateStructuredFragments(
-            fragments = fragments,
-            forcedSourceLanguage = forcedSourceLanguage,
-            targetLanguage = targetLanguage,
-            availableLanguages = availableLanguages,
-            screenshot = screenshot,
-          )
-      ) {
-        is StructuredFragmentTranslationOutput.Success -> {
-          lastOriginalText = fragments.joinToString("\n") { it.text }
-          lastTranslatedText = result.blocks.joinToString("\n") { it.text }
-          ui.removeTranslationOverlays()
-          ui.setOcrButtonVisible(true)
-          ui.setOcrButtonActive(false)
-          ui.showStyledTranslationOverlays(result.blocks)
-        }
-
-        is StructuredFragmentTranslationOutput.NothingToTranslate ->
-          showOverlayTranslationMessage(
-            when (result.reason) {
-              dev.davidv.translator.NothingReason.ALREADY_TARGET_LANGUAGE -> "Already in ${targetLanguage.displayName}"
-              dev.davidv.translator.NothingReason.COULD_NOT_DETECT -> "Could not detect language — set source language manually"
-              dev.davidv.translator.NothingReason.NO_TRANSLATABLE_TEXT -> "No translatable visible text found"
-            },
-          )
-
-        is StructuredFragmentTranslationOutput.Error -> {
-          Log.e(tag, "Translation error: ${result.message}")
-          ui.removeTranslationOverlays()
-          ui.setOcrButtonVisible(false)
-          ui.setOcrButtonActive(false)
-        }
-      }
-    }
-  }
-
-  private fun withOptionalScreenshot(onResult: (Bitmap?) -> Unit) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-      onResult(null)
-      return
-    }
-
-    takeScreenshot(
-      Display.DEFAULT_DISPLAY,
-      mainExecutor,
-      object : TakeScreenshotCallback {
-        override fun onSuccess(screenshot: ScreenshotResult) {
-          val hwBitmap = Bitmap.wrapHardwareBuffer(screenshot.hardwareBuffer, screenshot.colorSpace)
-          screenshot.hardwareBuffer.close()
-          if (hwBitmap == null) {
-            onResult(null)
-            return
-          }
-          val swBitmap = hwBitmap.copy(Bitmap.Config.ARGB_8888, false)
-          hwBitmap.recycle()
-          onResult(swBitmap)
-        }
-
-        override fun onFailure(errorCode: Int) {
-          Log.w(tag, "Screenshot failed: $errorCode")
-          onResult(null)
-        }
-      },
-    )
-  }
-
-  private fun showOverlayTranslationMessage(message: String) {
-    ui.removeTranslationOverlays()
-    ui.showOverlayMessage(message)
   }
 }

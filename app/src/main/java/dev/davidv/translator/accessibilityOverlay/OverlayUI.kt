@@ -2,21 +2,12 @@ package dev.davidv.translator.accessibilityOverlay
 
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
-import android.text.Spannable
-import android.text.SpannableStringBuilder
-import android.text.style.BackgroundColorSpan
-import android.text.style.ForegroundColorSpan
-import android.text.style.StrikethroughSpan
-import android.text.style.StyleSpan
-import android.text.style.UnderlineSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -28,7 +19,6 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import dev.davidv.translator.Language
 import dev.davidv.translator.MainActivity
-import dev.davidv.translator.OverlayColors
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
@@ -49,10 +39,6 @@ class OverlayUI(
   private var targetLabelView: TextView? = null
   private var readingOrderButtonView: View? = null
   private var readingOrderIconView: ImageView? = null
-  private var ocrButtonView: View? = null
-  private var ocrIconView: ImageView? = null
-  private var wandButtonView: View? = null
-  private var wandIconView: ImageView? = null
   private val translationOverlays = mutableListOf<View>()
   private var borderView: BorderWaveView? = null
 
@@ -221,11 +207,7 @@ class OverlayUI(
         showReadingOrderButton = forcedSourceLanguage?.code == "ja",
         readingOrder = readingOrder,
         onReadingOrderClick = { service.toggleJapaneseOcrMode() },
-        showOcrButton = true,
-        onOcrClick = { service.startManualOcrSelection() },
-        onOcrLongClick = { service.handleFullScreenOcr() },
-        showWandButton = true,
-        onWandClick = { service.handleTranslateVisible() },
+        onRefreshClick = { service.handleFullScreenOcr() },
         onTranslateScreenClick = { service.startScreenTranslate() },
         onMenuClick = { service.showDotsMenu() },
         isAutoSource = isAutoSource,
@@ -235,10 +217,6 @@ class OverlayUI(
     targetLabelView = toolbarViews.targetLabel
     readingOrderButtonView = toolbarViews.readingOrderButton
     readingOrderIconView = toolbarViews.readingOrderIcon
-    ocrButtonView = toolbarViews.ocrButton
-    ocrIconView = toolbarViews.ocrIcon
-    wandButtonView = toolbarViews.wandButton
-    wandIconView = toolbarViews.wandIcon
 
     val params =
       WindowManager.LayoutParams(
@@ -265,10 +243,6 @@ class OverlayUI(
       targetLabelView = null
       readingOrderButtonView = null
       readingOrderIconView = null
-      ocrButtonView = null
-      ocrIconView = null
-      wandButtonView = null
-      wandIconView = null
     }
   }
 
@@ -287,17 +261,6 @@ class OverlayUI(
       visible = forcedSourceLanguage?.code == "ja",
       readingOrder = readingOrder,
     )
-  }
-
-  fun setOcrButtonVisible(visible: Boolean) {
-    ocrButtonView?.visibility = View.VISIBLE
-    if (!visible) {
-      setOcrButtonActive(false)
-    }
-  }
-
-  fun setOcrButtonActive(active: Boolean) {
-    OverlayChromeFactory.setOcrButtonActive(ocrButtonView, ocrIconView, active)
   }
 
   fun showDotsMenu() {
@@ -348,223 +311,6 @@ class OverlayUI(
 
   fun dismissMenu() {
     menuManager.dismiss()
-  }
-
-  fun showTranslationOverlay(
-    translatedText: String,
-    bounds: Rect,
-    colors: OverlayColors?,
-  ) {
-    val bgColor = colors?.background ?: Color.parseColor("#F0FFFFFF")
-    val fgColor = colors?.foreground ?: Color.BLACK
-    val overlayWidth = maxOf(bounds.width(), dpToPx(48))
-    val overlayHeight = maxOf(bounds.height(), dpToPx(32))
-    val screenBounds =
-      Rect(
-        0,
-        0,
-        service.resources.displayMetrics.widthPixels,
-        service.resources.displayMetrics.heightPixels,
-      )
-    val overlayRect = Rect(bounds.left, bounds.top, bounds.left + overlayWidth, bounds.top + overlayHeight)
-    val visibleBounds = Rect(overlayRect)
-    if (!visibleBounds.intersect(screenBounds)) return
-
-    // When text is at the bottom of the screen we don't know how much is cropped.
-    // Take system font size as a minimum size to prevent all the block's text from
-    // being crammed into 1-line-tall blocks.
-    val screenHeight = screenBounds.height()
-    val isClippedVertically =
-      bounds.bottom >= screenHeight - getNavBarHeight() - dpToPx(4) ||
-        bounds.top <= getStatusBarHeight() + dpToPx(4)
-    val minTextSizePx =
-      if (isClippedVertically) 16f * service.resources.displayMetrics.scaledDensity else 0f
-
-    val fullBitmap =
-      renderTextOverlayBitmap(
-        translatedText = translatedText,
-        width = overlayWidth,
-        minHeight = overlayHeight,
-        bgColor = bgColor,
-        fgColor = fgColor,
-        minTextSizePx = minTextSizePx,
-      )
-    val cropLeft = visibleBounds.left - overlayRect.left
-    val cropTop = visibleBounds.top - overlayRect.top
-    val croppedBitmap =
-      Bitmap.createBitmap(
-        fullBitmap,
-        cropLeft,
-        cropTop,
-        visibleBounds.width(),
-        visibleBounds.height(),
-      )
-    if (croppedBitmap != fullBitmap) {
-      fullBitmap.recycle()
-    }
-    showBitmapOverlay(croppedBitmap, visibleBounds)
-  }
-
-  fun showStyledTranslationOverlays(blocks: List<uniffi.translator.TranslatedStyledBlock>) {
-    val screenWidth = service.resources.displayMetrics.widthPixels
-    val screenHeight = service.resources.displayMetrics.heightPixels
-
-    for (block in blocks) {
-      if (block.text.isBlank()) continue
-      val bounds = block.boundingBox
-      val boundsLeft = bounds.left.toInt()
-      val boundsTop = bounds.top.toInt()
-      val boundsRight = bounds.right.toInt()
-      val boundsBottom = bounds.bottom.toInt()
-      val overlayWidth = maxOf(boundsRight - boundsLeft, dpToPx(48))
-      val targetHeight = maxOf(boundsBottom - boundsTop, dpToPx(32))
-
-      val bgColor = block.backgroundArgb.toInt()
-      val defaultFg = block.foregroundArgb.toInt()
-
-      val ssb = SpannableStringBuilder(block.text)
-      ssb.setSpan(ForegroundColorSpan(defaultFg), 0, ssb.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-
-      for (span in block.styleSpans) {
-        val start = span.start.toInt().coerceIn(0, ssb.length)
-        val end = span.end.toInt().coerceIn(start, ssb.length)
-        if (start == end) continue
-        val style = span.style ?: continue
-
-        val fg = style.textColor?.toInt()
-        if (fg != null && Color.alpha(fg) > 0) {
-          ssb.setSpan(ForegroundColorSpan(fg), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        if (hasRealBackground(style)) {
-          ssb.setSpan(BackgroundColorSpan(style.bgColor!!.toInt()), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        if (style.bold) {
-          ssb.setSpan(StyleSpan(Typeface.BOLD), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        if (style.italic) {
-          ssb.setSpan(StyleSpan(Typeface.ITALIC), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        if (style.underline) {
-          ssb.setSpan(UnderlineSpan(), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-        if (style.strikethrough) {
-          ssb.setSpan(StrikethroughSpan(), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-      }
-
-      val overlayFrame =
-        FrameLayout(service).apply {
-          background =
-            GradientDrawable().apply {
-              shape = GradientDrawable.RECTANGLE
-              cornerRadius = dpToPx(8).toFloat()
-              setColor(bgColor)
-            }
-          setOnClickListener { removeTranslationOverlays() }
-        }
-
-      val textView =
-        TextView(service).apply {
-          text = ssb
-          setPadding(0, 0, 0, 0)
-          gravity = Gravity.START or Gravity.CENTER_VERTICAL
-          maxLines = Int.MAX_VALUE
-          setAutoSizeTextTypeUniformWithConfiguration(8, 48, 1, TypedValue.COMPLEX_UNIT_SP)
-        }
-
-      overlayFrame.addView(
-        textView,
-        FrameLayout.LayoutParams(
-          FrameLayout.LayoutParams.MATCH_PARENT,
-          FrameLayout.LayoutParams.MATCH_PARENT,
-        ),
-      )
-
-      val visibleLeft = boundsLeft.coerceIn(0, screenWidth - 1)
-      val visibleTop = boundsTop.coerceIn(0, screenHeight - 1)
-      val visibleWidth = minOf(overlayWidth, screenWidth - visibleLeft)
-      val visibleHeight = minOf(targetHeight, screenHeight - visibleTop)
-      if (visibleWidth <= 0 || visibleHeight <= 0) continue
-
-      val params =
-        WindowManager.LayoutParams(
-          visibleWidth,
-          visibleHeight,
-          WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-          WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-          PixelFormat.TRANSLUCENT,
-        )
-      params.gravity = Gravity.TOP or Gravity.START
-      params.x = visibleLeft
-      params.y = visibleTop
-
-      windowManager.addView(overlayFrame, params)
-      translationOverlays.add(overlayFrame)
-    }
-  }
-
-  private fun hasRealBackground(style: uniffi.translator.TextStyle): Boolean {
-    val color = style.bgColor?.toInt() ?: return false
-    if (color == 0 || color == 1 || color == -1) return false
-    if (Color.alpha(color) == 0) return false
-    return true
-  }
-
-  private fun renderTextOverlayBitmap(
-    translatedText: String,
-    width: Int,
-    minHeight: Int,
-    bgColor: Int,
-    fgColor: Int,
-    minTextSizePx: Float = 0f,
-  ): Bitmap {
-    val container = FrameLayout(service)
-    val overlayBg = GradientDrawable()
-    overlayBg.setColor(bgColor)
-    overlayBg.cornerRadius = dpToPx(8).toFloat()
-    container.background = overlayBg
-
-    val sizingTextView = buildOverlayTextView(translatedText, fgColor)
-    val exactWidth = View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY)
-    val exactMinHeight = View.MeasureSpec.makeMeasureSpec(minHeight, View.MeasureSpec.EXACTLY)
-    sizingTextView.measure(exactWidth, exactMinHeight)
-    sizingTextView.layout(0, 0, width, minHeight)
-    val resolvedTextSizePx = maxOf(sizingTextView.textSize, minTextSizePx)
-
-    val textView = buildOverlayTextView(translatedText, fgColor)
-    textView.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE)
-    textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, resolvedTextSizePx)
-    container.addView(
-      textView,
-      FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.MATCH_PARENT,
-      ),
-    )
-
-    val screenHeight = service.resources.displayMetrics.heightPixels
-    val renderHeightBudget = minOf(maxOf(minHeight * 6, dpToPx(256)), screenHeight * 2)
-    val maxHeight = View.MeasureSpec.makeMeasureSpec(renderHeightBudget, View.MeasureSpec.AT_MOST)
-    container.measure(exactWidth, maxHeight)
-    val actualHeight = maxOf(container.measuredHeight, minHeight)
-    container.layout(0, 0, width, actualHeight)
-
-    val bitmap = Bitmap.createBitmap(width, actualHeight, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    container.draw(canvas)
-    return bitmap
-  }
-
-  private fun buildOverlayTextView(
-    translatedText: String,
-    fgColor: Int,
-  ): TextView {
-    return TextView(service).apply {
-      text = translatedText
-      setTextColor(fgColor)
-      typeface = Typeface.DEFAULT
-      setAutoSizeTextTypeUniformWithConfiguration(8, 48, 1, TypedValue.COMPLEX_UNIT_SP)
-    }
   }
 
   fun showBitmapOverlay(
