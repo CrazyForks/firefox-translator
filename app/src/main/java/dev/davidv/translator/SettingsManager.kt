@@ -142,6 +142,17 @@ class SettingsManager(
       prefs.getBoolean("live_camera_overlay_enabled", defaults.liveCameraOverlayEnabled)
     val registerAsBrowser =
       prefs.getBoolean("register_as_browser", defaults.registerAsBrowser)
+    val assistantActionName = prefs.getString("assistant_action", null)
+    val assistantAction =
+      if (assistantActionName != null) {
+        try {
+          AssistantAction.valueOf(assistantActionName)
+        } catch (_: IllegalArgumentException) {
+          defaults.assistantAction
+        }
+      } else {
+        defaults.assistantAction
+      }
 
     return AppSettings(
       defaultTargetLanguageCode = defaultTargetLanguageCode,
@@ -169,6 +180,7 @@ class SettingsManager(
       translatePdfImages = translatePdfImages,
       liveCameraOverlayEnabled = liveCameraOverlayEnabled,
       registerAsBrowser = registerAsBrowser,
+      assistantAction = assistantAction,
     )
   }
 
@@ -281,6 +293,10 @@ class SettingsManager(
         putBoolean("register_as_browser", newSettings.registerAsBrowser)
         modifiedSettings.add("register_as_browser")
         applyBrowserAliasState(newSettings.registerAsBrowser)
+      }
+      if (newSettings.assistantAction != currentSettings.assistantAction) {
+        putString("assistant_action", newSettings.assistantAction.name)
+        modifiedSettings.add("assistant_action")
       }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")

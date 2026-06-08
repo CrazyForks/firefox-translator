@@ -21,6 +21,11 @@ object Constants {
   const val DEFAULT_CATALOG_INDEX_URL = "https://offline-translator.davidv.dev/index_v3.json"
 }
 
+enum class AssistantAction {
+  STILL_IMAGE,
+  LIVE_SCREEN,
+}
+
 data class AppSettings(
   val defaultTargetLanguageCode: String = "en",
   val defaultSourceLanguageCode: String? = null,
@@ -47,4 +52,5 @@ data class AppSettings(
   val translatePdfImages: Boolean = true,
   val liveCameraOverlayEnabled: Boolean = true,
   val registerAsBrowser: Boolean = true,
+  val assistantAction: AssistantAction = AssistantAction.STILL_IMAGE,
 )

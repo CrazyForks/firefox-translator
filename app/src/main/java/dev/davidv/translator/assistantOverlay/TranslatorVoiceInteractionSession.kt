@@ -242,6 +242,12 @@ class TranslatorVoiceInteractionSession(
     overlayContainer.removeAllViews()
     dismissMenu()
     updateBackdrop()
+
+    if (settingsManager.settings.value.assistantAction == dev.davidv.translator.AssistantAction.LIVE_SCREEN) {
+      launchLiveScreen()
+      return
+    }
+
     showStatus("Collecting screen context...")
     showLoading(true)
     startBorderPulse()
@@ -506,11 +512,33 @@ class TranslatorVoiceInteractionSession(
     return toolbarViews.root
   }
 
-  /** Hand off to the live MediaProjection screen-translate experience: launch
-   *  the consent flow (overlay grant + capture token), which starts
-   *  [dev.davidv.translator.screenTranslate.ScreenTranslateService], then
-   *  dismiss this session so the frozen screenshot overlay is removed and the
-   *  real screen shows through for capture. */
+  /** Live screen translate set as the assistant-invocation action: skip the still
+   *  overlay entirely, launch the consent flow with the default languages, and
+   *  dismiss this session. Needs a default source language (live can't run the
+   *  per-frame script classifier). */
+  private fun launchLiveScreen() {
+    val settings = settingsManager.settings.value
+    val source = settings.defaultSourceLanguageCode?.let { langStateManager.languageByCode(it) }
+    if (source == null) {
+      showLoading(false)
+      stopBorderPulse()
+      showStatus("Set a default source language to use live screen translation.")
+      return
+    }
+    val targetCode = langStateManager.languageByCode(settings.defaultTargetLanguageCode)?.code
+    runCatching {
+      context.startActivity(
+        ScreenCaptureRequestActivity.intent(context, source.code, targetCode, false),
+      )
+    }.onFailure { Log.w(tag, "failed to launch live screen translate", it) }
+    hide()
+  }
+
+  /** Hand off to the live MediaProjection screen-translate experience from the
+   *  still overlay's go-live button: launch the consent flow (overlay grant +
+   *  capture token), which starts [ScreenCaptureRequestActivity]'s service, then
+   *  dismiss this session so the frozen screenshot is removed and the real screen
+   *  shows through for capture. */
   private fun startScreenTranslate() {
     // Live screen translate needs a fixed source language — gate it off in auto
     // mode and tell the user to pick one. A Toast doesn't surface from the

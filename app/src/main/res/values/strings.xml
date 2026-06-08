@@ -6,6 +6,7 @@
     <string name="region_select_menu">Set translation area</string>
     <string name="screen_translate_needs_source">Specify source language</string>
     <string name="a11y_still_needs_r">Translate once needs Android 11 or newer</string>
+    <string name="live_tile_label">Translate screen live</string>
     <string name="translate_text">Translate</string>
     <string name="translate_link">Translate link</string>
     <string name="accessibility_service_description">Enable this service to translate text on screen. Tap the floating translate button to translate the current screen, or start a live screen translation.</string>
