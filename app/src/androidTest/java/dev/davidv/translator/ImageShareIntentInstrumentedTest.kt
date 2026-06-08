@@ -74,7 +74,9 @@ class ImageShareIntentInstrumentedTest {
 
     composeTestRule.activityRule.scenario.onActivity { activity ->
       assert(activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) { "it resumed" }
-      activity.onNewIntent(shareIntent)
+      val onNewIntent = MainActivity::class.java.getDeclaredMethod("onNewIntent", Intent::class.java)
+      onNewIntent.isAccessible = true
+      onNewIntent.invoke(activity, shareIntent)
     }
 
     println("it resumed")

@@ -38,29 +38,15 @@ object TestUtils {
     println("Copied $filename to ${appPath.name}")
   }
 
-  fun copyTessData(
-    context: Context,
-    tessDataPath: File,
-    language: Language,
-  ) {
-    copyFile(context, tessDataPath, language.tessFilename)
-  }
-
-  fun copyLangData(
-    context: Context,
-    dataPath: File,
-    language: Language,
-  ) {
-    val enLangFiles = fromEnglishFiles[language]
-    enLangFiles?.allFiles()?.forEach {
-      copyFile(context, dataPath, it)
-    }
-
-    val langEnFiles = toEnglishFiles[language]
-    langEnFiles?.allFiles()?.forEach {
-      copyFile(context, dataPath, it)
-    }
-  }
+  private val spanishModelFiles =
+    listOf(
+      "model.enes.intgemm.alphas.bin",
+      "model.esen.intgemm.alphas.bin",
+      "vocab.enes.spm",
+      "vocab.esen.spm",
+      "lex.50.50.enes.s2t.bin",
+      "lex.50.50.esen.s2t.bin",
+    )
 
   fun setupLanguagesForApp() {
     val testContext =
@@ -80,15 +66,29 @@ object TestUtils {
     val tessDataPath = filePathManager.getTesseractDataDir()
     tessDataPath.mkdirs()
 
-    copyLangData(testContext, dataPath, Language.SPANISH)
-    copyTessData(testContext, tessDataPath, Language.ENGLISH)
-    copyTessData(testContext, tessDataPath, Language.SPANISH)
+    spanishModelFiles.forEach { copyFile(testContext, dataPath, it) }
+    copyFile(testContext, tessDataPath, "eng.traineddata")
+    copyFile(testContext, tessDataPath, "spa.traineddata")
 
     val dictionariesPath = filePathManager.getDictionariesDir()
     dictionariesPath.mkdirs()
     copyFile(testContext, dictionariesPath, "es.dict")
     copyFile(testContext, dictionariesPath, "en.dict")
     copyFile(testContext, dictionariesPath, "index.json")
+  }
+
+  fun cleanupLanguagesForApp() {
+    val appContext =
+      androidx.test.platform.app.InstrumentationRegistry
+        .getInstrumentation()
+        .targetContext
+    val settingsManager = SettingsManager(appContext)
+    val filePathManager = FilePathManager(appContext, settingsManager.settings)
+    listOf(
+      filePathManager.getDataDir(),
+      filePathManager.getTesseractDataDir(),
+      filePathManager.getDictionariesDir(),
+    ).forEach { it.deleteRecursively() }
   }
 
   fun logUiChildren(
