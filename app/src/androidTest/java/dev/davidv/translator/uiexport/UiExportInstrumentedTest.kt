@@ -84,6 +84,8 @@ class UiExportInstrumentedTest {
 
     composeTestRule.onAllNodesWithContentDescription("Settings").onFirst().performClick()
     composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithText("Advanced Settings").performScrollTo().performClick()
+    composeTestRule.waitForIdle()
     captureRoute("settings")
 
     composeTestRule.onAllNodesWithText("Manage").onFirst().performScrollTo().performClick()

@@ -34,6 +34,8 @@ sealed interface DrawOp {
     val sizePx: Float,
     val bold: Boolean,
     val italic: Boolean,
+    /** Measured advance width of the run, used to infer horizontal alignment from container margins. */
+    val widthPx: Float,
   ) : DrawOp
 
   data class Rect(

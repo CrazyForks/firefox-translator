@@ -158,7 +158,8 @@ class RecordingCanvas(bitmap: Bitmap) : Canvas(bitmap) {
     paint: Paint,
   ) {
     if (text.isEmpty() || curAlpha() < 0.01f) return
-    if (clippedOut(x, y - paint.textSize, x + paint.measureText(text), y + paint.descent())) return
+    val w = paint.measureText(text)
+    if (clippedOut(x, y - paint.textSize, x + w, y + paint.descent())) return
     ops +=
       DrawOp.TextRun(
         matrix = snapshotMatrix(),
@@ -169,6 +170,7 @@ class RecordingCanvas(bitmap: Bitmap) : Canvas(bitmap) {
         sizePx = paint.textSize,
         bold = paint.isBold(),
         italic = paint.isItalic(),
+        widthPx = w,
       )
   }
 

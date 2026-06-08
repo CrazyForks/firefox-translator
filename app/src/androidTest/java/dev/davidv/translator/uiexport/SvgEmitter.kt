@@ -43,6 +43,8 @@ object SvgEmitter {
       sb.appendLine("""  <rect x="0" y="0" width="$width" height="$height" fill="${hex(bg)}"/>""")
     }
 
+    val containers = ops.filterIsInstance<DrawOp.Rect>().filterNot { isWindowBackground(it, width) }
+
     var textSeq = 0
     var imageSeq = 0
     val imageKeyCounts = HashMap<String, Int>()
@@ -54,7 +56,7 @@ object SvgEmitter {
         is DrawOp.Line -> sb.appendLine(line(op))
         is DrawOp.Path -> sb.appendLine(path(op))
         is DrawOp.Image -> sb.appendLine(image(op, imageKey(route, op, imageKeyCounts) { imageSeq++ }))
-        is DrawOp.TextRun -> sb.appendLine(text(op, "$route:${textSeq++}"))
+        is DrawOp.TextRun -> sb.appendLine(text(op, "$route:${textSeq++}", containers))
       }
     }
     sb.append("</svg>").append('\n')
@@ -64,12 +66,58 @@ object SvgEmitter {
   private fun text(
     op: DrawOp.TextRun,
     key: String,
+    containers: List<DrawOp.Rect>,
   ): String {
     val weight = if (op.bold) "bold" else "normal"
     val style = if (op.italic) "italic" else "normal"
+    val (anchor, anchorX) = horizontalAnchor(op, containers)
+    val anchorAttr = if (anchor == "start") "" else """ text-anchor="$anchor""""
     return """  <text data-key="$key" data-source="${esc(op.text)}" transform="${svgMatrix(op.matrix)}"""" +
-      """ x="${num(op.x)}" y="${num(op.baselineY)}" font-size="${num(op.sizePx)}"""" +
-      """ font-weight="$weight" font-style="$style"${fill(op.color)}>${esc(op.text)}</text>"""
+      """ x="${num(anchorX)}" y="${num(op.baselineY)}" font-size="${num(op.sizePx)}"""" +
+      """ font-weight="$weight" font-style="$style"$anchorAttr${fill(op.color)}>${esc(op.text)}</text>"""
+  }
+
+  /**
+   * Infers a label's horizontal anchor from its margins inside the widest card-like rect that
+   * encloses it, so right-placed text grows leftward and centered text stays centered when edited.
+   * Compose bakes alignment into the draw position (paint is always LEFT), so geometry is the only
+   * signal; this is a heuristic tuned to be conservative — it only departs from `start` when the text
+   * clearly hugs the right edge or sits clearly centered.
+   */
+  private fun horizontalAnchor(
+    op: DrawOp.TextRun,
+    containers: List<DrawOp.Rect>,
+  ): Pair<String, Float> {
+    val left = op.matrix[2] + op.x
+    val right = left + op.widthPx
+    val baseline = op.matrix[5] + op.baselineY
+
+    val container =
+      containers
+        .filter { r ->
+          val cl = r.matrix[2] + r.left
+          val cr = r.matrix[2] + r.right
+          val ct = r.matrix[5] + r.top
+          val cb = r.matrix[5] + r.bottom
+          left >= cl - 1f && right <= cr + 1f && baseline >= ct && baseline <= cb && (cr - cl) > op.widthPx + 4f
+        }
+        .maxByOrNull { (it.matrix[2] + it.right) - (it.matrix[2] + it.left) }
+        ?: return "start" to op.x
+
+    val cl = container.matrix[2] + container.left
+    val cr = container.matrix[2] + container.right
+    val cw = cr - cl
+    val leftMargin = left - cl
+    val rightMargin = cr - right
+
+    return when {
+      minOf(leftMargin, rightMargin) > cw * 0.15f && kotlin.math.abs(leftMargin - rightMargin) < cw * 0.08f ->
+        "middle" to (op.x + op.widthPx / 2f)
+      leftMargin > cw * 0.25f && rightMargin < cw * 0.15f ->
+        "end" to (op.x + op.widthPx)
+      else ->
+        "start" to op.x
+    }
   }
 
   private fun rect(op: DrawOp.Rect): String {
