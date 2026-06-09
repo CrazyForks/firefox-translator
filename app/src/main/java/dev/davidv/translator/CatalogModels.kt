@@ -34,10 +34,21 @@ sealed class DocumentTranslationProgress {
     val rasterPages: Int,
   ) : DocumentTranslationProgress()
 
-  data class Translating(
+  /** Text-translation completion as a smooth fraction in [0, 1]. */
+  data class TranslatingText(
+    val fraction: Float,
+  ) : DocumentTranslationProgress()
+
+  /** Image-XObject OCR pass: real item counts. */
+  data class TranslatingImages(
     val current: Int,
     val total: Int,
-    val unit: String,
+  ) : DocumentTranslationProgress()
+
+  /** Page-raster overlay pass: real item counts. */
+  data class TranslatingRasterPages(
+    val current: Int,
+    val total: Int,
   ) : DocumentTranslationProgress()
 
   data object Writing : DocumentTranslationProgress()
@@ -52,11 +63,17 @@ private fun DocumentProgressEvent.toDocumentTranslationProgress(): DocumentTrans
         imageXobjects = imageXobjects.toInt(),
         rasterPages = rasterPages.toInt(),
       )
-    is DocumentProgressEvent.Translating ->
-      DocumentTranslationProgress.Translating(
+    is DocumentProgressEvent.TranslatingText ->
+      DocumentTranslationProgress.TranslatingText(fraction = fraction)
+    is DocumentProgressEvent.TranslatingImages ->
+      DocumentTranslationProgress.TranslatingImages(
         current = current.toInt(),
         total = total.toInt(),
-        unit = unit,
+      )
+    is DocumentProgressEvent.TranslatingRasterPages ->
+      DocumentTranslationProgress.TranslatingRasterPages(
+        current = current.toInt(),
+        total = total.toInt(),
       )
     DocumentProgressEvent.Writing -> DocumentTranslationProgress.Writing
   }
@@ -474,6 +491,9 @@ class LanguageCatalog private constructor(
         override fun isCancelled(): Boolean = isCancelled()
       },
     )
+
+  /** Abort an in-flight document translation; workers stop within ~one batch. */
+  fun cancelOngoingWork() = handle.cancelOngoingWork()
 
   fun planDownload(
     languageCode: String,

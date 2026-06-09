@@ -77,6 +77,9 @@ class TranslationCoordinator(
     return result
   }
 
+  /** Abort the in-flight document translation (fast, mid-batch). */
+  fun cancelOngoingWork() = translationService.cancelOngoingWork()
+
   suspend fun translateDocumentPath(
     inputPath: String,
     outputPath: String,

@@ -251,7 +251,7 @@ private fun DocumentTranslationDialog(
         if (document.isTranslating) {
           val phases = document.pdfPhases
           if (phases != null) {
-            PdfPhaseRow("Pages", phases.textCurrent, phases.textTotal)
+            PdfPhaseFractionRow("Text", phases.textFraction)
             PdfPhaseRow("Images", phases.imageCurrent, phases.imageTotal)
             PdfPhaseRow("Bitmap pages", phases.rasterCurrent, phases.rasterTotal)
           } else {
@@ -261,17 +261,7 @@ private fun DocumentTranslationDialog(
                 progress = { progressFraction },
                 modifier = Modifier.fillMaxWidth(),
               )
-              val current = document.progressCurrent ?: 0
-              val total = document.progressTotal ?: 0
-              val displayCurrent = if (current < total) current + 1 else current
-              val unit =
-                when (document.progressUnit) {
-                  "page" -> "Page"
-                  "image" -> "Image"
-                  "paragraph" -> "Paragraph"
-                  else -> "Block"
-                }
-              Text("$unit $displayCurrent/$total")
+              Text("${(progressFraction * 100).toInt()}%")
             } else {
               Text(document.progressLabel)
             }
@@ -322,6 +312,27 @@ private fun PdfPhaseRow(
     }
     LinearProgressIndicator(
       progress = { fraction },
+      modifier = Modifier.fillMaxWidth(),
+    )
+  }
+}
+
+@Composable
+private fun PdfPhaseFractionRow(
+  label: String,
+  fraction: Float,
+) {
+  val f = fraction.coerceIn(0f, 1f)
+  Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(label, modifier = Modifier.weight(1f))
+      Text("${(f * 100).toInt()}%")
+    }
+    LinearProgressIndicator(
+      progress = { f },
       modifier = Modifier.fillMaxWidth(),
     )
   }

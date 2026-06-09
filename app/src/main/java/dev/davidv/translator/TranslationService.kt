@@ -146,6 +146,15 @@ class TranslationService(
       TranslationResult.Success(TranslatedText(result, transliterated))
     }
 
+  /**
+   * Abort the in-flight document translation. Non-suspending so the cancel
+   * button can call it directly; the cached catalog is the same instance
+   * running the translation, so slimt's workers stop within ~one batch.
+   */
+  fun cancelOngoingWork() {
+    filePathManager.loadCatalog()?.cancelOngoingWork()
+  }
+
   suspend fun translateDocumentPath(
     inputPath: String,
     outputPath: String,

@@ -942,20 +942,10 @@ data class DocumentTranslationUiState(
   val errorMessage: String? = null,
   val progressLabel: String = "Preparing file",
   val pdfPhases: PdfPhaseProgress? = null,
-  val progressCurrent: Int? = null,
-  val progressTotal: Int? = null,
-  val progressUnit: String? = null,
+  val progressFraction: Float? = null,
 ) {
   val isTranslating: Boolean
     get() = outputPath == null && errorMessage == null
-
-  val progressFraction: Float?
-    get() {
-      val current = progressCurrent ?: return null
-      val total = progressTotal ?: return null
-      if (total <= 0) return null
-      return (current.toFloat() / total.toFloat()).coerceIn(0f, 1f)
-    }
 }
 
 private fun DocumentTranslationServiceState.toUiState(): DocumentTranslationUiState =
@@ -969,9 +959,7 @@ private fun DocumentTranslationServiceState.toUiState(): DocumentTranslationUiSt
     errorMessage = errorMessage,
     progressLabel = progressLabel,
     pdfPhases = pdfPhases,
-    progressCurrent = progressCurrent,
-    progressTotal = progressTotal,
-    progressUnit = progressUnit,
+    progressFraction = progressFraction,
   )
 
 private fun mimeTypeForDocumentPath(path: String): String =

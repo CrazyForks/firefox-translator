@@ -52,26 +52,29 @@ impl From<TranslatorError> for CatalogError {
 pub enum DocumentProgressEvent {
     Preparing,
     /// PDF-only: emitted once after inventory, before any pass starts.
-    /// Lets the UI render three labelled progress lines (pages /
-    /// images / raster pages) with their totals up-front, instead of
-    /// one bar that resets when each phase ends. Subsequent
-    /// `Translating` events update the matching counter via `unit`:
-    ///   - "page" → text-translation pages
-    ///   - "image" → image-XObject pass
-    ///   - "raster_page" → page-raster overlay pass
-    /// `raster_pages` is an upper bound; the raster pass refines it
-    /// once the image pass has narrowed the actual set, by reporting
-    /// the smaller `total` in its ticks.
+    /// Lets the UI render three labelled progress lines (text / images /
+    /// raster pages) with their image/raster totals up-front, instead of
+    /// one bar that resets when each phase ends. The text bar is driven by
+    /// `TranslatingText`, the image bar by `TranslatingImages`, the raster
+    /// bar by `TranslatingRasterPages`.
+    /// `raster_pages` is an upper bound; the raster pass refines it once the
+    /// image pass has narrowed the actual set, by reporting the smaller
+    /// `total` in its ticks.
     PdfPlan {
         text_pages: u32,
         image_xobjects: u32,
         raster_pages: u32,
     },
-    Translating {
-        current: u32,
-        total: u32,
-        unit: String,
-    },
+    /// Text-translation progress as a smooth completion fraction in
+    /// `[0.0, 1.0]` (source-length weighted). Used for every text path
+    /// (txt/odt/epub and the PDF text pass) — the per-paragraph/page counts it
+    /// replaced were interpolated estimates, not real positions, so a fraction
+    /// is the honest representation.
+    TranslatingText { fraction: f32 },
+    /// Image-XObject OCR+translation pass: real, in-order item counts.
+    TranslatingImages { current: u32, total: u32 },
+    /// Page-raster overlay OCR+translation pass: real, in-order item counts.
+    TranslatingRasterPages { current: u32, total: u32 },
     Writing,
 }
 
@@ -255,21 +258,18 @@ fn translate_document_path_impl(
             Ok(())
         }
     };
-    // The document translators now report progress per sentence from slimt
-    // worker threads, so `report_translating` is called concurrently. Forward
-    // to the foreign sink only when the (coarse, unit-resolution) counter
-    // advances, so we cross the FFI boundary at most ~`total` times instead of
-    // once per sentence. Cancellation no longer rides this callback — the app
-    // calls `cancel_ongoing_work()`, which the workers observe directly.
-    let last_reported = std::sync::atomic::AtomicUsize::new(0);
-    let report_translating = |current: usize, total: usize, unit: &str| {
-        let prev = last_reported.fetch_max(current, std::sync::atomic::Ordering::Relaxed);
-        if current > prev || current == total {
-            on_progress(DocumentProgressEvent::Translating {
-                current: current as u32,
-                total: total as u32,
-                unit: unit.to_string(),
-            });
+    // The text translators report a smooth completion fraction per sentence
+    // from slimt worker threads, so `report_text` is called concurrently.
+    // Forward to the foreign sink only when the fraction advances by ≥0.1%, so
+    // we cross the FFI boundary at most ~1000 times instead of once per
+    // sentence. Cancellation no longer rides this callback — the app calls
+    // `cancel_ongoing_work()`, which the workers observe directly.
+    let last_permille = std::sync::atomic::AtomicUsize::new(0);
+    let report_text = |fraction: f32| {
+        let permille = (fraction * 1000.0) as usize;
+        let prev = last_permille.fetch_max(permille, std::sync::atomic::Ordering::Relaxed);
+        if permille > prev || fraction >= 1.0 {
+            on_progress(DocumentProgressEvent::TranslatingText { fraction });
         }
     };
     check_cancelled()?;
@@ -298,13 +298,7 @@ fn translate_document_path_impl(
                 source_code,
                 &target_code,
                 txt_layout.into(),
-                |progress| {
-                    let translator::txt::TxtTranslateProgress::TranslatingParagraph {
-                        current,
-                        total,
-                    } = progress;
-                    report_translating(current, total, "paragraph");
-                },
+                report_text,
             )
             .map_err(|error| match error {
                 translator::txt::TxtTranslateError::Cancelled => CatalogError::Cancelled,
@@ -323,13 +317,7 @@ fn translate_document_path_impl(
                     forced_source_code.as_deref(),
                     &target_code,
                     &available,
-                    |progress| {
-                        let translator::odt::OdtTranslateProgress::TranslatingBlock {
-                            current,
-                            total,
-                        } = progress;
-                        report_translating(current, total, "block");
-                    },
+                    report_text,
                 )
                 .map_err(|error| match error {
                     translator::odt::OdtTranslateError::Cancelled => CatalogError::Cancelled,
@@ -355,13 +343,7 @@ fn translate_document_path_impl(
                     forced_source_code.as_deref(),
                     &target_code,
                     &available,
-                    |progress| {
-                        let translator::epub::EpubTranslateProgress::TranslatingBlock {
-                            current,
-                            total,
-                        } = progress;
-                        report_translating(current, total, "block");
-                    },
+                    report_text,
                 )
                 .map_err(|error| match error {
                     translator::epub::EpubTranslateError::Cancelled => CatalogError::Cancelled,
@@ -430,13 +412,7 @@ fn translate_document_path_impl(
                     forced_source_code.as_deref(),
                     &target_code,
                     &available,
-                    |progress| {
-                        let translator::pdf_translate::PdfTranslateProgress::TranslatingPage {
-                            current,
-                            total,
-                        } = progress;
-                        report_translating(current, total, "page");
-                    },
+                    report_text,
                 );
                 // If no native text was found but image translation
                 // can still add overlay content, proceed with an empty
@@ -474,10 +450,9 @@ fn translate_document_path_impl(
                     if translate_pdf_images && forced_source_code.is_some() {
                         let src = forced_source_code.as_deref().unwrap_or("");
                         let xobject_progress = |current: usize, total: usize| {
-                            on_progress(DocumentProgressEvent::Translating {
+                            on_progress(DocumentProgressEvent::TranslatingImages {
                                 current: current as u32,
                                 total: total as u32,
-                                unit: "image".to_string(),
                             });
                         };
                         let xobject_output =
@@ -505,10 +480,9 @@ fn translate_document_path_impl(
                             .copied()
                             .collect();
                         let page_progress = |current: usize, total: usize| {
-                            on_progress(DocumentProgressEvent::Translating {
+                            on_progress(DocumentProgressEvent::TranslatingRasterPages {
                                 current: current as u32,
                                 total: total as u32,
-                                unit: "raster_page".to_string(),
                             });
                         };
                         let final_bytes =
