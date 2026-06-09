@@ -245,7 +245,7 @@ fn translate_document_path_impl(
     available_language_codes: Vec<String>,
     translate_pdf_images: bool,
     txt_layout: TxtLayout,
-    mut on_progress: impl FnMut(DocumentProgressEvent),
+    on_progress: impl Fn(DocumentProgressEvent) + Sync,
     is_cancelled: impl Fn() -> bool + Send + Sync,
 ) -> Result<String, CatalogError> {
     let check_cancelled = || {
@@ -253,6 +253,23 @@ fn translate_document_path_impl(
             Err(CatalogError::Cancelled)
         } else {
             Ok(())
+        }
+    };
+    // The document translators now report progress per sentence from slimt
+    // worker threads, so `report_translating` is called concurrently. Forward
+    // to the foreign sink only when the (coarse, unit-resolution) counter
+    // advances, so we cross the FFI boundary at most ~`total` times instead of
+    // once per sentence. Cancellation no longer rides this callback — the app
+    // calls `cancel_ongoing_work()`, which the workers observe directly.
+    let last_reported = std::sync::atomic::AtomicUsize::new(0);
+    let report_translating = |current: usize, total: usize, unit: &str| {
+        let prev = last_reported.fetch_max(current, std::sync::atomic::Ordering::Relaxed);
+        if current > prev || current == total {
+            on_progress(DocumentProgressEvent::Translating {
+                current: current as u32,
+                total: total as u32,
+                unit: unit.to_string(),
+            });
         }
     };
     check_cancelled()?;
@@ -282,23 +299,11 @@ fn translate_document_path_impl(
                 &target_code,
                 txt_layout.into(),
                 |progress| {
-                    if is_cancelled() {
-                        return Err(translator::txt::TxtTranslateError::Cancelled);
-                    }
                     let translator::txt::TxtTranslateProgress::TranslatingParagraph {
                         current,
                         total,
                     } = progress;
-                    on_progress(DocumentProgressEvent::Translating {
-                        current: current as u32,
-                        total: total as u32,
-                        unit: "paragraph".to_string(),
-                    });
-                    if is_cancelled() {
-                        Err(translator::txt::TxtTranslateError::Cancelled)
-                    } else {
-                        Ok(())
-                    }
+                    report_translating(current, total, "paragraph");
                 },
             )
             .map_err(|error| match error {
@@ -319,23 +324,11 @@ fn translate_document_path_impl(
                     &target_code,
                     &available,
                     |progress| {
-                        if is_cancelled() {
-                            return Err(translator::odt::OdtTranslateError::Cancelled);
-                        }
                         let translator::odt::OdtTranslateProgress::TranslatingBlock {
                             current,
                             total,
                         } = progress;
-                        on_progress(DocumentProgressEvent::Translating {
-                            current: current as u32,
-                            total: total as u32,
-                            unit: "block".to_string(),
-                        });
-                        if is_cancelled() {
-                            Err(translator::odt::OdtTranslateError::Cancelled)
-                        } else {
-                            Ok(())
-                        }
+                        report_translating(current, total, "block");
                     },
                 )
                 .map_err(|error| match error {
@@ -363,23 +356,11 @@ fn translate_document_path_impl(
                     &target_code,
                     &available,
                     |progress| {
-                        if is_cancelled() {
-                            return Err(translator::epub::EpubTranslateError::Cancelled);
-                        }
                         let translator::epub::EpubTranslateProgress::TranslatingBlock {
                             current,
                             total,
                         } = progress;
-                        on_progress(DocumentProgressEvent::Translating {
-                            current: current as u32,
-                            total: total as u32,
-                            unit: "block".to_string(),
-                        });
-                        if is_cancelled() {
-                            Err(translator::epub::EpubTranslateError::Cancelled)
-                        } else {
-                            Ok(())
-                        }
+                        report_translating(current, total, "block");
                     },
                 )
                 .map_err(|error| match error {
@@ -450,23 +431,11 @@ fn translate_document_path_impl(
                     &target_code,
                     &available,
                     |progress| {
-                        if is_cancelled() {
-                            return Err(translator::pdf_translate::PdfTranslateError::Cancelled);
-                        }
                         let translator::pdf_translate::PdfTranslateProgress::TranslatingPage {
                             current,
                             total,
                         } = progress;
-                        on_progress(DocumentProgressEvent::Translating {
-                            current: current as u32,
-                            total: total as u32,
-                            unit: "page".to_string(),
-                        });
-                        if is_cancelled() {
-                            Err(translator::pdf_translate::PdfTranslateError::Cancelled)
-                        } else {
-                            Ok(())
-                        }
+                        report_translating(current, total, "page");
                     },
                 );
                 // If no native text was found but image translation
@@ -892,6 +861,16 @@ impl CatalogHandle {
         self.session
             .retranslate_prepared_overlay(prepared, &source_code, &target_code)
             .map_err(CatalogError::from)
+    }
+
+    /// Request cancellation of an in-flight `translate_document_path*` call.
+    /// Safe to call from another thread (e.g. a UI "cancel" tap) while a
+    /// document translation is running — slimt's worker pool observes it and
+    /// stops within ~one batch, and the call returns `CatalogError::Cancelled`.
+    /// A no-op if nothing is translating; the next document translation clears
+    /// the flag at its start.
+    fn cancel_ongoing_work(&self) {
+        self.session.cancel_ongoing_work();
     }
 
     fn translate_document_path(
