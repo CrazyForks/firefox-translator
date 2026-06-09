@@ -294,6 +294,10 @@ class TranslatorVoiceInteractionSession(
 
   override fun onHandleScreenshot(screenshot: Bitmap?) {
     super.onHandleScreenshot(screenshot)
+    // In live mode onShow already handed off to the projection flow; the system
+    // still delivers the screenshot (we asked for it), but we must not run the
+    // still OCR or it would override the live action.
+    if (settingsManager.settings.value.assistantAction == dev.davidv.translator.AssistantAction.LIVE_SCREEN) return
     captureTimeoutJob?.cancel()
     captureTimeoutJob = null
     Log.d(tag, "Screenshot callback received bitmap=${screenshot?.width}x${screenshot?.height}")
@@ -327,7 +331,14 @@ class TranslatorVoiceInteractionSession(
       return
     }
 
-    val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
+    val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
+    if (targetLanguage == null) {
+      // Catalog not ready yet — don't leave the spinner stuck on.
+      processing = false
+      showLoading(false)
+      showStatus("Translation languages aren't ready yet. Try again.")
+      return
+    }
     val ocrSourceLanguage = sourceLanguage ?: targetLanguage
     val cropped = cropSystemBars(screenshot)
     val workingBitmap = cropped.copy(Bitmap.Config.ARGB_8888, false)
@@ -511,22 +522,23 @@ class TranslatorVoiceInteractionSession(
   }
 
   /** Live screen translate set as the assistant-invocation action: skip the still
-   *  overlay entirely, launch the consent flow with the default languages, and
-   *  dismiss this session. Needs a default source language (live can't run the
-   *  per-frame script classifier). */
+   *  overlay entirely, launch the consent flow with the default languages from
+   *  settings, and dismiss this session. Needs a fixed default source language
+   *  (live can't run the per-frame script classifier). The language *codes* are
+   *  passed straight through — [ScreenTranslateService] resolves them against the
+   *  app catalog, which is always loaded, unlike this session's lazy catalog. */
   private fun launchLiveScreen() {
     val settings = settingsManager.settings.value
-    val source = settings.defaultSourceLanguageCode?.let { langStateManager.languageByCode(it) }
-    if (source == null) {
+    val sourceCode = settings.defaultSourceLanguageCode
+    if (sourceCode == null) {
       showLoading(false)
       stopBorderPulse()
-      showStatus("Set a default source language to use live screen translation.")
+      showStatus("Set a default source language in Settings to use live screen translation.")
       return
     }
-    val targetCode = langStateManager.languageByCode(settings.defaultTargetLanguageCode)?.code
     runCatching {
       context.startActivity(
-        ScreenCaptureRequestActivity.intent(context, source.code, targetCode, false),
+        ScreenCaptureRequestActivity.intent(context, sourceCode, settings.defaultTargetLanguageCode, isAutoSource = false),
       )
     }.onFailure { Log.w(tag, "failed to launch live screen translate", it) }
     hide()
