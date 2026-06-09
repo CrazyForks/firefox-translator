@@ -24,8 +24,8 @@ object Constants {
 enum class AssistantAction(
   val displayName: String,
 ) {
-  STILL_IMAGE("Still image"),
-  LIVE_SCREEN("Live screen"),
+  STILL_IMAGE("Translate once"),
+  LIVE_SCREEN("Start live translation"),
 }
 
 data class AppSettings(

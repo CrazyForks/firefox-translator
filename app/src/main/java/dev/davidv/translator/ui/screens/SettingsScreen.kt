@@ -156,7 +156,6 @@ fun SettingsScreen(
 ) {
   val context = LocalContext.current
   var showPermissionDialog by remember { mutableStateOf(false) }
-  var assistantRoleHeld by remember { mutableStateOf(isAssistantRoleHeld(context)) }
 
   val permissionLauncher =
     rememberLauncherForActivityResult(
@@ -181,9 +180,7 @@ fun SettingsScreen(
   val assistantRoleLauncher =
     rememberLauncherForActivityResult(
       contract = ActivityResultContracts.StartActivityForResult(),
-    ) { _ ->
-      assistantRoleHeld = isAssistantRoleHeld(context)
-    }
+    ) { _ -> }
 
   val notificationPermissionLauncher =
     rememberLauncherForActivityResult(
@@ -551,24 +548,56 @@ fun SettingsScreen(
           )
 
           Text(
-            text =
-              "Translate text directly on top of other apps.\n" +
-                "Tech preview, expect bugs.",
+            text = "Translate text directly on top of other apps.",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
-
-          Text(
-            text = "Grant screen access through the assistant gesture or the accessibility floating button — either works.",
-            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
 
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
           ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Always-on floating button",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Text(
+                text = "Requires accessibility role",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+
+            TextButton(
+              onClick = {
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+              },
+            ) {
+              Text("Manage")
+            }
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Translate screen on shortcut",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+              )
+              Text(
+                text = "Long-press home or power to trigger",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+
             TextButton(
               onClick = {
                 if (shouldLaunchAssistantRoleRequest(context)) {
@@ -581,22 +610,14 @@ fun SettingsScreen(
                 }
               },
             ) {
-              Text(if (assistantRoleHeld) "Assistant ✓" else "Assistant")
-            }
-
-            TextButton(
-              onClick = {
-                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-              },
-            ) {
-              Text("Accessibility")
+              Text("Manage")
             }
           }
 
           var assistantActionExpanded by remember { mutableStateOf(false) }
 
           Text(
-            text = "On assistant invocation",
+            text = "On shortcut invocation",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -1294,13 +1315,6 @@ private fun formatSize(sizeBytes: Long): String {
   } else {
     "%.1f %s".format(size, units[unitIndex])
   }
-}
-
-private fun isAssistantRoleHeld(context: android.content.Context): Boolean {
-  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
-  val roleManager = context.getSystemService(RoleManager::class.java) ?: return false
-  if (!roleManager.isRoleAvailable(RoleManager.ROLE_ASSISTANT)) return false
-  return roleManager.isRoleHeld(RoleManager.ROLE_ASSISTANT)
 }
 
 private fun shouldLaunchAssistantRoleRequest(context: Context): Boolean {
