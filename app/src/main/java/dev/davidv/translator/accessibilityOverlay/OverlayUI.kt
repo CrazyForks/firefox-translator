@@ -19,10 +19,10 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import dev.davidv.translator.Language
 import dev.davidv.translator.MainActivity
-import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.assistantOverlay.BorderWaveView
+import dev.davidv.translator.overlayChrome.FloatingBubble
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
@@ -33,13 +33,14 @@ class OverlayUI(
   private val settingsManager: SettingsManager,
 ) {
   private val handler = Handler(Looper.getMainLooper())
-  private var floatingButton: View? = null
+  private var launcherBubble: FloatingBubble? = null
   private var toolbarView: View? = null
   private var sourceLabelView: TextView? = null
   private var targetLabelView: TextView? = null
   private var readingOrderButtonView: View? = null
   private var readingOrderIconView: ImageView? = null
   private val translationOverlays = mutableListOf<View>()
+  private var touchWatcher: View? = null
   private var borderView: BorderWaveView? = null
 
   private val menuManager =
@@ -96,93 +97,24 @@ class OverlayUI(
       },
     )
 
-  var savedButtonX = 0
-  var savedButtonY = 0
-
   fun showFloatingButton() {
-    if (floatingButton != null) return
-
-    val buttonSize = dpToPx(48)
-    val padding = dpToPx(10)
-
-    val container = FrameLayout(service)
-    val bg = GradientDrawable()
-    bg.shape = GradientDrawable.OVAL
-    bg.setColor(Color.parseColor("#F1AB7F"))
-    container.background = bg
-
-    val icon = ImageView(service)
-    icon.setImageResource(R.drawable.ic_translate_button)
-    icon.setPadding(padding, padding, padding, padding)
-    container.addView(icon, FrameLayout.LayoutParams(buttonSize, buttonSize))
-
-    val params =
-      WindowManager.LayoutParams(
-        buttonSize,
-        buttonSize,
-        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-        PixelFormat.TRANSLUCENT,
-      )
-    params.gravity = Gravity.TOP or Gravity.END
-    params.x = dpToPx(16)
-    params.y = dpToPx(200)
-
-    var initialX = 0
-    var initialY = 0
-    var initialTouchX = 0f
-    var initialTouchY = 0f
-    var moved = false
-
-    container.setOnTouchListener { _, event ->
-      when (event.action) {
-        MotionEvent.ACTION_DOWN -> {
-          initialX = params.x
-          initialY = params.y
-          initialTouchX = event.rawX
-          initialTouchY = event.rawY
-          moved = false
-          true
-        }
-        MotionEvent.ACTION_MOVE -> {
-          val dx = (initialTouchX - event.rawX).toInt()
-          val dy = (event.rawY - initialTouchY).toInt()
-          if (Math.abs(dx) > 10 || Math.abs(dy) > 10) moved = true
-          params.x = initialX + dx
-          params.y = initialY + dy
-          windowManager.updateViewLayout(container, params)
-          true
-        }
-        MotionEvent.ACTION_UP -> {
-          if (!moved) service.activate()
-          true
-        }
-        else -> false
-      }
+    val bubble = launcherBubble
+    if (bubble == null) {
+      launcherBubble =
+        FloatingBubble(service, windowManager, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, ::dpToPx) {
+          service.activate()
+        }.also { it.show() }
+    } else {
+      bubble.setShown(true)
     }
-
-    windowManager.addView(container, params)
-    floatingButton = container
   }
 
   fun removeFloatingButton() {
-    floatingButton?.let {
-      val params = it.layoutParams as? WindowManager.LayoutParams
-      savedButtonX = params?.x ?: 0
-      savedButtonY = params?.y ?: 0
-      windowManager.removeView(it)
-      floatingButton = null
-    }
+    launcherBubble?.setShown(false)
   }
 
   fun restoreFloatingButton() {
     showFloatingButton()
-    val buttonParams = floatingButton?.layoutParams as? WindowManager.LayoutParams
-    if (buttonParams != null) {
-      buttonParams.x = savedButtonX
-      buttonParams.y = savedButtonY
-      windowManager.updateViewLayout(floatingButton, buttonParams)
-    }
   }
 
   fun showToolbar(
@@ -320,14 +252,17 @@ class OverlayUI(
     val imageView = ImageView(service)
     imageView.setImageBitmap(bitmap)
     imageView.scaleType = ImageView.ScaleType.FIT_XY
-    imageView.setOnClickListener { removeTranslationOverlays() }
 
+    // Non-touchable so taps and swipes pass straight through to the app underneath;
+    // the overlay clears itself off the next scroll/click via onAccessibilityEvent.
     val params =
       WindowManager.LayoutParams(
         bounds.width(),
         bounds.height(),
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT,
       )
     params.gravity = Gravity.TOP or Gravity.START
@@ -336,6 +271,47 @@ class OverlayUI(
 
     windowManager.addView(imageView, params)
     translationOverlays.add(imageView)
+    ensureTouchWatcher()
+  }
+
+  /** A 1×1 watcher window: WATCH_OUTSIDE_TOUCH fires ACTION_OUTSIDE on the *down* of
+   *  any touch anywhere on screen, and NOT_TOUCH_MODAL lets that same touch reach the
+   *  app — so a tap or swipe both clear the result instantly and pass straight through. */
+  @android.annotation.SuppressLint("ClickableViewAccessibility")
+  private fun ensureTouchWatcher() {
+    if (touchWatcher != null) return
+    val watcher = View(service)
+    watcher.setOnTouchListener { _, event ->
+      if (event.action == MotionEvent.ACTION_OUTSIDE) {
+        removeTranslationOverlays()
+      }
+      false
+    }
+    val params =
+      WindowManager.LayoutParams(
+        1,
+        1,
+        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+          WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+          WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        PixelFormat.TRANSLUCENT,
+      )
+    params.gravity = Gravity.TOP or Gravity.START
+    params.windowAnimations = 0
+    windowManager.addView(watcher, params)
+    touchWatcher = watcher
+  }
+
+  private fun removeTouchWatcher() {
+    touchWatcher?.let {
+      try {
+        windowManager.removeView(it)
+      } catch (_: Exception) {
+      }
+    }
+    touchWatcher = null
   }
 
   fun showCenteredLoading() {
@@ -411,6 +387,7 @@ class OverlayUI(
       }
     }
     translationOverlays.clear()
+    removeTouchWatcher()
   }
 
   fun getStatusBarHeight(): Int {
@@ -454,6 +431,8 @@ class OverlayUI(
 
   fun cleanup() {
     handler.removeCallbacksAndMessages(null)
+    launcherBubble?.remove()
+    launcherBubble = null
   }
 
   internal fun dpToPx(dp: Int): Int = (dp * service.resources.displayMetrics.density).toInt()

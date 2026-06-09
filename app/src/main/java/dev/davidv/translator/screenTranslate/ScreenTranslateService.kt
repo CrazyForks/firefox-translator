@@ -37,6 +37,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
@@ -93,7 +94,6 @@ class ScreenTranslateService : Service() {
   private var bubble: FloatingBubble? = null
   private var regionView: View? = null
   private var toolbarView: View? = null
-  private var toolbarDismissLayer: View? = null
   private var sourceLabelView: TextView? = null
   private var targetLabelView: TextView? = null
   private var pauseIconView: ImageView? = null
@@ -184,6 +184,7 @@ class ScreenTranslateService : Service() {
     )
 
     setupOverlayAndCapture(tracker, proj)
+    broadcastLiveState(active = true)
 
     if (displayManager == null) {
       val dm = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
@@ -399,20 +400,6 @@ class ScreenTranslateService : Service() {
     val to = currentTo ?: return
     bubble?.setShown(false)
 
-    val dismiss =
-      View(this).apply { setOnClickListener { hideToolbar() } }
-    val dismissParams =
-      WindowManager.LayoutParams(
-        WindowManager.LayoutParams.MATCH_PARENT,
-        WindowManager.LayoutParams.MATCH_PARENT,
-        overlayWindowType(),
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-        PixelFormat.TRANSLUCENT,
-      )
-    dismissParams.windowAnimations = 0
-    wm.addView(dismiss, dismissParams)
-    toolbarDismissLayer = dismiss
-
     val views =
       OverlayChromeFactory.createLanguageToolbar(
         context = this,
@@ -439,12 +426,27 @@ class ScreenTranslateService : Service() {
     targetLabelView = views.targetLabel
     pauseIconView = views.pauseIcon
 
+    // A touch outside the toolbar strip collapses it back to the dot AND still
+    // reaches the app underneath (WATCH_OUTSIDE_TOUCH + the implied NOT_TOUCH_MODAL),
+    // so the user can keep scrolling/dragging — no full-screen catcher that would
+    // swallow the gesture.
+    views.root.setOnTouchListener { _, event ->
+      if (event.action == MotionEvent.ACTION_OUTSIDE) {
+        hideToolbar()
+        true
+      } else {
+        false
+      }
+    }
+
     val params =
       WindowManager.LayoutParams(
         WindowManager.LayoutParams.MATCH_PARENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
         overlayWindowType(),
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+          WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
         PixelFormat.TRANSLUCENT,
       )
     params.gravity = Gravity.TOP or Gravity.START
@@ -457,8 +459,6 @@ class ScreenTranslateService : Service() {
   private fun hideToolbar() {
     toolbarView?.let { runCatching { windowManager?.removeView(it) } }
     toolbarView = null
-    toolbarDismissLayer?.let { runCatching { windowManager?.removeView(it) } }
-    toolbarDismissLayer = null
     sourceLabelView = null
     targetLabelView = null
     pauseIconView = null
@@ -638,9 +638,19 @@ class ScreenTranslateService : Service() {
     Log.i(TAG, "capture resized to ${w}x$h @${dpi}dpi")
   }
 
+  private fun broadcastLiveState(active: Boolean) {
+    val intent =
+      Intent(ACTION_LIVE_STATE).apply {
+        setPackage(packageName)
+        putExtra(EXTRA_LIVE_ACTIVE, active)
+      }
+    sendBroadcast(intent)
+  }
+
   private fun stopEverything() {
     if (stopped) return
     stopped = true
+    broadcastLiveState(active = false)
     teardownControls()
     runCatching { displayManager?.unregisterDisplayListener(displayListener) }
     displayManager = null
@@ -689,6 +699,11 @@ class ScreenTranslateService : Service() {
     const val EXTRA_TARGET_LANG = "target_lang"
     const val EXTRA_AUTO_SOURCE = "auto_source"
     const val ACTION_STOP = "dev.davidv.translator.STOP_SCREEN_TRANSLATE"
+
+    /** Broadcast (in-package) so the accessibility service can hide its launcher
+     *  bubble while live translate runs — otherwise two bubbles stack. */
+    const val ACTION_LIVE_STATE = "dev.davidv.translator.LIVE_STATE"
+    const val EXTRA_LIVE_ACTIVE = "live_active"
 
     fun startIntent(
       context: Context,

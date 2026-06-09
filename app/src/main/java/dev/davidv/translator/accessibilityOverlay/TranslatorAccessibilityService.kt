@@ -27,6 +27,7 @@ import dev.davidv.translator.SpeechService
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
 import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
+import dev.davidv.translator.screenTranslate.ScreenTranslateService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -69,8 +70,26 @@ class TranslatorAccessibilityService : AccessibilityService() {
       }
     }
 
+  // Hide the launcher bubble while live screen-translate runs so we don't stack
+  // two bubbles; restore it when live stops (unless a still capture is active).
+  private val liveStateReceiver =
+    object : BroadcastReceiver() {
+      override fun onReceive(
+        context: Context?,
+        intent: Intent?,
+      ) {
+        val live = intent?.getBooleanExtra(ScreenTranslateService.EXTRA_LIVE_ACTIVE, false) ?: false
+        if (live) {
+          ui.removeFloatingButton()
+        } else if (!active) {
+          ui.restoreFloatingButton()
+        }
+      }
+    }
+
   companion object {
     const val ACTION_DISABLE = "dev.davidv.translator.DISABLE_ACCESSIBILITY"
+    private const val SCREENSHOT_RENDER_DELAY_MS = 120L
   }
 
   override fun onServiceConnected() {
@@ -109,6 +128,12 @@ class TranslatorAccessibilityService : AccessibilityService() {
       IntentFilter(ACTION_DISABLE),
       androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
     )
+    androidx.core.content.ContextCompat.registerReceiver(
+      this,
+      liveStateReceiver,
+      IntentFilter(ScreenTranslateService.ACTION_LIVE_STATE),
+      androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+    )
 
     serviceInfo = serviceInfo.apply { eventTypes = 0 }
 
@@ -132,6 +157,10 @@ class TranslatorAccessibilityService : AccessibilityService() {
   override fun onDestroy() {
     try {
       unregisterReceiver(disableReceiver)
+    } catch (_: Exception) {
+    }
+    try {
+      unregisterReceiver(liveStateReceiver)
     } catch (_: Exception) {
     }
     deactivate()
@@ -271,6 +300,15 @@ class TranslatorAccessibilityService : AccessibilityService() {
         dm.heightPixels - ui.getNavBarHeight(),
       )
 
+    // Let any open picker/menu finish dismissing before grabbing the screen,
+    // otherwise the popup lands in the screenshot.
+    ui.dismissMenu()
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+      captureFullScreen(region)
+    }, SCREENSHOT_RENDER_DELAY_MS)
+  }
+
+  private fun captureFullScreen(region: Rect) {
     takeScreenshot(
       Display.DEFAULT_DISPLAY,
       mainExecutor,
