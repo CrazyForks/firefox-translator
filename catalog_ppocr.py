@@ -16,7 +16,13 @@ PPOCR_BUCKET_BASE = "ocr/1/PP-OCRv5"
 PPOCR_INSTALL_BASE = "ppocr/PP-OCRv5"
 PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 
-PPOCR_DETECTOR_FILENAME = "PP-OCRv5_mobile_det_int8.mnn"
+# Detector alternatives, lowest to highest priority. Older entries stay
+# listed so existing installs keep counting as installed; clients download
+# only the highest-priority file and offer it as an upgrade over older ones.
+PPOCR_DETECTOR_FILENAMES = [
+    "PP-OCRv5_mobile_det_int8.mnn",
+    "det_quarter_int8.mnn",
+]
 PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x1_0_fp32.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x0_25_wq8.mnn"
@@ -89,7 +95,7 @@ def _keys_filename(script: str) -> str:
     return f"{script}_PP-OCRv5_keys.txt"
 
 
-def _make_file(name: str) -> dict:
+def _make_file(name: str, role: str, priority: int = 0) -> dict:
     install_path = f"{PPOCR_INSTALL_BASE}/{name}"
     mirror_path = f"{PPOCR_BUCKET_BASE}/{name}"
     return {
@@ -98,18 +104,24 @@ def _make_file(name: str) -> dict:
         "installPath": install_path,
         "url": f"https://offline-translator.davidv.dev/{mirror_path}",
         "mirrorPath": mirror_path,
+        "role": role,
+        "priority": priority,
     }
 
 
 def add_ppocr_packs(catalog: dict) -> None:
+    detector_files = [
+        _make_file(name, "detector", priority)
+        for priority, name in enumerate(PPOCR_DETECTOR_FILENAMES)
+    ]
     catalog["packs"][PPOCR_DETECTOR_PACK_ID] = {
         "feature": "ocr",
         "engine": PPOCR_ENGINE,
         "role": "detector",
-        "files": [
-            _make_file(PPOCR_DETECTOR_FILENAME),
-            _make_file(PPOCR_SCRIPT_CLASSIFIER_FILENAME),
-            _make_file(PPOCR_TEXTLINE_ORIENTATION_FILENAME),
+        "files": detector_files
+        + [
+            _make_file(PPOCR_SCRIPT_CLASSIFIER_FILENAME, "scriptClassifier"),
+            _make_file(PPOCR_TEXTLINE_ORIENTATION_FILENAME, "textlineOrientation"),
         ],
         "dependsOn": [],
     }
@@ -129,8 +141,8 @@ def add_ppocr_packs(catalog: dict) -> None:
             "role": "recognizer",
             "script": script,
             "files": [
-                _make_file(rec_filename),
-                _make_file(keys_filename),
+                _make_file(rec_filename, "recognizer"),
+                _make_file(keys_filename, "keys"),
             ],
             "dependsOn": depends_on,
         }

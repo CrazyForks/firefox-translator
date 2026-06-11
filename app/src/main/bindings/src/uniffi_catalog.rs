@@ -660,6 +660,22 @@ impl CatalogHandle {
         translator::plan_ocr_engine_downloads(&self.snapshot(), &language_codes, &engine)
     }
 
+    fn plan_ocr_engine_upgrades(
+        &self,
+        language_codes: Vec<String>,
+        engine: String,
+    ) -> translator::DownloadPlan {
+        let language_codes = language_codes
+            .into_iter()
+            .map(translator::LanguageCode::from)
+            .collect::<Vec<_>>();
+        translator::plan_ocr_engine_upgrades(&self.snapshot(), &language_codes, &engine)
+    }
+
+    fn plan_delete_superseded_files(&self) -> translator::DeletePlan {
+        translator::plan_delete_superseded_files(&self.snapshot())
+    }
+
     fn tts_sample_text(&self, language_code: String) -> Option<String> {
         self.snapshot()
             .catalog

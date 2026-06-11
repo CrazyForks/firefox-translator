@@ -315,6 +315,13 @@ class LanguageCatalog private constructor(
     engine: String,
   ): DownloadPlan = handle.planOcrEngineDownloads(languageCodes, engine)
 
+  fun planOcrEngineUpgrades(
+    languageCodes: List<String>,
+    engine: String,
+  ): DownloadPlan = handle.planOcrEngineUpgrades(languageCodes, engine)
+
+  fun planDeleteSupersededFiles(): DeletePlan = handle.planDeleteSupersededFiles()
+
   fun ttsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.ttsVoicePickerRegions(languageCode)
 
   fun installedTtsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.installedTtsVoicePickerRegions(languageCode)

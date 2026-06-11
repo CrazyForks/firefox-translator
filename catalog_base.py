@@ -249,7 +249,7 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
     validate_manifest(languages_v2, packs)
 
     return {
-        "formatVersion": 3,
+        "formatVersion": 4,
         "generatedAt": int(time.time()),
         "translationModelsBaseUrl": translation_base_url,
         "tesseractModelsBaseUrl": tesseract_base_url,

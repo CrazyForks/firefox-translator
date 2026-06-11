@@ -187,6 +187,21 @@ class DownloadService : Service() {
       context.startService(intent)
     }
 
+    fun startOcrEngineUpgrades(
+      context: Context,
+      languages: List<Language>,
+      engine: String,
+    ) {
+      val languageCodes = ArrayList(languages.map { it.code })
+      val intent =
+        Intent(context, DownloadService::class.java).apply {
+          action = "START_OCR_ENGINE_UPGRADES"
+          putStringArrayListExtra("language_codes", languageCodes)
+          putExtra("engine", engine)
+        }
+      context.startService(intent)
+    }
+
     fun startDictDownload(
       context: Context,
       language: Language,
@@ -299,6 +314,14 @@ class DownloadService : Service() {
         val catalog = getCatalog() ?: return START_NOT_STICKY
         val languages = languageCodes.mapNotNull(catalog::languageByCode)
         startOcrEngineDownloads(languages, engine)
+      }
+
+      "START_OCR_ENGINE_UPGRADES" -> {
+        val languageCodes = intent.getStringArrayListExtra("language_codes").orEmpty()
+        val engine = intent.getStringExtra("engine") ?: return START_NOT_STICKY
+        val catalog = getCatalog() ?: return START_NOT_STICKY
+        val languages = languageCodes.mapNotNull(catalog::languageByCode)
+        startOcrEngineUpgrades(languages, engine)
       }
 
       "START_DICT_DOWNLOAD" -> {
@@ -458,6 +481,32 @@ class DownloadService : Service() {
     languages: List<Language>,
     engine: String,
   ) {
+    startOcrEngineBatch(languages) { catalog, codes ->
+      catalog.planOcrEngineDownloads(codes, engine)
+    }
+  }
+
+  private fun startOcrEngineUpgrades(
+    languages: List<Language>,
+    engine: String,
+  ) {
+    startOcrEngineBatch(
+      languages,
+      onSuccess = {
+        getCatalog()?.let { catalog ->
+          filePathManager.applyDeletePlan(catalog.planDeleteSupersededFiles())
+        }
+      },
+    ) { catalog, codes ->
+      catalog.planOcrEngineUpgrades(codes, engine)
+    }
+  }
+
+  private fun startOcrEngineBatch(
+    languages: List<Language>,
+    onSuccess: suspend () -> Unit = {},
+    planProvider: (LanguageCatalog, List<String>) -> DownloadPlan,
+  ) {
     val activeLanguages = languages.distinctBy { it.code }.filter { _downloadStates.value[it]?.isDownloading != true }
     if (activeLanguages.isEmpty()) return
 
@@ -475,7 +524,7 @@ class DownloadService : Service() {
       serviceScope.launch {
         try {
           val catalog = getCatalog() ?: return@launch
-          val downloadPlan = catalog.planOcrEngineDownloads(activeLanguages.map { it.code }, engine)
+          val downloadPlan = planProvider(catalog, activeLanguages.map { it.code })
           var success = true
           if (downloadPlan.tasks.isNotEmpty()) {
             activeLanguages.forEach { language ->
@@ -514,6 +563,7 @@ class DownloadService : Service() {
           }
           if (success) {
             filePathManager.reloadCatalog()
+            onSuccess()
             Log.i("DownloadService", "OCR engine batch download complete")
             activeLanguages.forEach { language ->
               _downloadEvents.emit(DownloadEvent.NewTranslationAvailable(language))

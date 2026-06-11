@@ -685,6 +685,23 @@ fun LanguageAssetManagerScreen(
         }
       }
     }
+  val ppocrModelUpgrade =
+    remember(catalog, rows, appSettings.preferredOcrEngine, catalogRefreshToken) {
+      if (appSettings.preferredOcrEngine != PreferredOcrEngine.PADDLE || catalog == null) {
+        PaddleUpgrade.EMPTY
+      } else {
+        val languages =
+          rows
+            .filter { "ppocr" in catalog.installedOcrEngines(it.language.code) }
+            .map { it.language }
+        val plan = catalog.planOcrEngineUpgrades(languages.map { it.code }, "ppocr")
+        if (plan.tasks.isEmpty()) {
+          PaddleUpgrade.EMPTY
+        } else {
+          PaddleUpgrade(languages = languages, totalBytes = plan.totalSize.toLong())
+        }
+      }
+    }
 
   val sharedDictionaryUsersByLanguageCode =
     remember(rows) {
@@ -732,11 +749,23 @@ fun LanguageAssetManagerScreen(
       )
 
       if (paddleUpgrade.languages.isNotEmpty()) {
-        PaddleUpgradeCard(
-          languageCount = paddleUpgrade.languages.size,
+        val languageLabel =
+          if (paddleUpgrade.languages.size == 1) "1 language" else "${paddleUpgrade.languages.size} languages"
+        OcrUpgradeCard(
+          text = "You have files for $languageLabel in a suboptimal format.",
           totalBytes = paddleUpgrade.totalBytes,
           onDownload = {
             DownloadService.startOcrEngineDownloads(context, paddleUpgrade.languages, "ppocr")
+          },
+        )
+      }
+
+      if (ppocrModelUpgrade.languages.isNotEmpty()) {
+        OcrUpgradeCard(
+          text = "An improved text detection model is available.",
+          totalBytes = ppocrModelUpgrade.totalBytes,
+          onDownload = {
+            DownloadService.startOcrEngineUpgrades(context, ppocrModelUpgrade.languages, "ppocr")
           },
         )
       }
@@ -1353,12 +1382,11 @@ private fun ProgressIconButton(
 }
 
 @Composable
-private fun PaddleUpgradeCard(
-  languageCount: Int,
+private fun OcrUpgradeCard(
+  text: String,
   totalBytes: Long,
   onDownload: () -> Unit,
 ) {
-  val languageLabel = if (languageCount == 1) "1 language" else "$languageCount languages"
   Surface(
     color = MaterialTheme.colorScheme.surfaceContainerHigh,
     shape = RoundedCornerShape(12.dp),
@@ -1372,7 +1400,7 @@ private fun PaddleUpgradeCard(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Text(
-        text = "You have files for $languageLabel in a suboptimal format.",
+        text = text,
         style = MaterialTheme.typography.bodySmall,
         modifier = Modifier.weight(1f),
       )
