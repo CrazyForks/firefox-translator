@@ -24,14 +24,14 @@ PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 # The v6 tiny detector has its DBNet head folded to emit the probability
 # map at 1/4 resolution (same boxes, ~35% faster than the v5 detector).
 PPOCR_DETECTOR_FILENAMES = [
-    "PP-OCRv5_mobile_det_int8.mnn",
-    "det_quarter_int8.mnn",
-    "PP-OCRv6_tiny_det_quarter_int8.mnn",
+#    "PP-OCRv5_mobile_det_int8.mnn",
+#    "det_quarter_int8.mnn",
+#    "PP-OCRv6_tiny_det_quarter_int8.mnn",
     "PP-OCRv6_tiny_det_int8.mnn",
 ]
 PPOCR_V6_FILENAMES = {
     "PP-OCRv6_tiny_det_int8.mnn",
-    "PP-OCRv6_tiny_det_quarter_int8.mnn",
+#    "PP-OCRv6_tiny_det_quarter_int8.mnn",
     "PP-OCRv6_tiny_rec_int8.mnn",
     "PP-OCRv6_tiny_keys.txt",
     "PP-OCRv6_small_rec_int8.mnn",
