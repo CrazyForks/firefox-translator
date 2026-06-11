@@ -1,13 +1,13 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1781182471,
+  "generatedAt": 1781195927,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "tesseractModelsBaseUrl": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1781182471,
+    "languageIndexUpdatedAt": 1781195927,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -11568,6 +11568,15 @@
           "priority": 1
         },
         {
+          "name": "PP-OCRv6_tiny_det_quarter_int8.mnn",
+          "sizeBytes": 542360,
+          "installPath": "ppocr/PP-OCRv6/PP-OCRv6_tiny_det_quarter_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/PP-OCRv6_tiny_det_quarter_int8.mnn",
+          "mirrorPath": "ocr/1/PP-OCRv6/PP-OCRv6_tiny_det_quarter_int8.mnn",
+          "role": "detector",
+          "priority": 2
+        },
+        {
           "name": "PULC_int8.mnn",
           "sizeBytes": 1799836,
           "installPath": "ppocr/PP-OCRv5/PULC_int8.mnn",
@@ -11791,6 +11800,24 @@
           "mirrorPath": "ocr/1/PP-OCRv5/latin_PP-OCRv5_keys.txt",
           "role": "keys",
           "priority": 0
+        },
+        {
+          "name": "PP-OCRv6_tiny_rec_int8.mnn",
+          "sizeBytes": 1262568,
+          "installPath": "ppocr/PP-OCRv6/PP-OCRv6_tiny_rec_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/PP-OCRv6_tiny_rec_int8.mnn",
+          "mirrorPath": "ocr/1/PP-OCRv6/PP-OCRv6_tiny_rec_int8.mnn",
+          "role": "recognizer",
+          "priority": 1
+        },
+        {
+          "name": "PP-OCRv6_tiny_keys.txt",
+          "sizeBytes": 27156,
+          "installPath": "ppocr/PP-OCRv6/PP-OCRv6_tiny_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/PP-OCRv6_tiny_keys.txt",
+          "mirrorPath": "ocr/1/PP-OCRv6/PP-OCRv6_tiny_keys.txt",
+          "role": "keys",
+          "priority": 1
         }
       ],
       "dependsOn": [
@@ -11910,6 +11937,24 @@
           "mirrorPath": "ocr/1/PP-OCRv5/cj_PP-OCRv5_keys.txt",
           "role": "keys",
           "priority": 0
+        },
+        {
+          "name": "PP-OCRv6_small_rec_int8.mnn",
+          "sizeBytes": 5691768,
+          "installPath": "ppocr/PP-OCRv6/PP-OCRv6_small_rec_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/PP-OCRv6_small_rec_int8.mnn",
+          "mirrorPath": "ocr/1/PP-OCRv6/PP-OCRv6_small_rec_int8.mnn",
+          "role": "recognizer",
+          "priority": 1
+        },
+        {
+          "name": "PP-OCRv6_small_keys.txt",
+          "sizeBytes": 74947,
+          "installPath": "ppocr/PP-OCRv6/PP-OCRv6_small_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/PP-OCRv6_small_keys.txt",
+          "mirrorPath": "ocr/1/PP-OCRv6/PP-OCRv6_small_keys.txt",
+          "role": "keys",
+          "priority": 1
         }
       ],
       "dependsOn": [

@@ -14,15 +14,35 @@ import catalog_base
 PPOCR_ENGINE = "ppocr"
 PPOCR_BUCKET_BASE = "ocr/1/PP-OCRv5"
 PPOCR_INSTALL_BASE = "ppocr/PP-OCRv5"
+PPOCR_V6_BUCKET_BASE = "ocr/1/PP-OCRv6"
+PPOCR_V6_INSTALL_BASE = "ppocr/PP-OCRv6"
 PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 
 # Detector alternatives, lowest to highest priority. Older entries stay
 # listed so existing installs keep counting as installed; clients download
 # only the highest-priority file and offer it as an upgrade over older ones.
+# The v6 tiny detector has its DBNet head folded to emit the probability
+# map at 1/4 resolution (same boxes, ~35% faster than the v5 detector).
 PPOCR_DETECTOR_FILENAMES = [
     "PP-OCRv5_mobile_det_int8.mnn",
     "det_quarter_int8.mnn",
+    "PP-OCRv6_tiny_det_quarter_int8.mnn",
 ]
+PPOCR_V6_FILENAMES = {
+    "PP-OCRv6_tiny_det_quarter_int8.mnn",
+    "PP-OCRv6_tiny_rec_int8.mnn",
+    "PP-OCRv6_tiny_keys.txt",
+    "PP-OCRv6_small_rec_int8.mnn",
+    "PP-OCRv6_small_keys.txt",
+}
+
+# v6 recognizer upgrades per script slug: (model, keys). The unified v6
+# model covers Latin and Chinese+Japanese; tiny has no kana so the cj slot
+# gets the small tier. Other scripts stay on their v5 recognizers.
+PPOCR_V6_RECOGNIZER_FILENAMES = {
+    "latin": ("PP-OCRv6_tiny_rec_int8.mnn", "PP-OCRv6_tiny_keys.txt"),
+    "cj": ("PP-OCRv6_small_rec_int8.mnn", "PP-OCRv6_small_keys.txt"),
+}
 PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x1_0_fp32.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x0_25_wq8.mnn"
@@ -96,8 +116,12 @@ def _keys_filename(script: str) -> str:
 
 
 def _make_file(name: str, role: str, priority: int = 0) -> dict:
-    install_path = f"{PPOCR_INSTALL_BASE}/{name}"
-    mirror_path = f"{PPOCR_BUCKET_BASE}/{name}"
+    if name in PPOCR_V6_FILENAMES:
+        install_path = f"{PPOCR_V6_INSTALL_BASE}/{name}"
+        mirror_path = f"{PPOCR_V6_BUCKET_BASE}/{name}"
+    else:
+        install_path = f"{PPOCR_INSTALL_BASE}/{name}"
+        mirror_path = f"{PPOCR_BUCKET_BASE}/{name}"
     return {
         "name": name,
         "sizeBytes": 0,
@@ -135,15 +159,23 @@ def add_ppocr_packs(catalog: dict) -> None:
         depends_on = [PPOCR_DETECTOR_PACK_ID]
         if script != "latin":
             depends_on.append(latin_pack_id)
+        # Recognizer and keys alternates must stay paired: the engine picks
+        # the keys file whose priority matches the chosen recognizer's, so a
+        # half-downloaded upgrade falls back to the older complete pair.
+        files = [
+            _make_file(rec_filename, "recognizer"),
+            _make_file(keys_filename, "keys"),
+        ]
+        if script in PPOCR_V6_RECOGNIZER_FILENAMES:
+            v6_rec, v6_keys = PPOCR_V6_RECOGNIZER_FILENAMES[script]
+            files.append(_make_file(v6_rec, "recognizer", priority=1))
+            files.append(_make_file(v6_keys, "keys", priority=1))
         catalog["packs"][pack_id] = {
             "feature": "ocr",
             "engine": PPOCR_ENGINE,
             "role": "recognizer",
             "script": script,
-            "files": [
-                _make_file(rec_filename, "recognizer"),
-                _make_file(keys_filename, "keys"),
-            ],
+            "files": files,
             "dependsOn": depends_on,
         }
         for lang in langs:
