@@ -49,8 +49,8 @@ features = ["uniffi", "html"]
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = { version = "0.14", default-features = false }
 
-# [patch."https://github.com/DavidVentura/slimt-sys"]
-# slimt-sys = { path = "/home/david/git/slimt-sys" }
+[patch."https://github.com/DavidVentura/slimt-sys"]
+slimt-sys = { path = "/home/david/git/slimt-sys" }
 
 # [patch."https://github.com/DavidVentura/piper-rs"]
 # piper-rs = { path = "/home/david/git/piper-rs" }

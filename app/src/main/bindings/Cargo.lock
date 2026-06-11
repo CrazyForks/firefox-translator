@@ -2623,7 +2623,6 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "slimt-sys"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/slimt-sys#36ca726cced3d4130ad224a5301e51d5572b125b"
 dependencies = [
  "cmake",
 ]
@@ -2939,7 +2938,7 @@ dependencies = [
 [[package]]
 name = "translator"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#4e35f7486dddfdc4b804ed3f39fb3b50456baa1b"
+source = "git+https://github.com/DavidVentura/translator-rs.git#53e57a3290342514eca549069de4f1b7baa067f5"
 dependencies = [
  "cld2",
  "fax",
