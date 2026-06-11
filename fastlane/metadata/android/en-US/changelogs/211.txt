@@ -1,3 +1,5 @@
+Go to 'Manage languages' to download a faster OCR detection model (1MB)
+
 - Implement experimental 'screen translation' mode
 - Fix image handling for vertical Japanese text
 - Keep screen on when camera is running
