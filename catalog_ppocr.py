@@ -27,8 +27,10 @@ PPOCR_DETECTOR_FILENAMES = [
     "PP-OCRv5_mobile_det_int8.mnn",
     "det_quarter_int8.mnn",
     "PP-OCRv6_tiny_det_quarter_int8.mnn",
+    "PP-OCRv6_tiny_det_int8.mnn",
 ]
 PPOCR_V6_FILENAMES = {
+    "PP-OCRv6_tiny_det_int8.mnn",
     "PP-OCRv6_tiny_det_quarter_int8.mnn",
     "PP-OCRv6_tiny_rec_int8.mnn",
     "PP-OCRv6_tiny_keys.txt",
