@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UI text editor — __NAME__</title>
+<style>
+  body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; }
+  #panel { width: 280px; padding: 16px; box-sizing: border-box; border-right: 1px solid #ccc; overflow: auto; }
+  #stage { flex: 1; overflow: auto; background: #2a2a2a; position: relative; }
+  #stage svg { width: 100%; height: auto; display: block; }
+  h3 { margin: 0 0 12px; }
+  button { padding: 8px 12px; }
+  .hint { font-size: 12px; color: #777; margin-top: 16px; line-height: 1.5; }
+  .error { color: #b00; font-size: 13px; margin-top: 12px; line-height: 1.5; }
+  text[data-key] { cursor: text; }
+  #editor {
+    position: absolute; box-sizing: border-box; padding: 0 2px; margin: 0;
+    border: 1px solid #6a7cff; background: #14121c; border-radius: 2px;
+    font-family: sans-serif; line-height: 1.1; z-index: 10; display: none;
+  }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h3>Click a label to edit</h3>
+  <button id="reset">Reset all</button>
+  <p class="hint">Hover a label in the rendition to highlight it, then click to edit in place.
+  Typing updates the SVG live. Enter or click away to commit, Esc to cancel.</p>
+  <p class="error" id="error" style="display:none"></p>
+</div>
+<div id="stage">
+  <input id="editor" autocomplete="off">
+</div>
+<script>
+(async function () {
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const NAME = "__NAME__";
+  const stage = document.getElementById('stage');
+  const editor = document.getElementById('editor');
+
+  let svg;
+  try {
+    const res = await fetch(NAME);
+    if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+    const doc = new DOMParser().parseFromString(await res.text(), 'image/svg+xml');
+    if (doc.querySelector('parsererror')) throw new Error('SVG parse error');
+    svg = document.importNode(doc.documentElement, true);
+    stage.insertBefore(svg, editor);
+  } catch (e) {
+    const err = document.getElementById('error');
+    err.style.display = 'block';
+    err.textContent = 'Could not load ' + NAME + ': ' + e.message +
+      (location.protocol === 'file:' ? ' — fetch is blocked on file://; serve the folder over HTTP.' : '');
+    return;
+  }
+
+  const scale = () => svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+  const texts = [...svg.querySelectorAll('text[data-key]')];
+  const original = new Map(texts.map(t => [t, t.textContent]));
+
+  let hover = null;
+  function clearHover() { if (hover) { hover.remove(); hover = null; } }
+  function showHover(t) {
+    clearHover();
+    const b = t.getBBox();
+    const r = document.createElementNS(SVGNS, 'rect');
+    if (t.getAttribute('transform')) r.setAttribute('transform', t.getAttribute('transform'));
+    r.setAttribute('x', b.x - 4); r.setAttribute('y', b.y - 2);
+    r.setAttribute('width', b.width + 8); r.setAttribute('height', b.height + 4);
+    r.setAttribute('rx', 3);
+    r.setAttribute('fill', 'rgba(106,124,255,0.25)');
+    r.setAttribute('pointer-events', 'none');
+    t.parentNode.insertBefore(r, t);
+    hover = r;
+  }
+
+  let editing = null;
+  let editStart = "";
+  function commit() { editor.style.display = 'none'; editing = null; }
+  // Snap the editor onto the label's current box so it tracks the text as it grows (the label's own
+  // text-anchor makes right/centered text grow the right direction).
+  function reposition(t) {
+    const rect = t.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    editor.style.left = (rect.left - stageRect.left + stage.scrollLeft - 3) + 'px';
+    editor.style.top = (rect.top - stageRect.top + stage.scrollTop - 1) + 'px';
+    editor.style.width = (Math.max(rect.width, 8) + 6) + 'px';
+  }
+  function edit(t) {
+    editing = t;
+    editStart = t.textContent;
+    clearHover();
+    editor.style.display = 'block';
+    editor.style.fontSize = (parseFloat(t.getAttribute('font-size')) * scale()) + 'px';
+    editor.style.fontWeight = t.getAttribute('font-weight') || 'normal';
+    editor.style.fontStyle = t.getAttribute('font-style') || 'normal';
+    editor.style.color = t.getAttribute('fill') || '#fff';
+    editor.value = t.textContent;
+    reposition(t);
+    editor.focus();
+    editor.select();
+  }
+
+  // SVG <text> only receives pointer events on its painted glyph pixels, so clicking a label's
+  // whitespace misses. Cover each with a transparent hit-rect that carries the hover/click.
+  texts.forEach(t => {
+    const b = t.getBBox();
+    const pad = 6;
+    const hit = document.createElementNS(SVGNS, 'rect');
+    if (t.getAttribute('transform')) hit.setAttribute('transform', t.getAttribute('transform'));
+    hit.setAttribute('x', b.x - pad);
+    hit.setAttribute('y', b.y - pad);
+    hit.setAttribute('width', b.width + pad * 2);
+    hit.setAttribute('height', b.height + pad * 2);
+    hit.setAttribute('fill', 'transparent');
+    hit.style.pointerEvents = 'all';
+    hit.style.cursor = 'text';
+    hit.addEventListener('mouseenter', () => { if (!editing) showHover(t); });
+    hit.addEventListener('mouseleave', clearHover);
+    hit.addEventListener('click', () => edit(t));
+    t.parentNode.insertBefore(hit, t.nextSibling);
+  });
+
+  editor.addEventListener('input', () => { if (editing) { editing.textContent = editor.value; reposition(editing); } });
+  editor.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { commit(); }
+    else if (e.key === 'Escape') { if (editing) editing.textContent = editStart; commit(); }
+  });
+  editor.addEventListener('blur', commit);
+  stage.addEventListener('scroll', () => { if (editing) commit(); });
+
+  document.getElementById('reset').onclick = () => {
+    texts.forEach(t => t.textContent = original.get(t));
+    commit();
+  };
+})();
+</script>
+</body>
+</html>
