@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1781200178,
+  "generatedAt": 1781201267,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1781200178,
+    "languageIndexUpdatedAt": 1781201267,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -10450,12 +10450,20 @@
       "role": "detector",
       "files": [
         {
+          "name": "PP-OCRv6_tiny_det_half_int8.mnn",
+          "sizeBytes": 543128,
+          "installPath": "ppocr/PP-OCRv6/PP-OCRv6_tiny_det_half_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/PP-OCRv6_tiny_det_half_int8.mnn",
+          "role": "detector",
+          "priority": 0
+        },
+        {
           "name": "PP-OCRv6_tiny_det_int8.mnn",
           "sizeBytes": 543176,
           "installPath": "ppocr/PP-OCRv6/PP-OCRv6_tiny_det_int8.mnn",
           "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/PP-OCRv6_tiny_det_int8.mnn",
           "role": "detector",
-          "priority": 0
+          "priority": 1
         },
         {
           "name": "PULC_int8.mnn",
