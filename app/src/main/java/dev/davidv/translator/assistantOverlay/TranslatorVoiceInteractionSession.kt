@@ -17,6 +17,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.core.view.WindowInsetsCompat
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.MainActivity
@@ -66,6 +67,7 @@ class TranslatorVoiceInteractionSession(
   private var readingOrderIconView: ImageView? = null
   private var menuManager: OverlayMenuManager? = null
   private var borderView: BorderWaveView? = null
+  private var cutoutTopInset = 0
 
   private val systemBarTop: Int by lazy {
     val id = context.resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -99,7 +101,21 @@ class TranslatorVoiceInteractionSession(
   override fun onCreateContentView(): View {
     rootView = FrameLayout(context)
     rootView.setBackgroundColor(Color.TRANSPARENT)
-    rootView.setOnApplyWindowInsetsListener { _, insets -> insets }
+    // The screenshot backdrop replaces the whole screen, so the toolbar lives in
+    // the status-bar strip — but it still has to clear a display cutout.
+    rootView.setOnApplyWindowInsetsListener { _, insets ->
+      val safeTop =
+        WindowInsetsCompat
+          .toWindowInsetsCompat(insets, rootView)
+          .getInsets(WindowInsetsCompat.Type.displayCutout())
+          .top
+      if (safeTop != cutoutTopInset) {
+        cutoutTopInset = safeTop
+        (topBarView.layoutParams as FrameLayout.LayoutParams).topMargin = safeTop
+        topBarView.requestLayout()
+      }
+      insets
+    }
     menuManager =
       OverlayMenuManager(
         context,
@@ -124,7 +140,7 @@ class TranslatorVoiceInteractionSession(
                   FrameLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
                   gravity = Gravity.TOP or Gravity.END
-                  topMargin = dpToPx(48)
+                  topMargin = cutoutTopInset + dpToPx(48)
                   marginEnd = dpToPx(8)
                 },
             )

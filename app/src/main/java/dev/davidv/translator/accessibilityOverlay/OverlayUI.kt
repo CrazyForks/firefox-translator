@@ -24,6 +24,7 @@ import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.assistantOverlay.BorderWaveView
 import dev.davidv.translator.overlayChrome.FloatingBubble
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
+import dev.davidv.translator.overlayChrome.OverlayInsets
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
 
@@ -390,10 +391,7 @@ class OverlayUI(
     removeTouchWatcher()
   }
 
-  fun getStatusBarHeight(): Int {
-    val resourceId = service.resources.getIdentifier("status_bar_height", "dimen", "android")
-    return if (resourceId > 0) service.resources.getDimensionPixelSize(resourceId) else dpToPx(24)
-  }
+  fun getStatusBarHeight(): Int = OverlayInsets.topInset(windowManager, service.resources)
 
   fun getNavBarHeight(): Int {
     val resourceId = service.resources.getIdentifier("navigation_bar_height", "dimen", "android")

@@ -49,6 +49,7 @@ import dev.davidv.translator.TranslatorApplication
 import dev.davidv.translator.overlayChrome.FloatingBubble
 import dev.davidv.translator.overlayChrome.NormalizedRegion
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
+import dev.davidv.translator.overlayChrome.OverlayInsets
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
 import dev.davidv.translator.overlayChrome.RegionSelectView
@@ -480,8 +481,8 @@ class ScreenTranslateService : Service() {
   }
 
   private fun statusBarHeight(): Int {
-    val id = resources.getIdentifier("status_bar_height", "dimen", "android")
-    return if (id > 0) resources.getDimensionPixelSize(id) else dpToPx(24)
+    val wm = windowManager ?: getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    return OverlayInsets.topInset(wm, resources)
   }
 
   /** Manual pause/resume: freezes OCR + clears the on-screen overlays, without
