@@ -45,6 +45,10 @@ PPOCR_V6_RECOGNIZER_FILENAMES = {
     "latin": ("PP-OCRv6_tiny_rec_int8.mnn", "PP-OCRv6_tiny_keys.txt"),
     "cj": ("PP-OCRv6_small_rec_int8.mnn", "PP-OCRv6_small_keys.txt"),
 }
+# Per-strip ink-matte model (soft alpha coverage), shipped with the detector since it
+# is script-agnostic and runs on every detected strip. Optional at runtime — the engine
+# loads it only if present.
+PPOCR_INK_FILENAME = "ink.mnn"
 PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x1_0_fp32.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x0_25_wq8.mnn"
@@ -148,6 +152,7 @@ def add_ppocr_packs(catalog: dict) -> None:
         + [
             _make_file(PPOCR_SCRIPT_CLASSIFIER_FILENAME, "scriptClassifier"),
             _make_file(PPOCR_TEXTLINE_ORIENTATION_FILENAME, "textlineOrientation"),
+            _make_file(PPOCR_INK_FILENAME, "ink"),
         ],
         "dependsOn": [],
     }
