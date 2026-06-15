@@ -345,7 +345,7 @@ fn resolve(file_name: &str, ttc_index: u32) -> Option<(PathBuf, u32)> {
     Some((path, ttc_index))
 }
 
-fn locate_for(script: Script, bold: bool, italic: bool) -> Option<(PathBuf, u32)> {
+fn locate_for(script: Script, bold: bool, italic: bool) -> Option<(PathBuf, u32, u16)> {
     let want_weight: u16 = if bold { 700 } else { 400 };
     let families = families();
 
@@ -357,7 +357,7 @@ fn locate_for(script: Script, bold: bool, italic: bool) -> Option<(PathBuf, u32)
             if let Some(font) = pick_font(family, want_weight, italic)
                 && let Some(r) = resolve(&font.file_name, font.ttc_index)
             {
-                return Some(r);
+                return Some((r.0, r.1, font.weight));
             }
         }
     }
@@ -370,7 +370,7 @@ fn locate_for(script: Script, bold: bool, italic: bool) -> Option<(PathBuf, u32)
             if let Some(font) = pick_font(family, want_weight, italic)
                 && let Some(r) = resolve(&font.file_name, font.ttc_index)
             {
-                return Some(r);
+                return Some((r.0, r.1, font.weight));
             }
         }
     }
@@ -382,7 +382,7 @@ fn locate_for(script: Script, bold: bool, italic: bool) -> Option<(PathBuf, u32)
         if let Some(font) = pick_font(family, want_weight, italic)
             && let Some(r) = resolve(&font.file_name, font.ttc_index)
         {
-            return Some(r);
+            return Some((r.0, r.1, font.weight));
         }
     }
 
@@ -396,18 +396,19 @@ impl FontProvider for AndroidFontProvider {
         let mut chain: Vec<FontHandle> = Vec::new();
 
         if let Some(script) = script_from_translator(request.script, &request.language)
-            && let Some((path, ttc_index)) = locate_for(script, request.bold, request.italic)
+            && let Some((path, ttc_index, weight)) = locate_for(script, request.bold, request.italic)
         {
             log::debug!(
-                "[font] {:?} lang={} bold={} italic={} -> {} (ttc={})",
+                "[font] {:?} lang={} bold={} italic={} -> {} (ttc={} weight={})",
                 request.script,
                 request.language,
                 request.bold,
                 request.italic,
                 path.display(),
                 ttc_index,
+                weight,
             );
-            chain.push(FontHandle::new(path, ttc_index));
+            chain.push(FontHandle::new(path, ttc_index).with_weight(weight));
         }
 
         // Always append Roboto (sans-serif default) as a Latin/Cyrillic/Greek
@@ -421,7 +422,7 @@ impl FontProvider for AndroidFontProvider {
                 pick_font(family, if request.bold { 700 } else { 400 }, request.italic)
             && let Some((path, ttc_index)) = resolve(&font.file_name, font.ttc_index)
         {
-            chain.push(FontHandle::new(path, ttc_index));
+            chain.push(FontHandle::new(path, ttc_index).with_weight(font.weight));
         }
 
         chain
