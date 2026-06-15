@@ -140,7 +140,7 @@ fun shareImageUri(
   val intent = Intent(Intent.ACTION_SEND)
   intent.putExtra(Intent.EXTRA_STREAM, uri)
   intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-  intent.setType("image/png")
+  intent.setType("image/jpeg")
 
   startActivity(context, intent, null)
 }
@@ -192,10 +192,10 @@ suspend fun saveImage(
     var uri: Uri? = null
     try {
       imagesFolder.mkdirs()
-      val file = File(imagesFolder, "shared_image.png")
+      val file = File(imagesFolder, "shared_image.jpg")
 
       val stream = FileOutputStream(file)
-      image.compress(Bitmap.CompressFormat.PNG, 90, stream)
+      image.compress(Bitmap.CompressFormat.JPEG, 90, stream)
       stream.flush()
       stream.close()
       uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
