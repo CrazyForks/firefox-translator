@@ -137,14 +137,14 @@ def _keys_filename(script: str) -> str:
     return f"{script}_PP-OCRv5_keys.txt"
 
 
-def _make_file(name: str, role: str, priority: int = 0) -> dict:
+def _make_file(name: str, role: str, priority: int = 0, optional: bool = False) -> dict:
     if name in PPOCR_V6_FILENAMES:
         install_path = f"{PPOCR_V6_INSTALL_BASE}/{name}"
         mirror_path = f"{PPOCR_V6_BUCKET_BASE}/{name}"
     else:
         install_path = f"{PPOCR_INSTALL_BASE}/{name}"
         mirror_path = f"{PPOCR_BUCKET_BASE}/{name}"
-    return {
+    file = {
         "name": name,
         "sizeBytes": 0,
         "installPath": install_path,
@@ -153,6 +153,9 @@ def _make_file(name: str, role: str, priority: int = 0) -> dict:
         "role": role,
         "priority": priority,
     }
+    if optional:
+        file["optional"] = True
+    return file
 
 
 def add_ppocr_packs(catalog: dict) -> None:
@@ -168,7 +171,7 @@ def add_ppocr_packs(catalog: dict) -> None:
         + [
             _make_file(PPOCR_SCRIPT_CLASSIFIER_FILENAME, "scriptClassifier"),
             _make_file(PPOCR_TEXTLINE_ORIENTATION_FILENAME, "textlineOrientation"),
-            _make_file(PPOCR_INK_FILENAME, "ink"),
+            _make_file(PPOCR_INK_FILENAME, "ink", optional=True),
         ],
         "dependsOn": [],
     }
