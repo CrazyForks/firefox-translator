@@ -57,24 +57,6 @@ def make_support_pack_id(language_code: str, file_name: str) -> str:
     return f"support-{language_code}-{stem}"
 
 
-OCR_EXTRA_TRAINEDDATA = {
-    "ja": [
-        {
-            "name": "jpn_vert.traineddata",
-            "sizeBytes": 14330809,
-            "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/refs/heads/main/jpn_vert.traineddata",
-        }
-    ]
-}
-
-OCR_PRIMARY_TRAINEDDATA_OVERRIDES = {
-    "ja": {
-        "name": "jpn.traineddata",
-        "sizeBytes": 14330109,
-        "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/refs/heads/main/jpn.traineddata",
-    }
-}
-
 DICTIONARY_DEPENDENCY_OVERRIDES = {}
 
 
@@ -104,14 +86,12 @@ def add_language_asset_ref(language_entry: dict, feature: str, ref) -> None:
 
 def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
     translation_base_url = language_index["translationModelsBaseUrl"].rstrip("/")
-    tesseract_base_url = language_index["tesseractModelsBaseUrl"].rstrip("/")
     dictionary_base_url = language_index["dictionaryBaseUrl"].rstrip("/")
     dictionary_version = language_index["dictionaryVersion"]
 
     languages_v2 = {}
     packs = {}
     dictionary_consumers = defaultdict(list)
-    ocr_pack_ids_by_files = {}
 
     for lang in sorted(language_index["languages"], key=lambda item: item["code"]):
         code = lang["code"]
@@ -158,44 +138,6 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
             add_language_asset_ref(language_entry, "translate", pack_id)
             add_language_asset_ref(languages_v2[from_code], "translate", pack_id)
             add_language_asset_ref(languages_v2[to_code], "translate", pack_id)
-
-        primary_traineddata = OCR_PRIMARY_TRAINEDDATA_OVERRIDES.get(code)
-        primary_name = primary_traineddata["name"] if primary_traineddata else f"{lang['tessName']}.traineddata"
-        primary_size = int(primary_traineddata["sizeBytes"]) if primary_traineddata else int(lang["tessdataSizeBytes"])
-        primary_url = primary_traineddata["url"] if primary_traineddata else f"{tesseract_base_url}/{lang['tessName']}.traineddata"
-        ocr_files = [
-            make_file(
-                name=primary_name,
-                size_bytes=primary_size,
-                install_path=f"tesseract/tessdata/{primary_name}",
-                url=primary_url,
-                source_path=None if primary_traineddata else f"{lang['tessName']}.traineddata",
-            )
-        ]
-        for extra_traineddata in OCR_EXTRA_TRAINEDDATA.get(code, []):
-            name = extra_traineddata["name"]
-            ocr_files.append(
-                make_file(
-                    name=name,
-                    size_bytes=int(extra_traineddata["sizeBytes"]),
-                    install_path=f"tesseract/tessdata/{name}",
-                    url=extra_traineddata.get("url", f"{tesseract_base_url}/{name}"),
-                    source_path=None if extra_traineddata.get("url") else name,
-                )
-            )
-        ocr_file_key = tuple(file_info["installPath"] for file_info in ocr_files)
-        ocr_pack_id = ocr_pack_ids_by_files.get(ocr_file_key)
-        if ocr_pack_id is None:
-            ocr_pack_id = make_ocr_pack_id("tesseract", code)
-            ocr_pack_ids_by_files[ocr_file_key] = ocr_pack_id
-            packs[ocr_pack_id] = {
-                "feature": "ocr",
-                "engine": "tesseract",
-                "language": code,
-                "files": ocr_files,
-                "dependsOn": [] if code == "en" else [make_ocr_pack_id("tesseract", "en")],
-            }
-        add_language_asset_ref(language_entry, "ocr", {"tesseract": ocr_pack_id})
 
         for extra_file in lang.get("extraFiles", []):
             support_pack_id = make_support_pack_id(code, extra_file)
@@ -252,7 +194,6 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
         "formatVersion": 4,
         "generatedAt": int(time.time()),
         "translationModelsBaseUrl": translation_base_url,
-        "tesseractModelsBaseUrl": tesseract_base_url,
         "dictionaryBaseUrl": dictionary_base_url,
         "dictionaryVersion": dictionary_version,
         "sources": {
@@ -273,13 +214,6 @@ def normalize_language_assets(languages_v2: dict) -> None:
             assets["translate"] = sorted(set(assets["translate"]))
         if "support" in assets:
             assets["support"] = sorted(set(assets["support"]))
-        ocr_assets = assets.get("ocr")
-        if isinstance(ocr_assets, dict) and ocr_assets:
-            assets["preferredOcrEngine"] = (
-                "tesseract" if "tesseract" in ocr_assets else sorted(ocr_assets.keys())[0]
-            )
-        else:
-            assets["preferredOcrEngine"] = ""
 
 
 def validate_manifest(languages: dict, packs: dict) -> None:

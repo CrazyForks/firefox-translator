@@ -77,7 +77,6 @@ import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageCatalog
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.PermissionHelper
-import dev.davidv.translator.PreferredOcrEngine
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadonlyModalOutputAlignment
 import dev.davidv.translator.TapToTranslateNotification
@@ -674,48 +673,6 @@ fun SettingsScreen(
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
           )
-
-          // Preferred OCR Engine
-          var preferredEngineExpanded by remember { mutableStateOf(false) }
-
-          Text(
-            text = "Preferred Engine",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-          )
-
-          ExposedDropdownMenuBox(
-            expanded = preferredEngineExpanded,
-            onExpandedChange = { preferredEngineExpanded = it },
-            modifier = Modifier.fillMaxWidth(),
-          ) {
-            OutlinedTextField(
-              value = settings.preferredOcrEngine.displayName,
-              onValueChange = {},
-              readOnly = true,
-              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = preferredEngineExpanded) },
-              modifier =
-                Modifier
-                  .menuAnchor()
-                  .fillMaxWidth()
-                  .testTag("export-options:Preferred Engine"),
-              colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-            )
-            ExposedDropdownMenu(
-              expanded = preferredEngineExpanded,
-              onDismissRequest = { preferredEngineExpanded = false },
-            ) {
-              PreferredOcrEngine.entries.forEach { engine ->
-                DropdownMenuItem(
-                  text = { Text(engine.displayName) },
-                  onClick = {
-                    onSettingsChange(settings.copy(preferredOcrEngine = engine))
-                    preferredEngineExpanded = false
-                  },
-                )
-              }
-            }
-          }
 
           // Background Mode
           var backgroundModeExpanded by remember { mutableStateOf(false) }
@@ -1355,10 +1312,8 @@ private fun previewLanguage(
   code = code,
   displayName = name,
   shortDisplayName = name,
-  tessName = code,
   script = "Latn",
   dictionaryCode = code,
-  tessdataSizeBytes = 0,
 )
 
 @Preview(showBackground = true)

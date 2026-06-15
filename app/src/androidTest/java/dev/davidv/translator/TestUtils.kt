@@ -63,12 +63,7 @@ object TestUtils {
     val dataPath = filePathManager.getDataDir()
     dataPath.mkdirs()
 
-    val tessDataPath = filePathManager.getTesseractDataDir()
-    tessDataPath.mkdirs()
-
     spanishModelFiles.forEach { copyFile(testContext, dataPath, it) }
-    copyFile(testContext, tessDataPath, "eng.traineddata")
-    copyFile(testContext, tessDataPath, "spa.traineddata")
 
     val dictionariesPath = filePathManager.getDictionariesDir()
     dictionariesPath.mkdirs()
@@ -86,7 +81,6 @@ object TestUtils {
     val filePathManager = FilePathManager(appContext, settingsManager.settings)
     listOf(
       filePathManager.getDataDir(),
-      filePathManager.getTesseractDataDir(),
       filePathManager.getDictionariesDir(),
     ).forEach { it.deleteRecursively() }
   }

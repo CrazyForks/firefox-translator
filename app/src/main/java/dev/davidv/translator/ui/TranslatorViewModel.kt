@@ -36,7 +36,6 @@ import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.PcmAudio
 import dev.davidv.translator.PdfPhaseProgress
-import dev.davidv.translator.PreferredOcrEngine
 import dev.davidv.translator.PreparedImageOverlay
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
@@ -109,7 +108,6 @@ class TranslatorViewModel(
     val sourceCode: String,
     val sourceScript: String,
     val readingOrder: ReadingOrder?,
-    val engine: PreferredOcrEngine,
   )
 
   private var ocrCache: OcrCacheEntry? = null
@@ -600,17 +598,12 @@ class TranslatorViewModel(
     toLang: Language,
   ) {
     val readingOrder = currentReadingOrderFor(fromLang)
-    val engine = settingsManager.settings.value.preferredOcrEngine
     val cached =
       ocrCache?.takeIf { entry ->
         !_isAutoSource.value &&
           entry.imageRef === bitmap &&
           entry.readingOrder == readingOrder &&
-          entry.engine == engine &&
-          when (engine) {
-            PreferredOcrEngine.PADDLE -> entry.sourceScript == fromLang.script
-            PreferredOcrEngine.TESSERACT -> entry.sourceCode == fromLang.code
-          }
+          entry.sourceScript == fromLang.script
       }
     val onMessage: (TranslatorMessage.ImageTextDetected) -> Unit = { msg ->
       _input.value = msg.extractedText
@@ -647,7 +640,6 @@ class TranslatorViewModel(
           sourceCode = fromLang.code,
           sourceScript = fromLang.script,
           readingOrder = readingOrder,
-          engine = engine,
         )
     }
   }

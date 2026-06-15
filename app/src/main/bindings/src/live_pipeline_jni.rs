@@ -83,7 +83,7 @@ use std::ffi::{CString, c_char, c_void};
 use translator::gl_renderer::{GlesRenderer, PresentContent};
 #[cfg(feature = "gpu")]
 use translator::live_gpu_tick::{
-    clip_xform, frame_from_camera_gray, run_tracker_with_acquire, screen_acquire_frame,
+    frame_from_camera_gray, run_tracker_with_acquire, screen_acquire_frame,
 };
 #[cfg(feature = "gpu")]
 use translator::live_screen::{LiveScreenPipeline, MonitorAction};

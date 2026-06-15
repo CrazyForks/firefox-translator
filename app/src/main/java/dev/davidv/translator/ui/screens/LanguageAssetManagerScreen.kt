@@ -91,7 +91,6 @@ import dev.davidv.translator.LanguageCatalog
 import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.LanguageStateManager
-import dev.davidv.translator.PreferredOcrEngine
 import dev.davidv.translator.R
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.encodeVoiceOverride
@@ -610,7 +609,6 @@ fun LanguageAssetManagerScreen(
   queuedTtsPackIds: Map<Language, List<String>> = emptyMap(),
 ) {
   val languageMetadata by languageMetadataManager.metadata.collectAsState()
-  val appSettings by settingsManager.settings.collectAsState()
   val expandedLanguages = remember { mutableStateMapOf<String, Boolean>() }
   var isRefreshing by remember { mutableStateOf(false) }
   var filterQuery by remember { mutableStateOf("") }
@@ -665,29 +663,9 @@ fun LanguageAssetManagerScreen(
         }
         ?: emptyList()
     }
-  val paddleUpgrade =
-    remember(catalog, rows, appSettings.preferredOcrEngine, catalogRefreshToken) {
-      if (appSettings.preferredOcrEngine != PreferredOcrEngine.PADDLE || catalog == null) {
-        PaddleUpgrade.EMPTY
-      } else {
-        val languages = mutableListOf<Language>()
-        rows.forEach { row ->
-          if (!row.availability.ocrFiles) return@forEach
-          val installed = catalog.installedOcrEngines(row.language.code).toSet()
-          if ("tesseract" !in installed || "ppocr" in installed) return@forEach
-          languages.add(row.language)
-        }
-        val plan = catalog.planOcrEngineDownloads(languages.map { it.code }, "ppocr")
-        if (plan.tasks.isEmpty()) {
-          PaddleUpgrade.EMPTY
-        } else {
-          PaddleUpgrade(languages = languages, totalBytes = plan.totalSize.toLong())
-        }
-      }
-    }
   val ppocrModelUpgrade =
-    remember(catalog, rows, appSettings.preferredOcrEngine, catalogRefreshToken) {
-      if (appSettings.preferredOcrEngine != PreferredOcrEngine.PADDLE || catalog == null) {
+    remember(catalog, rows, catalogRefreshToken) {
+      if (catalog == null) {
         PaddleUpgrade.EMPTY
       } else {
         val languages =
@@ -747,18 +725,6 @@ fun LanguageAssetManagerScreen(
         singleLine = true,
         label = { Text("Filter languages") },
       )
-
-      if (paddleUpgrade.languages.isNotEmpty()) {
-        val languageLabel =
-          if (paddleUpgrade.languages.size == 1) "1 language" else "${paddleUpgrade.languages.size} languages"
-        OcrUpgradeCard(
-          text = "You have files for $languageLabel in a suboptimal format.",
-          totalBytes = paddleUpgrade.totalBytes,
-          onDownload = {
-            DownloadService.startOcrEngineDownloads(context, paddleUpgrade.languages, "ppocr")
-          },
-        )
-      }
 
       if (ppocrModelUpgrade.languages.isNotEmpty()) {
         OcrUpgradeCard(

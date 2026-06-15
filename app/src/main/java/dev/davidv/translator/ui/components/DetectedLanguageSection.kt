@@ -73,10 +73,8 @@ private fun previewLanguage(
   code = code,
   displayName = name,
   shortDisplayName = name,
-  tessName = code,
   script = "Latn",
   dictionaryCode = code,
-  tessdataSizeBytes = 0,
 )
 
 @Preview(showBackground = true)

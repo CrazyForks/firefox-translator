@@ -142,7 +142,6 @@ def tts_sample_mirror_path(pack: dict) -> str | None:
 def build_public_catalog(source_catalog: dict, bucket_dir: Path, base_url: str, allow_missing: bool) -> dict:
     published = deepcopy(source_catalog)
     published.pop("translationModelsBaseUrl", None)
-    published.pop("tesseractModelsBaseUrl", None)
     published.pop("dictionaryBaseUrl", None)
 
     missing_paths = []

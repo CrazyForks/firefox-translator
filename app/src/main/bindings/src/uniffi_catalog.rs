@@ -802,9 +802,8 @@ impl CatalogHandle {
         min_confidence: u32,
         reading_order: Option<translator::ReadingOrder>,
         background_mode: translator::BackgroundMode,
-        preferred_engine: translator::PreferredOcrEngine,
     ) -> Result<translator::PreparedImageOverlay, CatalogError> {
-        #[cfg(any(feature = "tesseract", feature = "ppocr"))]
+        #[cfg(feature = "ppocr")]
         {
             return self
                 .session
@@ -818,11 +817,10 @@ impl CatalogHandle {
                     min_confidence,
                     reading_order,
                     background_mode,
-                    preferred_engine,
                 )
                 .map_err(CatalogError::from);
         }
-        #[cfg(not(any(feature = "tesseract", feature = "ppocr")))]
+        #[cfg(not(feature = "ppocr"))]
         {
             let _ = (
                 rgba_bytes,
@@ -834,7 +832,6 @@ impl CatalogHandle {
                 min_confidence,
                 reading_order,
                 background_mode,
-                preferred_engine,
             );
             Err(CatalogError::Other {
                 reason: "OCR feature disabled".to_string(),

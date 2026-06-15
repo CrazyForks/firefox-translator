@@ -197,7 +197,6 @@ class TranslationCoordinator(
         val catalog = imageProcessor.loadCatalog() ?: return@withContext null
         val minConfidence = settingsManager.settings.value.minConfidence
         val backgroundMode = settingsManager.settings.value.backgroundMode
-        val preferredOcrEngine = settingsManager.settings.value.preferredOcrEngine
         val maxImageSize = settingsManager.settings.value.maxImageSize
         val sourceSelection =
           if (isAutoSource) {
@@ -215,7 +214,6 @@ class TranslationCoordinator(
               minConfidence,
               readingOrder,
               backgroundMode,
-              preferredOcrEngine,
             )
           } catch (e: uniffi.bindings.CatalogException.MissingAsset) {
             Log.d("OCR", "translateImagePlan failed: ${e.message}")

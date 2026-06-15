@@ -21,12 +21,9 @@ data class Language(
   val code: String,
   val displayName: String,
   val shortDisplayName: String,
-  val tessName: String,
   val script: String,
   val dictionaryCode: String,
-  val tessdataSizeBytes: Long,
 ) {
-  val tessFilename: String get() = "$tessName.traineddata"
   val isEnglish: Boolean get() = code == "en"
 
   override fun equals(other: Any?): Boolean = other is Language && code == other.code

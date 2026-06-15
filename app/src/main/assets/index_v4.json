@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1781421206,
+  "generatedAt": 1781512385,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1781421206,
+    "languageIndexUpdatedAt": 1781512385,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1774864382,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -24,12 +24,10 @@
           "translate-ar-en",
           "translate-en-ar"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ar",
-          "ppocr": "ocr-ppocr-arabic"
-        },
         "dictionary": "dict-ar",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-arabic"
+        }
       },
       "tts": {
         "defaultRegion": "JO",
@@ -57,12 +55,10 @@
           "translate-az-en",
           "translate-en-az"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-az",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-az",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "AZ",
@@ -88,12 +84,10 @@
         "translate": [
           "translate-be-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-be",
-          "ppocr": "ocr-ppocr-eslav"
-        },
         "dictionary": "dict-be",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-eslav"
+        }
       }
     },
     "bg": {
@@ -108,12 +102,10 @@
           "translate-bg-en",
           "translate-en-bg"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-bg",
-          "ppocr": "ocr-ppocr-cyrillic"
-        },
         "dictionary": "dict-bg",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-cyrillic"
+        }
       },
       "tts": {
         "defaultRegion": "BG",
@@ -140,11 +132,10 @@
           "translate-bn-en",
           "translate-en-bn"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-bn"
-        },
         "dictionary": "dict-bn",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-indic"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -171,12 +162,10 @@
           "translate-bs-en",
           "translate-en-bs"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-bs",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-hr",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "BA",
@@ -203,12 +192,10 @@
           "translate-ca-en",
           "translate-en-ca"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ca",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-ca",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "ES",
@@ -237,12 +224,10 @@
           "translate-cs-en",
           "translate-en-cs"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-cs",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-cs",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "CZ",
@@ -270,12 +255,10 @@
           "translate-da-en",
           "translate-en-da"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-da",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-da",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "DK",
@@ -302,12 +285,10 @@
           "translate-de-en",
           "translate-en-de"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-de",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-de",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "DE",
@@ -337,12 +318,10 @@
           "translate-el-en",
           "translate-en-el"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-el",
-          "ppocr": "ocr-ppocr-el"
-        },
         "dictionary": "dict-el",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-el"
+        }
       },
       "tts": {
         "defaultRegion": "GR",
@@ -470,12 +449,10 @@
           "translate-zh-en",
           "translate-zh_hant-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-en",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-en",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "US",
@@ -514,12 +491,10 @@
           "translate-en-es",
           "translate-es-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-es",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-es",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "ES",
@@ -561,12 +536,10 @@
           "translate-en-et",
           "translate-et-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-et",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-et",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "EE",
@@ -593,12 +566,10 @@
           "translate-en-fa",
           "translate-fa-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-fa",
-          "ppocr": "ocr-ppocr-arabic"
-        },
         "dictionary": "dict-fa",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-arabic"
+        }
       },
       "tts": {
         "defaultRegion": "IR",
@@ -628,12 +599,10 @@
           "translate-en-fi",
           "translate-fi-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-fi",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-fi",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "FI",
@@ -661,12 +630,10 @@
           "translate-en-fr",
           "translate-fr-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-fr",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-fr",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "FR",
@@ -696,11 +663,10 @@
           "translate-en-gu",
           "translate-gu-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-gu"
-        },
         "dictionary": "dict-gu",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-indic"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -727,11 +693,10 @@
           "translate-en-he",
           "translate-he-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-he"
-        },
         "dictionary": "dict-he",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-hebrew"
+        }
       },
       "tts": {
         "defaultRegion": "IL",
@@ -758,12 +723,10 @@
           "translate-en-hi",
           "translate-hi-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-hi",
-          "ppocr": "ocr-ppocr-devanagari"
-        },
         "dictionary": "dict-hi",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-devanagari"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -792,12 +755,10 @@
           "translate-en-hr",
           "translate-hr-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-hr",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-hr",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "HR",
@@ -824,12 +785,10 @@
           "translate-en-hu",
           "translate-hu-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-hu",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-hu",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "HU",
@@ -858,12 +817,10 @@
           "translate-en-id",
           "translate-id-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-id",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-id",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "ID",
@@ -890,12 +847,10 @@
           "translate-en-is",
           "translate-is-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-is",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-is",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "IS",
@@ -925,12 +880,10 @@
           "translate-en-it",
           "translate-it-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-it",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-it",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "IT",
@@ -958,15 +911,13 @@
           "translate-en-ja",
           "translate-ja-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ja",
-          "ppocr": "ocr-ppocr-cj"
-        },
         "support": [
           "support-ja-mucab"
         ],
         "dictionary": "dict-ja",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-cj"
+        }
       },
       "tts": {
         "defaultRegion": "JP",
@@ -994,11 +945,10 @@
           "translate-en-kn",
           "translate-kn-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-kn"
-        },
         "dictionary": "dict-kn",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-indic"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1025,12 +975,10 @@
           "translate-en-ko",
           "translate-ko-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ko",
-          "ppocr": "ocr-ppocr-korean"
-        },
         "dictionary": "dict-ko",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-korean"
+        }
       },
       "tts": {
         "defaultRegion": "KR",
@@ -1059,12 +1007,10 @@
           "translate-en-lt",
           "translate-lt-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-lt",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-lt",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "LT",
@@ -1091,12 +1037,10 @@
           "translate-en-lv",
           "translate-lv-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-lv",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-lv",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "LV",
@@ -1123,11 +1067,10 @@
           "translate-en-ml",
           "translate-ml-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ml"
-        },
         "dictionary": "dict-ml",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-indic"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1155,12 +1098,10 @@
           "translate-en-ms",
           "translate-ms-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ms",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-ms",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "MY",
@@ -1187,12 +1128,10 @@
           "translate-en-nb",
           "translate-nb-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-nb",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-nb",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       }
     },
     "nl": {
@@ -1207,12 +1146,10 @@
           "translate-en-nl",
           "translate-nl-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-nl",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-nl",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "NL",
@@ -1249,12 +1186,10 @@
         "translate": [
           "translate-nn-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-nb",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-nn",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       }
     },
     "no": {
@@ -1269,12 +1204,10 @@
           "translate-en-no",
           "translate-no-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-nb",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-no",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "NO",
@@ -1301,12 +1234,10 @@
           "translate-en-pl",
           "translate-pl-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-pl",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-pl",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "PL",
@@ -1336,12 +1267,10 @@
           "translate-en-pt",
           "translate-pt-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-pt",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-pt",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "BR",
@@ -1377,12 +1306,10 @@
           "translate-en-ro",
           "translate-ro-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ro",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-ro",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "RO",
@@ -1409,12 +1336,10 @@
           "translate-en-ru",
           "translate-ru-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ru",
-          "ppocr": "ocr-ppocr-eslav"
-        },
         "dictionary": "dict-ru",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-eslav"
+        }
       },
       "tts": {
         "defaultRegion": "RU",
@@ -1444,12 +1369,10 @@
           "translate-en-sk",
           "translate-sk-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-sk",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-sk",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "SK",
@@ -1476,12 +1399,10 @@
           "translate-en-sl",
           "translate-sl-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-sl",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-sl",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "SI",
@@ -1508,12 +1429,10 @@
           "translate-en-sq",
           "translate-sq-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-sq",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-sq",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "AL",
@@ -1540,12 +1459,10 @@
           "translate-en-sr",
           "translate-sr-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-sr",
-          "ppocr": "ocr-ppocr-cyrillic"
-        },
         "dictionary": "dict-hr",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-cyrillic"
+        }
       },
       "tts": {
         "defaultRegion": "RS",
@@ -1572,12 +1489,10 @@
           "translate-en-sv",
           "translate-sv-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-sv",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-sv",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "SE",
@@ -1606,12 +1521,10 @@
           "translate-en-ta",
           "translate-ta-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-ta",
-          "ppocr": "ocr-ppocr-ta"
-        },
         "dictionary": "dict-ta",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-ta"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1638,12 +1551,10 @@
           "translate-en-te",
           "translate-te-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-te",
-          "ppocr": "ocr-ppocr-te"
-        },
         "dictionary": "dict-te",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-te"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1672,12 +1583,10 @@
           "translate-en-th",
           "translate-th-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-th",
-          "ppocr": "ocr-ppocr-th"
-        },
         "dictionary": "dict-th",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-th"
+        }
       },
       "tts": {
         "defaultRegion": "TH",
@@ -1704,12 +1613,10 @@
           "translate-en-tr",
           "translate-tr-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-tr",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-tr",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "TR",
@@ -1736,12 +1643,10 @@
           "translate-en-uk",
           "translate-uk-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-uk",
-          "ppocr": "ocr-ppocr-eslav"
-        },
         "dictionary": "dict-uk",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-eslav"
+        }
       },
       "tts": {
         "defaultRegion": "UA",
@@ -1769,12 +1674,10 @@
           "translate-en-vi",
           "translate-vi-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-vi",
-          "ppocr": "ocr-ppocr-latin"
-        },
         "dictionary": "dict-vi",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "VN",
@@ -1803,12 +1706,10 @@
           "translate-en-zh",
           "translate-zh-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-zh",
-          "ppocr": "ocr-ppocr-cj"
-        },
         "dictionary": "dict-zh",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-cj"
+        }
       },
       "tts": {
         "defaultRegion": "CN",
@@ -1836,12 +1737,10 @@
           "translate-en-zh_hant",
           "translate-zh_hant-en"
         ],
-        "ocr": {
-          "tesseract": "ocr-tesseract-zh_hant",
-          "ppocr": "ocr-ppocr-cj"
-        },
         "dictionary": "dict-zh",
-        "preferredOcrEngine": "tesseract"
+        "ocr": {
+          "ppocr": "ocr-ppocr-cj"
+        }
       },
       "tts": {
         "defaultRegion": "TW",
@@ -2916,826 +2815,6 @@
         "type": "bilingual",
         "wordCount": 435742
       }
-    },
-    "ocr-tesseract-ar": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ar",
-      "files": [
-        {
-          "name": "ara.traineddata",
-          "sizeBytes": 1432056,
-          "installPath": "tesseract/tessdata/ara.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ara.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-az": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "az",
-      "files": [
-        {
-          "name": "aze.traineddata",
-          "sizeBytes": 3524799,
-          "installPath": "tesseract/tessdata/aze.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/aze.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-be": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "be",
-      "files": [
-        {
-          "name": "bel.traineddata",
-          "sizeBytes": 3692098,
-          "installPath": "tesseract/tessdata/bel.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/bel.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-bg": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "bg",
-      "files": [
-        {
-          "name": "bul.traineddata",
-          "sizeBytes": 1675212,
-          "installPath": "tesseract/tessdata/bul.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/bul.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-bn": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "bn",
-      "files": [
-        {
-          "name": "ben.traineddata",
-          "sizeBytes": 855841,
-          "installPath": "tesseract/tessdata/ben.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ben.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-bs": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "bs",
-      "files": [
-        {
-          "name": "bos.traineddata",
-          "sizeBytes": 2498242,
-          "installPath": "tesseract/tessdata/bos.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/bos.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ca": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ca",
-      "files": [
-        {
-          "name": "cat.traineddata",
-          "sizeBytes": 1146012,
-          "installPath": "tesseract/tessdata/cat.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/cat.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-cs": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "cs",
-      "files": [
-        {
-          "name": "ces.traineddata",
-          "sizeBytes": 3795684,
-          "installPath": "tesseract/tessdata/ces.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ces.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-da": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "da",
-      "files": [
-        {
-          "name": "dan.traineddata",
-          "sizeBytes": 2580059,
-          "installPath": "tesseract/tessdata/dan.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/dan.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-de": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "de",
-      "files": [
-        {
-          "name": "deu.traineddata",
-          "sizeBytes": 1525436,
-          "installPath": "tesseract/tessdata/deu.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/deu.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-el": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "el",
-      "files": [
-        {
-          "name": "ell.traineddata",
-          "sizeBytes": 1419514,
-          "installPath": "tesseract/tessdata/ell.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ell.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-en": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "en",
-      "files": [
-        {
-          "name": "eng.traineddata",
-          "sizeBytes": 4113088,
-          "installPath": "tesseract/tessdata/eng.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/eng.traineddata"
-        }
-      ],
-      "dependsOn": []
-    },
-    "ocr-tesseract-es": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "es",
-      "files": [
-        {
-          "name": "spa.traineddata",
-          "sizeBytes": 2294433,
-          "installPath": "tesseract/tessdata/spa.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/spa.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-et": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "et",
-      "files": [
-        {
-          "name": "est.traineddata",
-          "sizeBytes": 4458101,
-          "installPath": "tesseract/tessdata/est.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/est.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-fa": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "fa",
-      "files": [
-        {
-          "name": "fas.traineddata",
-          "sizeBytes": 431500,
-          "installPath": "tesseract/tessdata/fas.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/fas.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-fi": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "fi",
-      "files": [
-        {
-          "name": "fin.traineddata",
-          "sizeBytes": 7865732,
-          "installPath": "tesseract/tessdata/fin.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/fin.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-fr": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "fr",
-      "files": [
-        {
-          "name": "fra.traineddata",
-          "sizeBytes": 1130365,
-          "installPath": "tesseract/tessdata/fra.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/fra.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-gu": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "gu",
-      "files": [
-        {
-          "name": "guj.traineddata",
-          "sizeBytes": 1418394,
-          "installPath": "tesseract/tessdata/guj.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/guj.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-he": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "he",
-      "files": [
-        {
-          "name": "heb.traineddata",
-          "sizeBytes": 961404,
-          "installPath": "tesseract/tessdata/heb.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/heb.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-hi": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "hi",
-      "files": [
-        {
-          "name": "hin.traineddata",
-          "sizeBytes": 1122751,
-          "installPath": "tesseract/tessdata/hin.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/hin.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-hr": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "hr",
-      "files": [
-        {
-          "name": "hrv.traineddata",
-          "sizeBytes": 4103348,
-          "installPath": "tesseract/tessdata/hrv.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/hrv.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-hu": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "hu",
-      "files": [
-        {
-          "name": "hun.traineddata",
-          "sizeBytes": 5296273,
-          "installPath": "tesseract/tessdata/hun.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/hun.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-id": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "id",
-      "files": [
-        {
-          "name": "ind.traineddata",
-          "sizeBytes": 1122661,
-          "installPath": "tesseract/tessdata/ind.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ind.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-is": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "is",
-      "files": [
-        {
-          "name": "isl.traineddata",
-          "sizeBytes": 2278973,
-          "installPath": "tesseract/tessdata/isl.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/isl.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-it": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "it",
-      "files": [
-        {
-          "name": "ita.traineddata",
-          "sizeBytes": 2701314,
-          "installPath": "tesseract/tessdata/ita.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ita.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ja": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ja",
-      "files": [
-        {
-          "name": "jpn.traineddata",
-          "sizeBytes": 14330109,
-          "installPath": "tesseract/tessdata/jpn.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/jpn.traineddata"
-        },
-        {
-          "name": "jpn_vert.traineddata",
-          "sizeBytes": 14330809,
-          "installPath": "tesseract/tessdata/jpn_vert.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/jpn_vert.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-kn": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "kn",
-      "files": [
-        {
-          "name": "kan.traineddata",
-          "sizeBytes": 3608331,
-          "installPath": "tesseract/tessdata/kan.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/kan.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ko": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ko",
-      "files": [
-        {
-          "name": "kor.traineddata",
-          "sizeBytes": 1677415,
-          "installPath": "tesseract/tessdata/kor.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/kor.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-lt": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "lt",
-      "files": [
-        {
-          "name": "lit.traineddata",
-          "sizeBytes": 3154896,
-          "installPath": "tesseract/tessdata/lit.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/lit.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-lv": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "lv",
-      "files": [
-        {
-          "name": "lav.traineddata",
-          "sizeBytes": 2717247,
-          "installPath": "tesseract/tessdata/lav.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/lav.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ml": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ml",
-      "files": [
-        {
-          "name": "mal.traineddata",
-          "sizeBytes": 5275996,
-          "installPath": "tesseract/tessdata/mal.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/mal.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ms": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ms",
-      "files": [
-        {
-          "name": "msa.traineddata",
-          "sizeBytes": 1747801,
-          "installPath": "tesseract/tessdata/msa.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/msa.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-nb": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "nb",
-      "files": [
-        {
-          "name": "nor.traineddata",
-          "sizeBytes": 3610079,
-          "installPath": "tesseract/tessdata/nor.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/nor.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-nl": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "nl",
-      "files": [
-        {
-          "name": "nld.traineddata",
-          "sizeBytes": 6050296,
-          "installPath": "tesseract/tessdata/nld.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/nld.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-pl": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "pl",
-      "files": [
-        {
-          "name": "pol.traineddata",
-          "sizeBytes": 4765518,
-          "installPath": "tesseract/tessdata/pol.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/pol.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-pt": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "pt",
-      "files": [
-        {
-          "name": "por.traineddata",
-          "sizeBytes": 1982756,
-          "installPath": "tesseract/tessdata/por.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/por.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ro": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ro",
-      "files": [
-        {
-          "name": "ron.traineddata",
-          "sizeBytes": 2376323,
-          "installPath": "tesseract/tessdata/ron.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ron.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ru": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ru",
-      "files": [
-        {
-          "name": "rus.traineddata",
-          "sizeBytes": 3861738,
-          "installPath": "tesseract/tessdata/rus.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/rus.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-sk": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "sk",
-      "files": [
-        {
-          "name": "slk.traineddata",
-          "sizeBytes": 4427661,
-          "installPath": "tesseract/tessdata/slk.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/slk.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-sl": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "sl",
-      "files": [
-        {
-          "name": "slv.traineddata",
-          "sizeBytes": 3003829,
-          "installPath": "tesseract/tessdata/slv.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/slv.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-sq": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "sq",
-      "files": [
-        {
-          "name": "sqi.traineddata",
-          "sizeBytes": 1874705,
-          "installPath": "tesseract/tessdata/sqi.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/sqi.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-sr": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "sr",
-      "files": [
-        {
-          "name": "srp.traineddata",
-          "sizeBytes": 2149931,
-          "installPath": "tesseract/tessdata/srp.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/srp.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-sv": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "sv",
-      "files": [
-        {
-          "name": "swe.traineddata",
-          "sizeBytes": 4167034,
-          "installPath": "tesseract/tessdata/swe.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/swe.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-ta": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "ta",
-      "files": [
-        {
-          "name": "tam.traineddata",
-          "sizeBytes": 3237963,
-          "installPath": "tesseract/tessdata/tam.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/tam.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-te": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "te",
-      "files": [
-        {
-          "name": "tel.traineddata",
-          "sizeBytes": 2769654,
-          "installPath": "tesseract/tessdata/tel.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/tel.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-th": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "th",
-      "files": [
-        {
-          "name": "tha.traineddata",
-          "sizeBytes": 1072600,
-          "installPath": "tesseract/tessdata/tha.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/tha.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-tr": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "tr",
-      "files": [
-        {
-          "name": "tur.traineddata",
-          "sizeBytes": 4550554,
-          "installPath": "tesseract/tessdata/tur.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/tur.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-uk": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "uk",
-      "files": [
-        {
-          "name": "ukr.traineddata",
-          "sizeBytes": 3825102,
-          "installPath": "tesseract/tessdata/ukr.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/ukr.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-vi": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "vi",
-      "files": [
-        {
-          "name": "vie.traineddata",
-          "sizeBytes": 531275,
-          "installPath": "tesseract/tessdata/vie.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/vie.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-zh": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "zh",
-      "files": [
-        {
-          "name": "chi_sim.traineddata",
-          "sizeBytes": 2469156,
-          "installPath": "tesseract/tessdata/chi_sim.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/chi_sim.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
-    },
-    "ocr-tesseract-zh_hant": {
-      "feature": "ocr",
-      "engine": "tesseract",
-      "language": "zh_hant",
-      "files": [
-        {
-          "name": "chi_tra.traineddata",
-          "sizeBytes": 2366642,
-          "installPath": "tesseract/tessdata/chi_tra.traineddata",
-          "url": "https://offline-translator.davidv.dev/ocr/1/tesseract/tessdata/chi_tra.traineddata"
-        }
-      ],
-      "dependsOn": [
-        "ocr-tesseract-en"
-      ]
     },
     "support-ja-mucab": {
       "feature": "support",
@@ -10483,7 +9562,7 @@
         },
         {
           "name": "ink.mnn",
-          "sizeBytes": 501480,
+          "sizeBytes": 508456,
           "installPath": "ppocr/PP-OCRv5/ink.mnn",
           "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/ink.mnn",
           "role": "ink",
@@ -10623,6 +9702,62 @@
           "sizeBytes": 1663,
           "installPath": "ppocr/PP-OCRv5/eslav_PP-OCRv5_keys.txt",
           "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/eslav_PP-OCRv5_keys.txt",
+          "role": "keys",
+          "priority": 0
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-latin"
+      ]
+    },
+    "ocr-ppocr-hebrew": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "role": "recognizer",
+      "script": "hebrew",
+      "files": [
+        {
+          "name": "hebrew_rec_int8.mnn",
+          "sizeBytes": 3237360,
+          "installPath": "ppocr/PP-OCRv6/hebrew_rec_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/hebrew_rec_int8.mnn",
+          "role": "recognizer",
+          "priority": 0
+        },
+        {
+          "name": "hebrew_keys.txt",
+          "sizeBytes": 262,
+          "installPath": "ppocr/PP-OCRv6/hebrew_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/hebrew_keys.txt",
+          "role": "keys",
+          "priority": 0
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-latin"
+      ]
+    },
+    "ocr-ppocr-indic": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "role": "recognizer",
+      "script": "indic",
+      "files": [
+        {
+          "name": "indic_r2e10_int8.mnn",
+          "sizeBytes": 3277620,
+          "installPath": "ppocr/PP-OCRv6/indic_r2e10_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/indic_r2e10_int8.mnn",
+          "role": "recognizer",
+          "priority": 0
+        },
+        {
+          "name": "indic_keys.txt",
+          "sizeBytes": 1513,
+          "installPath": "ppocr/PP-OCRv6/indic_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/indic_keys.txt",
           "role": "keys",
           "priority": 0
         }

@@ -48,10 +48,6 @@ class FilePathManager(
 
   fun getDataDir(): File = File(baseDir, "bin")
 
-  fun getTesseractDataDir(): File = File(baseDir, "tesseract/tessdata")
-
-  fun getTesseractDir(): File = File(baseDir, "tesseract")
-
   fun getDictionariesDir(): File = File(baseDir, "dictionaries")
 
   fun getAdblockDir(): File = File(baseDir, "adblock")

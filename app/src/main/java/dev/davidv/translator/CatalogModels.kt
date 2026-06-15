@@ -236,10 +236,8 @@ class LanguageCatalog private constructor(
                 code = row.language.code,
                 displayName = row.language.displayName,
                 shortDisplayName = row.language.shortDisplayName,
-                tessName = row.language.tessName,
                 script = row.language.script,
                 dictionaryCode = row.language.dictionaryCode,
-                tessdataSizeBytes = row.language.tessdataSizeBytes.toLong(),
               ),
             availability =
               LangAvailability(
@@ -413,7 +411,6 @@ class LanguageCatalog private constructor(
     minConfidence: Int,
     readingOrder: ReadingOrder?,
     backgroundMode: BackgroundMode,
-    preferredOcrEngine: PreferredOcrEngine,
   ): uniffi.translator.PreparedImageOverlay =
     handle.translateImagePlan(
       rgbaBytes(bitmap),
@@ -425,7 +422,6 @@ class LanguageCatalog private constructor(
       minConfidence.toUInt(),
       readingOrder,
       backgroundMode,
-      preferredOcrEngine,
     )
 
   @Throws(CatalogException::class)

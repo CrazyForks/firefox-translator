@@ -1257,15 +1257,6 @@ class DownloadService : Service() {
         }
       }
     }
-
-    val tessDir = filePathManager.getTesseractDataDir()
-    if (tessDir.exists()) {
-      tessDir.listFiles()?.filter { it.name.endsWith(".tmp") }?.forEach { tempFile ->
-        if (tempFile.delete()) {
-          Log.d("DownloadService", "Cleaned up temp file: ${tempFile.name}")
-        }
-      }
-    }
   }
 
   inner class DownloadBinder : Binder() {

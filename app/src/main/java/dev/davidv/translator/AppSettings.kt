@@ -33,7 +33,6 @@ data class AppSettings(
   val defaultSourceLanguageCode: String? = null,
   val catalogIndexUrl: String = Constants.DEFAULT_CATALOG_INDEX_URL,
   val backgroundMode: BackgroundMode = BackgroundMode.AUTO_DETECT,
-  val preferredOcrEngine: PreferredOcrEngine = PreferredOcrEngine.PADDLE,
   val minConfidence: Int = 75,
   val maxImageSize: Int = 1400,
   val disableCLD: Boolean = false,

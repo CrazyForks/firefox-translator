@@ -36,6 +36,10 @@ PPOCR_V6_FILENAMES = {
     "PP-OCRv6_tiny_keys.txt",
     "PP-OCRv6_small_rec_int8.mnn",
     "PP-OCRv6_small_keys.txt",
+    "hebrew_rec_int8.mnn",
+    "hebrew_keys.txt",
+    "indic_r2e10_int8.mnn",
+    "indic_keys.txt",
 }
 
 # v6 recognizer upgrades per script slug: (model, keys). The unified v6
@@ -44,6 +48,15 @@ PPOCR_V6_FILENAMES = {
 PPOCR_V6_RECOGNIZER_FILENAMES = {
     "latin": ("PP-OCRv6_tiny_rec_int8.mnn", "PP-OCRv6_tiny_keys.txt"),
     "cj": ("PP-OCRv6_small_rec_int8.mnn", "PP-OCRv6_small_keys.txt"),
+}
+
+# Scripts whose only recognizer is a v6 fine-tune (no v5 base): (model, keys).
+# These cover languages PaddleOCR never shipped a recognizer for, which were
+# tesseract-only before. `indic` is one merged model over Bengali, Gujarati,
+# Kannada and Malayalam.
+PPOCR_V6_NATIVE_RECOGNIZER_FILENAMES = {
+    "hebrew": ("hebrew_rec_int8.mnn", "hebrew_keys.txt"),
+    "indic": ("indic_r2e10_int8.mnn", "indic_keys.txt"),
 }
 # Per-strip ink-matte model (soft alpha coverage), shipped with the detector since it
 # is script-agnostic and runs on every detected strip. Optional at runtime — the engine
@@ -76,15 +89,18 @@ PPOCR_RECOGNIZER_FILENAMES = {
 # The fallback slugs (`latin`, `cyrillic`) cover the languages that don't have
 # a script-or-language-specific model.
 #
-# Languages whose script is not covered by PPOCR at all (Bengali,
-# Gujarati, Hebrew, Kannada, Malayalam) are absent here and stay
-# tesseract-only.
+# `hebrew` and `indic` are v6 fine-tunes covering the scripts PaddleOCR never
+# shipped (Hebrew, Bengali, Gujarati, Kannada, Malayalam) — these were tesseract-
+# only before. `indic` is one merged recognizer over the four non-Devanagari
+# Indic scripts; Devanagari (hi) keeps its dedicated v5 recognizer.
 PPOCR_SCRIPT_TO_LANGUAGES = {
     "arabic": ["ar", "fa"],
     "cyrillic": ["bg", "sr"],          # non-East-Slavic Cyrillic only
     "devanagari": ["hi"],
     "el": ["el"],
     "eslav": ["be", "ru", "uk"],       # specialized East Slavic Cyrillic
+    "hebrew": ["he"],
+    "indic": ["bn", "gu", "kn", "ml"], # merged Bengali/Gujarati/Kannada/Malayalam
     "korean": ["ko"],
     "latin": [                         # all Latin-script langs, including en
         "az", "bs", "ca", "cs", "da", "de", "es", "et", "fi", "fr",
@@ -160,8 +176,6 @@ def add_ppocr_packs(catalog: dict) -> None:
     languages = catalog["languages"]
     latin_pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, "latin")
     for script, langs in PPOCR_SCRIPT_TO_LANGUAGES.items():
-        rec_filename = PPOCR_RECOGNIZER_FILENAMES[script]
-        keys_filename = _keys_filename(script)
         pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, script)
         depends_on = [PPOCR_DETECTOR_PACK_ID]
         if script != "latin":
@@ -169,14 +183,23 @@ def add_ppocr_packs(catalog: dict) -> None:
         # Recognizer and keys alternates must stay paired: the engine picks
         # the keys file whose priority matches the chosen recognizer's, so a
         # half-downloaded upgrade falls back to the older complete pair.
-        files = [
-            _make_file(rec_filename, "recognizer"),
-            _make_file(keys_filename, "keys"),
-        ]
-        if script in PPOCR_V6_RECOGNIZER_FILENAMES:
-            v6_rec, v6_keys = PPOCR_V6_RECOGNIZER_FILENAMES[script]
-            files.append(_make_file(v6_rec, "recognizer", priority=1))
-            files.append(_make_file(v6_keys, "keys", priority=1))
+        if script in PPOCR_V6_NATIVE_RECOGNIZER_FILENAMES:
+            rec_filename, keys_filename = PPOCR_V6_NATIVE_RECOGNIZER_FILENAMES[script]
+            files = [
+                _make_file(rec_filename, "recognizer"),
+                _make_file(keys_filename, "keys"),
+            ]
+        else:
+            rec_filename = PPOCR_RECOGNIZER_FILENAMES[script]
+            keys_filename = _keys_filename(script)
+            files = [
+                _make_file(rec_filename, "recognizer"),
+                _make_file(keys_filename, "keys"),
+            ]
+            if script in PPOCR_V6_RECOGNIZER_FILENAMES:
+                v6_rec, v6_keys = PPOCR_V6_RECOGNIZER_FILENAMES[script]
+                files.append(_make_file(v6_rec, "recognizer", priority=1))
+                files.append(_make_file(v6_keys, "keys", priority=1))
         catalog["packs"][pack_id] = {
             "feature": "ocr",
             "engine": PPOCR_ENGINE,

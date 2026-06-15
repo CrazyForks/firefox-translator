@@ -66,7 +66,6 @@ def add_adblock_packs(catalog: dict) -> None:
 
 
 MODELS_MANIFEST_URL = "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json"
-TESSERACT_BASE_URL = "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/refs/heads/main"
 DICTIONARY_BASE_URL = "https://offline-translator.davidv.dev/dictionaries"
 DICT_VERSION = 1
 
@@ -126,61 +125,6 @@ LANGUAGE_NAMES = {
     "zh_hant": "Chinese (繁體)",
 }
 
-TESSERACT_LANGUAGE_MAPPINGS = {
-    "ar": "ara",
-    "az": "aze",
-    "be": "bel",
-    "bg": "bul",
-    "bn": "ben",
-    "bs": "bos",
-    "ca": "cat",
-    "cs": "ces",
-    "da": "dan",
-    "de": "deu",
-    "el": "ell",
-    "en": "eng",
-    "es": "spa",
-    "et": "est",
-    "fa": "fas",
-    "fi": "fin",
-    "fr": "fra",
-    "gu": "guj",
-    "he": "heb",
-    "hi": "hin",
-    "hr": "hrv",
-    "hu": "hun",
-    "id": "ind",
-    "is": "isl",
-    "it": "ita",
-    "ja": "jpn",
-    "kn": "kan",
-    "ko": "kor",
-    "lt": "lit",
-    "lv": "lav",
-    "ml": "mal",
-    "ms": "msa",
-    "nb": "nor",
-    "nl": "nld",
-    "nn": "nor",
-    "no": "nor",
-    "pl": "pol",
-    "pt": "por",
-    "ro": "ron",
-    "ru": "rus",
-    "sk": "slk",
-    "sl": "slv",
-    "sq": "sqi",
-    "sr": "srp",
-    "sv": "swe",
-    "ta": "tam",
-    "te": "tel",
-    "th": "tha",
-    "tr": "tur",
-    "uk": "ukr",
-    "vi": "vie",
-    "zh": "chi_sim",
-    "zh_hant": "chi_tra",
-}
 
 SHORT_DISPLAY_NAMES = {
     "zh": "简体",
@@ -362,7 +306,6 @@ def format_direction(entry: dict) -> dict:
 def build_language_index(
     *,
     models_manifest: dict,
-    tesseract_base_url: str = TESSERACT_BASE_URL,
     dictionary_base_url: str = DICTIONARY_BASE_URL,
     dictionary_version: int = DICT_VERSION,
 ) -> dict:
@@ -371,11 +314,7 @@ def build_language_index(
 
     languages = []
     for lang_code in sorted(all_languages):
-        if lang_code not in LANGUAGE_NAMES:
-            continue
-
-        tess_name = TESSERACT_LANGUAGE_MAPPINGS.get(lang_code)
-        if tess_name is None:
+        if lang_code not in LANGUAGE_NAMES or lang_code not in LANGUAGE_SCRIPTS:
             continue
 
         languages.append(
@@ -383,10 +322,8 @@ def build_language_index(
                 "code": lang_code,
                 "name": LANGUAGE_NAMES[lang_code],
                 "shortName": SHORT_DISPLAY_NAMES.get(lang_code, LANGUAGE_NAMES[lang_code]),
-                "tessName": tess_name,
                 "script": LANGUAGE_SCRIPTS[lang_code],
                 "dictionaryCode": DICTIONARY_CODE_OVERRIDES.get(lang_code, lang_code),
-                "tessdataSizeBytes": 0,
                 "toEnglish": format_direction(to_english[lang_code]) if lang_code in to_english else None,
                 "fromEnglish": format_direction(from_english[lang_code]) if lang_code in from_english else None,
                 "extraFiles": EXTRA_FILES.get(lang_code, []),
@@ -397,7 +334,6 @@ def build_language_index(
         "version": 1,
         "updatedAt": int(time.time()),
         "translationModelsBaseUrl": models_manifest["baseUrl"].rstrip("/"),
-        "tesseractModelsBaseUrl": tesseract_base_url.rstrip("/"),
         "dictionaryBaseUrl": dictionary_base_url.rstrip("/"),
         "dictionaryVersion": int(dictionary_version),
         "languages": languages,
