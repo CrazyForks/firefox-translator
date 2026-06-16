@@ -40,6 +40,7 @@ PPOCR_V6_FILENAMES = {
     "hebrew_keys.txt",
     "indic_r2e10_int8.mnn",
     "indic_keys.txt",
+    "ink_bold_int8.mnn",
 }
 
 # v6 recognizer upgrades per script slug: (model, keys). The unified v6
@@ -58,10 +59,10 @@ PPOCR_V6_NATIVE_RECOGNIZER_FILENAMES = {
     "hebrew": ("hebrew_rec_int8.mnn", "hebrew_keys.txt"),
     "indic": ("indic_r2e10_int8.mnn", "indic_keys.txt"),
 }
-# Per-strip ink-matte model (soft alpha coverage), shipped with the detector since it
-# is script-agnostic and runs on every detected strip. Optional at runtime — the engine
-# loads it only if present.
-PPOCR_INK_FILENAME = "ink.mnn"
+# Per-strip ink model, shipped with the detector since it is script-agnostic and runs on
+# every detected strip. Two channels: ch0 soft-alpha matte (color matting), ch1 per-pixel
+# bold (typography weight). Optional at runtime — the engine loads it only if present.
+PPOCR_INK_FILENAME = "ink_bold_int8.mnn"
 PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x1_0_fp32.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x0_25_wq8.mnn"
