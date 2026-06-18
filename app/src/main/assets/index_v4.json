@@ -1,14 +1,14 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1781627210,
+  "generatedAt": 1781821445,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1781627210,
+    "languageIndexUpdatedAt": 1781821445,
     "dictionaryIndexVersion": 1,
-    "dictionaryIndexUpdatedAt": 1774864382,
+    "dictionaryIndexUpdatedAt": 1781816467,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
-    "gcsModelsGenerated": "2026-03-29T00:37:49Z",
+    "gcsModelsGenerated": "2026-06-18T01:48:57Z",
     "piperVoiceCount": 158
   },
   "languages": {
@@ -369,9 +369,11 @@
           "translate-en-el",
           "translate-en-es",
           "translate-en-et",
+          "translate-en-eu",
           "translate-en-fa",
           "translate-en-fi",
           "translate-en-fr",
+          "translate-en-gl",
           "translate-en-gu",
           "translate-en-he",
           "translate-en-hi",
@@ -409,9 +411,11 @@
           "translate-en-zh_hant",
           "translate-es-en",
           "translate-et-en",
+          "translate-eu-en",
           "translate-fa-en",
           "translate-fi-en",
           "translate-fr-en",
+          "translate-gl-en",
           "translate-gu-en",
           "translate-he-en",
           "translate-hi-en",
@@ -426,6 +430,7 @@
           "translate-lt-en",
           "translate-lv-en",
           "translate-ml-en",
+          "translate-mr-en",
           "translate-ms-en",
           "translate-nb-en",
           "translate-nl-en",
@@ -445,6 +450,7 @@
           "translate-th-en",
           "translate-tr-en",
           "translate-uk-en",
+          "translate-ur-en",
           "translate-vi-en",
           "translate-zh-en",
           "translate-zh_hant-en"
@@ -554,6 +560,34 @@
         "sampleText": "Vikerkaar on meteoroloogiline nähtus, mis tekib valguse peegeldumise, murdumise ja hajumise tõttu veepiiskades, mille tulemusena ilmub taevasse valgusspekter."
       }
     },
+    "eu": {
+      "meta": {
+        "code": "eu",
+        "name": "Basque",
+        "shortName": "Basque",
+        "script": "Latn"
+      },
+      "assets": {
+        "translate": [
+          "translate-en-eu",
+          "translate-eu-en"
+        ],
+        "dictionary": "dict-eu"
+      },
+      "tts": {
+        "defaultRegion": "ES",
+        "regions": {
+          "ES": {
+            "displayName": "Spain",
+            "voices": [
+              "tts-piper-eu-es-antton-medium",
+              "tts-piper-eu-es-maider-medium"
+            ]
+          }
+        },
+        "sampleText": "Ostadarra fenomeno meteorologiko bat da, argiaren islapenak, errefrakzioak eta sakabanaketak ur tantetan eragiten dutena, eta horren ondorioz argi-espektro bat agertzen da zeruan."
+      }
+    },
     "fa": {
       "meta": {
         "code": "fa",
@@ -649,6 +683,37 @@
           }
         },
         "sampleText": "Un arc-en-ciel est un phénomène météorologique causé par la réflexion, la réfraction et la dispersion de la lumière dans les gouttelettes d'eau, ce qui fait apparaître un spectre lumineux dans le ciel."
+      }
+    },
+    "gl": {
+      "meta": {
+        "code": "gl",
+        "name": "Galician",
+        "shortName": "Galician",
+        "script": "Latn"
+      },
+      "assets": {
+        "translate": [
+          "translate-en-gl",
+          "translate-gl-en"
+        ],
+        "dictionary": "dict-gl"
+      },
+      "tts": {
+        "defaultRegion": "ES",
+        "regions": {
+          "ES": {
+            "displayName": "Spain",
+            "voices": [
+              "tts-cotovia_vits-gl-es-sabela-cotovia-vits",
+              "tts-cotovia_vits-gl-es-brais-cotovia-vits",
+              "tts-cotovia_vits-gl-es-iago-cotovia-vits",
+              "tts-cotovia_vits-gl-es-icia-cotovia-vits",
+              "tts-cotovia_vits-gl-es-paulo-cotovia-vits"
+            ]
+          }
+        },
+        "sampleText": "O arco da vella é un fenómeno meteorolóxico causado pola reflexión, refracción e dispersión da luz nas pingas de auga, o que produce un espectro de luz que aparece no ceo."
       }
     },
     "gu": {
@@ -1084,6 +1149,32 @@
           }
         },
         "sampleText": "മഴവില്ല് ഒരു കാലാവസ്ഥാ പ്രതിഭാസമാണ്; ജലത്തുള്ളികളിലെ പ്രകാശത്തിന്റെ പ്രതിഫലനം, പ്രതിസരണം, ചിതറൽ എന്നിവ മൂലം ആകാശത്തിൽ പ്രകാശത്തിന്റെ വർണ്ണപടലം പ്രത്യക്ഷപ്പെടുന്നു."
+      }
+    },
+    "mr": {
+      "meta": {
+        "code": "mr",
+        "name": "Marathi",
+        "shortName": "Marathi",
+        "script": "Deva"
+      },
+      "assets": {
+        "translate": [
+          "translate-mr-en"
+        ],
+        "dictionary": "dict-mr"
+      },
+      "tts": {
+        "defaultRegion": "IN",
+        "regions": {
+          "IN": {
+            "displayName": "India",
+            "voices": [
+              "tts-mms-mr-in-standard-mms"
+            ]
+          }
+        },
+        "sampleText": "इंद्रधनुष्य ही एक हवामानशास्त्रीय घटना आहे, जी पाण्याच्या थेंबांमध्ये प्रकाशाचे परावर्तन, अपवर्तन आणि विकिरण यांमुळे निर्माण होते, ज्यामुळे आकाशात प्रकाशाचा वर्णपट दिसतो."
       }
     },
     "ms": {
@@ -1662,6 +1753,32 @@
         "sampleText": "Веселка — це метеорологічне явище, спричинене відбиттям, заломленням і розсіюванням світла у краплях води, внаслідок чого в небі з'являється спектр світла."
       }
     },
+    "ur": {
+      "meta": {
+        "code": "ur",
+        "name": "Urdu",
+        "shortName": "Urdu",
+        "script": "Arab"
+      },
+      "assets": {
+        "translate": [
+          "translate-ur-en"
+        ],
+        "dictionary": "dict-ur"
+      },
+      "tts": {
+        "defaultRegion": "PK",
+        "regions": {
+          "PK": {
+            "displayName": "Pakistan",
+            "voices": [
+              "tts-piper-ur-pk-fasih-medium"
+            ]
+          }
+        },
+        "sampleText": "قوسِ قزح ایک موسمیاتی مظہر ہے جو پانی کے قطروں میں روشنی کے انعکاس، انعطاف اور انتشار کی وجہ سے پیدا ہوتا ہے، جس کے نتیجے میں آسمان پر روشنی کا طیف نمودار ہوتا ہے۔"
+      }
+    },
     "vi": {
       "meta": {
         "code": "vi",
@@ -2036,6 +2153,27 @@
         "wordCount": 11645
       }
     },
+    "dict-eu": {
+      "feature": "dictionary",
+      "dictionaryCode": "eu",
+      "languages": [
+        "eu"
+      ],
+      "files": [
+        {
+          "name": "eu.dict",
+          "sizeBytes": 216917,
+          "installPath": "dictionaries/eu.dict",
+          "url": "https://offline-translator.davidv.dev/dictionaries/1/eu.dict"
+        }
+      ],
+      "dependsOn": [],
+      "metadata": {
+        "date": 1781815948,
+        "type": "english",
+        "wordCount": 9599
+      }
+    },
     "dict-fa": {
       "feature": "dictionary",
       "dictionaryCode": "fa",
@@ -2097,6 +2235,27 @@
         "date": 1758204389,
         "type": "bilingual",
         "wordCount": 1891044
+      }
+    },
+    "dict-gl": {
+      "feature": "dictionary",
+      "dictionaryCode": "gl",
+      "languages": [
+        "gl"
+      ],
+      "files": [
+        {
+          "name": "gl.dict",
+          "sizeBytes": 1290562,
+          "installPath": "dictionaries/gl.dict",
+          "url": "https://offline-translator.davidv.dev/dictionaries/1/gl.dict"
+        }
+      ],
+      "dependsOn": [],
+      "metadata": {
+        "date": 1781815948,
+        "type": "english",
+        "wordCount": 198673
       }
     },
     "dict-gu": {
@@ -2393,6 +2552,27 @@
         "date": 1758204389,
         "type": "english",
         "wordCount": 10022
+      }
+    },
+    "dict-mr": {
+      "feature": "dictionary",
+      "dictionaryCode": "mr",
+      "languages": [
+        "mr"
+      ],
+      "files": [
+        {
+          "name": "mr.dict",
+          "sizeBytes": 117924,
+          "installPath": "dictionaries/mr.dict",
+          "url": "https://offline-translator.davidv.dev/dictionaries/1/mr.dict"
+        }
+      ],
+      "dependsOn": [],
+      "metadata": {
+        "date": 1781815948,
+        "type": "english",
+        "wordCount": 4164
       }
     },
     "dict-ms": {
@@ -2771,6 +2951,27 @@
         "date": 1758204389,
         "type": "english",
         "wordCount": 47095
+      }
+    },
+    "dict-ur": {
+      "feature": "dictionary",
+      "dictionaryCode": "ur",
+      "languages": [
+        "ur"
+      ],
+      "files": [
+        {
+          "name": "ur.dict",
+          "sizeBytes": 225606,
+          "installPath": "dictionaries/ur.dict",
+          "url": "https://offline-translator.davidv.dev/dictionaries/1/ur.dict"
+        }
+      ],
+      "dependsOn": [],
+      "metadata": {
+        "date": 1781815948,
+        "type": "english",
+        "wordCount": 7069
       }
     },
     "dict-vi": {
@@ -3428,6 +3629,32 @@
       ],
       "dependsOn": []
     },
+    "translate-en-eu": {
+      "feature": "translation",
+      "from": "en",
+      "to": "eu",
+      "files": [
+        {
+          "name": "model.eneu.intgemm.alphas.bin",
+          "sizeBytes": 23068167,
+          "installPath": "bin/model.eneu.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-eu/eneu-baseline_IXuA7hOrQPCVZJOp6LIYVw/exported/model.eneu.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.eneu.spm",
+          "sizeBytes": 409774,
+          "installPath": "bin/vocab.eneu.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-eu/eneu-baseline_IXuA7hOrQPCVZJOp6LIYVw/exported/vocab.eneu.spm.gz"
+        },
+        {
+          "name": "lex.50.50.eneu.s2t.bin",
+          "sizeBytes": 1638880,
+          "installPath": "bin/lex.50.50.eneu.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-eu/eneu-baseline_IXuA7hOrQPCVZJOp6LIYVw/exported/lex.50.50.eneu.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
     "translate-en-fa": {
       "feature": "translation",
       "from": "en",
@@ -3502,6 +3729,32 @@
           "sizeBytes": 2297334,
           "installPath": "bin/lex.50.50.enfr.s2t.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/en-fr/retrain_hr_NLIxDbE1TBGyOTI-zwZagw/exported/lex.50.50.enfr.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
+    "translate-en-gl": {
+      "feature": "translation",
+      "from": "en",
+      "to": "gl",
+      "files": [
+        {
+          "name": "model.engl.intgemm.alphas.bin",
+          "sizeBytes": 23269843,
+          "installPath": "bin/model.engl.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-gl/engl-scielo_R-ohtLgdRzaBOXRG0v66NA/exported/model.engl.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.engl.spm",
+          "sizeBytes": 410683,
+          "installPath": "bin/vocab.engl.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-gl/engl-scielo_R-ohtLgdRzaBOXRG0v66NA/exported/vocab.engl.spm.gz"
+        },
+        {
+          "name": "lex.50.50.engl.s2t.bin",
+          "sizeBytes": 1581710,
+          "installPath": "bin/lex.50.50.engl.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-gl/engl-scielo_R-ohtLgdRzaBOXRG0v66NA/exported/lex.50.50.engl.s2t.bin.gz"
         }
       ],
       "dependsOn": []
@@ -4492,6 +4745,32 @@
       ],
       "dependsOn": []
     },
+    "translate-eu-en": {
+      "feature": "translation",
+      "from": "eu",
+      "to": "en",
+      "files": [
+        {
+          "name": "model.euen.intgemm.alphas.bin",
+          "sizeBytes": 22759889,
+          "installPath": "bin/model.euen.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/eu-en/euen-topk10_ebPYPysJRlmwmEIVWuv-YQ/exported/model.euen.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.euen.spm",
+          "sizeBytes": 409462,
+          "installPath": "bin/vocab.euen.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/eu-en/euen-topk10_ebPYPysJRlmwmEIVWuv-YQ/exported/vocab.euen.spm.gz"
+        },
+        {
+          "name": "lex.50.50.euen.s2t.bin",
+          "sizeBytes": 2059844,
+          "installPath": "bin/lex.50.50.euen.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/eu-en/euen-topk10_ebPYPysJRlmwmEIVWuv-YQ/exported/lex.50.50.euen.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
     "translate-fa-en": {
       "feature": "translation",
       "from": "fa",
@@ -4566,6 +4845,32 @@
           "sizeBytes": 2649934,
           "installPath": "bin/lex.50.50.fren.s2t.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/fr-en/retrain_hr_EFgIftH_RrCyzl5gjemVNg/exported/lex.50.50.fren.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
+    "translate-gl-en": {
+      "feature": "translation",
+      "from": "gl",
+      "to": "en",
+      "files": [
+        {
+          "name": "model.glen.intgemm.alphas.bin",
+          "sizeBytes": 23501364,
+          "installPath": "bin/model.glen.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/gl-en/gl-topk10_JaJ_E6cmSMSMhMEs8zHqzw/exported/model.glen.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.glen.spm",
+          "sizeBytes": 409308,
+          "installPath": "bin/vocab.glen.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/gl-en/gl-topk10_JaJ_E6cmSMSMhMEs8zHqzw/exported/vocab.glen.spm.gz"
+        },
+        {
+          "name": "lex.50.50.glen.s2t.bin",
+          "sizeBytes": 2215790,
+          "installPath": "bin/lex.50.50.glen.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/gl-en/gl-topk10_JaJ_E6cmSMSMhMEs8zHqzw/exported/lex.50.50.glen.s2t.bin.gz"
         }
       ],
       "dependsOn": []
@@ -4930,6 +5235,32 @@
           "sizeBytes": 2296381,
           "installPath": "bin/lex.50.50.mlen.s2t.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/ml-en/h1-2025_Ahkzk6jNTAut7rz6laKkGQ/exported/lex.50.50.mlen.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
+    "translate-mr-en": {
+      "feature": "translation",
+      "from": "mr",
+      "to": "en",
+      "files": [
+        {
+          "name": "model.mren.intgemm.alphas.bin",
+          "sizeBytes": 23528866,
+          "installPath": "bin/model.mren.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/mr-en/next26_XkZJEQltRmKRcBirmiL30g/exported/model.mren.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.mren.spm",
+          "sizeBytes": 442209,
+          "installPath": "bin/vocab.mren.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/mr-en/next26_XkZJEQltRmKRcBirmiL30g/exported/vocab.mren.spm.gz"
+        },
+        {
+          "name": "lex.50.50.mren.s2t.bin",
+          "sizeBytes": 2469059,
+          "installPath": "bin/lex.50.50.mren.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/mr-en/next26_XkZJEQltRmKRcBirmiL30g/exported/lex.50.50.mren.s2t.bin.gz"
         }
       ],
       "dependsOn": []
@@ -5305,21 +5636,21 @@
       "files": [
         {
           "name": "model.taen.intgemm.alphas.bin",
-          "sizeBytes": 23673200,
+          "sizeBytes": 23526938,
           "installPath": "bin/model.taen.intgemm.alphas.bin",
-          "url": "https://offline-translator.davidv.dev/translation/1/models/ta-en/h1-2025_SCQIuddKRXKyysmEsTGv-A/exported/model.taen.intgemm.alphas.bin.gz"
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ta-en/next26_dwRqBIcMSDG7drW2_xDIMA/exported/model.taen.intgemm.alphas.bin.gz"
         },
         {
           "name": "vocab.taen.spm",
-          "sizeBytes": 446919,
+          "sizeBytes": 451486,
           "installPath": "bin/vocab.taen.spm",
-          "url": "https://offline-translator.davidv.dev/translation/1/models/ta-en/h1-2025_SCQIuddKRXKyysmEsTGv-A/exported/vocab.taen.spm.gz"
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ta-en/next26_dwRqBIcMSDG7drW2_xDIMA/exported/vocab.taen.spm.gz"
         },
         {
           "name": "lex.50.50.taen.s2t.bin",
-          "sizeBytes": 2453155,
+          "sizeBytes": 2410364,
           "installPath": "bin/lex.50.50.taen.s2t.bin",
-          "url": "https://offline-translator.davidv.dev/translation/1/models/ta-en/h1-2025_SCQIuddKRXKyysmEsTGv-A/exported/lex.50.50.taen.s2t.bin.gz"
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ta-en/next26_dwRqBIcMSDG7drW2_xDIMA/exported/lex.50.50.taen.s2t.bin.gz"
         }
       ],
       "dependsOn": []
@@ -5424,6 +5755,32 @@
           "sizeBytes": 1790588,
           "installPath": "bin/lex.50.50.uken.s2t.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/uk-en/spring-2024_WEPBsc-zQWSDn34b5KFscw/exported/lex.50.50.uken.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
+    "translate-ur-en": {
+      "feature": "translation",
+      "from": "ur",
+      "to": "en",
+      "files": [
+        {
+          "name": "model.uren.intgemm.alphas.bin",
+          "sizeBytes": 23064952,
+          "installPath": "bin/model.uren.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ur-en/next26-lowerbc_YQbMSoalT82NnQU9H1-G-w/exported/model.uren.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.uren.spm",
+          "sizeBytes": 417745,
+          "installPath": "bin/vocab.uren.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ur-en/next26-lowerbc_YQbMSoalT82NnQU9H1-G-w/exported/vocab.uren.spm.gz"
+        },
+        {
+          "name": "lex.50.50.uren.s2t.bin",
+          "sizeBytes": 1922245,
+          "installPath": "bin/lex.50.50.uren.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ur-en/next26-lowerbc_YQbMSoalT82NnQU9H1-G-w/exported/lex.50.50.uren.s2t.bin.gz"
         }
       ],
       "dependsOn": []
@@ -5674,6 +6031,21 @@
           "sizeBytes": 49285,
           "installPath": "bin/espeak-ng-data/es_dict",
           "url": "https://offline-translator.davidv.dev/tts/1/espeak-ng-data/es_dict"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-core-v1"
+      ]
+    },
+    "tts-espeak-dict-eu": {
+      "feature": "support",
+      "kind": "tts-espeak-dict",
+      "files": [
+        {
+          "name": "eu_dict",
+          "sizeBytes": 48841,
+          "installPath": "bin/espeak-ng-data/eu_dict",
+          "url": "https://offline-translator.davidv.dev/tts/1/espeak-ng-data/eu_dict"
         }
       ],
       "dependsOn": [
@@ -6070,6 +6442,21 @@
         "tts-espeak-core-v1"
       ]
     },
+    "tts-espeak-dict-ur": {
+      "feature": "support",
+      "kind": "tts-espeak-dict",
+      "files": [
+        {
+          "name": "ur_dict",
+          "sizeBytes": 133556,
+          "installPath": "bin/espeak-ng-data/ur_dict",
+          "url": "https://offline-translator.davidv.dev/tts/1/espeak-ng-data/ur_dict"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-core-v1"
+      ]
+    },
     "tts-espeak-dict-vi": {
       "feature": "support",
       "kind": "tts-espeak-dict",
@@ -6133,6 +6520,19 @@
       "dependsOn": [
         "tts-kokoro-voices-v1.0"
       ]
+    },
+    "tts-cotovia-lexicon-gl": {
+      "feature": "support",
+      "kind": "tts-cotovia-lexicon",
+      "files": [
+        {
+          "name": "gl_lexicon.txt.zst",
+          "sizeBytes": 995200,
+          "installPath": "bin/cotovia_vits/gl/gl_lexicon.txt.zst",
+          "url": "https://offline-translator.davidv.dev/tts/1/cotovia_vits/gl/gl_lexicon.txt.zst"
+        }
+      ],
+      "dependsOn": []
     },
     "tts-piper-ar-jo-kareem-medium": {
       "feature": "tts",
@@ -7131,6 +7531,64 @@
       "dependsOn": [],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/et/cv_medium.opus"
     },
+    "tts-piper-eu-es-antton-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "language": "eu",
+      "locale": "eu_ES",
+      "region": "ES",
+      "voice": "antton",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "eu_ES-antton-medium.onnx",
+          "sizeBytes": 63531379,
+          "installPath": "bin/piper/eu/eu_ES/antton/medium/eu_ES-antton-medium.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/eu/eu_ES/antton/medium/eu_ES-antton-medium.onnx"
+        },
+        {
+          "name": "eu_ES-antton-medium.onnx.json",
+          "sizeBytes": 5076,
+          "installPath": "bin/piper/eu/eu_ES/antton/medium/eu_ES-antton-medium.onnx.json",
+          "url": "https://offline-translator.davidv.dev/tts/1/eu/eu_ES/antton/medium/eu_ES-antton-medium.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-eu"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/eu/antton_medium.opus"
+    },
+    "tts-piper-eu-es-maider-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "language": "eu",
+      "locale": "eu_ES",
+      "region": "ES",
+      "voice": "maider",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "eu_ES-maider-medium.onnx",
+          "sizeBytes": 63531379,
+          "installPath": "bin/piper/eu/eu_ES/maider/medium/eu_ES-maider-medium.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/eu/eu_ES/maider/medium/eu_ES-maider-medium.onnx"
+        },
+        {
+          "name": "eu_ES-maider-medium.onnx.json",
+          "sizeBytes": 5076,
+          "installPath": "bin/piper/eu/eu_ES/maider/medium/eu_ES-maider-medium.onnx.json",
+          "url": "https://offline-translator.davidv.dev/tts/1/eu/eu_ES/maider/medium/eu_ES-maider-medium.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-eu"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/eu/maider_medium.opus"
+    },
     "tts-piper-fa-ir-gyro-medium": {
       "feature": "tts",
       "engine": "piper",
@@ -7426,6 +7884,121 @@
         "tts-espeak-dict-fr"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/fr/mls_medium.opus"
+    },
+    "tts-cotovia_vits-gl-es-sabela-cotovia-vits": {
+      "feature": "tts",
+      "engine": "cotovia_vits",
+      "language": "gl",
+      "locale": "gl_ES",
+      "region": "ES",
+      "voice": "sabela",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "vits.onnx",
+          "sizeBytes": 60333923,
+          "installPath": "bin/cotovia_vits/gl/gl_ES/sabela/medium/vits.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/gl/gl_ES/sabela/medium/vits.onnx"
+        }
+      ],
+      "dependsOn": [
+        "tts-cotovia-lexicon-gl"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/gl/sabela_medium.opus"
+    },
+    "tts-cotovia_vits-gl-es-brais-cotovia-vits": {
+      "feature": "tts",
+      "engine": "cotovia_vits",
+      "language": "gl",
+      "locale": "gl_ES",
+      "region": "ES",
+      "voice": "brais",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "vits.onnx",
+          "sizeBytes": 60333923,
+          "installPath": "bin/cotovia_vits/gl/gl_ES/brais/medium/vits.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/gl/gl_ES/brais/medium/vits.onnx"
+        }
+      ],
+      "dependsOn": [
+        "tts-cotovia-lexicon-gl"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/gl/brais_medium.opus"
+    },
+    "tts-cotovia_vits-gl-es-iago-cotovia-vits": {
+      "feature": "tts",
+      "engine": "cotovia_vits",
+      "language": "gl",
+      "locale": "gl_ES",
+      "region": "ES",
+      "voice": "iago",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "vits.onnx",
+          "sizeBytes": 60333923,
+          "installPath": "bin/cotovia_vits/gl/gl_ES/iago/medium/vits.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/gl/gl_ES/iago/medium/vits.onnx"
+        }
+      ],
+      "dependsOn": [
+        "tts-cotovia-lexicon-gl"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/gl/iago_medium.opus"
+    },
+    "tts-cotovia_vits-gl-es-icia-cotovia-vits": {
+      "feature": "tts",
+      "engine": "cotovia_vits",
+      "language": "gl",
+      "locale": "gl_ES",
+      "region": "ES",
+      "voice": "icia",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "vits.onnx",
+          "sizeBytes": 60333923,
+          "installPath": "bin/cotovia_vits/gl/gl_ES/icia/medium/vits.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/gl/gl_ES/icia/medium/vits.onnx"
+        }
+      ],
+      "dependsOn": [
+        "tts-cotovia-lexicon-gl"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/gl/icia_medium.opus"
+    },
+    "tts-cotovia_vits-gl-es-paulo-cotovia-vits": {
+      "feature": "tts",
+      "engine": "cotovia_vits",
+      "language": "gl",
+      "locale": "gl_ES",
+      "region": "ES",
+      "voice": "paulo",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "vits.onnx",
+          "sizeBytes": 60333923,
+          "installPath": "bin/cotovia_vits/gl/gl_ES/paulo/medium/vits.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/gl/gl_ES/paulo/medium/vits.onnx"
+        }
+      ],
+      "dependsOn": [
+        "tts-cotovia-lexicon-gl"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/gl/paulo_medium.opus"
     },
     "tts-mms-gu-in-standard-mms": {
       "feature": "tts",
@@ -8172,6 +8745,33 @@
         "tts-espeak-dict-ml"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ml/meera_medium.opus"
+    },
+    "tts-mms-mr-in-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "mr",
+      "locale": "mr_IN",
+      "region": "IN",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114043832,
+          "installPath": "bin/mms/mr/mr_IN/standard/medium/model.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/mr/mr_IN/standard/medium/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 490,
+          "installPath": "bin/mms/mr/mr_IN/standard/medium/tokens.txt",
+          "url": "https://offline-translator.davidv.dev/tts/1/mr/mr_IN/standard/medium/tokens.txt"
+        }
+      ],
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/mr/standard_medium.opus"
     },
     "tts-mms-ms-my-standard-mms": {
       "feature": "tts",
@@ -9284,6 +9884,35 @@
         "tts-espeak-dict-uk"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/uk/lada_x_low.opus"
+    },
+    "tts-piper-ur-pk-fasih-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "language": "ur",
+      "locale": "ur_PK",
+      "region": "PK",
+      "voice": "fasih",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "ur_PK-fasih-medium.onnx",
+          "sizeBytes": 63532015,
+          "installPath": "bin/piper/ur/ur_PK/fasih/medium/ur_PK-fasih-medium.onnx",
+          "url": "https://offline-translator.davidv.dev/tts/1/ur/ur_PK/fasih/medium/ur_PK-fasih-medium.onnx"
+        },
+        {
+          "name": "ur_PK-fasih-medium.onnx.json",
+          "sizeBytes": 3146,
+          "installPath": "bin/piper/ur/ur_PK/fasih/medium/ur_PK-fasih-medium.onnx.json",
+          "url": "https://offline-translator.davidv.dev/tts/1/ur/ur_PK/fasih/medium/ur_PK-fasih-medium.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-ur"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ur/fasih_medium.opus"
     },
     "tts-piper-vi-vn-vais1000-medium": {
       "feature": "tts",

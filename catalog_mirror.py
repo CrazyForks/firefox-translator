@@ -64,7 +64,7 @@ def mirror_path_for_file(pack_or_feature, file_info: dict) -> str:
         return f"dictionaries/{ensure_version_prefix(name)}"
 
     if feature == "support":
-        if kind in {"tts-espeak-core", "tts-espeak-dict", "tts-kokoro-core", "tts-kokoro-mnn-core", "tts-kokoro-voices"} and install_path:
+        if kind in {"tts-espeak-core", "tts-espeak-dict", "tts-kokoro-core", "tts-kokoro-mnn-core", "tts-kokoro-voices", "tts-cotovia-lexicon"} and install_path:
             return f"tts/{tail_after_bin(install_path)}"
         if kind == "mucab" and source_path:
             return f"dictionaries/{source_path.strip('/')}"

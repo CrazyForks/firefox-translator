@@ -18,6 +18,17 @@ TTS_VERSION = 1
 KOKORO_SHARED_PACK_ID = "tts-kokoro-v1.0-core"
 KOKORO_MNN_SHARED_PACK_ID = "tts-kokoro-mnn-v1.0-core"
 KOKORO_VOICES_PACK_ID = "tts-kokoro-voices-v1.0"
+
+COTOVIA_LEXICON_PACK_IDS = {"gl": "tts-cotovia-lexicon-gl"}
+COTOVIA_LEXICON_FILES = {
+    "gl": {
+        "name": "gl_lexicon.txt.zst",
+        "size_bytes": 995200,
+        "install_path": "bin/cotovia_vits/gl/gl_lexicon.txt.zst",
+        "url": f"{COQUI_VITS_BASE_URL}/cotovia/gl/gl_lexicon.txt.zst",
+    },
+}
+
 CORE_ESPEAK_FILES = ("phondata", "phonindex", "phontab", "intonations")
 QUALITY_PRIORITY = {
     "medium": 0,
@@ -78,7 +89,14 @@ VOICE_RANK_PREFERENCES: dict[str, int] = {
     "de_DE-thorsten-medium": -1,
     # sam sounds like a robot
     "en_US-sam-medium": 1,
+    # sabela is HiTZ's flagship Galician voice; keep it over the alphabetical tie
+    "gl_ES-sabela-cotovia_vits": -1,
 }
+
+# Voices kept per region (the rest are dropped from the served index). Galician
+# ships the full HiTZ set (minus the broken celtia), so it overrides the default.
+DEFAULT_VOICES_PER_REGION = 4
+PER_LANGUAGE_VOICES_PER_REGION = {"gl": 5}
 EXTRA_TTS_VOICES = {
     # External Polish Piper voice metadata source:
     # https://huggingface.co/WitoldG/polish_piper_models/resolve/main/pl_PL-jarvis_wg_glos-medium.onnx.json
@@ -168,6 +186,62 @@ EXTRA_TTS_VOICES = {
             "heb/tokens.txt": {
                 "size_bytes": 179,
                 "url": f"{MMS_BASE_URL}/heb/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # External MMS model metadata source:
+    # https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/tree/main/mar
+    "mr_IN-standard-mms": {
+        "engine": "mms",
+        "key": "mr_IN-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "mr_IN",
+            "family": "mr",
+            "region": "IN",
+            "name_native": "मराठी",
+            "name_english": "Marathi",
+            "country_english": "India",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "mar/model.onnx": {
+                "size_bytes": 114043832,
+                "url": f"{MMS_BASE_URL}/mar/model.onnx",
+            },
+            "mar/tokens.txt": {
+                "size_bytes": 490,
+                "url": f"{MMS_BASE_URL}/mar/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # HiTZ sabela Galician VITS voice. Its cotovia g2p is baked offline into a
+    # shared per-language word->id lexicon (see scripts/gl_sabela_lexicon in
+    # translator-rs); the voice depends on the tts-cotovia-lexicon-gl pack.
+    "gl_ES-sabela-cotovia_vits": {
+        "engine": "cotovia_vits",
+        "key": "gl_ES-sabela-cotovia_vits",
+        "name": "sabela",
+        "language": {
+            "code": "gl_ES",
+            "family": "gl",
+            "region": "ES",
+            "name_native": "Galego",
+            "name_english": "Galician",
+            "country_english": "Spain",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "shared_pack": COTOVIA_LEXICON_PACK_IDS["gl"],
+        "files": {
+            "vits.onnx": {
+                "size_bytes": 60333923,
+                "url": "https://huggingface.co/HiTZ/TTS-gl_sabela/resolve/main/vits.onnx",
             },
         },
         "aliases": [],
@@ -726,6 +800,30 @@ EXTRA_TTS_VOICES = {
     },
 }
 
+# The other HiTZ Galician voices share sabela's cotovia VITS_U2W frontend
+# (137-symbol vocab), so they reuse the one tts-cotovia-lexicon-gl pack — only
+# the per-speaker onnx differs (verified identical onnx signatures, so the shared
+# lexicon is correct for all). celtia is excluded: its model has unnatural
+# pauses/diction (a model issue, not the frontend). gl ships 5 voices.
+for _gl_voice in ["brais", "iago", "icia", "paulo"]:
+    EXTRA_TTS_VOICES[f"gl_ES-{_gl_voice}-cotovia_vits"] = {
+        "engine": "cotovia_vits",
+        "key": f"gl_ES-{_gl_voice}-cotovia_vits",
+        "name": _gl_voice,
+        "language": EXTRA_TTS_VOICES["gl_ES-sabela-cotovia_vits"]["language"],
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "shared_pack": COTOVIA_LEXICON_PACK_IDS["gl"],
+        "files": {
+            "vits.onnx": {
+                "size_bytes": 60333923,
+                "url": f"https://huggingface.co/HiTZ/TTS-gl_{_gl_voice}/resolve/main/vits.onnx",
+            },
+        },
+        "aliases": [],
+    }
+
 KOKORO_SHARED_FILES = {
     "kokoro-v1.0.int8.onnx": {
         "size_bytes": 92361271,
@@ -953,6 +1051,26 @@ def build_shared_tts_support_packs(catalog: dict, voices: dict) -> None:
         }
 
 
+def build_cotovia_lexicon_packs(catalog: dict, voices: dict) -> None:
+    for language_code, pack_id in COTOVIA_LEXICON_PACK_IDS.items():
+        if not any(voice.get("shared_pack") == pack_id for voice in voices.values()):
+            continue
+        lexicon = COTOVIA_LEXICON_FILES[language_code]
+        catalog["packs"][pack_id] = {
+            "feature": "support",
+            "kind": "tts-cotovia-lexicon",
+            "files": [
+                {
+                    "name": lexicon["name"],
+                    "sizeBytes": lexicon["size_bytes"],
+                    "installPath": lexicon["install_path"],
+                    "url": lexicon["url"],
+                }
+            ],
+            "dependsOn": [],
+        }
+
+
 def engine_supports_espeak(engine: str) -> bool:
     return engine in {"piper", "mimic3", "kokoro", "kokoro_mnn"}
 
@@ -993,10 +1111,12 @@ def merge_tts(
     if required_dict_codes:
         build_espeak_support_packs(catalog, required_dict_codes, tts_base_url, tts_version, espeak_core_zip_size)
     build_shared_tts_support_packs(catalog, voices)
+    build_cotovia_lexicon_packs(catalog, voices)
 
     regions_by_language: dict[str, dict[str, dict]] = defaultdict(dict)
     for (app_language, region), region_voices in sorted(grouped.items()):
-        ranked = sorted(region_voices, key=voice_sort_key)[:4]
+        limit = PER_LANGUAGE_VOICES_PER_REGION.get(app_language, DEFAULT_VOICES_PER_REGION)
+        ranked = sorted(region_voices, key=voice_sort_key)[:limit]
         voice_ids: list[str] = []
 
         for key, voice in ranked:

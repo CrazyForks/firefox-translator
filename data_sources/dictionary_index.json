@@ -349,8 +349,36 @@
       "size": 10139921,
       "type": "bilingual",
       "word_count": 435742
+    },
+    "eu": {
+      "date": 1781815948,
+      "filename": "eu.dict",
+      "size": 216917,
+      "type": "english",
+      "word_count": 9599
+    },
+    "gl": {
+      "date": 1781815948,
+      "filename": "gl.dict",
+      "size": 1290562,
+      "type": "english",
+      "word_count": 198673
+    },
+    "mr": {
+      "date": 1781815948,
+      "filename": "mr.dict",
+      "size": 117924,
+      "type": "english",
+      "word_count": 4164
+    },
+    "ur": {
+      "date": 1781815948,
+      "filename": "ur.dict",
+      "size": 225606,
+      "type": "english",
+      "word_count": 7069
     }
   },
-  "updated_at": 1774864382,
+  "updated_at": 1781816467,
   "version": 1
 }
