@@ -94,6 +94,7 @@ class SpeechService(
                   packId = selectedPackId,
                 )
               } catch (e: uniffi.bindings.CatalogException) {
+                Log.e("SpeechService", "synthesizeSpeechPcm failed lang=${language.code} pack=$selectedPackId", e)
                 throw IllegalStateException(
                   "Speech synthesis failed for ${language.displayName}",
                   e,

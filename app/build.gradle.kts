@@ -287,7 +287,10 @@ val abiToBindingsTask =
       // CI uses git deps — the parsed paths don't exist there, so the
       // inputs.dir calls are skipped and behaviour is unchanged.
       val cargoTomlText = bindingsRootDir.resolve("Cargo.toml").readText()
-      val pathDepRegex = Regex("""(?m)^\s*path\s*=\s*"([^"]+)"""")
+      // Matches both `path = "..."` (own-line dep) and the inline
+      // `name = { path = "..." }` form used by [patch] overrides; the
+      // leading anchor still skips commented-out lines.
+      val pathDepRegex = Regex("""(?m)^\s*(?:[A-Za-z0-9_-]+\s*=\s*\{\s*)?path\s*=\s*"([^"]+)"""")
       pathDepRegex.findAll(cargoTomlText).forEach { match ->
         val raw = match.groupValues[1]
         val resolved =
