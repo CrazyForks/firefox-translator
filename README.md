@@ -31,7 +31,7 @@ https://github.com/user-attachments/assets/bf774a4f-3d58-49b7-b4e2-cb30eb395b39
 ## Tech
 
 - Translation models are Firefox' [translations models](https://github.com/mozilla/translations)
-- OCR models are [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) (with [Tesseract](https://github.com/tesseract-ocr/tesseract) for unsupported langs)
+- OCR models are [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR)
 - Automatic language detection is done via [cld2](https://github.com/CLD2Owners/cld2)
 - Dictionary is based on data from Wiktionary, exported by [Kaikki](https://kaikki.org/)
   - For Japanese specifically, there's a second "word dictionary" (Mecab) for transliterating Kanji
