@@ -1,0 +1,8 @@
+Breaking change:
+
+Hebrew, Malayalam, Gujarati, Bengali, Kannada need to download new files (5MB)
+
+- Remove Tesseract OCR support (use PaddlePaddle only)
+- Add Galician, Urdu, Basque, Marathi support
+- Improve image recognition inpainting (needs a download, 1MB)
+- Fix assistant ui for phones with notches
