@@ -3,7 +3,9 @@ package dev.davidv.translator.assistantOverlay
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
@@ -26,9 +28,11 @@ import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.TranslationCoordinator
+import dev.davidv.translator.overlayChrome.NormalizedRegion
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
+import dev.davidv.translator.overlayChrome.RegionSelectView
 import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.min
 
 class TranslatorVoiceInteractionSession(
   context: Context,
@@ -67,6 +72,7 @@ class TranslatorVoiceInteractionSession(
   private var readingOrderIconView: ImageView? = null
   private var menuManager: OverlayMenuManager? = null
   private var borderView: BorderWaveView? = null
+  private var regionView: View? = null
   private var cutoutTopInset = 0
 
   private val systemBarTop: Int by lazy {
@@ -89,6 +95,10 @@ class TranslatorVoiceInteractionSession(
   private var isAutoSource: Boolean = true
   private var forcedTargetLanguage: Language? = null
   private var ocrReadingOrder: ReadingOrder? = null
+
+  // Chosen OCR sub-rect, normalized to the full session window (the space
+  // [RegionSelectView] reports); null means translate the whole screenshot.
+  private var currentRegion: NormalizedRegion? = null
   private var lastOriginalText: String = ""
   private var lastTranslatedText: String = ""
 
@@ -255,6 +265,7 @@ class TranslatorVoiceInteractionSession(
     clearCapture()
     overlayContainer.removeAllViews()
     dismissMenu()
+    removeRegionEditor()
     updateBackdrop()
 
     if (settingsManager.settings.value.assistantAction == dev.davidv.translator.AssistantAction.LIVE_SCREEN) {
@@ -296,6 +307,7 @@ class TranslatorVoiceInteractionSession(
     clearCapture()
     overlayContainer.removeAllViews()
     dismissMenu()
+    removeRegionEditor()
     screenshotView.setImageDrawable(null)
     updateBackdrop()
     showLoading(false)
@@ -357,7 +369,18 @@ class TranslatorVoiceInteractionSession(
     }
     val ocrSourceLanguage = sourceLanguage ?: targetLanguage
     val cropped = cropSystemBars(screenshot)
-    val workingBitmap = cropped.copy(Bitmap.Config.ARGB_8888, false)
+    val regionPx = currentRegion?.let { regionInBitmapPx(it, cropped.width, cropped.height) }
+    // OCR only the chosen sub-rect; keep a full-size copy to paint the translated
+    // overlay back onto, so the rest of the screenshot shows through unchanged.
+    val ocrSource =
+      if (regionPx != null) {
+        Bitmap.createBitmap(cropped, regionPx.left, regionPx.top, regionPx.width(), regionPx.height())
+      } else {
+        cropped
+      }
+    val workingBitmap = ocrSource.copy(Bitmap.Config.ARGB_8888, false)
+    val baseBitmap = if (regionPx != null) cropped.copy(Bitmap.Config.ARGB_8888, true) else null
+    if (ocrSource !== cropped) ocrSource.recycle()
     if (cropped !== screenshot) cropped.recycle()
     processing = true
     translationJob =
@@ -377,18 +400,88 @@ class TranslatorVoiceInteractionSession(
         processing = false
         showLoading(false)
         if (result == null) {
+          baseBitmap?.recycle()
           showStatus("OCR failed")
           return@launch
         }
         lastOriginalText = result.extractedText
         lastTranslatedText = result.translatedText
+        val display =
+          if (baseBitmap != null && regionPx != null) {
+            Canvas(baseBitmap).drawBitmap(
+              result.correctedBitmap,
+              Rect(0, 0, result.correctedBitmap.width, result.correctedBitmap.height),
+              regionPx,
+              null,
+            )
+            result.correctedBitmap.recycle()
+            baseBitmap
+          } else {
+            result.correctedBitmap
+          }
         val oldCropped = croppedBitmap
         if (oldCropped != null && oldCropped !== screenshotBitmap) oldCropped.recycle()
-        croppedBitmap = result.correctedBitmap
+        croppedBitmap = display
         screenshotView.setImageBitmap(croppedBitmap)
         updateBackdrop()
         hideStatus()
       }
+  }
+
+  /** Map a region normalized to the session window onto pixel coordinates of the
+   *  (system-bar-cropped) screenshot. The screenshot is shown FIT_START in a
+   *  full-window [ImageView], so the displayed image is the window scaled by `s`
+   *  and pinned top-left; undo that to land back in bitmap space. */
+  private fun regionInBitmapPx(
+    region: NormalizedRegion,
+    bw: Int,
+    bh: Int,
+  ): Rect {
+    val vw = screenshotView.width.toFloat().coerceAtLeast(1f)
+    val vh = screenshotView.height.toFloat().coerceAtLeast(1f)
+    val s = min(vw / bw, vh / bh)
+    val dispW = s * bw
+    val dispH = s * bh
+    val left = ((region.left * vw / dispW).coerceIn(0f, 1f) * bw).toInt().coerceIn(0, bw - 1)
+    val top = ((region.top * vh / dispH).coerceIn(0f, 1f) * bh).toInt().coerceIn(0, bh - 1)
+    val right = ((region.right * vw / dispW).coerceIn(0f, 1f) * bw).toInt().coerceIn(left + 1, bw)
+    val bottom = ((region.bottom * vh / dispH).coerceIn(0f, 1f) * bh).toInt().coerceIn(top + 1, bh)
+    return Rect(left, top, right, bottom)
+  }
+
+  private fun showRegionEditor() {
+    if (regionView != null) return
+    dismissMenu()
+    val view =
+      RegionSelectView(
+        context,
+        ::dpToPx,
+        currentRegion,
+        onConfirm = { r ->
+          currentRegion = r
+          removeRegionEditor()
+          retranslate()
+        },
+        onReset = {
+          currentRegion = null
+          removeRegionEditor()
+          retranslate()
+        },
+        onCancel = { removeRegionEditor() },
+      )
+    rootView.addView(
+      view,
+      FrameLayout.LayoutParams(
+        FrameLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams.MATCH_PARENT,
+      ),
+    )
+    regionView = view
+  }
+
+  private fun removeRegionEditor() {
+    regionView?.let { rootView.removeView(it) }
+    regionView = null
   }
 
   private fun startBorderPulse() {
@@ -492,6 +585,7 @@ class TranslatorVoiceInteractionSession(
     screenshotBitmap = null
     croppedBitmap = null
     processing = false
+    currentRegion = null
     lastOriginalText = ""
     lastTranslatedText = ""
   }
@@ -524,6 +618,7 @@ class TranslatorVoiceInteractionSession(
         onSourceClick = { showLanguagePicker(true) },
         onSwap = { swapLanguages() },
         onTargetClick = { showLanguagePicker(false) },
+        onRegionClick = { showRegionEditor() },
         showReadingOrderButton = forcedSourceLanguage?.code == "ja",
         readingOrder = currentReadingOrderFor(forcedSourceLanguage),
         onReadingOrderClick = { toggleJapaneseOcrMode() },
