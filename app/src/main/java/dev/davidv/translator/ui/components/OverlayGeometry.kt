@@ -31,6 +31,10 @@ internal data class FitTransform(val scale: Float, val offsetX: Float, val offse
   fun mapX(x: Float) = offsetX + x * scale
 
   fun mapY(y: Float) = offsetY + y * scale
+
+  fun unmapX(x: Float) = (x - offsetX) / scale
+
+  fun unmapY(y: Float) = (y - offsetY) / scale
 }
 
 internal fun fitTransform(

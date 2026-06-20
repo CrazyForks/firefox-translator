@@ -45,8 +45,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -285,22 +285,25 @@ private class SelectionActionModeCallback(
   }
 }
 
-private enum class DragMode { NEW, START, END }
+private enum class DragMode { START, END }
 
 /**
- * Persistent Lens-style word selection over the displayed image. A drag selects the contiguous
- * reading-order run of words (same writing direction as where it started); the selection stays
- * after release with draggable end handles, and a floating action bar (Copy / Share / Web search)
- * tracks it. Tapping the image clears the selection. Nothing is auto-copied.
+ * Persistent Lens-style word selection over the displayed image. Tapping a word selects it (and
+ * starts the selection); tapping another word moves the selection; tapping empty space clears it.
+ * The selection stays with draggable end handles, and a floating action bar (Copy / Share / Web
+ * search) tracks it. A plain drag is left for the container to pan/zoom; only a drag that grabs a
+ * handle edits the selection. Nothing is auto-copied.
  *
  * `words` are in image-pixel space; mapped with the image's ContentScale.Fit transform, so this
- * stays aligned inside the image's transformed (zoom/pan) container.
+ * stays aligned inside the image's transformed (zoom/pan) container. `scale` is the container's
+ * current zoom — the magnifier is suppressed when zoomed (its source mapping assumes identity).
  */
 @Composable
 fun WordSelectionOverlay(
   words: List<PositionedWord>,
   imageWidth: Int,
   imageHeight: Int,
+  scale: Float = 1f,
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
@@ -317,9 +320,10 @@ fun WordSelectionOverlay(
   var selEnd by remember(words) { mutableStateOf<Int?>(null) }
   var dragging by remember { mutableStateOf(false) }
   var contentRect by remember { mutableStateOf(android.graphics.Rect()) }
-  // The Canvas's top-left within the root view; the action bar's content rect must be in
-  // root-view coords, but selection geometry is computed in Canvas-local coords.
-  var canvasOrigin by remember { mutableStateOf(Offset.Zero) }
+  // The Canvas's layout coords; `localToRoot` maps Canvas-local points to root-view coords through
+  // the container's zoom/pan transform, which the action bar and magnifier need.
+  var layoutCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+  val scaleState = rememberUpdatedState(scale)
 
   val hasSelection = selStart != null && selEnd != null
   val selectedText =
@@ -330,7 +334,7 @@ fun WordSelectionOverlay(
 
   // Drive the floating action bar: present while there's a selection and no active drag.
   var actionMode by remember { mutableStateOf<ActionMode?>(null) }
-  LaunchedEffect(hasSelection, dragging) {
+  LaunchedEffect(hasSelection, dragging, selStart, selEnd) {
     if (hasSelection && !dragging) {
       if (actionMode == null) {
         actionMode =
@@ -358,16 +362,16 @@ fun WordSelectionOverlay(
   Canvas(
     modifier =
       modifier
-        .onGloballyPositioned { canvasOrigin = it.positionInRoot() }
+        .onGloballyPositioned { layoutCoords = it }
         .pointerInput(words, imageWidth, imageHeight) {
           val slop = viewConfiguration.touchSlop
-          val handleRadius = 28.dp.toPx()
 
           fun transform() = fitTransform(size.width.toFloat(), size.height.toFloat(), imageWidth, imageHeight)
 
           fun recomputeRect() {
             val s = selStart ?: return
             val e = selEnd ?: return
+            val coords = layoutCoords ?: return
             val t = transform()
             var l = Float.MAX_VALUE
             var top = Float.MAX_VALUE
@@ -383,21 +387,55 @@ fun WordSelectionOverlay(
                 b = max(b, t.mapY(p.y))
               }
             }
+            // Map the local bounds through the container's zoom/pan to root-view coords.
+            val topLeft = coords.localToRoot(Offset(l, top))
+            val bottomRight = coords.localToRoot(Offset(r, b))
             contentRect =
               android.graphics.Rect(
-                (l + canvasOrigin.x).toInt(),
-                (top + canvasOrigin.y).toInt(),
-                (r + canvasOrigin.x).toInt(),
-                (b + canvasOrigin.y).toInt(),
+                topLeft.x.toInt(),
+                topLeft.y.toInt(),
+                bottomRight.x.toInt(),
+                bottomRight.y.toInt(),
               )
+          }
+
+          // Loupe raised a full bubble-height above the finger so it isn't occluded. The finger's
+          // root-view position comes through the container transform, so it tracks under zoom.
+          fun showMagnifier(pos: Offset) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+            val m = magnifier ?: return
+            val root = (layoutCoords ?: return).localToRoot(pos)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+              m.show(root.x, root.y, root.x, root.y - m.height.toFloat())
+            } else {
+              m.show(root.x, root.y)
+            }
+          }
+
+          // Word whose oriented box (slightly padded) contains the touched point, or null.
+          fun wordAt(pos: Offset): Int? {
+            val t = transform()
+            val ix = t.unmapX(pos.x)
+            val iy = t.unmapY(pos.y)
+            return words.indices.firstOrNull { i ->
+              val b = words[i].bounds
+              val dx = ix - b.cx
+              val dy = iy - b.cy
+              val c = cos(b.angleRadians)
+              val s = sin(b.angleRadians)
+              val pad = b.height * 0.25f
+              abs(dx * c + dy * s) <= b.width / 2f + pad && abs(-dx * s + dy * c) <= b.height / 2f + pad
+            }
           }
 
           awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             val t = transform()
+            // Grab radius in local coords; divide by zoom so it stays a constant on-screen size.
+            val handleRadius = 28.dp.toPx() / scaleState.value
             val s0 = selStart
             val e0 = selEnd
-            val mode =
+            val handleMode =
               if (s0 != null && e0 != null) {
                 val startP = handlePoint(words[s0].bounds, leading = true)
                 val endP = handlePoint(words[e0].bounds, leading = false)
@@ -406,61 +444,48 @@ fun WordSelectionOverlay(
                 when {
                   (down.position - startView).getDistance() < handleRadius -> DragMode.START
                   (down.position - endView).getDistance() < handleRadius -> DragMode.END
-                  else -> DragMode.NEW
+                  else -> null
                 }
               } else {
-                DragMode.NEW
+                null
               }
-            val newAnchor = if (mode == DragMode.NEW) nearestWord(words, down.position, t, null) else null
 
-            var moved = false
-            while (true) {
-              val event = awaitPointerEvent()
-              val change = event.changes.firstOrNull { it.id == down.id } ?: break
-              if (!change.pressed) break
-              val d = change.position - down.position
-              if (!moved && d.getDistance() > slop) moved = true
-              if (moved) {
+            if (handleMode != null) {
+              // Grab a handle: consume so the container doesn't pan, and resize the selection.
+              down.consume()
+              while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
                 change.consume()
                 dragging = true
-                when (mode) {
-                  DragMode.START -> {
-                    val dir = isHorizontal(words[e0!!].bounds.angleRadians)
-                    nearestWord(words, change.position, transform(), dir)?.let { nw ->
-                      selStart = min(nw, e0)
-                      selEnd = max(nw, e0)
-                    }
-                  }
-                  DragMode.END -> {
-                    val dir = isHorizontal(words[s0!!].bounds.angleRadians)
-                    nearestWord(words, change.position, transform(), dir)?.let { nw ->
-                      selStart = min(s0, nw)
-                      selEnd = max(s0, nw)
-                    }
-                  }
-                  DragMode.NEW -> {
-                    val anchor = newAnchor
-                    if (anchor != null) {
-                      val dir = isHorizontal(words[anchor].bounds.angleRadians)
-                      nearestWord(words, change.position, transform(), dir)?.let { nw ->
-                        selStart = min(anchor, nw)
-                        selEnd = max(anchor, nw)
-                      }
-                    }
-                  }
+                val fixed = if (handleMode == DragMode.START) e0!! else s0!!
+                val dir = isHorizontal(words[fixed].bounds.angleRadians)
+                nearestWord(words, change.position, transform(), dir)?.let { nw ->
+                  selStart = min(fixed, nw)
+                  selEnd = max(fixed, nw)
                 }
                 recomputeRect()
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                  magnifier?.show(canvasOrigin.x + change.position.x, canvasOrigin.y + change.position.y)
-                }
+                showMagnifier(change.position)
               }
-            }
-
-            dragging = false
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) magnifier?.dismiss()
-            if (!moved && mode == DragMode.NEW) {
-              selStart = null
-              selEnd = null
+              dragging = false
+              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) magnifier?.dismiss()
+            } else {
+              // Not a handle: observe without consuming so the container can pan/zoom; a tap (no
+              // drag) selects the word under the finger, or clears when it's on empty space.
+              var moved = false
+              while (true) {
+                val event = awaitPointerEvent()
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                if (!change.pressed) break
+                if (!moved && (change.position - down.position).getDistance() > slop) moved = true
+              }
+              if (!moved) {
+                val w = wordAt(down.position)
+                selStart = w
+                selEnd = w
+                if (w != null) recomputeRect()
+              }
             }
           }
         },
@@ -493,8 +518,9 @@ fun WordSelectionOverlay(
     }
     // End handles: pin markers whose tip sits at the line bottom, hanging below it. The opening
     // pin points up-right (toward the selection), the closing pin up-left. The drawable's tip is
-    // at its bottom-centre, so anchor and rotate about that.
-    val handleSize = 26.dp.toPx()
+    // at its bottom-centre, so anchor and rotate about that. Divide by zoom so the pin stays a
+    // constant on-screen size instead of growing with the image.
+    val handleSize = 26.dp.toPx() / scale
 
     fun drawHandle(
       p: Offset,
