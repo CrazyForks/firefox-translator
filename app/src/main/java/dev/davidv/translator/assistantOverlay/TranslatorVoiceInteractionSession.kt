@@ -3,9 +3,7 @@ package dev.davidv.translator.assistantOverlay
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
@@ -17,8 +15,8 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.view.WindowInsetsCompat
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
@@ -28,12 +26,14 @@ import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.TranslationCoordinator
-import dev.davidv.translator.overlayChrome.NormalizedRegion
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
-import dev.davidv.translator.overlayChrome.RegionSelectView
 import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
+import dev.davidv.translator.ui.components.AssistantResultView
+import dev.davidv.translator.ui.components.DetectedRegions
+import dev.davidv.translator.ui.components.ImageWordSelection
+import dev.davidv.translator.ui.components.WindowComposeHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -43,7 +43,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.min
 
 class TranslatorVoiceInteractionSession(
   context: Context,
@@ -64,15 +63,13 @@ class TranslatorVoiceInteractionSession(
   private lateinit var screenshotView: ImageView
   private lateinit var overlayContainer: FrameLayout
   private lateinit var statusView: TextView
-  private lateinit var loadingView: View
   private lateinit var topBarView: View
   private var sourceLabelView: TextView? = null
   private var targetLabelView: TextView? = null
   private var readingOrderButtonView: View? = null
   private var readingOrderIconView: ImageView? = null
+  private var flipIconView: ImageView? = null
   private var menuManager: OverlayMenuManager? = null
-  private var borderView: BorderWaveView? = null
-  private var regionView: View? = null
   private var cutoutTopInset = 0
 
   private val systemBarTop: Int by lazy {
@@ -96,11 +93,16 @@ class TranslatorVoiceInteractionSession(
   private var forcedTargetLanguage: Language? = null
   private var ocrReadingOrder: ReadingOrder? = null
 
-  // Chosen OCR sub-rect, normalized to the full session window (the space
-  // [RegionSelectView] reports); null means translate the whole screenshot.
-  private var currentRegion: NormalizedRegion? = null
-  private var lastOriginalText: String = ""
-  private var lastTranslatedText: String = ""
+  // The interactive image surface, hosted in a ComposeView over the screenshot backdrop: it shows
+  // the screenshot with the scan animation while OCR runs, then the translated image with the
+  // word-selection overlay. `assistantDisplay == null` keeps the layer hidden/pass-through.
+  private val assistantDisplay = mutableStateOf<Bitmap?>(null)
+  private val assistantOriginal = mutableStateOf<Bitmap?>(null)
+  private val assistantSelection = mutableStateOf<ImageWordSelection?>(null)
+  private val assistantProcessing = mutableStateOf(false)
+  private val assistantRegions = mutableStateOf<DetectedRegions?>(null)
+  private val assistantShowOriginal = mutableStateOf(false)
+  private var resultHost: WindowComposeHost? = null
 
   override fun onCreate() {
     super.onCreate()
@@ -195,9 +197,26 @@ class TranslatorVoiceInteractionSession(
       ),
     )
 
-    borderView = BorderWaveView.create(context)
+    // Interactive image layer: the scan animation while OCR runs, then the translated image with
+    // word selection. Stays transparent (pass-through) until there's something to show.
+    resultHost =
+      WindowComposeHost(context).apply {
+        view.visibility = View.GONE
+        setContent {
+          assistantDisplay.value?.let { display ->
+            AssistantResultView(
+              display = display,
+              original = assistantOriginal.value,
+              selection = assistantSelection.value,
+              isProcessing = assistantProcessing.value,
+              detectedRegions = assistantRegions.value,
+              showOriginal = assistantShowOriginal.value,
+            )
+          }
+        }
+      }
     rootView.addView(
-      borderView,
+      resultHost!!.view,
       FrameLayout.LayoutParams(
         FrameLayout.LayoutParams.MATCH_PARENT,
         FrameLayout.LayoutParams.MATCH_PARENT,
@@ -240,18 +259,9 @@ class TranslatorVoiceInteractionSession(
         }
     rootView.addView(statusView, statusParams)
 
-    loadingView = buildLoadingView()
-    rootView.addView(
-      loadingView,
-      FrameLayout
-        .LayoutParams(
-          FrameLayout.LayoutParams.WRAP_CONTENT,
-          FrameLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { gravity = Gravity.CENTER },
-    )
+    resultHost!!.installOn(rootView)
 
     showStatus("Invoke this assistant on top of text to translate it")
-    showLoading(false)
     updateBackdrop()
     return rootView
   }
@@ -265,7 +275,6 @@ class TranslatorVoiceInteractionSession(
     clearCapture()
     overlayContainer.removeAllViews()
     dismissMenu()
-    removeRegionEditor()
     updateBackdrop()
 
     if (settingsManager.settings.value.assistantAction == dev.davidv.translator.AssistantAction.LIVE_SCREEN) {
@@ -274,13 +283,9 @@ class TranslatorVoiceInteractionSession(
     }
 
     showStatus("Collecting screen context...")
-    showLoading(true)
-    startBorderPulse()
 
     if (!isAssistScreenshotEnabled()) {
       Log.w(tag, "Assistant screenshot capture is disabled in system settings")
-      showLoading(false)
-      stopBorderPulse()
       showStatus("Screenshot access is disabled for this assistant. Enable it in the system assistant settings.")
       return
     }
@@ -289,8 +294,6 @@ class TranslatorVoiceInteractionSession(
       sessionScope.launch {
         delay(CAPTURE_TIMEOUT_MS)
         if (screenshotBitmap == null && !processing) {
-          showLoading(false)
-          stopBorderPulse()
           showStatus("No screen data received. Enable 'Use screenshot' for this assistant.")
         }
       }
@@ -303,21 +306,34 @@ class TranslatorVoiceInteractionSession(
 
   override fun onHide() {
     super.onHide()
-    stopBorderPulse()
     clearCapture()
+    clearResultOverlay()
     overlayContainer.removeAllViews()
     dismissMenu()
-    removeRegionEditor()
     screenshotView.setImageDrawable(null)
     updateBackdrop()
-    showLoading(false)
   }
 
   override fun onDestroy() {
-    stopBorderPulse()
     sessionScope.cancel()
     clearCapture()
+    clearResultOverlay()
+    resultHost?.dispose()
+    resultHost = null
     super.onDestroy()
+  }
+
+  /** Drop the interactive image layer and recycle the flip's original-image copy. */
+  private fun clearResultOverlay() {
+    assistantOriginal.value?.recycle()
+    assistantDisplay.value = null
+    assistantOriginal.value = null
+    assistantSelection.value = null
+    assistantRegions.value = null
+    assistantProcessing.value = false
+    assistantShowOriginal.value = false
+    setFlipButtonVisible(false)
+    resultHost?.view?.visibility = View.GONE
   }
 
   override fun onHandleScreenshot(screenshot: Bitmap?) {
@@ -330,8 +346,6 @@ class TranslatorVoiceInteractionSession(
     captureTimeoutJob = null
     Log.d(tag, "Screenshot callback received bitmap=${screenshot?.width}x${screenshot?.height}")
     if (screenshot == null) {
-      showLoading(false)
-      stopBorderPulse()
       showStatus("This app did not provide a screenshot.")
       return
     }
@@ -349,40 +363,39 @@ class TranslatorVoiceInteractionSession(
   private fun runFullScreenOcr() {
     val screenshot = screenshotBitmap ?: return
     overlayContainer.removeAllViews()
-    showLoading(true)
     hideStatus()
     val sourceLanguage = ocrSourceLanguage()
     if (!isAutoSource && sourceLanguage == null) {
       processing = false
-      showLoading(false)
       showStatus("Set a default source language for OCR.")
       return
     }
 
     val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
     if (targetLanguage == null) {
-      // Catalog not ready yet — don't leave the spinner stuck on.
       processing = false
-      showLoading(false)
       showStatus("Translation languages aren't ready yet. Try again.")
       return
     }
     val ocrSourceLanguage = sourceLanguage ?: targetLanguage
     val cropped = cropSystemBars(screenshot)
-    val regionPx = currentRegion?.let { regionInBitmapPx(it, cropped.width, cropped.height) }
-    // OCR only the chosen sub-rect; keep a full-size copy to paint the translated
-    // overlay back onto, so the rest of the screenshot shows through unchanged.
-    val ocrSource =
-      if (regionPx != null) {
-        Bitmap.createBitmap(cropped, regionPx.left, regionPx.top, regionPx.width(), regionPx.height())
-      } else {
-        cropped
-      }
-    val workingBitmap = ocrSource.copy(Bitmap.Config.ARGB_8888, false)
-    val baseBitmap = if (regionPx != null) cropped.copy(Bitmap.Config.ARGB_8888, true) else null
-    if (ocrSource !== cropped) ocrSource.recycle()
+    val workingBitmap = cropped.copy(Bitmap.Config.ARGB_8888, false)
     if (cropped !== screenshot) cropped.recycle()
+
+    // Show the screenshot with the scan animation while OCR/translation run; the detection callback
+    // fills in the regions the scan sweeps over, then the result swaps in the translated image with
+    // the word-selection overlay. `workingBitmap` doubles as the flip's original and is not recycled
+    // by the pipeline, so it stays alive until the next clear.
+    clearResultOverlay()
     processing = true
+    assistantOriginal.value = workingBitmap
+    assistantSelection.value = null
+    assistantRegions.value = null
+    assistantShowOriginal.value = false
+    assistantProcessing.value = true
+    assistantDisplay.value = workingBitmap
+    resultHost?.view?.visibility = View.VISIBLE
+
     translationJob =
       sessionScope.launch {
         val result =
@@ -394,127 +407,50 @@ class TranslatorVoiceInteractionSession(
               onMessage = {},
               readingOrder = currentReadingOrderFor(sourceLanguage),
               isAutoSource = isAutoSource,
+              onDetectedRegions = { boxes, w, h ->
+                assistantRegions.value = DetectedRegions(w, h, boxes)
+              },
             )
           }
         ensureActive()
         processing = false
-        showLoading(false)
         if (result == null) {
-          baseBitmap?.recycle()
           showStatus("OCR failed")
+          clearResultOverlay()
           return@launch
         }
-        lastOriginalText = result.extractedText
-        lastTranslatedText = result.translatedText
-        val display =
-          if (baseBitmap != null && regionPx != null) {
-            Canvas(baseBitmap).drawBitmap(
-              result.correctedBitmap,
-              Rect(0, 0, result.correctedBitmap.width, result.correctedBitmap.height),
-              regionPx,
-              null,
-            )
-            result.correctedBitmap.recycle()
-            baseBitmap
-          } else {
-            result.correctedBitmap
-          }
+        val display = result.correctedBitmap
         val oldCropped = croppedBitmap
         if (oldCropped != null && oldCropped !== screenshotBitmap) oldCropped.recycle()
         croppedBitmap = display
         screenshotView.setImageBitmap(croppedBitmap)
+        val selection =
+          ImageWordSelection(
+            imageWidth = result.metadata.width.toInt(),
+            imageHeight = result.metadata.height.toInt(),
+            sourceWords = result.metadata.sourceWords,
+            translatedWords = result.translatedWords,
+          )
+        assistantProcessing.value = false
+        assistantRegions.value = null
+        assistantSelection.value = selection
+        assistantDisplay.value = display
+        setFlipButtonVisible(true)
+        resultHost?.view?.visibility = View.VISIBLE
         updateBackdrop()
         hideStatus()
       }
   }
 
-  /** Map a region normalized to the session window onto pixel coordinates of the
-   *  (system-bar-cropped) screenshot. The screenshot is shown FIT_START in a
-   *  full-window [ImageView], so the displayed image is the window scaled by `s`
-   *  and pinned top-left; undo that to land back in bitmap space. */
-  private fun regionInBitmapPx(
-    region: NormalizedRegion,
-    bw: Int,
-    bh: Int,
-  ): Rect {
-    val vw = screenshotView.width.toFloat().coerceAtLeast(1f)
-    val vh = screenshotView.height.toFloat().coerceAtLeast(1f)
-    val s = min(vw / bw, vh / bh)
-    val dispW = s * bw
-    val dispH = s * bh
-    val left = ((region.left * vw / dispW).coerceIn(0f, 1f) * bw).toInt().coerceIn(0, bw - 1)
-    val top = ((region.top * vh / dispH).coerceIn(0f, 1f) * bh).toInt().coerceIn(0, bh - 1)
-    val right = ((region.right * vw / dispW).coerceIn(0f, 1f) * bw).toInt().coerceIn(left + 1, bw)
-    val bottom = ((region.bottom * vh / dispH).coerceIn(0f, 1f) * bh).toInt().coerceIn(top + 1, bh)
-    return Rect(left, top, right, bottom)
+  private fun setFlipButtonVisible(visible: Boolean) {
+    flipIconView?.visibility = if (visible) View.VISIBLE else View.GONE
   }
 
-  private fun showRegionEditor() {
-    if (regionView != null) return
-    dismissMenu()
-    val view =
-      RegionSelectView(
-        context,
-        ::dpToPx,
-        currentRegion,
-        onConfirm = { r ->
-          currentRegion = r
-          removeRegionEditor()
-          retranslate()
-        },
-        onReset = {
-          currentRegion = null
-          removeRegionEditor()
-          retranslate()
-        },
-        onCancel = { removeRegionEditor() },
-      )
-    rootView.addView(
-      view,
-      FrameLayout.LayoutParams(
-        FrameLayout.LayoutParams.MATCH_PARENT,
-        FrameLayout.LayoutParams.MATCH_PARENT,
-      ),
-    )
-    regionView = view
-  }
-
-  private fun removeRegionEditor() {
-    regionView?.let { rootView.removeView(it) }
-    regionView = null
-  }
-
-  private fun startBorderPulse() {
-    borderView?.startAnimation()
-  }
-
-  private fun stopBorderPulse() {
-    borderView?.stopAnimation()
-  }
-
-  private fun buildLoadingView(): View {
-    val container =
-      FrameLayout(context).apply {
-        background =
-          GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = dpToPx(16).toFloat()
-            setColor(Color.parseColor("#CC202020"))
-          }
-        val padding = dpToPx(16)
-        setPadding(padding, padding, padding, padding)
-      }
-
-    val progress = ProgressBar(context)
-    container.addView(
-      progress,
-      FrameLayout
-        .LayoutParams(
-          dpToPx(48),
-          dpToPx(48),
-        ).apply { gravity = Gravity.CENTER },
-    )
-    return container
+  private fun toggleAssistantOriginal() {
+    if (assistantDisplay.value == null) return
+    val show = !assistantShowOriginal.value
+    assistantShowOriginal.value = show
+    flipIconView?.setColorFilter(if (show) Color.parseColor("#8AB4F8") else Color.WHITE)
   }
 
   @Suppress("DEPRECATION")
@@ -560,11 +496,6 @@ class TranslatorVoiceInteractionSession(
     statusView.visibility = View.GONE
   }
 
-  private fun showLoading(visible: Boolean) {
-    if (!::loadingView.isInitialized) return
-    loadingView.visibility = if (visible) View.VISIBLE else View.GONE
-  }
-
   private fun cropSystemBars(source: Bitmap): Bitmap {
     val top = systemBarTop.coerceIn(0, source.height - 1)
     if (top == 0) return source
@@ -585,9 +516,6 @@ class TranslatorVoiceInteractionSession(
     screenshotBitmap = null
     croppedBitmap = null
     processing = false
-    currentRegion = null
-    lastOriginalText = ""
-    lastTranslatedText = ""
   }
 
   private fun dpToPx(dp: Int): Int = (dp * context.resources.displayMetrics.density).toInt()
@@ -618,7 +546,7 @@ class TranslatorVoiceInteractionSession(
         onSourceClick = { showLanguagePicker(true) },
         onSwap = { swapLanguages() },
         onTargetClick = { showLanguagePicker(false) },
-        onRegionClick = { showRegionEditor() },
+        onFlipOriginal = { toggleAssistantOriginal() },
         showReadingOrderButton = forcedSourceLanguage?.code == "ja",
         readingOrder = currentReadingOrderFor(forcedSourceLanguage),
         onReadingOrderClick = { toggleJapaneseOcrMode() },
@@ -629,6 +557,8 @@ class TranslatorVoiceInteractionSession(
     targetLabelView = toolbarViews.targetLabel
     readingOrderButtonView = toolbarViews.readingOrderButton
     readingOrderIconView = toolbarViews.readingOrderIcon
+    flipIconView = toolbarViews.flipIcon
+    flipIconView?.visibility = View.GONE
     return toolbarViews.root
   }
 
@@ -642,8 +572,6 @@ class TranslatorVoiceInteractionSession(
     val settings = settingsManager.settings.value
     val sourceCode = settings.defaultSourceLanguageCode
     if (sourceCode == null) {
-      showLoading(false)
-      stopBorderPulse()
       showStatus("Set a default source language in Settings to use live screen translation.")
       return
     }
@@ -706,7 +634,6 @@ class TranslatorVoiceInteractionSession(
       runFullScreenOcr()
     } else {
       overlayContainer.removeAllViews()
-      showLoading(true)
       hideStatus()
     }
   }
@@ -775,25 +702,11 @@ class TranslatorVoiceInteractionSession(
 
   private fun showDotsMenu() {
     menuManager?.showDotsMenu(
+      // Copy is handled by the selection action bar; the flip button swaps original/translated.
       listOf(
-        "Copy original text" to { copyToClipboard("Original text", lastOriginalText) },
-        "Copy translated text" to { copyToClipboard("Translated text", lastTranslatedText) },
         "Open App" to { openMainApp() },
       ),
     )
-  }
-
-  private fun copyToClipboard(
-    label: String,
-    text: String,
-  ) {
-    if (text.isBlank()) {
-      showStatus("Nothing to copy yet", autoHideAfterMs = 2000)
-      return
-    }
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
-    showStatus("Copied $label", autoHideAfterMs = 2000)
   }
 
   private fun openMainApp() {

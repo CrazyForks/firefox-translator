@@ -23,6 +23,7 @@ data class LanguageToolbarViews(
   val readingOrderButton: View? = null,
   val readingOrderIcon: ImageView? = null,
   val pauseIcon: ImageView? = null,
+  val flipIcon: ImageView? = null,
 )
 
 object OverlayChromeFactory {
@@ -52,6 +53,7 @@ object OverlayChromeFactory {
     onReadingOrderClick: (() -> Unit)? = null,
     onRefreshClick: (() -> Unit)? = null,
     onRegionClick: (() -> Unit)? = null,
+    onFlipOriginal: (() -> Unit)? = null,
     onPauseClick: (() -> Unit)? = null,
     isPaused: Boolean = false,
     onMenuClick: (() -> Unit)? = null,
@@ -207,6 +209,26 @@ object OverlayChromeFactory {
       )
     }
 
+    var flipIcon: ImageView? = null
+    onFlipOriginal?.let {
+      val flipBtn =
+        ImageView(context).apply {
+          setImageResource(R.drawable.flip)
+          setColorFilter(Color.WHITE)
+          setPadding(iconPad, iconPad, iconPad, iconPad)
+          setOnClickListener { onFlipOriginal() }
+          contentDescription = "Show original"
+        }
+      flipIcon = flipBtn
+      val flipPill = makePill(context, dpToPx, flipBtn)
+      rightActions.addView(
+        flipPill,
+        LinearLayout.LayoutParams(btnSize, btnSize).apply {
+          marginEnd = dpToPx(6)
+        },
+      )
+    }
+
     var pauseIcon: ImageView? = null
     onPauseClick?.let {
       val pauseBtn =
@@ -249,6 +271,7 @@ object OverlayChromeFactory {
       readingOrderButton = readingOrderPill,
       readingOrderIcon = readingOrderIcon,
       pauseIcon = pauseIcon,
+      flipIcon = flipIcon,
     )
   }
 

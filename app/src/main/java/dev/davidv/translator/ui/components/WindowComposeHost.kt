@@ -18,6 +18,7 @@
 package dev.davidv.translator.ui.components
 
 import android.content.Context
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.Lifecycle
@@ -50,10 +51,20 @@ class WindowComposeHost(context: Context) : LifecycleOwner, ViewModelStoreOwner,
     ComposeView(context).also { composeView ->
       savedStateController.performRestore(null)
       lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-      composeView.setViewTreeLifecycleOwner(this)
-      composeView.setViewTreeViewModelStoreOwner(this)
-      composeView.setViewTreeSavedStateRegistryOwner(this)
+      installOn(composeView)
     }
+
+  /**
+   * Compose resolves its window recomposer from the *top-level* view of the window (the first child
+   * of `android.R.id.content`, or the topmost view when there is none, as in a WindowManager/Dialog
+   * window) and reads the ViewTree owners off it. Setting them only on the [ComposeView] is not
+   * enough: the owners must live on whatever view roots this window, so install them there too.
+   */
+  fun installOn(target: View) {
+    target.setViewTreeLifecycleOwner(this)
+    target.setViewTreeViewModelStoreOwner(this)
+    target.setViewTreeSavedStateRegistryOwner(this)
+  }
 
   fun setContent(content: @Composable () -> Unit) = view.setContent(content)
 
