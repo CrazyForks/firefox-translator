@@ -212,7 +212,7 @@ fn render_translated_overlay(
     prepared: translator::PreparedImageOverlay,
     language: String,
     min_font_size_px: f32,
-) -> Result<Vec<u8>, CatalogError> {
+) -> Result<translator::image_render::RenderedOverlay, CatalogError> {
     use translator::image_render::{RenderOptions, render_overlay};
     let opts = RenderOptions {
         language,

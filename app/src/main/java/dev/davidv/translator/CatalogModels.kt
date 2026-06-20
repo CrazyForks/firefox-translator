@@ -442,7 +442,7 @@ class LanguageCatalog private constructor(
     plan: uniffi.translator.PreparedImageOverlay,
     targetLanguage: Language,
     minFontSizePx: Float,
-  ): ByteArray = uniffi.bindings.renderTranslatedOverlay(plan, targetLanguage.code, minFontSizePx)
+  ): uniffi.translator.RenderedOverlay = uniffi.bindings.renderTranslatedOverlay(plan, targetLanguage.code, minFontSizePx)
 
   @Throws(CatalogException::class)
   fun detectDocumentQuad(bitmap: Bitmap): uniffi.translator.DocumentDetection? =

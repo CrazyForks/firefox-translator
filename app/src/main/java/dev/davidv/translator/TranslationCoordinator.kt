@@ -234,11 +234,13 @@ class TranslationCoordinator(
         val extractedText = plan.extractedText
         onMessage(TranslatorMessage.ImageTextDetected(extractedText))
         lateinit var overlayBitmap: Bitmap
+        var translatedWords: List<uniffi.translator.PositionedWord> = emptyList()
         val translatePaint =
           measureTimeMillis {
             val rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
-            overlayBitmap = bitmapFromRgba(rendered, plan.width.toInt(), plan.height.toInt())
+            overlayBitmap = bitmapFromRgba(rendered.rgbaBytes, plan.width.toInt(), plan.height.toInt())
               ?: return@withContext null
+            translatedWords = rendered.translatedWords
           }
         Log.i("TranslationCoordinator", "Overpainting took ${translatePaint}ms")
         Log.i("TranslationCoordinator", "OCR total: ${System.currentTimeMillis() - totalStart}ms")
@@ -248,6 +250,7 @@ class TranslationCoordinator(
           extractedText = extractedText,
           translatedText = plan.translatedText,
           metadata = plan,
+          translatedWords = translatedWords,
         )
       } catch (e: Exception) {
         Log.e("TranslationCoordinator", "Exception ${e.stackTrace}")
@@ -279,11 +282,13 @@ class TranslationCoordinator(
         val extractedText = plan.extractedText
         onMessage(TranslatorMessage.ImageTextDetected(extractedText))
         lateinit var overlayBitmap: Bitmap
+        var translatedWords: List<uniffi.translator.PositionedWord> = emptyList()
         val translatePaint =
           measureTimeMillis {
             val rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
-            overlayBitmap = bitmapFromRgba(rendered, plan.width.toInt(), plan.height.toInt())
+            overlayBitmap = bitmapFromRgba(rendered.rgbaBytes, plan.width.toInt(), plan.height.toInt())
               ?: return@withContext null
+            translatedWords = rendered.translatedWords
           }
         Log.i("TranslationCoordinator", "Retranslate overpainting took ${translatePaint}ms")
 
@@ -292,6 +297,7 @@ class TranslationCoordinator(
           extractedText = extractedText,
           translatedText = plan.translatedText,
           metadata = plan,
+          translatedWords = translatedWords,
         )
       } catch (e: Exception) {
         Log.e("TranslationCoordinator", "Exception ${e.stackTrace}")
@@ -346,4 +352,7 @@ data class ProcessedImageResult(
   val extractedText: String,
   val translatedText: String,
   val metadata: PreparedImageOverlay,
+  // Per-word boxes of the rendered translation (image space). Source-word boxes for the
+  // original text live on `metadata.sourceWords`. Both drive drag-to-copy.
+  val translatedWords: List<uniffi.translator.PositionedWord>,
 )
