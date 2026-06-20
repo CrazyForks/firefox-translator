@@ -802,6 +802,7 @@ impl CatalogHandle {
         min_confidence: u32,
         reading_order: Option<translator::ReadingOrder>,
         background_mode: translator::BackgroundMode,
+        detection: Option<Vec<translator::DetectedTextBox>>,
     ) -> Result<translator::PreparedImageOverlay, CatalogError> {
         #[cfg(feature = "ppocr")]
         {
@@ -817,6 +818,7 @@ impl CatalogHandle {
                     min_confidence,
                     reading_order,
                     background_mode,
+                    detection,
                 )
                 .map_err(CatalogError::from);
         }
@@ -832,7 +834,31 @@ impl CatalogHandle {
                 min_confidence,
                 reading_order,
                 background_mode,
+                detection,
             );
+            Err(CatalogError::Other {
+                reason: "OCR feature disabled".to_string(),
+            })
+        }
+    }
+
+    fn detect_image_boxes(
+        &self,
+        rgba_bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+        max_image_size: u32,
+    ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
+        #[cfg(feature = "ppocr")]
+        {
+            return self
+                .session
+                .detect_image_boxes(&rgba_bytes, width, height, max_image_size)
+                .map_err(CatalogError::from);
+        }
+        #[cfg(not(feature = "ppocr"))]
+        {
+            let _ = (rgba_bytes, width, height, max_image_size);
             Err(CatalogError::Other {
                 reason: "OCR feature disabled".to_string(),
             })

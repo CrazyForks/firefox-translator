@@ -79,7 +79,6 @@ class SettingsManager(
     val enableOutputTransliteration = prefs.getBoolean("enable_output_transliteration", defaults.enableOutputTransliteration)
     val useExternalStorage = prefs.getBoolean("use_external_storage", defaults.useExternalStorage)
     val fontFactor = prefs.getFloat("font_factor", defaults.fontFactor)
-    val showOCRDetection = prefs.getBoolean("show_ocr_detection", defaults.showOCRDetection)
     val showTransliterationOnInput = prefs.getBoolean("show_transliteration_on_input", defaults.showTransliterationOnInput)
     val onlyShowOutputOnReadonlyModal =
       prefs.getBoolean(
@@ -153,7 +152,6 @@ class SettingsManager(
       enableOutputTransliteration = enableOutputTransliteration,
       useExternalStorage = useExternalStorage,
       fontFactor = fontFactor,
-      showOCRDetection = showOCRDetection,
       showTransliterationOnInput = showTransliterationOnInput,
       onlyShowOutputOnReadonlyModal = onlyShowOutputOnReadonlyModal,
       readonlyModalOutputAlignment = readonlyModalOutputAlignment,
@@ -214,10 +212,6 @@ class SettingsManager(
       if (newSettings.useExternalStorage != currentSettings.useExternalStorage) {
         putBoolean("use_external_storage", newSettings.useExternalStorage)
         modifiedSettings.add("use_external_storage")
-      }
-      if (newSettings.showOCRDetection != currentSettings.showOCRDetection) {
-        putBoolean("show_ocr_detection", newSettings.showOCRDetection)
-        modifiedSettings.add("show_ocr_detection")
       }
       if (newSettings.fontFactor != currentSettings.fontFactor) {
         putFloat("font_factor", newSettings.fontFactor)

@@ -49,6 +49,8 @@ import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.copyDocumentUriToCache
 import dev.davidv.translator.displayNameForUri
 import dev.davidv.translator.sizeBytesForUri
+import dev.davidv.translator.ui.components.DetectedRegions
+import dev.davidv.translator.ui.components.ImageWordSelection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -101,6 +103,12 @@ class TranslatorViewModel(
 
   private val _originalImage = MutableStateFlow<Bitmap?>(null)
   val originalImage: StateFlow<Bitmap?> = _originalImage.asStateFlow()
+
+  private val _imageWordSelection = MutableStateFlow<ImageWordSelection?>(null)
+  val imageWordSelection: StateFlow<ImageWordSelection?> = _imageWordSelection.asStateFlow()
+
+  private val _detectedRegions = MutableStateFlow<DetectedRegions?>(null)
+  val detectedRegions: StateFlow<DetectedRegions?> = _detectedRegions.asStateFlow()
 
   private data class OcrCacheEntry(
     val plan: PreparedImageOverlay,
@@ -597,6 +605,8 @@ class TranslatorViewModel(
     fromLang: Language,
     toLang: Language,
   ) {
+    _imageWordSelection.value = null
+    _detectedRegions.value = null
     val readingOrder = currentReadingOrderFor(fromLang)
     val cached =
       ocrCache?.takeIf { entry ->
@@ -628,11 +638,22 @@ class TranslatorViewModel(
           onMissingDetectedLanguage = { detected ->
             _currentDetectedLanguage.value = detected
           },
+          onDetectedRegions = { boxes, w, h ->
+            _detectedRegions.value = DetectedRegions(w, h, boxes)
+          },
         )
       }
+    _detectedRegions.value = null
     result?.let {
       _displayImage.value = it.correctedBitmap
       _output.value = TranslatedText(it.translatedText, null)
+      _imageWordSelection.value =
+        ImageWordSelection(
+          imageWidth = it.metadata.width.toInt(),
+          imageHeight = it.metadata.height.toInt(),
+          sourceWords = it.metadata.sourceWords,
+          translatedWords = it.translatedWords,
+        )
       ocrCache =
         OcrCacheEntry(
           plan = it.metadata,

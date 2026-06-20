@@ -411,6 +411,7 @@ class LanguageCatalog private constructor(
     minConfidence: Int,
     readingOrder: ReadingOrder?,
     backgroundMode: BackgroundMode,
+    detection: List<uniffi.translator.DetectedTextBox>? = null,
   ): uniffi.translator.PreparedImageOverlay =
     handle.translateImagePlan(
       rgbaBytes(bitmap),
@@ -422,6 +423,19 @@ class LanguageCatalog private constructor(
       minConfidence.toUInt(),
       readingOrder,
       backgroundMode,
+      detection,
+    )
+
+  @Throws(CatalogException::class)
+  fun detectImageBoxes(
+    bitmap: Bitmap,
+    maxImageSize: Int,
+  ): List<uniffi.translator.DetectedTextBox> =
+    handle.detectImageBoxes(
+      rgbaBytes(bitmap),
+      bitmap.width.toUInt(),
+      bitmap.height.toUInt(),
+      maxImageSize.toUInt(),
     )
 
   @Throws(CatalogException::class)

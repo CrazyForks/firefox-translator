@@ -188,6 +188,7 @@ class TranslationCoordinator(
     readingOrder: ReadingOrder? = null,
     isAutoSource: Boolean = false,
     onMissingDetectedLanguage: (Language) -> Unit = {},
+    onDetectedRegions: (List<uniffi.translator.OrientedRect>, Int, Int) -> Unit = { _, _, _ -> },
   ): ProcessedImageResult? =
     withContext(Dispatchers.IO) {
       _isTranslating.value = true
@@ -204,6 +205,19 @@ class TranslationCoordinator(
           } else {
             OcrSourceSelection.Specific(uniffi.translator.LanguageCode(from.code))
           }
+        // Detect first so the UI can pill the regions and run a scan animation while the heavier
+        // recognition + translation below runs. The detection is fed back into translateImagePlan
+        // so the detector runs only once.
+        val detection =
+          try {
+            catalog.detectImageBoxes(finalBitmap, maxImageSize)
+          } catch (e: uniffi.bindings.CatalogException) {
+            Log.d("OCR", "detectImageBoxes failed: ${e.message}")
+            null
+          }
+        detection?.let { boxes ->
+          onDetectedRegions(boxes.map { it.orientedBox }, finalBitmap.width, finalBitmap.height)
+        }
         val plan =
           try {
             catalog.translateImagePlan(
@@ -214,6 +228,7 @@ class TranslationCoordinator(
               minConfidence,
               readingOrder,
               backgroundMode,
+              detection,
             )
           } catch (e: uniffi.bindings.CatalogException.MissingAsset) {
             Log.d("OCR", "translateImagePlan failed: ${e.message}")

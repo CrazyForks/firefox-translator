@@ -39,7 +39,6 @@ data class AppSettings(
   val enableOutputTransliteration: Boolean = true,
   val useExternalStorage: Boolean = false,
   val fontFactor: Float = 1.0f,
-  val showOCRDetection: Boolean = false,
   val showTransliterationOnInput: Boolean = false,
   val onlyShowOutputOnReadonlyModal: Boolean = false,
   val readonlyModalOutputAlignment: ReadonlyModalOutputAlignment = ReadonlyModalOutputAlignment.MIDDLE,

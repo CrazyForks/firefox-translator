@@ -58,6 +58,7 @@ import kotlin.math.roundToInt
 fun ZoomableImageViewer(
   bitmap: Bitmap,
   originalBitmap: Bitmap,
+  wordSelection: ImageWordSelection?,
   onDismiss: () -> Unit,
   onShare: () -> Unit,
 ) {
@@ -130,9 +131,7 @@ fun ZoomableImageViewer(
           .fillMaxSize()
           .background(Color.Black),
     ) {
-      Image(
-        bitmap = displayed.asImageBitmap(),
-        contentDescription = if (showOriginal) "Zoomable original image" else "Zoomable translated image",
+      Box(
         modifier =
           Modifier
             .fillMaxSize()
@@ -142,7 +141,22 @@ fun ZoomableImageViewer(
               scaleX = scale,
               scaleY = scale,
             ).transformable(state = state),
-      )
+      ) {
+        Image(
+          bitmap = displayed.asImageBitmap(),
+          contentDescription = if (showOriginal) "Zoomable original image" else "Zoomable translated image",
+          modifier = Modifier.fillMaxSize(),
+        )
+
+        if (wordSelection != null) {
+          WordSelectionOverlay(
+            words = if (showOriginal) wordSelection.sourceWords else wordSelection.translatedWords,
+            imageWidth = wordSelection.imageWidth,
+            imageHeight = wordSelection.imageHeight,
+            modifier = Modifier.matchParentSize(),
+          )
+        }
+      }
 
       Row(
         modifier = Modifier.align(Alignment.TopEnd),
