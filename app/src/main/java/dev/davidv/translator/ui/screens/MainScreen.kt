@@ -56,6 +56,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -169,6 +170,7 @@ fun MainScreen(
   var showImageSourceSheet by remember { mutableStateOf(false) }
   // Flip the main image between the translation and the original (resets on a new image).
   var showOriginal by remember(displayImage) { mutableStateOf(false) }
+  val isImageProcessing = isOcrInProgress.collectAsState().value || isTranslating.collectAsState().value
   val inputFocusController = remember { StyledTextFieldFocusController() }
   val extraTopPadding = if (launchMode == LaunchMode.Normal) 0.dp else 8.dp
   val context = LocalContext.current
@@ -280,8 +282,7 @@ fun MainScreen(
                   displayImage = displayImage,
                   originalImage = originalImage,
                   showOriginal = showOriginal,
-                  isOcrInProgress = isOcrInProgress,
-                  isTranslating = isTranslating,
+                  isProcessing = isImageProcessing,
                   detectedRegions = detectedRegions,
                   wordSelection = imageWordSelection,
                   maxHeight = parentHeight * 0.85f,

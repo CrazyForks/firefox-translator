@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +43,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
-import kotlinx.coroutines.flow.StateFlow
 import kotlin.math.roundToInt
 
 /**
@@ -59,17 +57,12 @@ fun ImageDisplaySection(
   displayImage: Bitmap,
   originalImage: Bitmap?,
   showOriginal: Boolean,
-  isOcrInProgress: StateFlow<Boolean>,
-  isTranslating: StateFlow<Boolean>,
+  isProcessing: Boolean,
   detectedRegions: DetectedRegions?,
   wordSelection: ImageWordSelection?,
   maxHeight: Dp,
   modifier: Modifier = Modifier,
 ) {
-  val isOcrInProgressState by isOcrInProgress.collectAsState()
-  val isTranslatingState by isTranslating.collectAsState()
-  val isProcessing = isOcrInProgressState || isTranslatingState
-
   val shown = if (showOriginal && originalImage != null) originalImage else displayImage
   val aspect = displayImage.width.toFloat() / displayImage.height.toFloat()
   val density = LocalDensity.current
