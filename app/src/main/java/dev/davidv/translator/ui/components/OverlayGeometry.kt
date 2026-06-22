@@ -23,7 +23,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.rotate
-import uniffi.translator.OrientedRect
+import uniffi.translator_core.OrientedRect
 import kotlin.math.min
 
 /** Image->view transform for a bitmap drawn with ContentScale.Fit inside `viewSize`. */

@@ -80,9 +80,9 @@ import dev.davidv.translator.TranslatorApplication
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import uniffi.translator.DocumentDetection
-import uniffi.translator.DocumentPoint
-import uniffi.translator.DocumentQuad
+import uniffi.translator_align.DocumentDetection
+import uniffi.translator_align.DocumentPoint
+import uniffi.translator_align.DocumentQuad
 import androidx.compose.ui.geometry.Size as GeometrySize
 
 private const val TAG = "DocAlignActivity"

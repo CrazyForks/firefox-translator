@@ -147,8 +147,8 @@ class TranslatorViewModel(
   private val _dictionaryLookupLanguage = MutableStateFlow<Language?>(null)
   val dictionaryLookupLanguage: StateFlow<Language?> = _dictionaryLookupLanguage.asStateFlow()
 
-  private val _ttsVoices = MutableStateFlow<Map<String, List<uniffi.translator.InstalledTtsPack>>>(emptyMap())
-  val ttsVoices: StateFlow<Map<String, List<uniffi.translator.InstalledTtsPack>>> = _ttsVoices.asStateFlow()
+  private val _ttsVoices = MutableStateFlow<Map<String, List<uniffi.translator_core.InstalledTtsPack>>>(emptyMap())
+  val ttsVoices: StateFlow<Map<String, List<uniffi.translator_core.InstalledTtsPack>>> = _ttsVoices.asStateFlow()
 
   private val _documentTranslation = MutableStateFlow<DocumentTranslationUiState?>(null)
   val documentTranslation: StateFlow<DocumentTranslationUiState?> = _documentTranslation.asStateFlow()

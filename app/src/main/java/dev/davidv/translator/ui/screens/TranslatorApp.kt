@@ -102,11 +102,11 @@ import java.io.FileOutputStream
 import java.io.IOException
 import kotlin.math.roundToInt
 
-private fun defaultVoiceNameForLanguage(packs: List<uniffi.translator.InstalledTtsPack>): String? =
+private fun defaultVoiceNameForLanguage(packs: List<uniffi.translator_core.InstalledTtsPack>): String? =
   packs.firstOrNull()?.voices?.firstOrNull()?.name
 
 private fun packsContainVoice(
-  packs: List<uniffi.translator.InstalledTtsPack>,
+  packs: List<uniffi.translator_core.InstalledTtsPack>,
   voiceName: String,
 ): Boolean = packs.any { pack -> pack.voices.any { it.name == voiceName } }
 

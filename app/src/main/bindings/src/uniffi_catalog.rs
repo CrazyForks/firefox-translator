@@ -762,35 +762,6 @@ impl CatalogHandle {
             .unwrap_or_else(|_| translator::MixedTextTranslationResult::default())
     }
 
-    fn translate_structured_fragments(
-        &self,
-        fragments: Vec<translator::StructuredStyledFragment>,
-        forced_source_code: Option<String>,
-        target_code: String,
-        available_language_codes: Vec<String>,
-        screenshot: Option<translator::OverlayScreenshot>,
-        background_mode: translator::BackgroundMode,
-    ) -> translator::StructuredTranslationResult {
-        let available = available_language_codes
-            .into_iter()
-            .map(translator::LanguageCode::from)
-            .collect::<Vec<_>>();
-        self.session
-            .translate_structured_fragments(
-                &fragments,
-                forced_source_code.as_deref(),
-                &target_code,
-                &available,
-                screenshot.as_ref(),
-                background_mode,
-            )
-            .unwrap_or_else(|error| translator::StructuredTranslationResult {
-                blocks: Vec::new(),
-                nothing_reason: None,
-                error_message: Some(error.message),
-            })
-    }
-
     fn translate_image_plan(
         &self,
         rgba_bytes: Vec<u8>,

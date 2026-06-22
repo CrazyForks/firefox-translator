@@ -20,7 +20,7 @@ package dev.davidv.translator
 import uniffi.bindings.detectLanguageRecord
 import uniffi.bindings.detectLanguageRobustCodeRecord
 
-internal typealias DetectionResult = uniffi.translator.DetectionResult
+internal typealias DetectionResult = uniffi.translator_translate.DetectionResult
 
 internal class NativeLanguageRuntime {
   fun detectLanguage(

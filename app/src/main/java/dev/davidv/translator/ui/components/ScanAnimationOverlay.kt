@@ -32,7 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import uniffi.translator.OrientedRect
+import uniffi.translator_core.OrientedRect
 import kotlin.math.abs
 
 /**

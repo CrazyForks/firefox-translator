@@ -83,116 +83,6 @@ private fun rgbaBytes(bitmap: Bitmap): ByteArray =
     bitmap.copyPixelsToBuffer(ByteBuffer.wrap(bytes))
   }
 
-private data class CroppedOverlayScreenshot(
-  val screenshot: uniffi.translator.OverlayScreenshot,
-  val left: Int,
-  val top: Int,
-)
-
-private fun cropOverlayScreenshot(
-  bitmap: Bitmap,
-  fragments: List<StyledFragment>,
-  marginPx: Int = 4,
-): CroppedOverlayScreenshot? {
-  if (fragments.isEmpty()) return null
-
-  var left = Int.MAX_VALUE
-  var top = Int.MAX_VALUE
-  var right = Int.MIN_VALUE
-  var bottom = Int.MIN_VALUE
-  fragments.forEach { fragment ->
-    val bounds = fragment.bounds
-    left = minOf(left, bounds.left)
-    top = minOf(top, bounds.top)
-    right = maxOf(right, bounds.right)
-    bottom = maxOf(bottom, bounds.bottom)
-  }
-
-  if (left == Int.MAX_VALUE || top == Int.MAX_VALUE) return null
-
-  val cropLeft = (left - marginPx).coerceIn(0, bitmap.width)
-  val cropTop = (top - marginPx).coerceIn(0, bitmap.height)
-  val cropRight = (right + marginPx).coerceIn(cropLeft, bitmap.width)
-  val cropBottom = (bottom + marginPx).coerceIn(cropTop, bitmap.height)
-  val cropWidth = cropRight - cropLeft
-  val cropHeight = cropBottom - cropTop
-  if (cropWidth <= 0 || cropHeight <= 0) return null
-
-  val croppedBitmap = Bitmap.createBitmap(bitmap, cropLeft, cropTop, cropWidth, cropHeight)
-  try {
-    return CroppedOverlayScreenshot(
-      screenshot =
-        uniffi.translator.OverlayScreenshot(
-          rgbaBytes(croppedBitmap),
-          croppedBitmap.width.toUInt(),
-          croppedBitmap.height.toUInt(),
-        ),
-      left = cropLeft,
-      top = cropTop,
-    )
-  } finally {
-    croppedBitmap.recycle()
-  }
-}
-
-private fun shiftStyledFragment(
-  fragment: StyledFragment,
-  dx: Int,
-  dy: Int,
-): StyledFragment {
-  val bounds = fragment.bounds
-  return StyledFragment(
-    text = fragment.text,
-    boundingBox =
-      Rect(
-        left = (bounds.left - dx).coerceAtLeast(0),
-        top = (bounds.top - dy).coerceAtLeast(0),
-        right = (bounds.right - dx).coerceAtLeast(0),
-        bottom = (bounds.bottom - dy).coerceAtLeast(0),
-      ).toUniffiRect(),
-    style = fragment.style,
-    layoutGroup = fragment.layoutGroup,
-    translationGroup = fragment.translationGroup,
-    clusterGroup = fragment.clusterGroup,
-  )
-}
-
-private fun shiftStructuredTranslationResult(
-  result: uniffi.translator.StructuredTranslationResult,
-  dx: Int,
-  dy: Int,
-): uniffi.translator.StructuredTranslationResult =
-  uniffi.translator.StructuredTranslationResult(
-    blocks =
-      result.blocks.map { block ->
-        val bounds =
-          Rect(
-            block.boundingBox.left.toInt() + dx,
-            block.boundingBox.top.toInt() + dy,
-            block.boundingBox.right.toInt() + dx,
-            block.boundingBox.bottom.toInt() + dy,
-          ).toUniffiRect()
-        uniffi.translator.TranslatedStyledBlock(
-          text = block.text,
-          boundingBox = bounds,
-          sourceRects =
-            block.sourceRects.map { rect ->
-              Rect(
-                rect.left.toInt() + dx,
-                rect.top.toInt() + dy,
-                rect.right.toInt() + dx,
-                rect.bottom.toInt() + dy,
-              ).toUniffiRect()
-            },
-          styleSpans = block.styleSpans,
-          backgroundArgb = block.backgroundArgb,
-          foregroundArgb = block.foregroundArgb,
-        )
-      },
-    nothingReason = result.nothingReason,
-    errorMessage = result.errorMessage,
-  )
-
 data class LanguageTtsRegionV2(
   val displayName: String,
   val voices: List<String> = emptyList(),
@@ -353,7 +243,7 @@ class LanguageCatalog private constructor(
     forcedSourceLanguage: Language?,
     targetLanguage: Language,
     availableLanguages: List<Language>,
-  ): uniffi.translator.MixedTextTranslationResult =
+  ): uniffi.translator_translate.MixedTextTranslationResult =
     handle.translateMixedTexts(
       inputs,
       forcedSourceLanguage?.code,
@@ -368,51 +258,17 @@ class LanguageCatalog private constructor(
     fragments: List<String>,
   ): List<String> = handle.translateHtmlFragments(from.code, to.code, fragments)
 
-  fun translateStructuredFragments(
-    fragments: List<StyledFragment>,
-    forcedSourceLanguage: Language?,
-    targetLanguage: Language,
-    availableLanguages: List<Language>,
-    screenshot: Bitmap?,
-    backgroundMode: BackgroundMode,
-  ): uniffi.translator.StructuredTranslationResult {
-    val needsScreenshotSampling =
-      backgroundMode == BackgroundMode.AUTO_DETECT &&
-        fragments.any { !(it.style?.hasRealBackground() ?: false) }
-    val croppedScreenshot = screenshot?.takeIf { needsScreenshotSampling }?.let { cropOverlayScreenshot(it, fragments) }
-    val nativeFragments =
-      if (croppedScreenshot != null) {
-        fragments.map { shiftStyledFragment(it, croppedScreenshot.left, croppedScreenshot.top) }
-      } else {
-        fragments
-      }
-    val result =
-      handle.translateStructuredFragments(
-        nativeFragments,
-        forcedSourceLanguage?.code,
-        targetLanguage.code,
-        availableLanguages.map { it.code },
-        croppedScreenshot?.screenshot,
-        backgroundMode,
-      )
-    return if (croppedScreenshot != null) {
-      shiftStructuredTranslationResult(result, croppedScreenshot.left, croppedScreenshot.top)
-    } else {
-      result
-    }
-  }
-
   @Throws(CatalogException::class)
   fun translateImagePlan(
     bitmap: Bitmap,
     maxImageSize: Int,
-    sourceSelection: uniffi.translator.OcrSourceSelection,
+    sourceSelection: uniffi.translator_core.OcrSourceSelection,
     to: Language,
     minConfidence: Int,
     readingOrder: ReadingOrder?,
     backgroundMode: BackgroundMode,
-    detection: List<uniffi.translator.DetectedTextBox>? = null,
-  ): uniffi.translator.PreparedImageOverlay =
+    detection: List<uniffi.translator_core.DetectedTextBox>? = null,
+  ): uniffi.translator_core.PreparedImageOverlay =
     handle.translateImagePlan(
       rgbaBytes(bitmap),
       bitmap.width.toUInt(),
@@ -430,7 +286,7 @@ class LanguageCatalog private constructor(
   fun detectImageBoxes(
     bitmap: Bitmap,
     maxImageSize: Int,
-  ): List<uniffi.translator.DetectedTextBox> =
+  ): List<uniffi.translator_core.DetectedTextBox> =
     handle.detectImageBoxes(
       rgbaBytes(bitmap),
       bitmap.width.toUInt(),
@@ -440,10 +296,10 @@ class LanguageCatalog private constructor(
 
   @Throws(CatalogException::class)
   fun retranslateImagePlan(
-    prepared: uniffi.translator.PreparedImageOverlay,
+    prepared: uniffi.translator_core.PreparedImageOverlay,
     from: Language,
     to: Language,
-  ): uniffi.translator.PreparedImageOverlay = handle.retranslateImagePlan(prepared, from.code, to.code)
+  ): uniffi.translator_core.PreparedImageOverlay = handle.retranslateImagePlan(prepared, from.code, to.code)
 
   /** Internal accessor for the raw uniffi `CatalogHandle`. The live-
    *  overlay pipeline constructor takes this so it can hold an Arc to
@@ -453,23 +309,23 @@ class LanguageCatalog private constructor(
 
   @Throws(CatalogException::class)
   fun renderTranslatedOverlay(
-    plan: uniffi.translator.PreparedImageOverlay,
+    plan: uniffi.translator_core.PreparedImageOverlay,
     targetLanguage: Language,
     minFontSizePx: Float,
-  ): uniffi.translator.RenderedOverlay = uniffi.bindings.renderTranslatedOverlay(plan, targetLanguage.code, minFontSizePx)
+  ): uniffi.translator_render.RenderedOverlay = uniffi.bindings.renderTranslatedOverlay(plan, targetLanguage.code, minFontSizePx)
 
   @Throws(CatalogException::class)
-  fun detectDocumentQuad(bitmap: Bitmap): uniffi.translator.DocumentDetection? =
+  fun detectDocumentQuad(bitmap: Bitmap): uniffi.translator_align.DocumentDetection? =
     handle.detectDocumentQuad(rgbaBytes(bitmap), bitmap.width.toUInt(), bitmap.height.toUInt())
 
   @Throws(CatalogException::class)
   fun warpDocumentRgba(
     bitmap: Bitmap,
-    quad: uniffi.translator.DocumentQuad,
+    quad: uniffi.translator_align.DocumentQuad,
     outWidth: Int? = null,
     outHeight: Int? = null,
     postprocess: Boolean = true,
-  ): uniffi.translator.WarpedImageRgba =
+  ): uniffi.translator_align.WarpedImageRgba =
     handle.warpDocumentRgba(
       rgbaBytes(bitmap),
       bitmap.width.toUInt(),
@@ -558,7 +414,7 @@ class LanguageCatalog private constructor(
       )
     }
 
-  fun installedTtsVoices(languageCode: String): List<uniffi.translator.InstalledTtsPack> = handle.installedTtsVoices(languageCode)
+  fun installedTtsVoices(languageCode: String): List<uniffi.translator_core.InstalledTtsPack> = handle.installedTtsVoices(languageCode)
 
   fun planSpeechChunks(
     languageCode: String,
@@ -610,7 +466,7 @@ fun sampleOverlayColors(
 
   val croppedBitmap = Bitmap.createBitmap(bitmap, cropLeft, cropTop, cropWidth, cropHeight)
   val localBounds =
-    uniffi.translator.Rect(
+    uniffi.translator_core.Rect(
       left = (bounds.left - cropLeft).coerceIn(0, cropWidth).toUInt(),
       top = (bounds.top - cropTop).coerceIn(0, cropHeight).toUInt(),
       right = (bounds.right - cropLeft).coerceIn(0, cropWidth).toUInt(),
@@ -625,7 +481,7 @@ fun sampleOverlayColors(
       if (right <= left || bottom <= top) {
         null
       } else {
-        uniffi.translator.Rect(
+        uniffi.translator_core.Rect(
           left = left.toUInt(),
           top = top.toUInt(),
           right = right.toUInt(),

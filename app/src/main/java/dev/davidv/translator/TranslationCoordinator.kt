@@ -25,8 +25,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import uniffi.translator.OcrSourceSelection
-import uniffi.translator.PreparedImageOverlay
+import uniffi.translator_core.OcrSourceSelection
+import uniffi.translator_core.PreparedImageOverlay
 import java.nio.ByteBuffer
 import kotlin.system.measureTimeMillis
 
@@ -126,39 +126,6 @@ class TranslationCoordinator(
     availableLanguages: List<Language>,
   ): Language? = languageDetector.detectLanguageRobust(text, hint, availableLanguages)
 
-  suspend fun translateStructuredFragments(
-    fragments: List<StyledFragment>,
-    forcedSourceLanguage: Language?,
-    targetLanguage: Language,
-    availableLanguages: List<Language>,
-    screenshot: Bitmap?,
-  ): StructuredFragmentTranslationOutput {
-    if (fragments.isEmpty()) {
-      return StructuredFragmentTranslationOutput.NothingToTranslate(NothingReason.NO_TRANSLATABLE_TEXT)
-    }
-
-    _isTranslating.value = true
-    val result: StructuredFragmentTranslationOutput
-    try {
-      val elapsed =
-        measureTimeMillis {
-          result =
-            translationService.translateStructuredFragments(
-              fragments = fragments,
-              forcedSourceLanguage = forcedSourceLanguage,
-              targetLanguage = targetLanguage,
-              availableLanguages = availableLanguages,
-              screenshot = screenshot,
-            )
-        }
-      Log.d("TranslationCoordinator", "Structured fragment translation of ${fragments.size} fragments took ${elapsed}ms")
-    } finally {
-      lastTranslatedInput = fragments.lastOrNull()?.text ?: ""
-      _isTranslating.value = false
-    }
-    return result
-  }
-
   suspend fun correctBitmap(
     uri: Uri,
     deleteAfterLoad: Boolean = false,
@@ -188,7 +155,7 @@ class TranslationCoordinator(
     readingOrder: ReadingOrder? = null,
     isAutoSource: Boolean = false,
     onMissingDetectedLanguage: (Language) -> Unit = {},
-    onDetectedRegions: (List<uniffi.translator.OrientedRect>, Int, Int) -> Unit = { _, _, _ -> },
+    onDetectedRegions: (List<uniffi.translator_core.OrientedRect>, Int, Int) -> Unit = { _, _, _ -> },
   ): ProcessedImageResult? =
     withContext(Dispatchers.IO) {
       _isTranslating.value = true
@@ -203,7 +170,7 @@ class TranslationCoordinator(
           if (isAutoSource) {
             OcrSourceSelection.Auto
           } else {
-            OcrSourceSelection.Specific(uniffi.translator.LanguageCode(from.code))
+            OcrSourceSelection.Specific(uniffi.translator_core.LanguageCode(from.code))
           }
         // Detect first so the UI can pill the regions and run a scan animation while the heavier
         // recognition + translation below runs. The detection is fed back into translateImagePlan
@@ -249,7 +216,7 @@ class TranslationCoordinator(
         val extractedText = plan.extractedText
         onMessage(TranslatorMessage.ImageTextDetected(extractedText))
         lateinit var overlayBitmap: Bitmap
-        var translatedWords: List<uniffi.translator.PositionedWord> = emptyList()
+        var translatedWords: List<uniffi.translator_core.PositionedWord> = emptyList()
         val translatePaint =
           measureTimeMillis {
             val rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
@@ -297,7 +264,7 @@ class TranslationCoordinator(
         val extractedText = plan.extractedText
         onMessage(TranslatorMessage.ImageTextDetected(extractedText))
         lateinit var overlayBitmap: Bitmap
-        var translatedWords: List<uniffi.translator.PositionedWord> = emptyList()
+        var translatedWords: List<uniffi.translator_core.PositionedWord> = emptyList()
         val translatePaint =
           measureTimeMillis {
             val rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
@@ -340,7 +307,10 @@ class TranslationCoordinator(
 
   suspend fun availableTtsVoices(language: Language): List<TtsVoiceOption> = speechService.availableTtsVoices(language)
 
-  suspend fun installedTtsVoices(language: Language): List<uniffi.translator.InstalledTtsPack> = speechService.installedTtsVoices(language)
+  suspend fun installedTtsVoices(language: Language): List<uniffi.translator_core.InstalledTtsPack> =
+    speechService.installedTtsVoices(
+      language,
+    )
 
   private fun bitmapFromRgba(
     bytes: ByteArray,
@@ -369,5 +339,5 @@ data class ProcessedImageResult(
   val metadata: PreparedImageOverlay,
   // Per-word boxes of the rendered translation (image space). Source-word boxes for the
   // original text live on `metadata.sourceWords`. Both drive drag-to-copy.
-  val translatedWords: List<uniffi.translator.PositionedWord>,
+  val translatedWords: List<uniffi.translator_core.PositionedWord>,
 )

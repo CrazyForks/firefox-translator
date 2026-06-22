@@ -52,8 +52,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.R
-import uniffi.translator.OrientedRect
-import uniffi.translator.PositionedWord
+import uniffi.translator_core.OrientedRect
+import uniffi.translator_core.PositionedWord
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos

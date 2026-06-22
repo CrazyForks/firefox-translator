@@ -1,17 +1,17 @@
 package dev.davidv.translator
 
-typealias ReadingOrder = uniffi.translator.ReadingOrder
-typealias NothingReason = uniffi.translator.NothingReason
-typealias BackgroundMode = uniffi.translator.BackgroundMode
-typealias PreparedImageOverlay = uniffi.translator.PreparedImageOverlay
-typealias TokenAlignment = uniffi.translator.TokenAlignment
-typealias TranslationWithAlignment = uniffi.translator.TranslationWithAlignment
+typealias ReadingOrder = uniffi.translator_core.ReadingOrder
+typealias NothingReason = uniffi.translator_translate.NothingReason
+typealias BackgroundMode = uniffi.translator_core.BackgroundMode
+typealias PreparedImageOverlay = uniffi.translator_core.PreparedImageOverlay
+typealias TokenAlignment = uniffi.translator_translate.TokenAlignment
+typealias TranslationWithAlignment = uniffi.translator_translate.TranslationWithAlignment
 typealias Feature = uniffi.translator.Feature
-typealias DownloadPlan = uniffi.translator.DownloadPlan
-typealias DownloadTask = uniffi.translator.DownloadTask
-typealias DeletePlan = uniffi.translator.DeletePlan
-typealias TtsVoicePackInfo = uniffi.translator.TtsVoicePackInfo
-typealias TtsVoicePickerRegion = uniffi.translator.TtsVoicePickerRegion
+typealias DownloadPlan = uniffi.translator_core.DownloadPlan
+typealias DownloadTask = uniffi.translator_core.DownloadTask
+typealias DeletePlan = uniffi.translator_core.DeletePlan
+typealias TtsVoicePackInfo = uniffi.translator_core.TtsVoicePackInfo
+typealias TtsVoicePickerRegion = uniffi.translator_core.TtsVoicePickerRegion
 
 val BackgroundMode.displayName: String
   get() =

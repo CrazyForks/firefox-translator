@@ -87,37 +87,6 @@ class TranslationService(
       BatchTextTranslationOutput.Translated(translatedByText)
     }
 
-  suspend fun translateStructuredFragments(
-    fragments: List<StyledFragment>,
-    forcedSourceLanguage: Language?,
-    targetLanguage: Language,
-    availableLanguages: List<Language>,
-    screenshot: android.graphics.Bitmap?,
-  ): StructuredFragmentTranslationOutput =
-    withContext(Dispatchers.IO) {
-      val catalog =
-        filePathManager.loadCatalog()
-          ?: return@withContext StructuredFragmentTranslationOutput.Error("Catalog unavailable")
-      val result =
-        catalog.translateStructuredFragments(
-          fragments = fragments,
-          forcedSourceLanguage = forcedSourceLanguage,
-          targetLanguage = targetLanguage,
-          availableLanguages = availableLanguages,
-          screenshot = screenshot,
-          backgroundMode = settingsManager.settings.value.backgroundMode,
-        )
-
-      result.errorMessage?.let { message ->
-        return@withContext StructuredFragmentTranslationOutput.Error(message)
-      }
-      val nothingReason = result.nothingReason
-      if (nothingReason != null && result.blocks.isEmpty()) {
-        return@withContext StructuredFragmentTranslationOutput.NothingToTranslate(nothingReason)
-      }
-      StructuredFragmentTranslationOutput.Success(result.blocks)
-    }
-
   suspend fun translate(
     from: Language,
     to: Language,
@@ -214,18 +183,4 @@ sealed class TranslationResult {
   data class Error(
     val message: String,
   ) : TranslationResult()
-}
-
-sealed class StructuredFragmentTranslationOutput {
-  data class Success(
-    val blocks: List<uniffi.translator.TranslatedStyledBlock>,
-  ) : StructuredFragmentTranslationOutput()
-
-  data class NothingToTranslate(
-    val reason: NothingReason,
-  ) : StructuredFragmentTranslationOutput()
-
-  data class Error(
-    val message: String,
-  ) : StructuredFragmentTranslationOutput()
 }
