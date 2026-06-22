@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1781821445,
+  "generatedAt": 1782120241,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1781821445,
+    "languageIndexUpdatedAt": 1782120241,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1781816467,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -3035,6 +3035,7 @@
       "feature": "translation",
       "from": "ar",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.aren.intgemm.alphas.bin",
@@ -3061,6 +3062,7 @@
       "feature": "translation",
       "from": "az",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.azen.intgemm.alphas.bin",
@@ -3087,6 +3089,7 @@
       "feature": "translation",
       "from": "be",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.been.intgemm.alphas.bin",
@@ -3113,6 +3116,7 @@
       "feature": "translation",
       "from": "bg",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.bgen.intgemm.alphas.bin",
@@ -3139,6 +3143,7 @@
       "feature": "translation",
       "from": "bn",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.bnen.intgemm.alphas.bin",
@@ -3165,6 +3170,7 @@
       "feature": "translation",
       "from": "bs",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.bsen.intgemm.alphas.bin",
@@ -3191,6 +3197,7 @@
       "feature": "translation",
       "from": "ca",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.caen.intgemm.alphas.bin",
@@ -3217,6 +3224,7 @@
       "feature": "translation",
       "from": "cs",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.csen.intgemm.alphas.bin",
@@ -3243,6 +3251,7 @@
       "feature": "translation",
       "from": "da",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.daen.intgemm.alphas.bin",
@@ -3269,6 +3278,7 @@
       "feature": "translation",
       "from": "de",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.deen.intgemm.alphas.bin",
@@ -3295,6 +3305,7 @@
       "feature": "translation",
       "from": "el",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.elen.intgemm.alphas.bin",
@@ -3321,6 +3332,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ar",
+      "experimental": false,
       "files": [
         {
           "name": "model.enar.intgemm.alphas.bin",
@@ -3347,6 +3359,7 @@
       "feature": "translation",
       "from": "en",
       "to": "az",
+      "experimental": false,
       "files": [
         {
           "name": "model.enaz.intgemm.alphas.bin",
@@ -3373,6 +3386,7 @@
       "feature": "translation",
       "from": "en",
       "to": "bg",
+      "experimental": false,
       "files": [
         {
           "name": "model.enbg.intgemm.alphas.bin",
@@ -3399,6 +3413,7 @@
       "feature": "translation",
       "from": "en",
       "to": "bn",
+      "experimental": false,
       "files": [
         {
           "name": "model.enbn.intgemm.alphas.bin",
@@ -3425,6 +3440,7 @@
       "feature": "translation",
       "from": "en",
       "to": "bs",
+      "experimental": false,
       "files": [
         {
           "name": "model.enbs.intgemm.alphas.bin",
@@ -3451,6 +3467,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ca",
+      "experimental": false,
       "files": [
         {
           "name": "model.enca.intgemm.alphas.bin",
@@ -3477,6 +3494,7 @@
       "feature": "translation",
       "from": "en",
       "to": "cs",
+      "experimental": false,
       "files": [
         {
           "name": "model.encs.intgemm.alphas.bin",
@@ -3503,6 +3521,7 @@
       "feature": "translation",
       "from": "en",
       "to": "da",
+      "experimental": false,
       "files": [
         {
           "name": "model.enda.intgemm.alphas.bin",
@@ -3529,6 +3548,7 @@
       "feature": "translation",
       "from": "en",
       "to": "de",
+      "experimental": false,
       "files": [
         {
           "name": "model.ende.intgemm.alphas.bin",
@@ -3555,6 +3575,7 @@
       "feature": "translation",
       "from": "en",
       "to": "el",
+      "experimental": false,
       "files": [
         {
           "name": "model.enel.intgemm.alphas.bin",
@@ -3581,6 +3602,7 @@
       "feature": "translation",
       "from": "en",
       "to": "es",
+      "experimental": false,
       "files": [
         {
           "name": "model.enes.intgemm.alphas.bin",
@@ -3607,6 +3629,7 @@
       "feature": "translation",
       "from": "en",
       "to": "et",
+      "experimental": false,
       "files": [
         {
           "name": "model.enet.intgemm.alphas.bin",
@@ -3633,6 +3656,7 @@
       "feature": "translation",
       "from": "en",
       "to": "eu",
+      "experimental": false,
       "files": [
         {
           "name": "model.eneu.intgemm.alphas.bin",
@@ -3659,6 +3683,7 @@
       "feature": "translation",
       "from": "en",
       "to": "fa",
+      "experimental": false,
       "files": [
         {
           "name": "model.enfa.intgemm.alphas.bin",
@@ -3685,6 +3710,7 @@
       "feature": "translation",
       "from": "en",
       "to": "fi",
+      "experimental": false,
       "files": [
         {
           "name": "model.enfi.intgemm.alphas.bin",
@@ -3711,6 +3737,7 @@
       "feature": "translation",
       "from": "en",
       "to": "fr",
+      "experimental": false,
       "files": [
         {
           "name": "model.enfr.intgemm.alphas.bin",
@@ -3737,6 +3764,7 @@
       "feature": "translation",
       "from": "en",
       "to": "gl",
+      "experimental": false,
       "files": [
         {
           "name": "model.engl.intgemm.alphas.bin",
@@ -3763,6 +3791,7 @@
       "feature": "translation",
       "from": "en",
       "to": "gu",
+      "experimental": false,
       "files": [
         {
           "name": "model.engu.intgemm.alphas.bin",
@@ -3789,6 +3818,7 @@
       "feature": "translation",
       "from": "en",
       "to": "he",
+      "experimental": false,
       "files": [
         {
           "name": "model.enhe.intgemm.alphas.bin",
@@ -3815,6 +3845,7 @@
       "feature": "translation",
       "from": "en",
       "to": "hi",
+      "experimental": false,
       "files": [
         {
           "name": "model.enhi.intgemm.alphas.bin",
@@ -3841,6 +3872,7 @@
       "feature": "translation",
       "from": "en",
       "to": "hr",
+      "experimental": false,
       "files": [
         {
           "name": "model.enhr.intgemm.alphas.bin",
@@ -3867,6 +3899,7 @@
       "feature": "translation",
       "from": "en",
       "to": "hu",
+      "experimental": false,
       "files": [
         {
           "name": "model.enhu.intgemm.alphas.bin",
@@ -3893,6 +3926,7 @@
       "feature": "translation",
       "from": "en",
       "to": "id",
+      "experimental": false,
       "files": [
         {
           "name": "model.enid.intgemm.alphas.bin",
@@ -3919,6 +3953,7 @@
       "feature": "translation",
       "from": "en",
       "to": "is",
+      "experimental": false,
       "files": [
         {
           "name": "model.enis.intgemm.alphas.bin",
@@ -3945,6 +3980,7 @@
       "feature": "translation",
       "from": "en",
       "to": "it",
+      "experimental": false,
       "files": [
         {
           "name": "model.enit.intgemm.alphas.bin",
@@ -3971,6 +4007,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ja",
+      "experimental": false,
       "files": [
         {
           "name": "model.enja.intgemm.alphas.bin",
@@ -4003,6 +4040,7 @@
       "feature": "translation",
       "from": "en",
       "to": "kn",
+      "experimental": false,
       "files": [
         {
           "name": "model.enkn.intgemm.alphas.bin",
@@ -4029,6 +4067,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ko",
+      "experimental": false,
       "files": [
         {
           "name": "model.enko.intgemm.alphas.bin",
@@ -4061,6 +4100,7 @@
       "feature": "translation",
       "from": "en",
       "to": "lt",
+      "experimental": false,
       "files": [
         {
           "name": "model.enlt.intgemm.alphas.bin",
@@ -4087,6 +4127,7 @@
       "feature": "translation",
       "from": "en",
       "to": "lv",
+      "experimental": false,
       "files": [
         {
           "name": "model.enlv.intgemm.alphas.bin",
@@ -4113,6 +4154,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ml",
+      "experimental": false,
       "files": [
         {
           "name": "model.enml.intgemm.alphas.bin",
@@ -4139,6 +4181,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ms",
+      "experimental": false,
       "files": [
         {
           "name": "model.enms.intgemm.alphas.bin",
@@ -4165,6 +4208,7 @@
       "feature": "translation",
       "from": "en",
       "to": "nb",
+      "experimental": false,
       "files": [
         {
           "name": "model.ennb.intgemm.alphas.bin",
@@ -4191,6 +4235,7 @@
       "feature": "translation",
       "from": "en",
       "to": "nl",
+      "experimental": false,
       "files": [
         {
           "name": "model.ennl.intgemm.alphas.bin",
@@ -4217,6 +4262,7 @@
       "feature": "translation",
       "from": "en",
       "to": "no",
+      "experimental": false,
       "files": [
         {
           "name": "model.enno.intgemm.alphas.bin",
@@ -4243,6 +4289,7 @@
       "feature": "translation",
       "from": "en",
       "to": "pl",
+      "experimental": false,
       "files": [
         {
           "name": "model.enpl.intgemm.alphas.bin",
@@ -4269,6 +4316,7 @@
       "feature": "translation",
       "from": "en",
       "to": "pt",
+      "experimental": false,
       "files": [
         {
           "name": "model.enpt.intgemm.alphas.bin",
@@ -4295,6 +4343,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ro",
+      "experimental": false,
       "files": [
         {
           "name": "model.enro.intgemm.alphas.bin",
@@ -4321,6 +4370,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ru",
+      "experimental": false,
       "files": [
         {
           "name": "model.enru.intgemm.alphas.bin",
@@ -4347,6 +4397,7 @@
       "feature": "translation",
       "from": "en",
       "to": "sk",
+      "experimental": false,
       "files": [
         {
           "name": "model.ensk.intgemm.alphas.bin",
@@ -4373,6 +4424,7 @@
       "feature": "translation",
       "from": "en",
       "to": "sl",
+      "experimental": false,
       "files": [
         {
           "name": "model.ensl.intgemm.alphas.bin",
@@ -4399,6 +4451,7 @@
       "feature": "translation",
       "from": "en",
       "to": "sq",
+      "experimental": true,
       "files": [
         {
           "name": "model.ensq.intgemm.alphas.bin",
@@ -4425,6 +4478,7 @@
       "feature": "translation",
       "from": "en",
       "to": "sr",
+      "experimental": false,
       "files": [
         {
           "name": "model.ensr.intgemm.alphas.bin",
@@ -4451,6 +4505,7 @@
       "feature": "translation",
       "from": "en",
       "to": "sv",
+      "experimental": false,
       "files": [
         {
           "name": "model.ensv.intgemm.alphas.bin",
@@ -4477,6 +4532,7 @@
       "feature": "translation",
       "from": "en",
       "to": "ta",
+      "experimental": false,
       "files": [
         {
           "name": "model.enta.intgemm.alphas.bin",
@@ -4503,6 +4559,7 @@
       "feature": "translation",
       "from": "en",
       "to": "te",
+      "experimental": false,
       "files": [
         {
           "name": "model.ente.intgemm.alphas.bin",
@@ -4529,6 +4586,7 @@
       "feature": "translation",
       "from": "en",
       "to": "th",
+      "experimental": false,
       "files": [
         {
           "name": "model.enth.intgemm.alphas.bin",
@@ -4555,6 +4613,7 @@
       "feature": "translation",
       "from": "en",
       "to": "tr",
+      "experimental": false,
       "files": [
         {
           "name": "model.entr.intgemm.alphas.bin",
@@ -4581,6 +4640,7 @@
       "feature": "translation",
       "from": "en",
       "to": "uk",
+      "experimental": false,
       "files": [
         {
           "name": "model.enuk.intgemm.alphas.bin",
@@ -4607,6 +4667,7 @@
       "feature": "translation",
       "from": "en",
       "to": "vi",
+      "experimental": false,
       "files": [
         {
           "name": "model.envi.intgemm.alphas.bin",
@@ -4633,6 +4694,7 @@
       "feature": "translation",
       "from": "en",
       "to": "zh",
+      "experimental": false,
       "files": [
         {
           "name": "model.enzh.intgemm.alphas.bin",
@@ -4665,6 +4727,7 @@
       "feature": "translation",
       "from": "en",
       "to": "zh_hant",
+      "experimental": false,
       "files": [
         {
           "name": "model.enzh_hant.intgemm.alphas.bin",
@@ -4697,6 +4760,7 @@
       "feature": "translation",
       "from": "es",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.esen.intgemm.alphas.bin",
@@ -4723,6 +4787,7 @@
       "feature": "translation",
       "from": "et",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.eten.intgemm.alphas.bin",
@@ -4749,6 +4814,7 @@
       "feature": "translation",
       "from": "eu",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.euen.intgemm.alphas.bin",
@@ -4775,6 +4841,7 @@
       "feature": "translation",
       "from": "fa",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.faen.intgemm.alphas.bin",
@@ -4801,6 +4868,7 @@
       "feature": "translation",
       "from": "fi",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.fien.intgemm.alphas.bin",
@@ -4827,6 +4895,7 @@
       "feature": "translation",
       "from": "fr",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.fren.intgemm.alphas.bin",
@@ -4853,6 +4922,7 @@
       "feature": "translation",
       "from": "gl",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.glen.intgemm.alphas.bin",
@@ -4879,6 +4949,7 @@
       "feature": "translation",
       "from": "gu",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.guen.intgemm.alphas.bin",
@@ -4905,6 +4976,7 @@
       "feature": "translation",
       "from": "he",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.heen.intgemm.alphas.bin",
@@ -4931,6 +5003,7 @@
       "feature": "translation",
       "from": "hi",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.hien.intgemm.alphas.bin",
@@ -4957,6 +5030,7 @@
       "feature": "translation",
       "from": "hr",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.hren.intgemm.alphas.bin",
@@ -4983,6 +5057,7 @@
       "feature": "translation",
       "from": "hu",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.huen.intgemm.alphas.bin",
@@ -5009,6 +5084,7 @@
       "feature": "translation",
       "from": "id",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.iden.intgemm.alphas.bin",
@@ -5035,6 +5111,7 @@
       "feature": "translation",
       "from": "is",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.isen.intgemm.alphas.bin",
@@ -5061,6 +5138,7 @@
       "feature": "translation",
       "from": "it",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.iten.intgemm.alphas.bin",
@@ -5087,6 +5165,7 @@
       "feature": "translation",
       "from": "ja",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.jaen.intgemm.alphas.bin",
@@ -5113,6 +5192,7 @@
       "feature": "translation",
       "from": "kn",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.knen.intgemm.alphas.bin",
@@ -5139,6 +5219,7 @@
       "feature": "translation",
       "from": "ko",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.koen.intgemm.alphas.bin",
@@ -5165,6 +5246,7 @@
       "feature": "translation",
       "from": "lt",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.lten.intgemm.alphas.bin",
@@ -5191,6 +5273,7 @@
       "feature": "translation",
       "from": "lv",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.lven.intgemm.alphas.bin",
@@ -5217,6 +5300,7 @@
       "feature": "translation",
       "from": "ml",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.mlen.intgemm.alphas.bin",
@@ -5243,6 +5327,7 @@
       "feature": "translation",
       "from": "mr",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.mren.intgemm.alphas.bin",
@@ -5269,6 +5354,7 @@
       "feature": "translation",
       "from": "ms",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.msen.intgemm.alphas.bin",
@@ -5295,6 +5381,7 @@
       "feature": "translation",
       "from": "nb",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.nben.intgemm.alphas.bin",
@@ -5321,6 +5408,7 @@
       "feature": "translation",
       "from": "nl",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.nlen.intgemm.alphas.bin",
@@ -5347,6 +5435,7 @@
       "feature": "translation",
       "from": "nn",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.nnen.intgemm.alphas.bin",
@@ -5373,6 +5462,7 @@
       "feature": "translation",
       "from": "no",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.noen.intgemm.alphas.bin",
@@ -5399,6 +5489,7 @@
       "feature": "translation",
       "from": "pl",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.plen.intgemm.alphas.bin",
@@ -5425,6 +5516,7 @@
       "feature": "translation",
       "from": "pt",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.pten.intgemm.alphas.bin",
@@ -5451,6 +5543,7 @@
       "feature": "translation",
       "from": "ro",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.roen.intgemm.alphas.bin",
@@ -5477,6 +5570,7 @@
       "feature": "translation",
       "from": "ru",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.ruen.intgemm.alphas.bin",
@@ -5503,6 +5597,7 @@
       "feature": "translation",
       "from": "sk",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.sken.intgemm.alphas.bin",
@@ -5529,6 +5624,7 @@
       "feature": "translation",
       "from": "sl",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.slen.intgemm.alphas.bin",
@@ -5555,6 +5651,7 @@
       "feature": "translation",
       "from": "sq",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.sqen.intgemm.alphas.bin",
@@ -5581,6 +5678,7 @@
       "feature": "translation",
       "from": "sr",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.sren.intgemm.alphas.bin",
@@ -5607,6 +5705,7 @@
       "feature": "translation",
       "from": "sv",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.sven.intgemm.alphas.bin",
@@ -5633,6 +5732,7 @@
       "feature": "translation",
       "from": "ta",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.taen.intgemm.alphas.bin",
@@ -5659,6 +5759,7 @@
       "feature": "translation",
       "from": "te",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.teen.intgemm.alphas.bin",
@@ -5685,6 +5786,7 @@
       "feature": "translation",
       "from": "th",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.then.intgemm.alphas.bin",
@@ -5711,6 +5813,7 @@
       "feature": "translation",
       "from": "tr",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.tren.intgemm.alphas.bin",
@@ -5737,6 +5840,7 @@
       "feature": "translation",
       "from": "uk",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.uken.intgemm.alphas.bin",
@@ -5763,6 +5867,7 @@
       "feature": "translation",
       "from": "ur",
       "to": "en",
+      "experimental": true,
       "files": [
         {
           "name": "model.uren.intgemm.alphas.bin",
@@ -5789,6 +5894,7 @@
       "feature": "translation",
       "from": "vi",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.vien.intgemm.alphas.bin",
@@ -5815,6 +5921,7 @@
       "feature": "translation",
       "from": "zh",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.zhen.intgemm.alphas.bin",
@@ -5841,6 +5948,7 @@
       "feature": "translation",
       "from": "zh_hant",
       "to": "en",
+      "experimental": false,
       "files": [
         {
           "name": "model.zh_hanten.intgemm.alphas.bin",

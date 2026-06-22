@@ -203,6 +203,13 @@ MODEL_TYPE_PRIORITY = {
     "base-memory": 3,
 }
 
+RELEASE_STATUS_PRIORITY = {
+    "Release Android": 4,
+    "Release": 3,
+    "Release Desktop": 2,
+    "Nightly": 1,
+}
+
 MANIFEST_FILE_TYPES = {
     "model": "model",
     "lexicalShortlist": "lex",
@@ -228,8 +235,17 @@ def strip_compression_suffix(filename: str) -> str:
     return filename
 
 
+def is_experimental_release(release_status: str | None) -> bool:
+    return not (release_status or "").startswith("Release")
+
+
 def select_best_entry(entries: list[dict]) -> dict:
-    return max(entries, key=lambda entry: MODEL_TYPE_PRIORITY.get(entry.get("architecture", ""), 0))
+    def rank(entry: dict) -> tuple[int, int]:
+        release = RELEASE_STATUS_PRIORITY.get(entry.get("releaseStatus"), 0)
+        architecture = MODEL_TYPE_PRIORITY.get(entry.get("architecture", ""), 0)
+        return (release, architecture)
+
+    return max(entries, key=rank)
 
 
 def build_pair_files(manifest: dict) -> dict[tuple[str, str], dict]:
@@ -262,7 +278,10 @@ def build_pair_files(manifest: dict) -> dict[tuple[str, str], dict]:
                 "path": path,
             }
 
-        pair_files[(src, tgt)] = files
+        pair_files[(src, tgt)] = {
+            "files": files,
+            "experimental": is_experimental_release(best_entry.get("releaseStatus")),
+        }
 
     return pair_files
 
@@ -271,7 +290,8 @@ def build_language_data(pair_files: dict[tuple[str, str], dict]) -> tuple[dict, 
     from_english = {}
     to_english = {}
 
-    for (src, tgt), files in pair_files.items():
+    for (src, tgt), pair in pair_files.items():
+        files = pair["files"]
         if "model" not in files:
             continue
         if src != "en" and tgt != "en":
@@ -291,6 +311,7 @@ def build_language_data(pair_files: dict[tuple[str, str], dict]) -> tuple[dict, 
             "srcVocab": src_vocab,
             "tgtVocab": tgt_vocab,
             "lex": lex,
+            "experimental": pair["experimental"],
         }
 
         if src == "en":
@@ -308,6 +329,7 @@ def format_direction(entry: dict) -> dict:
         "srcVocab": entry["srcVocab"],
         "tgtVocab": entry["tgtVocab"],
         "lex": entry["lex"],
+        "experimental": entry["experimental"],
     }
 
 

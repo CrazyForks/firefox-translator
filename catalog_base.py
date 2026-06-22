@@ -118,6 +118,7 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
                 "feature": "translation",
                 "from": from_code,
                 "to": to_code,
+                "experimental": bool(direction["experimental"]),
                 "files": dedupe_files_by_install_path([
                     make_file(
                         name=file_info["name"],
