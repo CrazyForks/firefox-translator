@@ -2785,6 +2785,7 @@ dependencies = [
 [[package]]
 name = "translator"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "glow",
  "image",
@@ -2823,6 +2824,7 @@ dependencies = [
 [[package]]
 name = "translator-align"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "log",
  "mnn-sys",
@@ -2833,6 +2835,7 @@ dependencies = [
 [[package]]
 name = "translator-core"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "log",
  "serde",
@@ -2844,6 +2847,7 @@ dependencies = [
 [[package]]
 name = "translator-dictionary"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "tarkka",
  "translator-core",
@@ -2852,6 +2856,7 @@ dependencies = [
 [[package]]
 name = "translator-doc"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "log",
  "markup5ever",
@@ -2866,6 +2871,7 @@ dependencies = [
 [[package]]
 name = "translator-live"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "image",
  "log",
@@ -2880,6 +2886,7 @@ dependencies = [
 [[package]]
 name = "translator-mucab"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "mucab",
 ]
@@ -2887,6 +2894,7 @@ dependencies = [
 [[package]]
 name = "translator-ocr"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "image",
  "imageproc",
@@ -2902,6 +2910,7 @@ dependencies = [
 [[package]]
 name = "translator-pdf"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "fax",
  "image",
@@ -2918,6 +2927,7 @@ dependencies = [
 [[package]]
 name = "translator-raster"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "image",
  "log",
@@ -2927,6 +2937,7 @@ dependencies = [
 [[package]]
 name = "translator-render"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "rustybuzz",
  "translator-core",
@@ -2941,6 +2952,7 @@ dependencies = [
 [[package]]
 name = "translator-tracker"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "image",
  "log",
@@ -2952,6 +2964,7 @@ dependencies = [
 [[package]]
 name = "translator-translate"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "cld2",
  "html5ever",
@@ -2969,6 +2982,7 @@ dependencies = [
 [[package]]
 name = "translator-transliterate"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "icu_experimental",
  "icu_locale_core",
@@ -2980,6 +2994,7 @@ dependencies = [
 [[package]]
 name = "translator-tts"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
 dependencies = [
  "log",
  "piper-rs",

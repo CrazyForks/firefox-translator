@@ -212,7 +212,7 @@ private fun MigrationBlockingScreen(
             text =
               "You have ${state.ttsCount} text-to-speech " +
                 "${if (state.ttsCount == 1) "model" else "models"} to convert to a new " +
-                "format. It will take approximately ${8 * state.ttsCount} seconds. You will save " +
+                "format. It will take approximately ${6 * state.ttsCount} seconds. You will save " +
                 "%.0f MB of disk space.".format(savedMb),
             textAlign = TextAlign.Center,
           )
@@ -253,7 +253,7 @@ private fun MigrationBlockingScreen(
         else -> {
           CircularProgressIndicator()
           Spacer(Modifier.height(16.dp))
-          Text(text = "Updating models…", textAlign = TextAlign.Center)
+          Text(text = "Optimizing models", textAlign = TextAlign.Center)
         }
       }
     }
