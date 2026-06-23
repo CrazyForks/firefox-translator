@@ -10,7 +10,8 @@ path = "src/lib.rs"
 
 [dependencies]
 jni = { version = "0.21", default-features = false }
-translator-convert = { path = "/home/david/git/translator-rs/crates/translator-convert" }
+translator-convert = { git = "https://github.com/DavidVentura/translator-rs.git" }
+# translator-convert = { path = "/home/david/git/translator-rs/crates/translator-convert" }
 
 # [patch."https://github.com/DavidVentura/mnn-sys"]
 # mnn-sys = { path = "/home/david/git/mnn-sys" }
