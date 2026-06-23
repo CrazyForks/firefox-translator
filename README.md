@@ -18,7 +18,6 @@ Language packs contain the full translation models, translation happens _on your
 
 ## Screenshots
 
-[<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_main_interface.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/01_main_interface.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/03_transliteration.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/02_image_translation.png)
 [<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png" width="200px">](fastlane/metadata/android/en-US/images/phoneScreenshots/05_language_packs.png)
