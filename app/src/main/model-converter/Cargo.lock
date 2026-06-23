@@ -268,6 +268,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "mnn-sys"
 version = "0.1.0"
+source = "git+https://github.com/DavidVentura/mnn-sys#01b736b9e27320bdea6ab0eab207d6a934f4a515"
 dependencies = [
  "bindgen",
  "cc",
