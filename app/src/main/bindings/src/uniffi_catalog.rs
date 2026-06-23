@@ -149,6 +149,56 @@ impl From<translator::catalog::AssetFileV2> for CatalogFileRecord {
     }
 }
 
+/// One on-device ONNX→MNN migration step. Paths are relative to the catalog's
+/// `base_dir` (the same one passed to `CatalogHandle.open`). When `needs_convert`
+/// is false the `.mnn` already exists and only the stray `.onnx` needs dropping.
+/// The actual conversion runs in the separate converter native lib; deletion +
+/// snapshot refresh go through `discard_migration`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct MigrationJobRecord {
+    pub onnx_path: String,
+    pub mnn_path: String,
+    pub quant_bits: i32,
+    pub onnx_bytes: u64,
+    pub mnn_bytes: u64,
+    pub feature: String,
+    pub needs_convert: bool,
+}
+
+impl From<translator::catalog::MigrationJob> for MigrationJobRecord {
+    fn from(job: translator::catalog::MigrationJob) -> Self {
+        Self {
+            onnx_path: job.entry.onnx,
+            mnn_path: job.entry.mnn,
+            quant_bits: job.entry.quant_bits,
+            onnx_bytes: job.entry.onnx_bytes,
+            mnn_bytes: job.entry.mnn_bytes,
+            feature: job.entry.feature,
+            needs_convert: matches!(job.action, translator::catalog::MigrationAction::Convert),
+        }
+    }
+}
+
+impl From<MigrationJobRecord> for translator::catalog::MigrationJob {
+    fn from(record: MigrationJobRecord) -> Self {
+        translator::catalog::MigrationJob {
+            entry: translator::catalog::MigrationEntry {
+                onnx: record.onnx_path,
+                mnn: record.mnn_path,
+                quant_bits: record.quant_bits,
+                onnx_bytes: record.onnx_bytes,
+                mnn_bytes: record.mnn_bytes,
+                feature: record.feature,
+            },
+            action: if record.needs_convert {
+                translator::catalog::MigrationAction::Convert
+            } else {
+                translator::catalog::MigrationAction::CleanupOnly
+            },
+        }
+    }
+}
+
 #[cfg(feature = "dictionary")]
 fn map_dictionary_word(word: translator::tarkka::WordWithTaggedEntries) -> DictionaryWordRecord {
     DictionaryWordRecord {
@@ -594,6 +644,28 @@ impl CatalogHandle {
             .into_iter()
             .map(Into::into)
             .collect()
+    }
+
+    /// ONNX→MNN conversions needed to migrate this install to the MNN-only
+    /// runtime (only entries whose `.onnx` is present on disk). The caller runs
+    /// the `needs_convert` jobs through the converter native lib, then passes the
+    /// finished jobs (plus any cleanup-only / discarded ones) to
+    /// `discard_migration` to drop the `.onnx` and refresh.
+    fn plan_migration(&self) -> Vec<MigrationJobRecord> {
+        self.session
+            .plan_migration()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    /// Delete the source `.onnx` of each job and refresh the catalog snapshot.
+    /// Use after a successful conversion, for cleanup-only jobs, or when the user
+    /// opts to drop models instead of migrating them.
+    fn discard_migration(&self, jobs: Vec<MigrationJobRecord>) {
+        let jobs: Vec<translator::catalog::MigrationJob> =
+            jobs.into_iter().map(Into::into).collect();
+        self.session.discard_migration(&jobs);
     }
 
     fn lookup_dictionary(

@@ -101,8 +101,33 @@ def parse_args() -> argparse.Namespace:
 
 def default_output_for_mode(mode: str) -> Path:
     if mode == "public":
-        return SCRIPT_DIR / "app/src/main/assets/index_v4.json"
+        return SCRIPT_DIR / "app/src/main/assets/index_v5.json"
     return SCRIPT_DIR / "catalog_sources/source_catalog.json"
+
+
+def onnx_to_mnn(path: str) -> str:
+    assert path.endswith(".onnx"), path
+    return path[: -len(".onnx")] + ".mnn"
+
+
+# Model blobs the MNN-only runtime can no longer load as ONNX: every TTS engine
+# voice model and the doc-detection model. The kokoro ONNX engine is dropped
+# entirely (see `is_deprecated_kokoro_onnx_pack`) rather than converted — it has
+# no matching .mnn and is superseded by the native kokoro-mnn pack. `.onnx.json`
+# sidecars stay.
+def pack_models_are_convertible(pack: dict) -> bool:
+    feature = pack.get("feature")
+    return feature == "tts" or (feature == "support" and pack.get("kind") == "doc_detect")
+
+
+# The pre-MNN kokoro engine: the ONNX core blob plus its `engine == "kokoro"`
+# voice packs (which depend on it). Both are unloadable under the MNN-only runtime
+# and fully superseded by the `kokoro_mnn` packs, so they are removed from the
+# public index instead of migrated.
+def is_deprecated_kokoro_onnx_pack(pack: dict) -> bool:
+    if pack.get("kind") == "tts-kokoro-core":
+        return True
+    return pack.get("feature") == "tts" and pack.get("engine") == "kokoro"
 
 
 def build_internal_catalog(args: argparse.Namespace) -> dict:
@@ -144,14 +169,55 @@ def build_public_catalog(source_catalog: dict, bucket_dir: Path, base_url: str, 
     published.pop("translationModelsBaseUrl", None)
     published.pop("dictionaryBaseUrl", None)
 
+    published["packs"] = {
+        pack_id: pack
+        for pack_id, pack in published.get("packs", {}).items()
+        if not is_deprecated_kokoro_onnx_pack(pack)
+    }
+
     missing_paths = []
+    migrations = []
 
     catalog_adblock.publish_adblock_pack(published, bucket_dir, base_url)
 
     for pack in published.get("packs", {}).values():
+        convertible = pack_models_are_convertible(pack)
+        migration_feature = "doc_detect" if pack.get("kind") == "doc_detect" else "tts"
         for file_info in pack.get("files", []):
             mirror_path = catalog_mirror.mirror_path_for_file(pack, file_info)
             local_path = catalog_mirror.bucket_path(bucket_dir, mirror_path)
+
+            # Rewrite a model .onnx entry to its sibling .mnn (what fresh installs
+            # download) and record how an existing install converts its on-disk
+            # .onnx instead of re-downloading.
+            if convertible and file_info["name"].endswith(".onnx"):
+                mnn_mirror = onnx_to_mnn(mirror_path)
+                mnn_local = catalog_mirror.bucket_path(bucket_dir, mnn_mirror)
+                if not mnn_local.exists():
+                    if not allow_missing:
+                        missing_paths.append(str(mnn_local))
+                else:
+                    onnx_install = file_info["installPath"]
+                    onnx_bytes = local_path.stat().st_size if local_path.exists() else 0
+                    mnn_bytes = mnn_local.stat().st_size
+                    migrations.append(
+                        {
+                            "onnx": onnx_install,
+                            "mnn": onnx_to_mnn(onnx_install),
+                            "quantBits": 8,
+                            "onnxBytes": onnx_bytes,
+                            "mnnBytes": mnn_bytes,
+                            "feature": migration_feature,
+                        }
+                    )
+                    file_info["name"] = onnx_to_mnn(file_info["name"])
+                    file_info["installPath"] = onnx_to_mnn(onnx_install)
+                    file_info["sizeBytes"] = mnn_bytes
+                    file_info["url"] = catalog_mirror.mirror_url(base_url, mnn_mirror)
+                    file_info.pop("sourcePath", None)
+                    file_info.pop("mirrorPath", None)
+                    continue
+
             if local_path.exists():
                 file_info["sizeBytes"] = local_path.stat().st_size
                 file_info["url"] = catalog_mirror.mirror_url(base_url, mirror_path)
@@ -174,6 +240,7 @@ def build_public_catalog(source_catalog: dict, bucket_dir: Path, base_url: str, 
             f"Missing {len(missing_paths)} mirrored files under {bucket_dir}.\n{sample}"
         )
 
+    published["migrations"] = migrations
     return published
 
 
@@ -198,6 +265,8 @@ def main() -> None:
     output_path.write_text(json.dumps(catalog, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"Wrote {output_path}")
     print(f"languages={len(catalog['languages'])} packs={len(catalog['packs'])}")
+    if "migrations" in catalog:
+        print(f"migrations={len(catalog['migrations'])}")
 
 
 if __name__ == "__main__":

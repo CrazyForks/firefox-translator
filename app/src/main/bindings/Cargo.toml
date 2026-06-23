@@ -41,8 +41,8 @@ jni = { version = "0.21", default-features = false }
 
 [dependencies.translator]
 default-features = false
-git = "https://github.com/DavidVentura/translator-rs.git"
-# path = "/home/david/git/translator-rs"
+# git = "https://github.com/DavidVentura/translator-rs.git"
+path = "/home/david/git/translator-rs"
 features = ["uniffi", "html"]
 
 [target.'cfg(target_os = "android")'.dependencies]
@@ -59,5 +59,18 @@ android_logger = { version = "0.14", default-features = false }
 
 [profile.release]
 lto = "thin"
+debug = false
+strip = "debuginfo"
+
+# Fast on-device dev builds. Override the built-in `dev` profile rather than
+# a custom one: -sys build scripts (espeak/slimt/mnn) locate their target dir
+# by matching the `PROFILE` env var against a path component, and cargo only
+# ever sets PROFILE to debug/release — a custom profile name lands in an
+# unmatched dir and the build scripts panic. dev defaults already give
+# incremental=true, codegen-units=256, lto=off; we only raise opt-level so the
+# Rust hot paths aren't unusably slow on the phone, and strip to keep the .so
+# small for fast adb push.
+[profile.dev]
+opt-level = 1
 debug = false
 strip = "debuginfo"

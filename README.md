@@ -38,8 +38,7 @@ https://github.com/user-attachments/assets/bf774a4f-3d58-49b7-b4e2-cb30eb395b39
 - PDF surgery uses [mupdf](https://github.com/ArtifexSoftware/mupdf) and [lopdf](https://github.com/J-F-Liu/lopdf)
 - Inference engines are:
   - Translation models: [slimt](https://github.com/jerinphilip/slimt)
-  - Paddle OCR, Kokoro TTS: [MNN](https://github.com/alibaba/MNN/)
-  - Other TTS: [OnnxRuntime](https://github.com/microsoft/onnxruntime)
+  - Paddle OCR, TTS, document alignment: [MNN](https://github.com/alibaba/MNN/)
 
 ## Features & How to Use
 

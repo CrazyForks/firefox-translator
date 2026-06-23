@@ -84,11 +84,22 @@ class MainActivity : ComponentActivity() {
 
     setContent {
       TranslatorTheme {
-        TranslatorApp(
-          viewModel = viewModel,
-          downloadServiceState = downloadServiceState,
-          openLanguageManager = openLanguageManager,
-        )
+        MigrationGate(
+          filePathManager = app.filePathManager,
+          onMigrated = {
+            TranslatorTtsEngine.notifyVoiceDataChanged(applicationContext)
+            // The Application holds its own catalog instance (used by e.g. the
+            // doc-align gate) separate from LanguageStateManager's; refresh it too.
+            app.reloadLanguageCatalog()
+            viewModel.languageStateManager.refreshLanguageAvailability()
+          },
+        ) {
+          TranslatorApp(
+            viewModel = viewModel,
+            downloadServiceState = downloadServiceState,
+            openLanguageManager = openLanguageManager,
+          )
+        }
       }
     }
 

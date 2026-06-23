@@ -105,36 +105,6 @@ val androidSdkRoot =
     ?: throw GradleException("ANDROID_SDK_ROOT or ANDROID_HOME must be set")
 val ndk = "$androidSdkRoot/ndk/28.0.13004108"
 val bindingsAndroidApi = 23
-val onnxRuntimeRootDir = file("../third_party/onnxruntime")
-val onnxRuntimeSourceFingerprint =
-  providers
-    .exec {
-      workingDir = onnxRuntimeRootDir
-      commandLine(
-        "bash",
-        "-lc",
-        """
-        set -euo pipefail
-        if [ ! -e .git ]; then
-          echo missing
-          exit 0
-        fi
-        git rev-parse HEAD
-        git stash create || true
-        git status --short --untracked-files=normal
-        git submodule status --recursive
-        git submodule foreach --quiet --recursive 'printf "%s\n" "${'$'}displaypath"; git rev-parse HEAD; git stash create || true; git status --short --untracked-files=normal'
-        """.trimIndent(),
-      )
-    }.standardOutput
-    .asText
-    .map(String::trim)
-
-fun onnxRuntimeBuildDir(abi: String) = file("${layout.buildDirectory.asFile.get()}/onnxruntime/$abi")
-
-fun onnxRuntimeConfigDir(abi: String) = File(onnxRuntimeBuildDir(abi), "Release")
-
-fun onnxRuntimeSharedLibrary(abi: String) = File(onnxRuntimeConfigDir(abi), "libonnxruntime.so")
 
 fun jniLibAbiDir(abi: String) = File(jniLibsRootDir, abi)
 
@@ -192,81 +162,16 @@ val abiToCargoTarget =
     "x86" to "x86",
   )
 
-val verifyOnnxRuntimeSources =
-  tasks.register("verifyOnnxRuntimeSources") {
-    group = "verification"
-    description = "Verify the ONNX Runtime source tree is already present"
-    doLast {
-      val buildScript = onnxRuntimeRootDir.resolve("tools/ci_build/build.py")
-      if (!buildScript.isFile) {
-        error(
-          "ONNX Runtime sources are missing at ${onnxRuntimeRootDir.absolutePath}. " +
-            "Initialize submodules before running Gradle.",
-        )
-      }
-    }
-  }
-
-val abiToOnnxRuntimeTask =
-  abiToCargoTarget.keys.associateWith { abi ->
-    val taskSuffix = abiToTaskSuffix.getValue(abi)
-    val buildTask =
-      tasks.register("buildOnnxRuntime$taskSuffix", Exec::class) {
-        group = "build"
-        description = "Build ONNX Runtime for $abi"
-        dependsOn(verifyOnnxRuntimeSources)
-        workingDir = onnxRuntimeRootDir
-        // The ONNX Runtime checkout includes paths that Gradle cannot fingerprint reliably on CI.
-        // Fingerprint the git state instead so local edits still invalidate the native build.
-        inputs.property("onnxRuntimeSourceFingerprint", onnxRuntimeSourceFingerprint)
-        inputs.property("abi", abi)
-        inputs.property("androidApi", bindingsAndroidApi)
-        inputs.property("androidSdkRoot", androidSdkRoot)
-        inputs.property("androidNdkRoot", ndk)
-        inputs.property("cmakeCppStandard", "20")
-        inputs.property("cmakePathRemapFlags", cmakePathRemapFlags())
-        outputs.file(onnxRuntimeSharedLibrary(abi))
-        commandLine(
-          "python3",
-          "tools/ci_build/build.py",
-          "--build_dir=${onnxRuntimeBuildDir(abi).absolutePath}",
-          "--config=Release",
-          "--update",
-          "--build",
-          "--targets",
-          "onnxruntime",
-          "--skip_tests",
-          "--parallel",
-          "--android",
-          "--android_abi=$abi",
-          "--android_api=$bindingsAndroidApi",
-          "--android_sdk_path=$androidSdkRoot",
-          "--android_ndk_path=$ndk",
-          "--android_cpp_shared",
-          "--build_shared_lib",
-          "--disable_ml_ops",
-          "--disable_generation_ops",
-          "--no_kleidiai",
-          "--no_sve",
-          "--cmake_extra_defines",
-          "CMAKE_CXX_STANDARD=20",
-          "CMAKE_CXX_STANDARD_REQUIRED=ON",
-          "CMAKE_CXX_EXTENSIONS=OFF",
-          "CMAKE_C_FLAGS=${cmakePathRemapFlags()}",
-          "CMAKE_CXX_FLAGS=${cmakePathRemapFlags()}",
-          "onnxruntime_USE_ARM_NEON_NCHWC=ON",
-          "--skip_submodule_sync",
-        )
-      }
-
-    tasks.register("packageOnnxRuntime$taskSuffix", Copy::class) {
-      group = "build"
-      description = "Copy libonnxruntime.so for $abi into jniLibs"
-      dependsOn(buildTask)
-      from(onnxRuntimeSharedLibrary(abi))
-      into(jniLibAbiDir(abi))
-    }
-  }
+// Fast Rust builds for on-device dev: a Debug-only request (run_phone.sh /
+// Android Studio Run, both `assembleDebug`) builds the `dev` cargo profile
+// (incremental, opt-level 1); anything that touches Release, or an ambiguous
+// request like bare `assemble`, falls back to `--release` so a dev-optimised
+// lib can never be shipped.
+val cargoUseDevFast =
+  gradle.startParameter.taskNames.any { it.contains("Debug") } &&
+    gradle.startParameter.taskNames.none { it.contains("Release") }
+val cargoProfileArgs =
+  if (cargoUseDevFast) listOf("--profile", "dev") else listOf("--release")
 
 val abiToBindingsTask =
   abiToCargoTarget.mapValues { (abi, cargoTarget) ->
@@ -274,7 +179,6 @@ val abiToBindingsTask =
     tasks.register("buildBindings$taskSuffix") {
       group = "build"
       description = "Build Rust bindings library for $abi"
-      dependsOn(abiToOnnxRuntimeTask.getValue(abi))
       inputs.file(bindingsRootDir.resolve("Cargo.toml"))
       inputs.file(bindingsRootDir.resolve("Cargo.lock"))
       inputs.file(bindingsRootDir.resolve(".cargo/config.toml"))
@@ -302,11 +206,11 @@ val abiToBindingsTask =
           if (depCargo.exists()) inputs.file(depCargo)
         }
       }
-      inputs.file(onnxRuntimeSharedLibrary(abi))
       inputs.property("cargoTarget", cargoTarget)
       inputs.property("androidApi", bindingsAndroidApi)
       inputs.property("androidNdkRoot", ndk)
       inputs.property("cargoEncodedRustflags", cargoEncodedRustflags(abi))
+      inputs.property("cargoProfile", if (cargoUseDevFast) "dev" else "release")
       outputs.file(File(jniLibAbiDir(abi), "libbindings.so"))
       outputs.file(File(jniLibAbiDir(abi), "libc++_shared.so"))
 
@@ -315,8 +219,6 @@ val abiToBindingsTask =
           workingDir = bindingsRootDir
           environment("ANDROID_NDK_ROOT", ndk)
           environment("ANDROID_NDK_HOME", ndk)
-          environment("ORT_LIB_LOCATION", onnxRuntimeConfigDir(abi).absolutePath)
-          environment("ORT_PREFER_DYNAMIC_LINK", "1")
           environment("CARGO_ENCODED_RUSTFLAGS", cargoEncodedRustflags(abi))
           // CMake cross-compile contract for slimt-sys: parent build owns
           // toolchain selection, the -sys crate just forwards these.
@@ -334,7 +236,7 @@ val abiToBindingsTask =
             "--lib",
             "--target",
             cargoTarget,
-            "--release",
+            *cargoProfileArgs.toTypedArray(),
             "--platform",
             bindingsAndroidApi.toString(),
             "--link-libcxx-shared",
@@ -346,16 +248,85 @@ val abiToBindingsTask =
     }
   }
 
-tasks.register("buildOnnxRuntimeAll") {
-  group = "build"
-  description = "Build ONNX Runtime for all architectures"
-  dependsOn(abiToOnnxRuntimeTask.values.toList())
-}
-
 tasks.register("buildBindingsAll") {
   group = "build"
   description = "Build Rust bindings library for all architectures"
   dependsOn(abiToBindingsTask.values.toList())
+}
+
+// Separate cdylib for the on-device ONNX->MNN migration converter. It links the
+// MNN converter (full protobuf), which cannot share a binary with slimt's
+// sentencepiece (protobuf-lite), so it must NOT be part of libbindings.so.
+val converterRootDir = file("src/main/model-converter")
+
+val abiToConverterTask =
+  abiToCargoTarget.mapValues { (abi, cargoTarget) ->
+    val taskSuffix = abiToTaskSuffix.getValue(abi)
+    tasks.register("buildModelConverter$taskSuffix") {
+      group = "build"
+      description = "Build the ONNX->MNN converter library for $abi"
+      inputs.file(converterRootDir.resolve("Cargo.toml"))
+      inputs.file(converterRootDir.resolve(".cargo/config.toml"))
+      inputs.dir(converterRootDir.resolve("src"))
+
+      val cargoTomlText = converterRootDir.resolve("Cargo.toml").readText()
+      val pathDepRegex = Regex("""(?m)^\s*(?:[A-Za-z0-9_-]+\s*=\s*\{\s*)?path\s*=\s*"([^"]+)"""")
+      pathDepRegex.findAll(cargoTomlText).forEach { match ->
+        val raw = match.groupValues[1]
+        val resolved =
+          if (File(raw).isAbsolute) File(raw) else converterRootDir.resolve(raw).normalize()
+        val srcDir = resolved.resolve("src")
+        if (srcDir.exists()) {
+          inputs.dir(srcDir)
+          val depCargo = resolved.resolve("Cargo.toml")
+          if (depCargo.exists()) inputs.file(depCargo)
+        }
+      }
+      inputs.property("cargoTarget", cargoTarget)
+      inputs.property("androidApi", bindingsAndroidApi)
+      inputs.property("androidNdkRoot", ndk)
+      inputs.property("cargoEncodedRustflags", cargoEncodedRustflags(abi))
+      inputs.property("cargoProfile", if (cargoUseDevFast) "dev" else "release")
+      // libc++_shared.so is produced/owned by the bindings task; this task only
+      // owns its own .so to avoid overlapping gradle outputs.
+      outputs.file(File(jniLibAbiDir(abi), "libmodel_converter.so"))
+
+      doLast {
+        exec {
+          workingDir = converterRootDir
+          environment("ANDROID_NDK_ROOT", ndk)
+          environment("ANDROID_NDK_HOME", ndk)
+          environment("CARGO_ENCODED_RUSTFLAGS", cargoEncodedRustflags(abi))
+          environment(
+            "CMAKE_TOOLCHAIN_FILE",
+            File(ndk, "build/cmake/android.toolchain.cmake").absolutePath,
+          )
+          environment("ANDROID_ABI", abi)
+          environment("ANDROID_PLATFORM", "android-$bindingsAndroidApi")
+          environment("CMAKE_GENERATOR", "Ninja")
+          commandLine(
+            "cargo",
+            "ndk",
+            "build",
+            "--lib",
+            "--target",
+            cargoTarget,
+            *cargoProfileArgs.toTypedArray(),
+            "--platform",
+            bindingsAndroidApi.toString(),
+            "--link-libcxx-shared",
+            "--output-dir",
+            "../jniLibs",
+          )
+        }
+      }
+    }
+  }
+
+tasks.register("buildModelConverterAll") {
+  group = "build"
+  description = "Build the ONNX->MNN converter library for all architectures"
+  dependsOn(abiToConverterTask.values.toList())
 }
 
 val targetAbi = project.findProperty("targetAbi")?.toString()
@@ -366,6 +337,7 @@ val selectedAbis =
     defaultDevAbis
   }
 val bindingsTasks = selectedAbis.mapNotNull { abiToBindingsTask[it] }
+val converterTasks = selectedAbis.mapNotNull { abiToConverterTask[it] }
 
 val bindgenHostBinary = File(bindingsBindgenRootDir, "target/release/uniffi-bindgen")
 
@@ -416,6 +388,7 @@ val generateUniffiBindings =
 
 tasks.named("preBuild") {
   dependsOn(bindingsTasks)
+  dependsOn(converterTasks)
   dependsOn(generateUniffiBindings)
 }
 

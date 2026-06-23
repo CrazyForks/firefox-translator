@@ -18,7 +18,7 @@
 package dev.davidv.translator
 
 object Constants {
-  const val DEFAULT_CATALOG_INDEX_URL = "https://offline-translator.davidv.dev/index_v4.json"
+  const val DEFAULT_CATALOG_INDEX_URL = "https://offline-translator.davidv.dev/index_v5.json"
 }
 
 enum class AssistantAction(

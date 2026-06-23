@@ -36,6 +36,13 @@ class TranslatorApplication : Application() {
   var languageCatalog: LanguageCatalog? = null
     private set
 
+  /** Re-open the app-level catalog after on-disk model files change (e.g. the
+   *  ONNX→MNN migration), so gates like doc-align see the new state. */
+  fun reloadLanguageCatalog() {
+    languageCatalog = filePathManager.reloadCatalog()
+    languagesFlow.value = languageCatalog?.languageList ?: emptyList()
+  }
+
   override fun onCreate() {
     super.onCreate()
     Log.d("TranslatorApplication", "Initializing application services")

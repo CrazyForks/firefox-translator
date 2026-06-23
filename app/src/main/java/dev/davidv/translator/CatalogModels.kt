@@ -102,6 +102,7 @@ data class CatalogFileEntry(
 
 class LanguageCatalog private constructor(
   private val handle: CatalogHandle,
+  val baseDir: String,
   val formatVersion: Int,
   val generatedAt: Long,
   val dictionaryVersion: Int,
@@ -145,6 +146,7 @@ class LanguageCatalog private constructor(
         languageRows.associate { row -> row.language.code to row.availability }
       return LanguageCatalog(
         handle = handle,
+        baseDir = baseDir,
         formatVersion = handle.formatVersion(),
         generatedAt = handle.generatedAt(),
         dictionaryVersion = handle.dictionaryVersion(),
@@ -368,6 +370,14 @@ class LanguageCatalog private constructor(
   /** Abort an in-flight document translation; workers stop within ~one batch. */
   fun cancelOngoingWork() = handle.cancelOngoingWork()
 
+  /** ONNX→MNN migrations needed for this install (only entries whose `.onnx` is
+   *  on disk). Run `needsConvert` jobs through [ModelConverterJni], then pass the
+   *  finished/cleanup/discarded jobs to [discardMigration]. */
+  fun planMigration(): List<uniffi.bindings.MigrationJobRecord> = handle.planMigration()
+
+  /** Delete each job's source `.onnx` and refresh the catalog snapshot. */
+  fun discardMigration(jobs: List<uniffi.bindings.MigrationJobRecord>) = handle.discardMigration(jobs)
+
   fun planDownload(
     languageCode: String,
     feature: Feature,
@@ -401,8 +411,13 @@ class LanguageCatalog private constructor(
 
   fun supportInstalledByKind(kind: String): Boolean {
     val sizeBytes = supportSizeBytesByKind(kind)
-    val plan = planSupportDownloadByKind(kind) ?: return false
-    return sizeBytes > 0 && plan.tasks.isEmpty()
+    val plan = planSupportDownloadByKind(kind)
+    val installed = plan != null && sizeBytes > 0 && plan.tasks.isEmpty()
+    android.util.Log.i(
+      "CatalogSupport",
+      "supportInstalledByKind $kind: size=$sizeBytes tasks=${plan?.tasks?.size ?: -1} -> $installed",
+    )
+    return installed
   }
 
   fun availableTtsVoices(languageCode: String): List<TtsVoiceOption> =
