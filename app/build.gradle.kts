@@ -162,16 +162,7 @@ val abiToCargoTarget =
     "x86" to "x86",
   )
 
-// Fast Rust builds for on-device dev: a Debug-only request (run_phone.sh /
-// Android Studio Run, both `assembleDebug`) builds the `dev` cargo profile
-// (incremental, opt-level 1); anything that touches Release, or an ambiguous
-// request like bare `assemble`, falls back to `--release` so a dev-optimised
-// lib can never be shipped.
-val cargoUseDevFast =
-  gradle.startParameter.taskNames.any { it.contains("Debug") } &&
-    gradle.startParameter.taskNames.none { it.contains("Release") }
-val cargoProfileArgs =
-  if (cargoUseDevFast) listOf("--profile", "dev") else listOf("--release")
+val cargoProfileArgs = listOf("--release")
 
 val abiToBindingsTask =
   abiToCargoTarget.mapValues { (abi, cargoTarget) ->
@@ -210,7 +201,7 @@ val abiToBindingsTask =
       inputs.property("androidApi", bindingsAndroidApi)
       inputs.property("androidNdkRoot", ndk)
       inputs.property("cargoEncodedRustflags", cargoEncodedRustflags(abi))
-      inputs.property("cargoProfile", if (cargoUseDevFast) "dev" else "release")
+      inputs.property("cargoProfile", "release")
       outputs.file(File(jniLibAbiDir(abi), "libbindings.so"))
       outputs.file(File(jniLibAbiDir(abi), "libc++_shared.so"))
 
@@ -286,7 +277,7 @@ val abiToConverterTask =
       inputs.property("androidApi", bindingsAndroidApi)
       inputs.property("androidNdkRoot", ndk)
       inputs.property("cargoEncodedRustflags", cargoEncodedRustflags(abi))
-      inputs.property("cargoProfile", if (cargoUseDevFast) "dev" else "release")
+      inputs.property("cargoProfile", "release")
       // libc++_shared.so is produced/owned by the bindings task; this task only
       // owns its own .so to avoid overlapping gradle outputs.
       outputs.file(File(jniLibAbiDir(abi), "libmodel_converter.so"))

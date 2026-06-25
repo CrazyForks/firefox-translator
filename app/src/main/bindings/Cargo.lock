@@ -584,6 +584,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "document-features"
+version = "0.2.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
+dependencies = [
+ "litrs",
+]
+
+[[package]]
 name = "dwrote"
 version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -660,6 +669,18 @@ dependencies = [
  "bindgen 0.69.5",
  "cmake",
  "glob",
+]
+
+[[package]]
+name = "fast_image_resize"
+version = "5.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbc7fe45cf92b43817ff62a3723e862b85bd1d06288f63007f7645d1d2f7a060"
+dependencies = [
+ "cfg-if",
+ "document-features",
+ "num-traits",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1452,6 +1473,12 @@ name = "litemap"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92daf443525c4cce67b150400bc2316076100ce0b3686209eb8cf3c31612e6f0"
+
+[[package]]
+name = "litrs"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 
 [[package]]
 name = "lock_api"
@@ -2785,9 +2812,8 @@ dependencies = [
 [[package]]
 name = "translator"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
- "glow",
  "image",
  "imageproc",
  "log",
@@ -2805,6 +2831,7 @@ dependencies = [
  "translator-core",
  "translator-dictionary",
  "translator-doc",
+ "translator-gpu",
  "translator-live",
  "translator-mucab",
  "translator-ocr",
@@ -2824,7 +2851,7 @@ dependencies = [
 [[package]]
 name = "translator-align"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "log",
  "mnn-sys",
@@ -2835,7 +2862,7 @@ dependencies = [
 [[package]]
 name = "translator-core"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "log",
  "serde",
@@ -2847,7 +2874,7 @@ dependencies = [
 [[package]]
 name = "translator-dictionary"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "tarkka",
  "translator-core",
@@ -2856,7 +2883,7 @@ dependencies = [
 [[package]]
 name = "translator-doc"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "log",
  "markup5ever",
@@ -2869,9 +2896,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "translator-gpu"
+version = "0.1.0"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
+dependencies = [
+ "glow",
+ "log",
+ "translator-core",
+ "translator-live",
+ "translator-raster",
+ "translator-render",
+]
+
+[[package]]
 name = "translator-live"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "image",
  "log",
@@ -2886,7 +2926,7 @@ dependencies = [
 [[package]]
 name = "translator-mucab"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "mucab",
 ]
@@ -2894,7 +2934,7 @@ dependencies = [
 [[package]]
 name = "translator-ocr"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "image",
  "imageproc",
@@ -2910,7 +2950,7 @@ dependencies = [
 [[package]]
 name = "translator-pdf"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "fax",
  "image",
@@ -2927,17 +2967,19 @@ dependencies = [
 [[package]]
 name = "translator-raster"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
+ "fast_image_resize",
  "image",
  "log",
+ "rayon",
  "translator-core",
 ]
 
 [[package]]
 name = "translator-render"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "rustybuzz",
  "translator-core",
@@ -2952,7 +2994,7 @@ dependencies = [
 [[package]]
 name = "translator-tracker"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "image",
  "log",
@@ -2964,7 +3006,7 @@ dependencies = [
 [[package]]
 name = "translator-translate"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "cld2",
  "html5ever",
@@ -2982,7 +3024,7 @@ dependencies = [
 [[package]]
 name = "translator-transliterate"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "icu_experimental",
  "icu_locale_core",
@@ -2994,7 +3036,7 @@ dependencies = [
 [[package]]
 name = "translator-tts"
 version = "0.1.0"
-source = "git+https://github.com/DavidVentura/translator-rs.git#27f5d691d5e5ed158227d8e1deeec271c70c5f3d"
+source = "git+https://github.com/DavidVentura/translator-rs.git#3269d5dd50ab79ee19cae039fb01d3cdcb4ab656"
 dependencies = [
  "log",
  "piper-rs",
