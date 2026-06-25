@@ -172,68 +172,99 @@ class TranslationCoordinator(
           } else {
             OcrSourceSelection.Specific(uniffi.translator_core.LanguageCode(from.code))
           }
-        // One pass: detection fires onDetectedRegions mid-call so the UI can pill the regions and
-        // run a scan animation while recognition + translation finish, without crossing the FFI
-        // boundary (or rebuilding the image) twice.
+        // Own the source pixels rust-side (one in-process copy via lockPixels, no byte[]/marshal),
+        // then run detect → ocr → renderInto as separate cheap calls; the multi-MB image never
+        // crosses the FFI boundary. `renderInto` composes the final overlay straight into the
+        // display bitmap's locked pixels.
         val translateStart = System.currentTimeMillis()
+        val srcAddr = NativeBitmap.lockPixels(finalBitmap)
+        if (srcAddr == 0L) {
+          Log.e("TranslationCoordinator", "lockPixels(source) failed")
+          return@withContext null
+        }
+        val ocrImage =
+          uniffi.bindings.OcrImage.fromPixels(
+            srcAddr.toULong(),
+            finalBitmap.width.toUInt(),
+            finalBitmap.height.toUInt(),
+          )
+        NativeBitmap.unlockPixels(finalBitmap)
+
+        val detection =
+          try {
+            catalog.ocrImageDetect(ocrImage, maxImageSize)
+          } catch (e: uniffi.bindings.CatalogException) {
+            Log.d("OCR", "detect failed: ${e.message}")
+            null
+          }
+        detection?.let { boxes ->
+          onDetectedRegions(boxes.map { it.orientedBox }, finalBitmap.width, finalBitmap.height)
+        }
+
         val plan =
           try {
-            catalog.translateImagePlanStreaming(
-              finalBitmap,
+            catalog.ocrImagePlan(
+              ocrImage,
               maxImageSize,
               sourceSelection,
               to,
               minConfidence,
               readingOrder,
               backgroundMode,
-            ) { boxes, width, height ->
-              onDetectedRegions(boxes.map { it.orientedBox }, width, height)
-            }
+              detection,
+            )
           } catch (e: uniffi.bindings.CatalogException.MissingAsset) {
-            Log.d("OCR", "translateImagePlan failed: ${e.message}")
+            Log.d("OCR", "ocr failed: ${e.message}")
             if (isAutoSource) {
               detectedLanguageCodeFromMissingAsset(e.message)
                 ?.let(catalog::languageByCode)
                 ?.let(onMissingDetectedLanguage)
             }
+            ocrImage.close()
             return@withContext null
           } catch (e: uniffi.bindings.CatalogException) {
-            Log.d("OCR", "translateImagePlan failed: ${e.message}")
+            Log.d("OCR", "ocr failed: ${e.message}")
+            ocrImage.close()
             return@withContext null
           }
         _isOcrInProgress.value = false
         Log.i(
           "TranslationCoordinator",
-          "translateImagePlanStreaming FFI (rgba extract + marshal + native): ${System.currentTimeMillis() - translateStart}ms",
+          "detect+ocr (lockpixels, no marshal): ${System.currentTimeMillis() - translateStart}ms",
         )
-
         Log.d("OCR", "complete, blocks=${plan.blocks.size}")
 
         val extractedText = plan.extractedText
         onMessage(TranslatorMessage.ImageTextDetected(extractedText))
-        lateinit var overlayBitmap: Bitmap
+
+        val output =
+          Bitmap.createBitmap(finalBitmap.width, finalBitmap.height, Bitmap.Config.ARGB_8888)
+        val dstAddr = NativeBitmap.lockPixels(output)
+        if (dstAddr == 0L) {
+          Log.e("TranslationCoordinator", "lockPixels(output) failed")
+          ocrImage.close()
+          return@withContext null
+        }
         var translatedWords: List<uniffi.translator_core.PositionedWord> = emptyList()
-        val rendered: uniffi.translator_render.RenderedOverlay
-        val translateMs =
+        val renderMs =
           measureTimeMillis {
-            rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
-            translatedWords = rendered.translatedWords
+            translatedWords =
+              try {
+                catalog.ocrImageRenderInto(ocrImage, plan, to, MIN_OVERLAY_FONT_SIZE_PX, dstAddr)
+              } finally {
+                NativeBitmap.unlockPixels(output)
+              }
           }
-        Log.i("TranslationCoordinator", "Translation took ${translateMs}ms")
-        val overpaintMs =
-          measureTimeMillis {
-            overlayBitmap = bitmapFromRgba(rendered.rgbaBytes, plan.width.toInt(), plan.height.toInt())
-              ?: return@withContext null
-          }
-        Log.i("TranslationCoordinator", "Overpainting took ${overpaintMs}ms")
+        Log.i("TranslationCoordinator", "renderInto took ${renderMs}ms")
         Log.i("TranslationCoordinator", "OCR+translate+.. total: ${System.currentTimeMillis() - totalStart}ms")
 
         ProcessedImageResult(
-          correctedBitmap = overlayBitmap,
+          correctedBitmap = output,
           extractedText = extractedText,
           translatedText = plan.translatedText,
           metadata = plan,
           translatedWords = translatedWords,
+          ocrImage = ocrImage,
         )
       } catch (e: Exception) {
         Log.e("TranslationCoordinator", "Exception ${e.stackTrace}")
@@ -249,11 +280,56 @@ class TranslationCoordinator(
     from: Language,
     to: Language,
     onMessage: (TranslatorMessage.ImageTextDetected) -> Unit,
+    ocrImage: uniffi.bindings.OcrImage? = null,
   ): ProcessedImageResult? =
     withContext(Dispatchers.IO) {
       _isTranslating.value = true
       try {
         val catalog = imageProcessor.loadCatalog() ?: return@withContext null
+
+        // Fast path: the source pixels are still owned rust-side, so re-render the cached OCR
+        // result into a fresh display bitmap without re-OCR or any image copy across the FFI.
+        if (ocrImage != null) {
+          val output =
+            Bitmap.createBitmap(
+              cachedPlan.width.toInt(),
+              cachedPlan.height.toInt(),
+              Bitmap.Config.ARGB_8888,
+            )
+          val dstAddr = NativeBitmap.lockPixels(output)
+          if (dstAddr == 0L) {
+            Log.e("TranslationCoordinator", "lockPixels(retranslate output) failed")
+            return@withContext null
+          }
+          val res =
+            try {
+              catalog.ocrImageRetranslateInto(
+                ocrImage,
+                cachedPlan,
+                from,
+                to,
+                MIN_OVERLAY_FONT_SIZE_PX,
+                dstAddr,
+              )
+            } catch (e: uniffi.bindings.CatalogException) {
+              Log.d("OCR", "retranslateInto failed: ${e.message}")
+              NativeBitmap.unlockPixels(output)
+              return@withContext null
+            } finally {
+              NativeBitmap.unlockPixels(output)
+            }
+          val extractedText = res.plan.extractedText
+          onMessage(TranslatorMessage.ImageTextDetected(extractedText))
+          return@withContext ProcessedImageResult(
+            correctedBitmap = output,
+            extractedText = extractedText,
+            translatedText = res.plan.translatedText,
+            metadata = res.plan,
+            translatedWords = res.words,
+            ocrImage = ocrImage,
+          )
+        }
+
         val plan =
           try {
             catalog.retranslateImagePlan(cachedPlan, from, to)
@@ -341,4 +417,6 @@ data class ProcessedImageResult(
   // Per-word boxes of the rendered translation (image space). Source-word boxes for the
   // original text live on `metadata.sourceWords`. Both drive drag-to-copy.
   val translatedWords: List<uniffi.translator_core.PositionedWord>,
+  // Rust-side owner of the source pixels; reused for a language switch without re-OCR/copy.
+  val ocrImage: uniffi.bindings.OcrImage? = null,
 )

@@ -104,11 +104,6 @@ pub trait DocumentProgressSink: Send + Sync {
     fn is_cancelled(&self) -> bool;
 }
 
-#[uniffi::export(with_foreign)]
-pub trait DetectionSink: Send + Sync {
-    fn on_detected(&self, boxes: Vec<translator::DetectedTextBox>, width: u32, height: u32);
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DictionaryGlossRecord {
     pub gloss_lines: Vec<String>,
@@ -277,6 +272,201 @@ fn render_translated_overlay(
     render_overlay(&prepared, &provider, &opts).map_err(|e| CatalogError::Other {
         reason: e.to_string(),
     })
+}
+
+#[derive(uniffi::Record)]
+pub struct RetranslateResult {
+    pub plan: translator::PreparedImageOverlay,
+    pub words: Vec<translator::ocr::PositionedWord>,
+}
+
+/// Owns a copy of a still image's pixels rust-side so detection, OCR, and overlay rendering
+/// run as separate FFI calls without re-marshalling the (multi-MB) image between them. The
+/// source pixels are read-only after construction; `render_into` composes the translated
+/// overlay into a *caller-provided* buffer, leaving the source intact (re-renderable).
+#[derive(uniffi::Object)]
+pub struct OcrImage {
+    source: Vec<u8>,
+    width: u32,
+    height: u32,
+    // Display-orient RGB + detector downscale, built once and shared by `detect` + `ocr` so the
+    // staged pass doesn't rebuild it (`None` until the first detect/ocr).
+    #[cfg(feature = "ppocr")]
+    still: std::sync::Mutex<Option<Arc<translator::live_frame::StillImage>>>,
+    // Erased background produced by `ocr`, kept rust-side so `render_into` draws onto it
+    // without the erased image crossing the FFI boundary.
+    erased: std::sync::Mutex<Option<Vec<u8>>>,
+}
+
+impl OcrImage {
+    #[cfg(feature = "ppocr")]
+    fn ensure_still(
+        &self,
+        catalog: &CatalogHandle,
+        max_image_size: u32,
+    ) -> Result<Arc<translator::live_frame::StillImage>, CatalogError> {
+        let mut guard = self.still.lock().expect("ocr image still lock");
+        if let Some(still) = guard.as_ref() {
+            return Ok(still.clone());
+        }
+        let still = Arc::new(
+            catalog
+                .session
+                .build_still_image(&self.source, self.width, self.height, max_image_size)
+                .map_err(CatalogError::from)?,
+        );
+        *guard = Some(still.clone());
+        Ok(still)
+    }
+}
+
+#[uniffi::export]
+impl OcrImage {
+    /// Copy the pixels at `pixels_addr` (a locked `ARGB_8888` bitmap, `width*height*4` bytes,
+    /// from [`NativeBitmap.lockPixels`]) into an owned buffer. The caller may unlock immediately.
+    #[uniffi::constructor]
+    fn from_pixels(pixels_addr: u64, width: u32, height: u32) -> Arc<Self> {
+        let len = (width as usize) * (height as usize) * 4;
+        let source = unsafe { std::slice::from_raw_parts(pixels_addr as *const u8, len) }.to_vec();
+        Arc::new(OcrImage {
+            source,
+            width,
+            height,
+            #[cfg(feature = "ppocr")]
+            still: std::sync::Mutex::new(None),
+            erased: std::sync::Mutex::new(None),
+        })
+    }
+
+    #[cfg(feature = "ppocr")]
+    fn detect(
+        &self,
+        catalog: Arc<CatalogHandle>,
+        max_image_size: u32,
+    ) -> Result<Vec<translator::DetectedTextBox>, CatalogError> {
+        let still = self.ensure_still(&catalog, max_image_size)?;
+        catalog
+            .session
+            .detect_boxes_from_still(&still, self.width, self.height)
+            .map_err(CatalogError::from)
+    }
+
+    #[cfg(feature = "ppocr")]
+    #[allow(clippy::too_many_arguments)]
+    fn ocr(
+        &self,
+        catalog: Arc<CatalogHandle>,
+        max_image_size: u32,
+        source_selection: translator::OcrSourceSelection,
+        target_code: String,
+        min_confidence: u32,
+        reading_order: Option<translator::ReadingOrder>,
+        background_mode: translator::BackgroundMode,
+        detection: Option<Vec<translator::DetectedTextBox>>,
+    ) -> Result<translator::PreparedImageOverlay, CatalogError> {
+        let still = self.ensure_still(&catalog, max_image_size)?;
+        let mut overlay = catalog
+            .session
+            .translate_from_still(
+                &still,
+                &self.source,
+                self.width,
+                self.height,
+                source_selection,
+                &target_code,
+                min_confidence,
+                reading_order,
+                background_mode,
+                detection,
+            )
+            .map_err(CatalogError::from)?;
+        // Stash the erased background (move, no clone) and hand back metadata only.
+        *self.erased.lock().expect("ocr image erased lock") =
+            Some(std::mem::take(&mut overlay.rgba_bytes));
+        Ok(overlay)
+    }
+
+    #[cfg(feature = "image-render")]
+    fn render_into(
+        &self,
+        plan: translator::PreparedImageOverlay,
+        language: String,
+        min_font_size_px: f32,
+        dst_addr: u64,
+    ) -> Result<Vec<translator::ocr::PositionedWord>, CatalogError> {
+        use translator::image_render::{RenderOptions, render_overlay};
+        let erased = self
+            .erased
+            .lock()
+            .expect("ocr image erased lock")
+            .clone()
+            .ok_or_else(|| CatalogError::Other {
+                reason: "render_into called before ocr".to_string(),
+            })?;
+        let mut prepared = plan;
+        prepared.rgba_bytes = erased;
+        let opts = RenderOptions {
+            language,
+            min_font_size_px,
+        };
+        let provider = crate::android_font_provider::AndroidFontProvider;
+        let rendered = render_overlay(&prepared, &provider, &opts).map_err(|e| {
+            CatalogError::Other {
+                reason: e.to_string(),
+            }
+        })?;
+        let len = (self.width as usize) * (self.height as usize) * 4;
+        let dst = unsafe { std::slice::from_raw_parts_mut(dst_addr as *mut u8, len) };
+        dst.copy_from_slice(&rendered.rgba_bytes);
+        Ok(rendered.translated_words)
+    }
+
+    /// Re-translate the cached OCR result to a new language and compose it into `dst`, reusing
+    /// the cached erased background — no re-OCR, and the erased image never crosses the FFI.
+    #[cfg(feature = "image-render")]
+    fn retranslate_into(
+        &self,
+        catalog: Arc<CatalogHandle>,
+        plan: translator::PreparedImageOverlay,
+        source_code: String,
+        target_code: String,
+        min_font_size_px: f32,
+        dst_addr: u64,
+    ) -> Result<RetranslateResult, CatalogError> {
+        use translator::image_render::{RenderOptions, render_overlay};
+        let erased = self
+            .erased
+            .lock()
+            .expect("ocr image erased lock")
+            .clone()
+            .ok_or_else(|| CatalogError::Other {
+                reason: "retranslate_into called before ocr".to_string(),
+            })?;
+        let mut prepared = plan;
+        prepared.rgba_bytes = erased;
+        let mut retranslated = catalog
+            .session
+            .retranslate_prepared_overlay(prepared, &source_code, &target_code)
+            .map_err(CatalogError::from)?;
+        let opts = RenderOptions {
+            language: target_code,
+            min_font_size_px,
+        };
+        let provider = crate::android_font_provider::AndroidFontProvider;
+        let rendered = render_overlay(&retranslated, &provider, &opts).map_err(|e| {
+            CatalogError::Other {
+                reason: e.to_string(),
+            }
+        })?;
+        let len = (self.width as usize) * (self.height as usize) * 4;
+        let dst = unsafe { std::slice::from_raw_parts_mut(dst_addr as *mut u8, len) };
+        dst.copy_from_slice(&rendered.rgba_bytes);
+        retranslated.rgba_bytes = Vec::new();
+        Ok(RetranslateResult {
+            plan: retranslated,
+            words: rendered.translated_words,
+        })
+    }
 }
 
 fn document_extension(path: &str) -> String {
@@ -883,61 +1073,6 @@ impl CatalogHandle {
                 reading_order,
                 background_mode,
                 detection,
-            );
-            Err(CatalogError::Other {
-                reason: "OCR feature disabled".to_string(),
-            })
-        }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn translate_image_plan_streaming(
-        &self,
-        rgba_bytes: Vec<u8>,
-        width: u32,
-        height: u32,
-        max_image_size: u32,
-        source_selection: translator::OcrSourceSelection,
-        target_code: String,
-        min_confidence: u32,
-        reading_order: Option<translator::ReadingOrder>,
-        background_mode: translator::BackgroundMode,
-        sink: Arc<dyn DetectionSink>,
-    ) -> Result<translator::PreparedImageOverlay, CatalogError> {
-        #[cfg(feature = "ppocr")]
-        {
-            let on_detected = move |boxes: &[translator::DetectedTextBox]| {
-                sink.on_detected(boxes.to_vec(), width, height);
-            };
-            return self
-                .session
-                .translate_image_rgba_streaming(
-                    &rgba_bytes,
-                    width,
-                    height,
-                    max_image_size,
-                    source_selection,
-                    &target_code,
-                    min_confidence,
-                    reading_order,
-                    background_mode,
-                    &on_detected,
-                )
-                .map_err(CatalogError::from);
-        }
-        #[cfg(not(feature = "ppocr"))]
-        {
-            let _ = (
-                rgba_bytes,
-                width,
-                height,
-                max_image_size,
-                source_selection,
-                target_code,
-                min_confidence,
-                reading_order,
-                background_mode,
-                sink,
             );
             Err(CatalogError::Other {
                 reason: "OCR feature disabled".to_string(),

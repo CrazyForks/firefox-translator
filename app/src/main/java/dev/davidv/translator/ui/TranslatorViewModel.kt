@@ -116,6 +116,9 @@ class TranslatorViewModel(
     val sourceCode: String,
     val sourceScript: String,
     val readingOrder: ReadingOrder?,
+    // Owns the source pixels rust-side so a language switch re-renders without re-OCR or any
+    // image copy across the FFI. Null for images translated via the legacy copying path.
+    val ocrImage: uniffi.bindings.OcrImage?,
   )
 
   private var ocrCache: OcrCacheEntry? = null
@@ -626,6 +629,7 @@ class TranslatorViewModel(
           fromLang,
           toLang,
           onMessage = onMessage,
+          ocrImage = cached.ocrImage,
         )
       } else {
         translationCoordinator.translateImageWithOverlay(
@@ -661,6 +665,7 @@ class TranslatorViewModel(
           sourceCode = fromLang.code,
           sourceScript = fromLang.script,
           readingOrder = readingOrder,
+          ocrImage = it.ocrImage,
         )
     }
   }

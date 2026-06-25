@@ -3,7 +3,6 @@ package dev.davidv.translator
 import android.graphics.Bitmap
 import uniffi.bindings.CatalogException
 import uniffi.bindings.CatalogHandle
-import uniffi.bindings.DetectionSink
 import uniffi.bindings.DocumentProgressEvent
 import uniffi.bindings.DocumentProgressSink
 import uniffi.bindings.TxtLayout
@@ -292,36 +291,6 @@ class LanguageCatalog private constructor(
     )
 
   @Throws(CatalogException::class)
-  fun translateImagePlanStreaming(
-    bitmap: Bitmap,
-    maxImageSize: Int,
-    sourceSelection: uniffi.translator_core.OcrSourceSelection,
-    to: Language,
-    minConfidence: Int,
-    readingOrder: ReadingOrder?,
-    backgroundMode: BackgroundMode,
-    onDetected: (List<uniffi.translator_core.DetectedTextBox>, Int, Int) -> Unit,
-  ): uniffi.translator_core.PreparedImageOverlay =
-    handle.translateImagePlanStreaming(
-      rgbaBytes(bitmap),
-      bitmap.width.toUInt(),
-      bitmap.height.toUInt(),
-      maxImageSize.toUInt(),
-      sourceSelection,
-      to.code,
-      minConfidence.toUInt(),
-      readingOrder,
-      backgroundMode,
-      object : DetectionSink {
-        override fun onDetected(
-          boxes: List<uniffi.translator_core.DetectedTextBox>,
-          width: UInt,
-          height: UInt,
-        ) = onDetected(boxes, width.toInt(), height.toInt())
-      },
-    )
-
-  @Throws(CatalogException::class)
   fun detectImageBoxes(
     bitmap: Bitmap,
     maxImageSize: Int,
@@ -339,6 +308,53 @@ class LanguageCatalog private constructor(
     from: Language,
     to: Language,
   ): uniffi.translator_core.PreparedImageOverlay = handle.retranslateImagePlan(prepared, from.code, to.code)
+
+  @Throws(CatalogException::class)
+  fun ocrImageDetect(
+    img: uniffi.bindings.OcrImage,
+    maxImageSize: Int,
+  ): List<uniffi.translator_core.DetectedTextBox> = img.detect(handle, maxImageSize.toUInt())
+
+  @Throws(CatalogException::class)
+  fun ocrImagePlan(
+    img: uniffi.bindings.OcrImage,
+    maxImageSize: Int,
+    sourceSelection: uniffi.translator_core.OcrSourceSelection,
+    to: Language,
+    minConfidence: Int,
+    readingOrder: ReadingOrder?,
+    backgroundMode: BackgroundMode,
+    detection: List<uniffi.translator_core.DetectedTextBox>?,
+  ): uniffi.translator_core.PreparedImageOverlay =
+    img.ocr(
+      handle,
+      maxImageSize.toUInt(),
+      sourceSelection,
+      to.code,
+      minConfidence.toUInt(),
+      readingOrder,
+      backgroundMode,
+      detection,
+    )
+
+  @Throws(CatalogException::class)
+  fun ocrImageRenderInto(
+    img: uniffi.bindings.OcrImage,
+    plan: uniffi.translator_core.PreparedImageOverlay,
+    to: Language,
+    minFontSizePx: Float,
+    dstAddr: Long,
+  ): List<uniffi.translator_core.PositionedWord> = img.renderInto(plan, to.code, minFontSizePx, dstAddr.toULong())
+
+  @Throws(CatalogException::class)
+  fun ocrImageRetranslateInto(
+    img: uniffi.bindings.OcrImage,
+    plan: uniffi.translator_core.PreparedImageOverlay,
+    from: Language,
+    to: Language,
+    minFontSizePx: Float,
+    dstAddr: Long,
+  ): uniffi.bindings.RetranslateResult = img.retranslateInto(handle, plan, from.code, to.code, minFontSizePx, dstAddr.toULong())
 
   /** Internal accessor for the raw uniffi `CatalogHandle`. The live-
    *  overlay pipeline constructor takes this so it can hold an Arc to

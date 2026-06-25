@@ -9,6 +9,9 @@ pub mod uniffi_catalog;
 #[cfg(all(feature = "planar-tracker", target_os = "android"))]
 mod live_pipeline_jni;
 
+#[cfg(target_os = "android")]
+mod bitmap_jni;
+
 /// Idempotent logger init. Called from the first uniffi entry point
 /// (`CatalogHandle::open`) because uniffi 0.29 for Kotlin loads the
 /// .so via JNA, which does *not* invoke `JNI_OnLoad` — so a JNI-style
