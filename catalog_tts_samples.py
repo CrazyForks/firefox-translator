@@ -37,6 +37,8 @@ TTS_SAMPLES = {
     "ms": "Pelangi ialah fenomena meteorologi yang disebabkan oleh pantulan, pembiasan dan penyebaran cahaya dalam titisan air, lalu menghasilkan spektrum cahaya yang kelihatan di langit.",
     "nl": "Een regenboog is een meteorologisch verschijnsel dat wordt veroorzaakt door reflectie, breking en verstrooiing van licht in waterdruppels, waardoor een lichtspectrum aan de hemel verschijnt.",
     "no": "En regnbue er et meteorologisk fenomen som skyldes refleksjon, brytning og spredning av lys i vanndråper, noe som fører til at et lysspekter blir synlig på himmelen.",
+    "nb": "En regnbue er et meteorologisk fenomen som skyldes refleksjon, brytning og spredning av lys i vanndråper, noe som fører til at et lysspekter blir synlig på himmelen.",
+    "nn": "Ein regnboge er eit meteorologisk fenomen som skuldast refleksjon, bryting og spreiing av lys i vassdropar, noko som fører til at eit lysspekter blir synleg på himmelen.",
     "pl": "Tęcza to zjawisko meteorologiczne spowodowane odbiciem, załamaniem i rozszczepieniem światła w kroplach wody, w wyniku czego na niebie pojawia się widmo światła.",
     "pt": "O arco-íris é um fenómeno meteorológico causado pela reflexão, refração e dispersão da luz nas gotas de água, resultando num espectro de luz visível no céu.",
     "ro": "Curcubeul este un fenomen meteorologic cauzat de reflexia, refracția și dispersia luminii în picăturile de apă, ceea ce face ca un spectru de lumină să apară pe cer.",

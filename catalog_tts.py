@@ -58,6 +58,14 @@ APP_LANGUAGE_OVERRIDES = {
     "zh_HK": "zh_hant",
     "yue_HK": "zh_hant",
 }
+# A spoken-language voice set serves several written-standard app languages.
+# Bokmål and Nynorsk are written norms of spoken Norwegian; the `no` voice
+# (and eSpeak's only Norwegian phonemizer, Bokmål) covers both. The aliased
+# languages reference the source language's voice packs — nothing extra is
+# downloaded. Aliases apply only to targets that have no voices of their own.
+TTS_LANGUAGE_ALIASES = {
+    "no": ["nb", "nn"],
+}
 ESPEAK_DICT_OVERRIDES = {
     "zh": "cmn",
 }
@@ -1184,6 +1192,14 @@ def merge_tts(
                 "displayName": region_display_name(ranked[0][1]),
                 "voices": voice_ids,
             }
+
+    for source, targets in TTS_LANGUAGE_ALIASES.items():
+        if source not in regions_by_language:
+            continue
+        for target in targets:
+            if target not in supported_languages or target in regions_by_language:
+                continue
+            regions_by_language[target] = dict(regions_by_language[source])
 
     missing_samples = sorted(set(regions_by_language) - set(TTS_SAMPLES))
     if missing_samples:

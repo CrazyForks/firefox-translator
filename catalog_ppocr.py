@@ -1,8 +1,8 @@
 """PaddleOCR v5 script-based recognizer mapping.
 
 The PPOCR rec models are organised by script, not by language: one model
-covers every language that uses that script. Maps the script "slugs" used
-in PaddleOCR filenames to the catalog's language codes.
+covers every language that uses that script. A language's recognizer is
+derived from its ISO 15924 script, so adding a language gives it OCR for free.
 
 The shared "cj" model handles Chinese (simplified + traditional) and Japanese
 together. Korean uses its own recognizer.
@@ -82,56 +82,59 @@ PPOCR_RECOGNIZER_FILENAMES = {
     "cj": "PP-OCRv5_mobile_rec_int8.mnn",
 }
 
-# Language codes (catalog keys) served by each PPOCR script.
+# ISO 15924 script code → PPOCR recognizer slug. PPOCR rec models are
+# organised by script, so a language's recognizer follows directly from its
+# script and a newly-added language gets OCR automatically. The one
+# language-level distinction is East Slavic Cyrillic (see below).
 #
-# Specialization tiers: each language is assigned to its most suitable model.
-# English uses the shared Latin model instead of the dedicated English model;
-# `eslav` is preferred over `cyrillic` for Russian / Belarusian / Ukrainian.
-# The fallback slugs (`latin`, `cyrillic`) cover the languages that don't have
-# a script-or-language-specific model.
-#
-# `hebrew` and `indic` are v6 fine-tunes covering the scripts PaddleOCR never
-# shipped (Hebrew, Bengali, Gujarati, Kannada, Malayalam) — these were tesseract-
-# only before. `indic` is one merged recognizer over the four non-Devanagari
-# Indic scripts; Devanagari (hi) keeps its dedicated v5 recognizer.
-PPOCR_SCRIPT_TO_LANGUAGES = {
-    "arabic": ["ar", "fa"],
-    "cyrillic": ["bg", "sr"],          # non-East-Slavic Cyrillic only
-    "devanagari": ["hi"],
-    "el": ["el"],
-    "eslav": ["be", "ru", "uk"],       # specialized East Slavic Cyrillic
-    "hebrew": ["he"],
-    "indic": ["bn", "gu", "kn", "ml"], # merged Bengali/Gujarati/Kannada/Malayalam
-    "korean": ["ko"],
-    "latin": [                         # all Latin-script langs, including en
-        "az", "bs", "ca", "cs", "da", "de", "es", "et", "fi", "fr",
-        "hr", "hu", "id", "is", "it", "lt", "lv", "ms", "nb", "nl",
-        "nn", "no", "pl", "pt", "ro", "sk", "sl", "sq", "sv", "tr",
-        "vi", "en",
-    ],
-    "ta": ["ta"],
-    "te": ["te"],
-    "th": ["th"],
-    "cj": ["ja", "zh", "zh_hant"],
+# `indic` is one merged v6 recognizer over the four non-Devanagari Indic
+# scripts; Devanagari keeps its dedicated v5 recognizer. `hebrew` and `indic`
+# are v6 fine-tunes covering scripts PaddleOCR never shipped a recognizer for
+# (tesseract-only before). The shared `cj` model handles Chinese (simplified +
+# traditional) and Japanese; Korean has its own recognizer.
+ISO_SCRIPT_TO_PPOCR = {
+    "Arab": "arabic",
+    "Beng": "indic",
+    "Cyrl": "cyrillic",
+    "Deva": "devanagari",
+    "Grek": "el",
+    "Gujr": "indic",
+    "Hang": "korean",
+    "Hans": "cj",
+    "Hant": "cj",
+    "Hebr": "hebrew",
+    "Jpan": "cj",
+    "Knda": "indic",
+    "Latn": "latin",
+    "Mlym": "indic",
+    "Taml": "ta",
+    "Telu": "te",
+    "Thai": "th",
 }
 
+# East Slavic languages use the specialized `eslav` recognizer in place of the
+# generic `cyrillic` one.
+PPOCR_EAST_SLAVIC_LANGS = {"be", "ru", "uk"}
 
-def language_to_ppocr_script() -> dict:
-    """Reverse mapping: language code → ppocr script slug.
+# Every recognizer slug that gets a pack, in stable output order.
+PPOCR_RECOGNIZER_SLUGS = [
+    "arabic", "cyrillic", "devanagari", "el", "eslav", "hebrew",
+    "indic", "korean", "latin", "ta", "te", "th", "cj",
+]
 
-    A language only appears here if PPOCR has a recognizer that covers
-    its script. Returned as a fresh dict on each call.
+assert set(ISO_SCRIPT_TO_PPOCR.values()) | {"eslav"} == set(PPOCR_RECOGNIZER_SLUGS)
+
+
+def ppocr_slug_for_language(code: str, script: str) -> str | None:
+    """PPOCR recognizer slug covering `code`, or None if no recognizer fits.
+
+    Derived from the ISO 15924 script, with East Slavic Cyrillic upgraded to
+    the specialized `eslav` recognizer.
     """
-    out = {}
-    for script, langs in PPOCR_SCRIPT_TO_LANGUAGES.items():
-        for lang in langs:
-            if lang in out:
-                raise ValueError(
-                    f"Language {lang} mapped to two ppocr scripts: "
-                    f"{out[lang]} and {script}"
-                )
-            out[lang] = script
-    return out
+    slug = ISO_SCRIPT_TO_PPOCR.get(script)
+    if slug == "cyrillic" and code in PPOCR_EAST_SLAVIC_LANGS:
+        return "eslav"
+    return slug
 
 
 def _keys_filename(script: str) -> str:
@@ -179,7 +182,7 @@ def add_ppocr_packs(catalog: dict) -> None:
 
     languages = catalog["languages"]
     latin_pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, "latin")
-    for script, langs in PPOCR_SCRIPT_TO_LANGUAGES.items():
+    for script in PPOCR_RECOGNIZER_SLUGS:
         pack_id = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, script)
         depends_on = [PPOCR_DETECTOR_PACK_ID]
         if script != "latin":
@@ -212,8 +215,10 @@ def add_ppocr_packs(catalog: dict) -> None:
             "files": files,
             "dependsOn": depends_on,
         }
-        for lang in langs:
-            if lang not in languages:
-                continue
-            ocr_assets = languages[lang]["assets"].setdefault("ocr", {})
-            ocr_assets[PPOCR_ENGINE] = pack_id
+
+    for lang, language in languages.items():
+        slug = ppocr_slug_for_language(lang, language["meta"]["script"])
+        if slug is None:
+            continue
+        ocr_assets = language["assets"].setdefault("ocr", {})
+        ocr_assets[PPOCR_ENGINE] = catalog_base.make_ocr_pack_id(PPOCR_ENGINE, slug)

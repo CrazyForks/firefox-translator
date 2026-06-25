@@ -1,12 +1,12 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1782120241,
+  "generatedAt": 1782376571,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1782120241,
+    "languageIndexUpdatedAt": 1782376571,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1781816467,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -574,7 +574,10 @@
           "translate-en-eu",
           "translate-eu-en"
         ],
-        "dictionary": "dict-eu"
+        "dictionary": "dict-eu",
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "ES",
@@ -699,7 +702,10 @@
           "translate-en-gl",
           "translate-gl-en"
         ],
-        "dictionary": "dict-gl"
+        "dictionary": "dict-gl",
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       },
       "tts": {
         "defaultRegion": "ES",
@@ -1164,7 +1170,10 @@
         "translate": [
           "translate-mr-en"
         ],
-        "dictionary": "dict-mr"
+        "dictionary": "dict-mr",
+        "ocr": {
+          "ppocr": "ocr-ppocr-devanagari"
+        }
       },
       "tts": {
         "defaultRegion": "IN",
@@ -1225,6 +1234,18 @@
         "ocr": {
           "ppocr": "ocr-ppocr-latin"
         }
+      },
+      "tts": {
+        "defaultRegion": "NO",
+        "regions": {
+          "NO": {
+            "displayName": "Norway",
+            "voices": [
+              "tts-piper-no-no-talesyntese-medium"
+            ]
+          }
+        },
+        "sampleText": "En regnbue er et meteorologisk fenomen som skyldes refleksjon, brytning og spredning av lys i vanndråper, noe som fører til at et lysspekter blir synlig på himmelen."
       }
     },
     "nl": {
@@ -1283,6 +1304,18 @@
         "ocr": {
           "ppocr": "ocr-ppocr-latin"
         }
+      },
+      "tts": {
+        "defaultRegion": "NO",
+        "regions": {
+          "NO": {
+            "displayName": "Norway",
+            "voices": [
+              "tts-piper-no-no-talesyntese-medium"
+            ]
+          }
+        },
+        "sampleText": "Ein regnboge er eit meteorologisk fenomen som skuldast refleksjon, bryting og spreiing av lys i vassdropar, noko som fører til at eit lysspekter blir synleg på himmelen."
       }
     },
     "no": {
@@ -1766,7 +1799,10 @@
         "translate": [
           "translate-ur-en"
         ],
-        "dictionary": "dict-ur"
+        "dictionary": "dict-ur",
+        "ocr": {
+          "ppocr": "ocr-ppocr-arabic"
+        }
       },
       "tts": {
         "defaultRegion": "PK",
