@@ -270,6 +270,7 @@
         <service
             android:name=".assistantOverlay.TranslatorVoiceInteractionService"
             android:exported="true"
+            android:directBootAware="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <intent-filter>
                 <action android:name="android.service.voice.VoiceInteractionService" />
@@ -281,11 +282,13 @@
 
         <service
             android:name=".assistantOverlay.TranslatorVoiceInteractionSessionService"
-            android:exported="true" />
+            android:exported="true"
+            android:directBootAware="true" />
 
         <service
             android:name=".assistantOverlay.TranslatorRecognitionService"
             android:exported="true"
+            android:directBootAware="true"
             android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
             <intent-filter>
                 <action android:name="android.speech.RecognitionService" />
