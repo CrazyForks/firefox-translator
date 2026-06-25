@@ -172,28 +172,13 @@ class TranslationCoordinator(
           } else {
             OcrSourceSelection.Specific(uniffi.translator_core.LanguageCode(from.code))
           }
-        // Detect first so the UI can pill the regions and run a scan animation while the heavier
-        // recognition + translation below runs. The detection is fed back into translateImagePlan
-        // so the detector runs only once.
-        val detectStart = System.currentTimeMillis()
-        val detection =
-          try {
-            catalog.detectImageBoxes(finalBitmap, maxImageSize)
-          } catch (e: uniffi.bindings.CatalogException) {
-            Log.d("OCR", "detectImageBoxes failed: ${e.message}")
-            null
-          }
-        Log.i(
-          "TranslationCoordinator",
-          "detectImageBoxes FFI (rgba extract + marshal + native): ${System.currentTimeMillis() - detectStart}ms",
-        )
-        detection?.let { boxes ->
-          onDetectedRegions(boxes.map { it.orientedBox }, finalBitmap.width, finalBitmap.height)
-        }
+        // One pass: detection fires onDetectedRegions mid-call so the UI can pill the regions and
+        // run a scan animation while recognition + translation finish, without crossing the FFI
+        // boundary (or rebuilding the image) twice.
         val translateStart = System.currentTimeMillis()
         val plan =
           try {
-            catalog.translateImagePlan(
+            catalog.translateImagePlanStreaming(
               finalBitmap,
               maxImageSize,
               sourceSelection,
@@ -201,8 +186,9 @@ class TranslationCoordinator(
               minConfidence,
               readingOrder,
               backgroundMode,
-              detection,
-            )
+            ) { boxes, width, height ->
+              onDetectedRegions(boxes.map { it.orientedBox }, width, height)
+            }
           } catch (e: uniffi.bindings.CatalogException.MissingAsset) {
             Log.d("OCR", "translateImagePlan failed: ${e.message}")
             if (isAutoSource) {
@@ -218,7 +204,7 @@ class TranslationCoordinator(
         _isOcrInProgress.value = false
         Log.i(
           "TranslationCoordinator",
-          "translateImagePlan FFI (rgba extract + marshal + native): ${System.currentTimeMillis() - translateStart}ms",
+          "translateImagePlanStreaming FFI (rgba extract + marshal + native): ${System.currentTimeMillis() - translateStart}ms",
         )
 
         Log.d("OCR", "complete, blocks=${plan.blocks.size}")

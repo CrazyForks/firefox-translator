@@ -104,6 +104,11 @@ pub trait DocumentProgressSink: Send + Sync {
     fn is_cancelled(&self) -> bool;
 }
 
+#[uniffi::export(with_foreign)]
+pub trait DetectionSink: Send + Sync {
+    fn on_detected(&self, boxes: Vec<translator::DetectedTextBox>, width: u32, height: u32);
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DictionaryGlossRecord {
     pub gloss_lines: Vec<String>,
@@ -878,6 +883,61 @@ impl CatalogHandle {
                 reading_order,
                 background_mode,
                 detection,
+            );
+            Err(CatalogError::Other {
+                reason: "OCR feature disabled".to_string(),
+            })
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn translate_image_plan_streaming(
+        &self,
+        rgba_bytes: Vec<u8>,
+        width: u32,
+        height: u32,
+        max_image_size: u32,
+        source_selection: translator::OcrSourceSelection,
+        target_code: String,
+        min_confidence: u32,
+        reading_order: Option<translator::ReadingOrder>,
+        background_mode: translator::BackgroundMode,
+        sink: Arc<dyn DetectionSink>,
+    ) -> Result<translator::PreparedImageOverlay, CatalogError> {
+        #[cfg(feature = "ppocr")]
+        {
+            let on_detected = move |boxes: &[translator::DetectedTextBox]| {
+                sink.on_detected(boxes.to_vec(), width, height);
+            };
+            return self
+                .session
+                .translate_image_rgba_streaming(
+                    &rgba_bytes,
+                    width,
+                    height,
+                    max_image_size,
+                    source_selection,
+                    &target_code,
+                    min_confidence,
+                    reading_order,
+                    background_mode,
+                    &on_detected,
+                )
+                .map_err(CatalogError::from);
+        }
+        #[cfg(not(feature = "ppocr"))]
+        {
+            let _ = (
+                rgba_bytes,
+                width,
+                height,
+                max_image_size,
+                source_selection,
+                target_code,
+                min_confidence,
+                reading_order,
+                background_mode,
+                sink,
             );
             Err(CatalogError::Other {
                 reason: "OCR feature disabled".to_string(),

@@ -3,6 +3,7 @@ package dev.davidv.translator
 import android.graphics.Bitmap
 import uniffi.bindings.CatalogException
 import uniffi.bindings.CatalogHandle
+import uniffi.bindings.DetectionSink
 import uniffi.bindings.DocumentProgressEvent
 import uniffi.bindings.DocumentProgressSink
 import uniffi.bindings.TxtLayout
@@ -288,6 +289,36 @@ class LanguageCatalog private constructor(
       readingOrder,
       backgroundMode,
       detection,
+    )
+
+  @Throws(CatalogException::class)
+  fun translateImagePlanStreaming(
+    bitmap: Bitmap,
+    maxImageSize: Int,
+    sourceSelection: uniffi.translator_core.OcrSourceSelection,
+    to: Language,
+    minConfidence: Int,
+    readingOrder: ReadingOrder?,
+    backgroundMode: BackgroundMode,
+    onDetected: (List<uniffi.translator_core.DetectedTextBox>, Int, Int) -> Unit,
+  ): uniffi.translator_core.PreparedImageOverlay =
+    handle.translateImagePlanStreaming(
+      rgbaBytes(bitmap),
+      bitmap.width.toUInt(),
+      bitmap.height.toUInt(),
+      maxImageSize.toUInt(),
+      sourceSelection,
+      to.code,
+      minConfidence.toUInt(),
+      readingOrder,
+      backgroundMode,
+      object : DetectionSink {
+        override fun onDetected(
+          boxes: List<uniffi.translator_core.DetectedTextBox>,
+          width: UInt,
+          height: UInt,
+        ) = onDetected(boxes, width.toInt(), height.toInt())
+      },
     )
 
   @Throws(CatalogException::class)
