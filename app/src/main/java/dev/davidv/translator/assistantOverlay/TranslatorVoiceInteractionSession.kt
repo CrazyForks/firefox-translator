@@ -353,8 +353,11 @@ class TranslatorVoiceInteractionSession(
     val oldCr = croppedBitmap
     oldSs?.recycle()
     if (oldCr != null && oldCr !== oldSs) oldCr.recycle()
-    screenshotBitmap = screenshot.copy(Bitmap.Config.ARGB_8888, false)
-    croppedBitmap = screenshotBitmap?.let { cropSystemBars(it) }
+    // `screenshotBitmap` is the cropped, lockable source of truth (reused by retranslate);
+    // `croppedBitmap` is the currently-displayed bitmap (this source during the scan, then the
+    // translated result), so they start as the same object.
+    screenshotBitmap = croppedSoftwareScreenshot(screenshot)
+    croppedBitmap = screenshotBitmap
     screenshotView.setImageBitmap(croppedBitmap)
     updateBackdrop()
     runFullScreenOcr()
@@ -378,9 +381,9 @@ class TranslatorVoiceInteractionSession(
       return
     }
     val ocrSourceLanguage = sourceLanguage ?: targetLanguage
-    val cropped = cropSystemBars(screenshot)
-    val workingBitmap = cropped.copy(Bitmap.Config.ARGB_8888, false)
-    if (cropped !== screenshot) cropped.recycle()
+    // `screenshot` is already the cropped software source; copy it so the A/B original survives
+    // independently of `croppedBitmap` (which gets reassigned to the translated result).
+    val workingBitmap = screenshot.copy(Bitmap.Config.ARGB_8888, false)
 
     // Show the screenshot with the scan animation while OCR/translation run; the detection callback
     // fills in the regions the scan sweeps over, then the result swaps in the translated image with
@@ -496,10 +499,26 @@ class TranslatorVoiceInteractionSession(
     statusView.visibility = View.GONE
   }
 
-  private fun cropSystemBars(source: Bitmap): Bitmap {
-    val top = systemBarTop.coerceIn(0, source.height - 1)
-    if (top == 0) return source
-    return Bitmap.createBitmap(source, 0, top, source.width, source.height - top)
+  // The system screenshot can be hardware-backed (unlockable) and includes the status bar. Produce
+  // a lockable software ARGB_8888 bitmap with the bar cropped off. A hardware source must be
+  // `copy`-converted to software first (it can't be drawn to a software Canvas); a software source
+  // is cropped directly. Replaces the old full-copy → crop → working-copy chain.
+  private fun croppedSoftwareScreenshot(source: Bitmap): Bitmap {
+    val software =
+      if (source.config == Bitmap.Config.HARDWARE) {
+        source.copy(Bitmap.Config.ARGB_8888, false)
+      } else {
+        source
+      }
+    val top = systemBarTop.coerceIn(0, software.height - 1)
+    val cropped =
+      if (top == 0) {
+        software.copy(Bitmap.Config.ARGB_8888, false)
+      } else {
+        Bitmap.createBitmap(software, 0, top, software.width, software.height - top)
+      }
+    if (software !== source && software !== cropped) software.recycle()
+    return cropped
   }
 
   private fun clearCapture() {
