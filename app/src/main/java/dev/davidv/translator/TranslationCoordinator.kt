@@ -175,6 +175,7 @@ class TranslationCoordinator(
         // Detect first so the UI can pill the regions and run a scan animation while the heavier
         // recognition + translation below runs. The detection is fed back into translateImagePlan
         // so the detector runs only once.
+        val detectStart = System.currentTimeMillis()
         val detection =
           try {
             catalog.detectImageBoxes(finalBitmap, maxImageSize)
@@ -182,9 +183,14 @@ class TranslationCoordinator(
             Log.d("OCR", "detectImageBoxes failed: ${e.message}")
             null
           }
+        Log.i(
+          "TranslationCoordinator",
+          "detectImageBoxes FFI (rgba extract + marshal + native): ${System.currentTimeMillis() - detectStart}ms",
+        )
         detection?.let { boxes ->
           onDetectedRegions(boxes.map { it.orientedBox }, finalBitmap.width, finalBitmap.height)
         }
+        val translateStart = System.currentTimeMillis()
         val plan =
           try {
             catalog.translateImagePlan(
@@ -210,6 +216,10 @@ class TranslationCoordinator(
             return@withContext null
           }
         _isOcrInProgress.value = false
+        Log.i(
+          "TranslationCoordinator",
+          "translateImagePlan FFI (rgba extract + marshal + native): ${System.currentTimeMillis() - translateStart}ms",
+        )
 
         Log.d("OCR", "complete, blocks=${plan.blocks.size}")
 
@@ -217,15 +227,20 @@ class TranslationCoordinator(
         onMessage(TranslatorMessage.ImageTextDetected(extractedText))
         lateinit var overlayBitmap: Bitmap
         var translatedWords: List<uniffi.translator_core.PositionedWord> = emptyList()
-        val translatePaint =
+        val rendered: uniffi.translator_render.RenderedOverlay
+        val translateMs =
           measureTimeMillis {
-            val rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
-            overlayBitmap = bitmapFromRgba(rendered.rgbaBytes, plan.width.toInt(), plan.height.toInt())
-              ?: return@withContext null
+            rendered = catalog.renderTranslatedOverlay(plan, to, MIN_OVERLAY_FONT_SIZE_PX)
             translatedWords = rendered.translatedWords
           }
-        Log.i("TranslationCoordinator", "Overpainting took ${translatePaint}ms")
-        Log.i("TranslationCoordinator", "OCR total: ${System.currentTimeMillis() - totalStart}ms")
+        Log.i("TranslationCoordinator", "Translation took ${translateMs}ms")
+        val overpaintMs =
+          measureTimeMillis {
+            overlayBitmap = bitmapFromRgba(rendered.rgbaBytes, plan.width.toInt(), plan.height.toInt())
+              ?: return@withContext null
+          }
+        Log.i("TranslationCoordinator", "Overpainting took ${overpaintMs}ms")
+        Log.i("TranslationCoordinator", "OCR+translate+.. total: ${System.currentTimeMillis() - totalStart}ms")
 
         ProcessedImageResult(
           correctedBitmap = overlayBitmap,

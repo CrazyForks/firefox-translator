@@ -78,10 +78,16 @@ private fun DocumentProgressEvent.toDocumentTranslationProgress(): DocumentTrans
     DocumentProgressEvent.Writing -> DocumentTranslationProgress.Writing
   }
 
-private fun rgbaBytes(bitmap: Bitmap): ByteArray =
-  ByteArray(bitmap.byteCount).also { bytes ->
+private fun rgbaBytes(bitmap: Bitmap): ByteArray {
+  val start = System.nanoTime()
+  return ByteArray(bitmap.byteCount).also { bytes ->
     bitmap.copyPixelsToBuffer(ByteBuffer.wrap(bytes))
+    android.util.Log.i(
+      "CatalogModels",
+      "rgbaBytes extract: ${bitmap.width}x${bitmap.height} ${bytes.size / 1024}KB — ${(System.nanoTime() - start) / 1_000_000.0}ms",
+    )
   }
+}
 
 data class LanguageTtsRegionV2(
   val displayName: String,
