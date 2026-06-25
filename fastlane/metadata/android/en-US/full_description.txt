@@ -9,11 +9,13 @@ Features:
 • Transliteration of non-latin script
 • Quick translation of on-screen content via Accessibility service or Device Assistant role
 
-Supports 50 languages:
+Supports 57 languages:
 
 - Albanian
 - Arabic
 - Azerbaijani
+- Basque
+- Belarusian
 - Bengali
 - Bosnian
 - Bulgarian
@@ -28,6 +30,7 @@ Supports 50 languages:
 - Estonian
 - Finnish
 - French
+- Galician
 - German
 - Greek
 - Gujarati
@@ -44,8 +47,10 @@ Supports 50 languages:
 - Lithuanian
 - Malay
 - Malayalam
+- Marathi
 - Norwegian
 - Norwegian Bokmål
+- Norwegian Nynorsk
 - Persian
 - Polish
 - Portuguese
@@ -61,4 +66,5 @@ Supports 50 languages:
 - Thai
 - Turkish
 - Ukrainian
+- Urdu
 - Vietnamese

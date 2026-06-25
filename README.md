@@ -25,6 +25,65 @@ Language packs contain the full translation models, translation happens _on your
 
 https://github.com/user-attachments/assets/bf774a4f-3d58-49b7-b4e2-cb30eb395b39
 
+## Supported languages
+
+- Albanian
+- Arabic
+- Azerbaijani
+- Basque
+- Belarusian
+- Bengali
+- Bosnian
+- Bulgarian
+- Catalan
+- Chinese (简体)
+- Chinese (繁體)
+- Croatian
+- Czech
+- Danish
+- Dutch
+- English
+- Estonian
+- Finnish
+- French
+- Galician
+- German
+- Greek
+- Gujarati
+- Hebrew
+- Hindi
+- Hungarian
+- Icelandic
+- Indonesian
+- Italian
+- Japanese
+- Kannada
+- Korean
+- Latvian
+- Lithuanian
+- Malay
+- Malayalam
+- Marathi
+- Norwegian
+- Norwegian Bokmål
+- Norwegian Nynorsk
+- Persian
+- Polish
+- Portuguese
+- Romanian
+- Russian
+- Serbian
+- Slovak
+- Slovenian
+- Spanish
+- Swedish
+- Tamil
+- Telugu
+- Thai
+- Turkish
+- Ukrainian
+- Urdu
+- Vietnamese
 
 ## Tech
 
