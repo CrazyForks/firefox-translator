@@ -196,6 +196,14 @@ val abiToBindingsTask =
           val depCargo = resolved.resolve("Cargo.toml")
           if (depCargo.exists()) inputs.file(depCargo)
         }
+        resolved.resolve("crates").listFiles()?.forEach { crate ->
+          val crateSrc = crate.resolve("src")
+          if (crateSrc.exists()) {
+            inputs.dir(crateSrc)
+            val crateCargo = crate.resolve("Cargo.toml")
+            if (crateCargo.exists()) inputs.file(crateCargo)
+          }
+        }
       }
       inputs.property("cargoTarget", cargoTarget)
       inputs.property("androidApi", bindingsAndroidApi)
@@ -271,6 +279,14 @@ val abiToConverterTask =
           inputs.dir(srcDir)
           val depCargo = resolved.resolve("Cargo.toml")
           if (depCargo.exists()) inputs.file(depCargo)
+        }
+        resolved.resolve("crates").listFiles()?.forEach { crate ->
+          val crateSrc = crate.resolve("src")
+          if (crateSrc.exists()) {
+            inputs.dir(crateSrc)
+            val crateCargo = crate.resolve("Cargo.toml")
+            if (crateCargo.exists()) inputs.file(crateCargo)
+          }
         }
       }
       inputs.property("cargoTarget", cargoTarget)

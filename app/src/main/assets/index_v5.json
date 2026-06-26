@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1782376571,
+  "generatedAt": 1782467056,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1782376571,
+    "languageIndexUpdatedAt": 1782467056,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1781816467,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -10293,6 +10293,15 @@
           "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/ink_bold_int8.mnn",
           "role": "ink",
           "priority": 0,
+          "optional": true
+        },
+        {
+          "name": "ink_bold_line_int8.mnn",
+          "sizeBytes": 1980300,
+          "installPath": "ppocr/PP-OCRv6/ink_bold_line_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/ink_bold_line_int8.mnn",
+          "role": "ink",
+          "priority": 1,
           "optional": true
         }
       ],

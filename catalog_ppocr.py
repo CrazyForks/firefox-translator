@@ -41,6 +41,7 @@ PPOCR_V6_FILENAMES = {
     "indic_r2e10_int8.mnn",
     "indic_keys.txt",
     "ink_bold_int8.mnn",
+    "ink_bold_line_int8.mnn",
 }
 
 # v6 recognizer upgrades per script slug: (model, keys). The unified v6
@@ -59,10 +60,10 @@ PPOCR_V6_NATIVE_RECOGNIZER_FILENAMES = {
     "hebrew": ("hebrew_rec_int8.mnn", "hebrew_keys.txt"),
     "indic": ("indic_r2e10_int8.mnn", "indic_keys.txt"),
 }
-# Per-strip ink model, shipped with the detector since it is script-agnostic and runs on
-# every detected strip. Two channels: ch0 soft-alpha matte (color matting), ch1 per-pixel
-# bold (typography weight). Optional at runtime — the engine loads it only if present.
-PPOCR_INK_FILENAME = "ink_bold_int8.mnn"
+# Per-strip ink model, optional at runtime. Lowest→highest priority like the detector above, so
+# existing installs are offered the newer file as an upgrade. The *_line_* model adds a 3rd
+# channel (rule); the channel count is self-describing, so older app builds read it as matte+bold.
+PPOCR_INK_FILENAMES = ["ink_bold_int8.mnn", "ink_bold_line_int8.mnn"]
 PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x1_0_fp32.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x0_25_wq8.mnn"
@@ -175,7 +176,10 @@ def add_ppocr_packs(catalog: dict) -> None:
         + [
             _make_file(PPOCR_SCRIPT_CLASSIFIER_FILENAME, "scriptClassifier"),
             _make_file(PPOCR_TEXTLINE_ORIENTATION_FILENAME, "textlineOrientation"),
-            _make_file(PPOCR_INK_FILENAME, "ink", optional=True),
+            *[
+                _make_file(name, "ink", priority=priority, optional=True)
+                for priority, name in enumerate(PPOCR_INK_FILENAMES)
+            ],
         ],
         "dependsOn": [],
     }
