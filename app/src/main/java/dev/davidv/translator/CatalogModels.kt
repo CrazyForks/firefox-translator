@@ -6,7 +6,6 @@ import uniffi.bindings.CatalogHandle
 import uniffi.bindings.DocumentProgressEvent
 import uniffi.bindings.DocumentProgressSink
 import uniffi.bindings.TxtLayout
-import uniffi.bindings.sampleOverlayColorsRgba
 import java.nio.ByteBuffer
 
 typealias CatalogError = CatalogException
@@ -510,65 +509,4 @@ class LanguageCatalog private constructor(
       handle.synthesizeSpeechPcm(languageCode, text, speechSpeed, voiceName, isPhonemes, packId)
     return PcmAudio(sampleRate = audio.sampleRate, pcmSamples = audio.pcmSamples.toShortArray())
   }
-}
-
-fun sampleOverlayColors(
-  bitmap: Bitmap,
-  bounds: Rect,
-  backgroundMode: BackgroundMode,
-  wordRects: Array<Rect>? = null,
-): OverlayColors {
-  val sampleMargin = 4
-  val cropLeft = (bounds.left - sampleMargin).coerceAtLeast(0)
-  val cropTop = (bounds.top - sampleMargin).coerceAtLeast(0)
-  val cropRight = (bounds.right + sampleMargin).coerceAtMost(bitmap.width)
-  val cropBottom = (bounds.bottom + sampleMargin).coerceAtMost(bitmap.height)
-  val cropWidth = cropRight - cropLeft
-  val cropHeight = cropBottom - cropTop
-  if (cropWidth <= 0 || cropHeight <= 0) {
-    return OverlayColors(
-      background = android.graphics.Color.WHITE,
-      foreground = android.graphics.Color.BLACK,
-    )
-  }
-
-  val croppedBitmap = Bitmap.createBitmap(bitmap, cropLeft, cropTop, cropWidth, cropHeight)
-  val localBounds =
-    uniffi.translator_core.Rect(
-      left = (bounds.left - cropLeft).coerceIn(0, cropWidth).toUInt(),
-      top = (bounds.top - cropTop).coerceIn(0, cropHeight).toUInt(),
-      right = (bounds.right - cropLeft).coerceIn(0, cropWidth).toUInt(),
-      bottom = (bounds.bottom - cropTop).coerceIn(0, cropHeight).toUInt(),
-    )
-  val localWordRects =
-    wordRects?.mapNotNull { rect ->
-      val left = (rect.left - cropLeft).coerceIn(0, cropWidth)
-      val top = (rect.top - cropTop).coerceIn(0, cropHeight)
-      val right = (rect.right - cropLeft).coerceIn(0, cropWidth)
-      val bottom = (rect.bottom - cropTop).coerceIn(0, cropHeight)
-      if (right <= left || bottom <= top) {
-        null
-      } else {
-        uniffi.translator_core.Rect(
-          left = left.toUInt(),
-          top = top.toUInt(),
-          right = right.toUInt(),
-          bottom = bottom.toUInt(),
-        )
-      }
-    }
-  val colors =
-    sampleOverlayColorsRgba(
-      rgbaBytes(croppedBitmap),
-      croppedBitmap.width.toUInt(),
-      croppedBitmap.height.toUInt(),
-      localBounds,
-      backgroundMode,
-      localWordRects,
-    )
-  croppedBitmap.recycle()
-  return OverlayColors(
-    background = colors?.backgroundArgb?.toInt() ?: android.graphics.Color.WHITE,
-    foreground = colors?.foregroundArgb?.toInt() ?: android.graphics.Color.BLACK,
-  )
 }

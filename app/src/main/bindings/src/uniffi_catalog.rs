@@ -14,7 +14,7 @@ pub(crate) const PER_FRAME_TIMING_LOG: bool = false;
 use thiserror::Error;
 use translator::{
     CatalogSnapshot, Feature, FsPackInstallChecker, TranslatorError, TranslatorErrorKind,
-    TranslatorSession, language_rows_in_snapshot, sample_overlay_colors,
+    TranslatorSession, language_rows_in_snapshot,
 };
 
 #[derive(Debug, Error, uniffi::Error)]
@@ -230,25 +230,6 @@ fn map_dictionary_word(word: translator::tarkka::WordWithTaggedEntries) -> Dicti
     }
 }
 
-#[uniffi::export]
-fn sample_overlay_colors_rgba(
-    rgba_bytes: Vec<u8>,
-    width: u32,
-    height: u32,
-    bounds: translator::Rect,
-    background_mode: translator::BackgroundMode,
-    word_rects: Option<Vec<translator::Rect>>,
-) -> Option<translator::OverlayColors> {
-    sample_overlay_colors(
-        &rgba_bytes,
-        width,
-        height,
-        bounds,
-        background_mode,
-        word_rects.as_deref(),
-    )
-    .ok()
-}
 
 /// Rasterize the translated overlay onto `prepared`. Returns the new RGBA
 /// buffer (same dimensions as `prepared.width` x `prepared.height`).
