@@ -1,0 +1,4 @@
+- Improve TTS model size and speed; you will be forced to convert format on first launch
+- Improve bold detection quality (needs a model update, 1MB)
+- Implement underline detection and erasing for images (same model update as above)
+- Fix OCR crash from 0.7.0
