@@ -391,6 +391,29 @@ val generateUniffiBindings =
       "--no-format",
       "--metadata-no-deps",
     )
+    doLast {
+      // uniffi 0.29.5 emits the per-component uniffiEnsureInitialized() calls in
+      // unordered hashset order, so bindings.kt (and thus classes.dex) is not
+      // reproducible across builds. Sort each contiguous block to make it stable.
+      val bindingsKt =
+        generatedBindingsDir.get().asFile.resolve("uniffi/bindings/bindings.kt")
+      val initRegex = Regex("""^\s*uniffi\.\w+\.uniffiEnsureInitialized\(\)\s*$""")
+      val lines = bindingsKt.readLines()
+      val out = ArrayList<String>(lines.size)
+      var i = 0
+      while (i < lines.size) {
+        if (!initRegex.matches(lines[i])) {
+          out.add(lines[i])
+          i++
+          continue
+        }
+        var j = i
+        while (j < lines.size && initRegex.matches(lines[j])) j++
+        out.addAll(lines.subList(i, j).sorted())
+        i = j
+      }
+      bindingsKt.writeText(out.joinToString("\n", postfix = "\n"))
+    }
   }
 
 tasks.named("preBuild") {
