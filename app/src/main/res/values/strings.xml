@@ -10,9 +10,9 @@
     <string name="translate_text">Translate</string>
     <string name="translate_link">Translate link</string>
     <string name="accessibility_service_description">Enable this service to translate text on screen. Tap the floating translate button to translate the current screen, or start a live screen translation.</string>
-    <string name="tap_to_translate_title">Tap to Translate is on</string>
+    <string name="tap_to_translate_title">Quick Translate is on</string>
     <string name="tap_to_translate_body">Tap to open the translator popup</string>
-    <string name="tap_to_translate_channel">Tap to Translate</string>
+    <string name="tap_to_translate_channel">Quick Translate</string>
     <string name="tap_to_translate_channel_description">Persistent notification for quick access to the translator popup</string>
     <string name="quick_tile_label">Translate</string>
 
@@ -30,33 +30,33 @@
     <string name="settings_general">General</string>
     <string name="settings_font_size">Font Size</string>
     <string name="settings_font_sample">This is some example text</string>
-    <string name="settings_tap_notification">Tap to Translate notification</string>
+    <string name="settings_tap_notification">Quick Translate notification</string>
     <string name="settings_tap_notification_desc">Persistent notification that opens the popup.</string>
     <string name="settings_web_translator">Web Translator</string>
     <string name="settings_clear_browsing">Clear browsing data on close</string>
     <string name="settings_clear_browsing_desc">Deletes cookies, cache and local storage.</string>
-    <string name="settings_popup_settings">Popup settings</string>
-    <string name="settings_popup_desc">Popup shows up when selecting \'Translate\' from the long-press menu</string>
+    <string name="settings_popup_settings">Popup</string>
+    <string name="settings_popup_desc">Popup shows up when selecting \'Translate\' from the text selection menu</string>
     <string name="settings_hide_input">Hide input</string>
     <string name="settings_popup_position">Popup position</string>
     <string name="settings_popup_size">Popup size: %1$d%%</string>
     <string name="settings_screen_translation">Screen translation</string>
     <string name="settings_screen_translation_desc">Translate text directly on top of other apps.</string>
-    <string name="settings_floating_button">Always-on floating button</string>
+    <string name="settings_floating_button">Always-on button</string>
     <string name="settings_floating_button_desc">Requires accessibility role</string>
     <string name="settings_shortcut">Translate screen on shortcut</string>
     <string name="settings_shortcut_desc">Long-press home or power to trigger</string>
     <string name="settings_on_shortcut">On shortcut invocation</string>
-    <string name="settings_ocr">OCR</string>
-    <string name="settings_background_mode">Background Mode</string>
+    <string name="settings_ocr">Images</string>
+    <string name="settings_background_mode">Replace text with</string>
     <string name="settings_min_confidence">Min Confidence: %1$d%%</string>
     <string name="settings_max_image_size">Max Image Size: %1$dpx</string>
-    <string name="settings_advanced">Advanced Settings</string>
-    <string name="settings_catalog_url">Catalog Index URL</string>
+    <string name="settings_advanced">Advanced</string>
+    <string name="settings_catalog_url">Catalog URL</string>
     <string name="settings_external_storage">Use external storage</string>
     <string name="settings_disable_autodetect">Disable automatic language detection</string>
-    <string name="settings_translit_output">Show transliteration for output</string>
-    <string name="settings_translit_input">Show transliteration for input</string>
+    <string name="settings_translit_output">Show transliteration for translated text</string>
+    <string name="settings_translit_input">Show transliteration for original text</string>
     <string name="settings_translit_japanese_spaces">Add spaces for Japanese transliteration</string>
     <string name="settings_translate_pdf_images">Translate images in PDFs</string>
     <string name="settings_translate_pdf_images_desc">OCR and translate raster images embedded in PDF pages.</string>
@@ -69,7 +69,7 @@
     <string name="settings_no_languages_available">No languages available</string>
     <string name="settings_default_from">Default \'from\' language</string>
     <string name="settings_default_to">Default \'to\' language</string>
-    <string name="settings_adblock_support">Adblock support</string>
+    <string name="settings_adblock_support">Ad blocking</string>
     <string name="settings_about_get_help">Get help / report issue</string>
     <string name="settings_about_support">Support development</string>
     <string name="settings_external_storage_perm_body">To store translation files in your Documents folder, this app needs access to manage all files.\nYou\'ll be taken to Settings where you can grant \'Allow access to manage all files\' permission.</string>
@@ -220,7 +220,7 @@
     <!-- feature row labels -->
     <string name="feature_translation">Translation</string>
     <string name="feature_dictionary">Dictionary</string>
-    <string name="feature_tts">Text-to-speech</string>
+    <string name="feature_tts">Voice</string>
 
     <!-- misc -->
     <string name="main_input_placeholder">Enter text</string>
