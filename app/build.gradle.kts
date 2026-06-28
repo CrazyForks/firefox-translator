@@ -89,6 +89,12 @@ android {
     generateLocaleConfig = true
   }
 
+  lint {
+    // Translations are managed in Weblate and land incrementally, so partial
+    // locales are expected; completeness is tracked there, not by the build.
+    disable += "MissingTranslation"
+  }
+
   applicationVariants.all {
     outputs.all {
       val output = this as com.android.build.gradle.internal.api.ApkVariantOutputImpl
