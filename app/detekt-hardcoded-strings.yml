@@ -1,0 +1,13 @@
+# Strict, single-purpose detekt config used by the `detektHardcodedStrings` task.
+# Only the hardcoded-UI-string rule is active and any finding fails the build, so new
+# hardcoded user-facing strings are rejected without making the rest of the (advisory)
+# detekt suite blocking. The main `detekt` task keeps using detekt-config.yml.
+build:
+  maxIssues: 0
+
+translator-rules:
+  active: true
+  NoHardcodedUiString:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**']
+    sinks: ['Text', 'makeText', 'setContentTitle', 'setContentText', 'setDescription', 'showStatus']
