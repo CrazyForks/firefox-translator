@@ -222,4 +222,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">मजकूर टाका</string>
     <string name="aidl_target_unavailable">लक्ष्य भाषा उपलब्ध नाही</string>
+    <string name="voice_section_downloaded">डाउनलोड केले</string>
+    <string name="voice_section_available">उपलब्ध</string>
+    <string name="detected_translate_from">यावरून भाषांतर करा</string>
+    <string name="detected_missing_language">भाषा अनुपलब्ध</string>
+    <string name="langmgr_ocr_upgrade_available">एक सुधारित मजकूर ओळख मॉडेल उपलब्ध आहे.</string>
 </resources>

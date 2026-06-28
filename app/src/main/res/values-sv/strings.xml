@@ -222,4 +222,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">Skriv text</string>
     <string name="aidl_target_unavailable">Målspråket är inte tillgängligt</string>
+    <string name="voice_section_downloaded">NEDLADDADE</string>
+    <string name="voice_section_available">TILLGÄNGLIGA</string>
+    <string name="detected_translate_from">Översätt från</string>
+    <string name="detected_missing_language">Språk saknas</string>
+    <string name="langmgr_ocr_upgrade_available">En förbättrad textigenkänningsmodell är tillgänglig.</string>
 </resources>

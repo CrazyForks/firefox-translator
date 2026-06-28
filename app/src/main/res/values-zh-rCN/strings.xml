@@ -221,4 +221,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">输入文字</string>
     <string name="aidl_target_unavailable">目标语言不可用</string>
+    <string name="voice_section_downloaded">已下载</string>
+    <string name="voice_section_available">可用</string>
+    <string name="detected_translate_from">翻译自</string>
+    <string name="detected_missing_language">缺少语言</string>
+    <string name="langmgr_ocr_upgrade_available">有改进的文本检测模型可用。</string>
 </resources>

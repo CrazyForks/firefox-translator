@@ -221,4 +221,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">テキストを入力</string>
     <string name="aidl_target_unavailable">翻訳先の言語を利用できません</string>
+    <string name="voice_section_downloaded">ダウンロード済み</string>
+    <string name="voice_section_available">利用可能</string>
+    <string name="detected_translate_from">翻訳元</string>
+    <string name="detected_missing_language">言語がありません</string>
+    <string name="langmgr_ocr_upgrade_available">改良されたテキスト検出モデルが利用できます。</string>
 </resources>

@@ -222,4 +222,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">टेक्स्ट डालें</string>
     <string name="aidl_target_unavailable">लक्ष्य भाषा उपलब्ध नहीं</string>
+    <string name="voice_section_downloaded">डाउनलोड किया गया</string>
+    <string name="voice_section_available">उपलब्ध</string>
+    <string name="detected_translate_from">इससे अनुवाद करें</string>
+    <string name="detected_missing_language">भाषा अनुपलब्ध</string>
+    <string name="langmgr_ocr_upgrade_available">एक बेहतर टेक्स्ट पहचान मॉडल उपलब्ध है।</string>
 </resources>

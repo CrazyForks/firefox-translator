@@ -222,4 +222,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">Text eingeben</string>
     <string name="aidl_target_unavailable">Zielsprache nicht verfügbar</string>
+    <string name="voice_section_downloaded">HERUNTERGELADEN</string>
+    <string name="voice_section_available">VERFÜGBAR</string>
+    <string name="detected_translate_from">Übersetzen aus</string>
+    <string name="detected_missing_language">Sprache fehlt</string>
+    <string name="langmgr_ocr_upgrade_available">Ein verbessertes Texterkennungsmodell ist verfügbar.</string>
 </resources>

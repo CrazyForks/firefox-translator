@@ -224,4 +224,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">Введите текст</string>
     <string name="aidl_target_unavailable">Язык перевода недоступен</string>
+    <string name="voice_section_downloaded">ЗАГРУЖЕНО</string>
+    <string name="voice_section_available">ДОСТУПНО</string>
+    <string name="detected_translate_from">Перевести с</string>
+    <string name="detected_missing_language">Язык отсутствует</string>
+    <string name="langmgr_ocr_upgrade_available">Доступна улучшенная модель распознавания текста.</string>
 </resources>

@@ -222,4 +222,9 @@
     <!-- misc -->
     <string name="main_input_placeholder">Digite o texto</string>
     <string name="aidl_target_unavailable">Idioma de destino indisponível</string>
+    <string name="voice_section_downloaded">BAIXADO</string>
+    <string name="voice_section_available">DISPONÍVEL</string>
+    <string name="detected_translate_from">Traduzir de</string>
+    <string name="detected_missing_language">Idioma ausente</string>
+    <string name="langmgr_ocr_upgrade_available">Há um modelo de detecção de texto aprimorado disponível.</string>
 </resources>
