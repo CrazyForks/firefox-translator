@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Translator</string>
+    <string name="app_name" translatable="false">Translator</string>
     <string name="stop">Stop</string>
     <string name="pause">Pause</string>
     <string name="resume">Resume</string>
@@ -167,7 +167,7 @@
     <string name="doc_notif_phase_text">Text %1$d%%</string>
     <string name="doc_notif_phase_images">Images %1$d/%2$d</string>
     <string name="doc_notif_phase_raster">Bitmap pages %1$d/%2$d</string>
-    <string name="doc_notif_progress_percent">%1$d%%</string>
+    <string name="doc_notif_progress_percent" translatable="false">%1$d%%</string>
     <string name="doc_notif_channel_name">Document translation</string>
     <string name="doc_notif_channel_desc">Shows progress while translating documents</string>
     <string name="doc_progress_preparing">Preparing file</string>
@@ -190,7 +190,7 @@
     <string name="common_save">Save</string>
     
     <!-- translator app -->
-    <string name="translator_percent">%1$d%%</string>
+    <string name="translator_percent" translatable="false">%1$d%%</string>
     <string name="translator_translated_file">Translated file: %1$s</string>
     <string name="translator_document_saved">Document saved</string>
     <string name="translator_document_save_failed">Failed to save document</string>

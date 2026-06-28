@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_name">Translator</string>
     <string name="stop">Detener</string>
     <string name="pause">Pausar</string>
     <string name="resume">Reanudar</string>
@@ -167,7 +166,6 @@
     <string name="doc_notif_phase_text">Texto %1$d%%</string>
     <string name="doc_notif_phase_images">Imágenes %1$d/%2$d</string>
     <string name="doc_notif_phase_raster">Páginas de mapa de bits %1$d/%2$d</string>
-    <string name="doc_notif_progress_percent">%1$d%%</string>
     <string name="doc_notif_channel_name">Traducción de documentos</string>
     <string name="doc_notif_channel_desc">Muestra el progreso mientras se traducen documentos</string>
     <string name="doc_progress_preparing">Preparando archivo</string>
@@ -190,7 +188,6 @@
     <string name="common_save">Guardar</string>
 
     <!-- translator app -->
-    <string name="translator_percent">%1$d%%</string>
     <string name="translator_translated_file">Archivo traducido: %1$s</string>
     <string name="translator_document_saved">Documento guardado</string>
     <string name="translator_document_save_failed">No se pudo guardar el documento</string>
