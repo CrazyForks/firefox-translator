@@ -48,7 +48,8 @@ object SvgEmitter {
     var textSeq = 0
     var imageSeq = 0
     val imageKeyCounts = HashMap<String, Int>()
-    for (op in ops) {
+
+    fun emitOp(op: DrawOp) {
       when (op) {
         // Skip the full-bleed opaque window background; the document background above already covers
         // it, and a copy stitched from a later frame would otherwise paint over earlier content.
@@ -59,9 +60,28 @@ object SvgEmitter {
         is DrawOp.TextRun -> sb.appendLine(text(op, "$route:${textSeq++}", containers))
       }
     }
+
+    // Bucket ops by section so each section is ONE <g id="section-<slug>" data-section="Name"> group
+    // (the host crops a section by group id via Inkscape --export-id). A section's ops can be
+    // non-contiguous in paint order after stitching, so we group rather than wrap runs; sections
+    // don't overlap spatially, so collecting them doesn't change the visible result. Un-sectioned
+    // chrome (top bar, dividers, FAB) is emitted first, in original order.
+    val sectioned = LinkedHashMap<String, MutableList<DrawOp>>()
+    for (op in ops) {
+      val sec = op.section
+      if (sec == null) emitOp(op) else sectioned.getOrPut(sec) { mutableListOf() }.add(op)
+    }
+    for ((sec, list) in sectioned) {
+      sb.appendLine("""  <g id="section-${slug(sec)}" data-section="${esc(sec)}">""")
+      list.forEach(::emitOp)
+      sb.appendLine("  </g>")
+    }
     sb.append("</svg>").append('\n')
     return sb.toString()
   }
+
+  /** Section name -> stable id/filename slug (lowercase, non-alnum collapsed to `_`). */
+  fun slug(s: String): String = s.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "_").trim('_')
 
   /**
    * A standalone panel listing a dropdown's options as editable labels. Used because the real popup

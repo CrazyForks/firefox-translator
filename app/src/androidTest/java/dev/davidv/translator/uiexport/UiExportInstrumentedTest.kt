@@ -19,6 +19,7 @@ package dev.davidv.translator.uiexport
 
 import android.graphics.Bitmap
 import android.util.Log
+import android.view.View
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -37,8 +38,12 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import dev.davidv.translator.MainActivity
+import dev.davidv.translator.R
 import dev.davidv.translator.TestUtils
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -66,11 +71,24 @@ class UiExportInstrumentedTest {
           ): Statement =
             object : Statement() {
               override fun evaluate() {
+                // Screenshots are the English source for Weblate, and the texts.json must match the
+                // English string values for exact key association, so force the app's per-app locale
+                // to en regardless of the device language. Restored afterward.
+                val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+                val localeManager =
+                  if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    ctx.getSystemService(android.app.LocaleManager::class.java)
+                  } else {
+                    null
+                  }
+                val previousLocales = localeManager?.applicationLocales
+                localeManager?.applicationLocales = android.os.LocaleList.forLanguageTags("en-US")
                 TestUtils.setupLanguagesForApp()
                 try {
                   base.evaluate()
                 } finally {
                   TestUtils.cleanupLanguagesForApp()
+                  if (previousLocales != null) localeManager.applicationLocales = previousLocales
                 }
               }
             }
@@ -83,21 +101,48 @@ class UiExportInstrumentedTest {
     awaitAnyContentDescription("Main screen", "Settings")
     captureRoute("main")
 
+    // FAB image-source sheet: a Material3 ModalBottomSheet (separate window) captured via the
+    // all-windows draw + draw-time overlay labeling. Best-effort: never break the rest of the export.
+    runCatching {
+      composeTestRule.onAllNodesWithContentDescription("Translate image or file").onFirst().performClick()
+      composeTestRule.waitForIdle()
+      waitForStable()
+      captureRoute("image_source", allowScroll = false, overlaySection = "Image source")
+      dismissOverlay()
+    }.onFailure { Log.w("UiExport", "image_source capture failed", it) }
+
     composeTestRule.onAllNodesWithContentDescription("Settings").onFirst().performClick()
     composeTestRule.waitForIdle()
-    composeTestRule.onNodeWithText("Advanced Settings").performScrollTo().performClick()
+    composeTestRule.onNodeWithText(str(R.string.settings_advanced)).performScrollTo().performClick()
     composeTestRule.waitForIdle()
     captureRoute("settings")
     captureDropdownOptions("settings")
 
-    composeTestRule.onAllNodesWithText("Manage").onFirst().performScrollTo().performClick()
+    composeTestRule.onAllNodesWithText(str(R.string.common_manage)).onFirst().performScrollTo().performClick()
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithText("Bulgarian").performScrollTo().performClick()
     composeTestRule.waitForIdle()
+
+    // Voice-download dialog: a BasicAlertDialog (separate window) — drawing all root views captures
+    // it too. Done BEFORE the scrolling capture below, while the just-expanded row (and its tagged
+    // trigger) is still composed; capturing language_manager scrolls the LazyColumn and would
+    // dispose it. Best-effort; trigger is tagged export-trigger:voice on the TTS feature-row action.
+    runCatching {
+      composeTestRule
+        .onAllNodes(SemanticsMatcher("voice trigger") { textTag(it).startsWith("export-trigger:voice") })
+        .onFirst()
+        .performScrollTo()
+        .performClick()
+      composeTestRule.waitForIdle()
+      waitForStable()
+      captureRoute("voice_picker", allowScroll = false, overlaySection = "Voice picker")
+      dismissOverlay()
+    }.onFailure { Log.w("UiExport", "voice_picker capture failed", it) }
+
     captureRoute("language_manager")
     goBack()
 
-    composeTestRule.onNodeWithText("How to use").performScrollTo().performClick()
+    composeTestRule.onNodeWithText(str(R.string.howto_title)).performScrollTo().performClick()
     composeTestRule.waitForIdle()
     captureRoute("how_to_use")
     goBack()
@@ -124,42 +169,109 @@ class UiExportInstrumentedTest {
     composeTestRule.waitForIdle()
   }
 
+  /**
+   * Dismiss a separate-window overlay (ModalBottomSheet / Dialog) with a real BACK key, which the
+   * window manager routes to the focused overlay window. The activity's onBackPressedDispatcher
+   * doesn't see the overlay's back handler (different window), so goBack() would finish the activity.
+   */
+  private fun dismissOverlay() {
+    UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack()
+    composeTestRule.waitForIdle()
+  }
+
+  private fun str(id: Int): String = composeTestRule.activity.getString(id)
+
   private data class Frame(val ops: List<DrawOp>, val width: Int)
 
-  private fun drawOnce(): Frame {
+  private fun drawOnce(overlaySection: String? = null): Frame {
     val activity = composeTestRule.activity
     var ops: List<DrawOp> = emptyList()
     var width = 0
     composeTestRule.runOnUiThread {
-      val view = activity.window.decorView
-      val w = view.width
-      val h = view.height
+      val decor = activity.window.decorView
+      val w = decor.width
+      val h = decor.height
       check(w > 0 && h > 0) { "decorView not laid out (${w}x$h)" }
       val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
       val canvas = RecordingCanvas(bmp)
-      view.draw(canvas)
+      val base = IntArray(2).also { decor.getLocationOnScreen(it) }
+      // Draw every attached window (activity + any dialog/popup), composited at its screen offset,
+      // in attach order (later = on top). Separate-window surfaces (BasicAlertDialog, ModalBottomSheet)
+      // aren't in decorView, so this is what makes dialogs/sheets appear in the SVG. Their semantics
+      // bounds are window-relative (useless for labeling against device-coord ops), so we tag the ops
+      // drawn for non-decor windows with `overlaySection` here, at draw time.
+      for (view in rootViews()) {
+        if (view === decor) {
+          view.draw(canvas)
+          continue
+        }
+        if (!view.isShown || view.width <= 0 || view.height <= 0) continue
+        val loc = IntArray(2).also { view.getLocationOnScreen(it) }
+        val save = canvas.save()
+        canvas.translate((loc[0] - base[0]).toFloat(), (loc[1] - base[1]).toFloat())
+        val from = canvas.ops.size
+        view.draw(canvas)
+        canvas.restoreToCount(save)
+        if (overlaySection != null) {
+          for (i in from until canvas.ops.size) {
+            val op = canvas.ops[i]
+            // Don't tag a full-bleed scrim rect (ModalBottomSheet draws one): it would blow the
+            // section's crop bbox up to the whole screen. Leaving it un-sectioned still renders it
+            // (dimmed backdrop) but keeps the crop tight to the actual sheet/dialog content.
+            val isScrim =
+              op is DrawOp.Rect &&
+                (op.right - op.left) >= w * 0.9f && (op.bottom - op.top) >= h * 0.9f
+            if (!isScrim) canvas.ops[i] = op.withSection(overlaySection)
+          }
+        }
+      }
       ops = canvas.ops.toList()
       width = w
     }
     return Frame(ops, width)
   }
 
-  private fun captureRoute(route: String) {
+  /** All attached root views (via WindowManagerGlobal); falls back to the activity decorView. */
+  private fun rootViews(): List<View> =
+    try {
+      val cls = Class.forName("android.view.WindowManagerGlobal")
+      val instance = cls.getMethod("getInstance").invoke(null)
+      val field = cls.getDeclaredField("mViews").apply { isAccessible = true }
+      @Suppress("UNCHECKED_CAST")
+      (field.get(instance) as List<View>).toList()
+    } catch (e: Exception) {
+      Log.w("UiExport", "WindowManagerGlobal.mViews unavailable; drawing decorView only", e)
+      listOf(composeTestRule.activity.window.decorView)
+    }
+
+  private fun captureRoute(
+    route: String,
+    allowScroll: Boolean = true,
+    overlaySection: String? = null,
+  ) {
     composeTestRule.waitForIdle()
     val frames = mutableListOf<CaptureFrame>()
     var width = 0
-    val scrollId = scrollNode()?.id
+    val scrollId = if (allowScroll) scrollNode()?.id else null
     if (scrollId != null) scrollToTop()
     waitForStable()
 
     var prevSignature: String? = null
     var guard = 0
     while (guard++ < 60) {
-      val frame = drawOnce()
+      val frame = drawOnce(overlaySection)
       width = frame.width
       val signature = textSignature(frame.ops)
       if (signature == prevSignature) break
-      frames += CaptureFrame(attachImageDescriptions(frame.ops))
+      // Overlay routes (dialog/sheet): ops are labeled at draw time, and the underlying window stays
+      // un-sectioned (rendered as dimmed context but not cropped); skip bounds-based labeling.
+      val withMeta =
+        if (overlaySection != null) {
+          attachImageDescriptions(frame.ops)
+        } else {
+          attachSections(attachImageDescriptions(frame.ops))
+        }
+      frames += CaptureFrame(withMeta)
       prevSignature = signature
       if (scrollId == null) break
       swipeUp(scrollId)
@@ -171,9 +283,67 @@ class UiExportInstrumentedTest {
     val outDir = File(outputDir(), "ui-export")
     outDir.mkdirs()
     File(outDir, "$route.svg").writeText(svg)
+    writeSectionTexts(outDir, route, stitched.ops)
     val texts = stitched.ops.count { it is DrawOp.TextRun }
     Log.i("UiExport", "wrote $route.svg (${frames.size} frames, ${stitched.ops.size} ops, $texts text runs)")
   }
+
+  /** `<route>.texts.json` = { section -> distinct ordered visible strings }, for exact key matching. */
+  private fun writeSectionTexts(
+    outDir: File,
+    route: String,
+    ops: List<DrawOp>,
+  ) {
+    val bySection = LinkedHashMap<String, MutableList<String>>()
+    for (op in ops) {
+      if (op !is DrawOp.TextRun) continue
+      val section = op.section ?: continue
+      val text = op.text.trim()
+      if (text.isEmpty()) continue
+      val list = bySection.getOrPut(section) { mutableListOf() }
+      if (text !in list) list.add(text)
+    }
+    val json = JSONObject()
+    for ((section, list) in bySection) json.put(section, JSONArray(list))
+    File(outDir, "$route.texts.json").writeText(json.toString(2))
+  }
+
+  /** Label each op with the smallest enclosing `export-section:<Name>` node (live per-frame coords). */
+  private fun attachSections(ops: List<DrawOp>): List<DrawOp> {
+    val sections =
+      composeTestRule
+        .onAllNodes(SemanticsMatcher("export-section tag") { textTag(it).startsWith("export-section:") })
+        .fetchSemanticsNodes()
+        .map { it.boundsInRoot to textTag(it).substringAfter("export-section:") }
+    if (sections.isEmpty()) return ops
+    return ops.map { op ->
+      val (px, py) = opAnchor(op)
+      val name =
+        sections
+          .filter { (b, _) -> px >= b.left && px <= b.right && py >= b.top && py <= b.bottom }
+          .minByOrNull { (b, _) -> b.width * b.height }
+          ?.second
+      if (name == null) op else op.withSection(name)
+    }
+  }
+
+  private fun opAnchor(op: DrawOp): Pair<Float, Float> =
+    when (op) {
+      is DrawOp.TextRun -> (op.matrix[2] + op.x + op.widthPx / 2f) to (op.matrix[5] + op.baselineY)
+      is DrawOp.Rect -> (op.matrix[2] + (op.left + op.right) / 2f) to (op.matrix[5] + (op.top + op.bottom) / 2f)
+      is DrawOp.Line -> (op.matrix[2] + (op.startX + op.stopX) / 2f) to (op.matrix[5] + (op.startY + op.stopY) / 2f)
+      is DrawOp.Path -> op.matrix[2] to op.matrix[5]
+      is DrawOp.Image -> (op.matrix[2] + (op.left + op.right) / 2f) to (op.matrix[5] + (op.top + op.bottom) / 2f)
+    }
+
+  private fun DrawOp.withSection(name: String): DrawOp =
+    when (this) {
+      is DrawOp.TextRun -> copy(section = name)
+      is DrawOp.Rect -> copy(section = name)
+      is DrawOp.Line -> copy(section = name)
+      is DrawOp.Path -> copy(section = name)
+      is DrawOp.Image -> copy(section = name)
+    }
 
   private fun textSignature(ops: List<DrawOp>): String =
     ops.filterIsInstance<DrawOp.TextRun>().joinToString("|") { "${it.text}@${it.baselineY.toInt()}" }

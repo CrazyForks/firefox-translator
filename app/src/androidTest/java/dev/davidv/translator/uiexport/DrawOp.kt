@@ -25,6 +25,9 @@ package dev.davidv.translator.uiexport
 sealed interface DrawOp {
   val matrix: FloatArray
 
+  /** Name of the enclosing `export-section:<Name>` node, attached at capture time; null = chrome. */
+  val section: String?
+
   data class TextRun(
     override val matrix: FloatArray,
     val text: String,
@@ -36,6 +39,7 @@ sealed interface DrawOp {
     val italic: Boolean,
     /** Measured advance width of the run, used to infer horizontal alignment from container margins. */
     val widthPx: Float,
+    override val section: String? = null,
   ) : DrawOp
 
   data class Rect(
@@ -48,6 +52,7 @@ sealed interface DrawOp {
     val color: Int,
     val stroke: Boolean,
     val strokeWidth: Float,
+    override val section: String? = null,
   ) : DrawOp
 
   data class Line(
@@ -58,6 +63,7 @@ sealed interface DrawOp {
     val stopY: Float,
     val color: Int,
     val strokeWidth: Float,
+    override val section: String? = null,
   ) : DrawOp
 
   /** Non-text vector content (icons, dividers drawn as paths) flattened to an SVG path string. */
@@ -67,6 +73,7 @@ sealed interface DrawOp {
     val color: Int,
     val stroke: Boolean,
     val strokeWidth: Float,
+    override val section: String? = null,
   ) : DrawOp
 
   /** A raster (vector asset rasterized by Compose, photo, etc.) with its device bounds and PNG bytes. */
@@ -79,5 +86,6 @@ sealed interface DrawOp {
     val pngBase64: String,
     /** contentDescription of the covering semantics node, if any (the bitmap itself carries no meaning). */
     val description: String? = null,
+    override val section: String? = null,
   ) : DrawOp
 }

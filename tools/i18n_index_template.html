@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UI screens — i18n viewer</title>
+<style>
+  body { font-family: sans-serif; margin: 0; background: #1d1d1d; color: #ddd; }
+  header { padding: 18px 24px; border-bottom: 1px solid #333; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header p { margin: 6px 0 0; font-size: 13px; color: #888; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; padding: 24px; }
+  .card { text-decoration: none; color: inherit; background: #262626; border: 1px solid #333; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; transition: border-color .12s, transform .12s; }
+  .card:hover { border-color: #6a7cff; transform: translateY(-2px); }
+  .thumb { height: 280px; overflow: hidden; background: #111; display: flex; justify-content: center; }
+  .thumb img { width: 100%; height: auto; display: block; object-fit: cover; object-position: top; }
+  .name { padding: 10px 12px; font-size: 13px; font-family: ui-monospace, monospace; color: #cfcfcf; border-top: 1px solid #333; }
+</style>
+</head>
+<body>
+<header>
+  <h1>UI screens</h1>
+  <p>Click a screen to open its i18n viewer (language toggle + Weblate links).</p>
+</header>
+<div class="grid">
+__CARDS__
+</div>
+</body>
+</html>

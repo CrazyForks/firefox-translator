@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>i18n viewer — __NAME__</title>
+<style>
+  body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; }
+  #panel { width: 260px; padding: 16px; box-sizing: border-box; border-right: 1px solid #ccc; overflow: auto; }
+  #stage { flex: 1; overflow: auto; background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; padding: 16px; box-sizing: border-box; }
+  #stage svg { width: min(420px, 100%); height: auto; display: block; }
+  h3 { margin: 0 0 12px; }
+  label { display: block; font-size: 13px; margin: 12px 0 4px; color: #555; }
+  select { width: 100%; padding: 6px; font-size: 14px; }
+  .check { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 14px; color: #333; cursor: pointer; }
+  .check input { margin: 0; }
+  .hint { font-size: 12px; color: #777; margin-top: 16px; line-height: 1.5; }
+  .error { color: #b00; font-size: 13px; margin-top: 12px; line-height: 1.5; }
+  .stat { font-size: 12px; color: #555; margin-top: 12px; line-height: 1.6; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+  text[data-i18n] { cursor: pointer; }
+  text.untranslated { opacity: 0.92; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <h3>i18n viewer</h3>
+  <label for="lang">Language</label>
+  <select id="lang"></select>
+  <label class="check"><input type="checkbox" id="showEn"> Show English</label>
+  <p class="stat" id="stat"></p>
+  <p class="hint"><span class="swatch" style="background:#e0a000"></span>amber outline = no translation in this language (showing English).<br><br>
+  Click any label to open it in Weblate.</p>
+  <p class="error" id="error" style="display:none"></p>
+</div>
+<div id="stage"></div>
+<script>
+(async function () {
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const NAME = "__NAME__";
+  const KEYS = "__KEYS__";
+  const WEBLATE = "__WEBLATE__";
+  const LANGS = __LANGS__;
+  const stage = document.getElementById('stage');
+  const errEl = document.getElementById('error');
+
+  function fail(msg) {
+    errEl.style.display = 'block';
+    errEl.textContent = msg + (location.protocol === 'file:'
+      ? ' — fetch is blocked on file://; serve the folder over HTTP.' : '');
+  }
+
+  let svg, keys, strings;
+  try {
+    const [svgRes, keysRes, strRes] = await Promise.all([fetch(NAME), fetch(KEYS), fetch('strings.json')]);
+    for (const [r, n] of [[svgRes, NAME], [keysRes, KEYS], [strRes, 'strings.json']]) {
+      if (!r.ok) throw new Error(`${n}: ${r.status} ${r.statusText}`);
+    }
+    const doc = new DOMParser().parseFromString(await svgRes.text(), 'image/svg+xml');
+    if (doc.querySelector('parsererror')) throw new Error('SVG parse error');
+    svg = document.importNode(doc.documentElement, true);
+    stage.appendChild(svg);
+    keys = await keysRes.json();
+    strings = await strRes.json();
+  } catch (e) {
+    return fail('Could not load: ' + e.message);
+  }
+
+  // Stamp each label with its resolved R.string key and remember the original English.
+  const texts = [...svg.querySelectorAll('text[data-key]')];
+  const english = new Map();
+  texts.forEach(t => {
+    const key = keys[t.getAttribute('data-key')];
+    english.set(t, t.textContent);
+    if (key) t.setAttribute('data-i18n', key);
+  });
+
+  function openWeblate(key) {
+    const lang = document.getElementById('lang').value;
+    window.open(`https://hosted.weblate.org/browse/${WEBLATE}/${lang}/?q=context:=${encodeURIComponent(key)}`,
+      '_blank', 'noopener');
+  }
+  // SVG <text> only takes clicks on painted glyph pixels; cover each with a transparent hit-rect.
+  function attachHit(t, key) {
+    const b = t.getBBox(), pad = 6;
+    const hit = document.createElementNS(SVGNS, 'rect');
+    if (t.getAttribute('transform')) hit.setAttribute('transform', t.getAttribute('transform'));
+    hit.setAttribute('x', b.x - pad); hit.setAttribute('y', b.y - pad);
+    hit.setAttribute('width', b.width + pad * 2); hit.setAttribute('height', b.height + pad * 2);
+    hit.setAttribute('fill', 'transparent');
+    hit.style.pointerEvents = 'all';
+    hit.style.cursor = 'pointer';
+    hit.addEventListener('click', () => openWeblate(key));
+    t.parentNode.insertBefore(hit, t.nextSibling);
+  }
+
+  // Group the consecutive same-key, same-style, vertically-stacked lines that a wrapped paragraph
+  // was drawn as, so a translation can be re-wrapped across the same line slots instead of dumped
+  // onto each line. Single-line labels are groups of 1; if their translation is longer than the
+  // English fit, we synthesize extra line slots below (or shrink, when wrapping can't help).
+  const VB_W = svg.viewBox.baseVal.width;
+  const leftX = t => {
+    const m = (t.getAttribute('transform') || '').match(/matrix\(([^)]+)\)/);
+    const tx = m ? parseFloat(m[1].trim().split(/[\s,]+/)[4]) : 0;
+    return tx + parseFloat(t.getAttribute('x') || 0);
+  };
+  const sameStyle = (a, b) =>
+    a.getAttribute('transform') === b.getAttribute('transform') &&
+    a.getAttribute('font-size') === b.getAttribute('font-size') &&
+    a.getAttribute('data-i18n') === b.getAttribute('data-i18n');
+  const groups = [];
+  for (const t of texts) {
+    if (!t.getAttribute('data-i18n')) continue;
+    const last = groups[groups.length - 1];
+    const prev = last && last.lines[last.lines.length - 1];
+    if (last && prev && sameStyle(prev, t) &&
+        parseFloat(t.getAttribute('y')) > parseFloat(prev.getAttribute('y'))) {
+      last.lines.push(t);
+    } else {
+      groups.push({ key: t.getAttribute('data-i18n'), lines: [t], synth: [] });
+    }
+  }
+  groups.forEach(g => {
+    const f = g.lines[0];
+    g.size = parseFloat(f.getAttribute('font-size'));
+    g.lineH = g.lines.length > 1
+      ? parseFloat(g.lines[1].getAttribute('y')) - parseFloat(f.getAttribute('y'))
+      : g.size * 1.3;
+    // Multi-line: wrap to the app's own column (widest English line). Single-line: the label can
+    // grow to the content width (symmetric padding => viewBox minus twice the left inset).
+    g.width = g.lines.length > 1
+      ? Math.max(...g.lines.map(l => l.getComputedTextLength()))
+      : VB_W - 2 * leftX(f);
+    g.lines.forEach(l => attachHit(l, g.key));
+  });
+
+  // Off-canvas probe to measure candidate lines at a group's font before committing them.
+  const probe = document.createElementNS(SVGNS, 'text');
+  probe.setAttribute('y', '-10000');
+  svg.appendChild(probe);
+  function measure(s, g) {
+    probe.setAttribute('font-size', g.size);
+    probe.setAttribute('font-weight', g.lines[0].getAttribute('font-weight') || 'normal');
+    probe.textContent = s;
+    return probe.getComputedTextLength();
+  }
+  function wrapWords(full, g, width) {
+    const words = full.split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = '';
+    for (const word of words) {
+      const trial = line ? line + ' ' + word : word;
+      if (line && measure(trial, g) > width) { lines.push(line); line = word; }
+      else line = trial;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function synthSlot(g, pos) {
+    const last = g.lines[g.lines.length - 1];
+    const el = last.cloneNode(true);
+    el.setAttribute('y', parseFloat(last.getAttribute('y')) + (pos - g.lines.length + 1) * g.lineH);
+    last.parentNode.insertBefore(el, last.nextSibling);
+    attachHit(el, g.key);
+    g.synth.push(el);
+    return el;
+  }
+  // Render a translated string into a group, wrapping across slots; shrink only if a single word
+  // still overflows the available width (can't be broken).
+  function render(g, full) {
+    let width = g.width;
+    let lines = wrapWords(full, g, width);
+    g.size0 = g.size0 || g.size;
+    g.size = g.size0;
+    const longest = Math.max(...lines.map(l => measure(l, g)));
+    if (longest > width) {
+      g.size = Math.max(g.size0 * width / longest, g.size0 * 0.6);
+      lines = wrapWords(full, g, width);
+    }
+    const total = Math.max(lines.length, g.lines.length);
+    for (let p = 0; p < total; p++) {
+      const slot = p < g.lines.length ? g.lines[p] : (g.synth[p - g.lines.length] || synthSlot(g, p));
+      slot.setAttribute('font-size', g.size);
+      slot.textContent = lines[p] || '';
+    }
+  }
+  function restore(g) {
+    g.size = g.size0 || g.size;
+    g.lines.forEach(l => { l.textContent = english.get(l); l.setAttribute('font-size', g.size); });
+    g.synth.forEach(e => { e.textContent = ''; });
+  }
+
+  function outline(t, on) {
+    let r = t.previousElementSibling;
+    const isMine = r && r.getAttribute && r.getAttribute('data-outline') === t.getAttribute('data-key');
+    if (!on) { if (isMine) r.remove(); return; }
+    if (isMine) return;
+    const b = t.getBBox();
+    r = document.createElementNS(SVGNS, 'rect');
+    r.setAttribute('data-outline', t.getAttribute('data-key'));
+    if (t.getAttribute('transform')) r.setAttribute('transform', t.getAttribute('transform'));
+    r.setAttribute('x', b.x - 2); r.setAttribute('y', b.y - 2);
+    r.setAttribute('width', b.width + 4); r.setAttribute('height', b.height + 4);
+    r.setAttribute('rx', 2); r.setAttribute('fill', 'none');
+    r.setAttribute('stroke', '#e0a000'); r.setAttribute('stroke-width', '1.5');
+    r.setAttribute('pointer-events', 'none');
+    t.parentNode.insertBefore(r, t);
+  }
+
+  function applyLang(lang) {
+    let translated = 0, missing = 0;
+    const unkeyed = texts.filter(t => !t.getAttribute('data-i18n')).length;
+    for (const g of groups) {
+      const val = strings[g.key] && strings[g.key][lang];
+      const hasIt = val != null && lang !== 'en';
+      if (hasIt) render(g, val); else restore(g);
+      g.lines.concat(g.synth).forEach(l => {
+        const flag = hasIt === false && lang !== 'en' && l.textContent !== '';
+        l.classList.toggle('untranslated', flag);
+        outline(l, flag);
+      });
+      if (lang === 'en' || hasIt) translated++; else missing++;
+    }
+    document.getElementById('stat').innerHTML =
+      `${translated} resolved · ${missing} untranslated · ${unkeyed} unmatched`;
+  }
+
+  const sel = document.getElementById('lang');
+  const showEn = document.getElementById('showEn');
+  // Dropdown picks the target language; the checkbox flips to English without touching the dropdown.
+  const targets = LANGS.filter(l => l !== 'en');
+  LANGS.forEach(l => { const o = document.createElement('option'); o.value = o.textContent = l; sel.appendChild(o); });
+  sel.value = targets[0] || 'en';
+  const refresh = () => applyLang(showEn.checked ? 'en' : sel.value);
+  sel.addEventListener('change', () => { showEn.checked = false; refresh(); });
+  showEn.addEventListener('change', refresh);
+  refresh();
+})();
+</script>
+</body>
+</html>
