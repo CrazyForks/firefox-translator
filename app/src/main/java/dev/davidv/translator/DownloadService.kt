@@ -23,6 +23,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.IBinder
 import android.util.Log
+import androidx.annotation.StringRes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -375,7 +376,7 @@ class DownloadService : Service() {
   private fun startPrimaryDownload(
     language: Language,
     actionLabel: String,
-    failureLabel: String,
+    @StringRes failureMessageRes: Int,
     planProvider: (LanguageCatalog) -> DownloadPlan,
     onSuccess: suspend (LanguageCatalog, LanguageCatalog) -> Unit = { _, _ -> },
   ) {
@@ -422,14 +423,14 @@ class DownloadService : Service() {
             Log.i("DownloadService", "${actionLabel.replaceFirstChar(Char::titlecase)} complete: ${language.displayName}")
             _downloadEvents.emit(DownloadEvent.NewTranslationAvailable(language))
           } else {
-            _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} $failureLabel failed"))
+            _downloadEvents.emit(DownloadEvent.DownloadError(getString(failureMessageRes, language.displayName)))
           }
         } catch (e: Exception) {
           Log.e("DownloadService", "${actionLabel.replaceFirstChar(Char::titlecase)} failed for ${language.displayName}", e)
           updateDownloadState(language) {
             it.copy(isDownloading = false, error = e.message)
           }
-          _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} $failureLabel failed"))
+          _downloadEvents.emit(DownloadEvent.DownloadError(getString(failureMessageRes, language.displayName)))
         } finally {
           downloadJobs.remove(language)
         }
@@ -442,7 +443,7 @@ class DownloadService : Service() {
     startPrimaryDownload(
       language = language,
       actionLabel = "download",
-      failureLabel = "download",
+      failureMessageRes = R.string.download_failed_core,
       planProvider = { catalog ->
         val corePlan = catalog.planDownload(language.code, Feature.CORE) ?: DownloadPlan(0UL, emptyList())
         val docDetectPlan =
@@ -470,7 +471,7 @@ class DownloadService : Service() {
     startPrimaryDownload(
       language = language,
       actionLabel = "OCR engine download",
-      failureLabel = "OCR download",
+      failureMessageRes = R.string.download_failed_ocr,
       planProvider = { catalog ->
         catalog.planOcrEngineDownload(language.code, engine) ?: DownloadPlan(0UL, emptyList())
       },
@@ -569,7 +570,7 @@ class DownloadService : Service() {
               _downloadEvents.emit(DownloadEvent.NewTranslationAvailable(language))
             }
           } else {
-            _downloadEvents.emit(DownloadEvent.DownloadError("OCR batch download failed"))
+            _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_ocr_batch)))
           }
         } catch (e: Exception) {
           Log.e("DownloadService", "OCR engine batch download failed", e)
@@ -640,7 +641,7 @@ class DownloadService : Service() {
           Log.i("DownloadService", "Dictionary download complete: ${language.displayName}")
           _downloadEvents.emit(DownloadEvent.NewDictionaryAvailable(language))
         } else {
-          _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} dictionary download failed"))
+          _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_dictionary, language.displayName)))
           Log.e("DownloadService", "Dictionary download failed for ${language.displayName}")
           updateDictionaryDownloadState(language) {
             it.copy(isDownloading = false, error = "Dictionary download failed for ${language.displayName}")
@@ -730,7 +731,7 @@ class DownloadService : Service() {
             Log.i("DownloadService", "TTS download complete: ${language.displayName}")
             _downloadEvents.emit(DownloadEvent.NewTtsAvailable(language))
           } else {
-            _downloadEvents.emit(DownloadEvent.DownloadError("${language.displayName} TTS download failed"))
+            _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_tts, language.displayName)))
             updateTtsDownloadState(language) {
               it.copy(isDownloading = false, error = "TTS download failed for ${language.displayName}")
             }
@@ -790,7 +791,7 @@ class DownloadService : Service() {
               updateAdblockDownloadState {
                 it.copy(isDownloading = false, error = "Catalog unavailable")
               }
-              _downloadEvents.emit(DownloadEvent.DownloadError("Catalog unavailable"))
+              _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_catalog_unavailable)))
               return@launch
             }
           val downloadPlan =
@@ -834,14 +835,14 @@ class DownloadService : Service() {
             updateAdblockDownloadState {
               it.copy(isDownloading = false, error = "Adblock download failed")
             }
-            _downloadEvents.emit(DownloadEvent.DownloadError("Adblock download failed"))
+            _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_adblock)))
           }
         } catch (e: Exception) {
           Log.e("DownloadService", "Adblock download failed", e)
           updateAdblockDownloadState {
             it.copy(isDownloading = false, error = e.message)
           }
-          _downloadEvents.emit(DownloadEvent.DownloadError("Adblock download failed"))
+          _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_adblock)))
         } finally {
           adblockDownloadJob = null
         }
@@ -1232,12 +1233,12 @@ class DownloadService : Service() {
         } else {
           Log.e("DownloadService", "Failed to move temp catalog file $tempFile to final location $catalogFile")
           tempFile.delete()
-          _downloadEvents.emit(DownloadEvent.DownloadError("Failed to save catalog"))
+          _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_catalog_save_failed)))
         }
       } catch (e: Exception) {
         Log.e("DownloadService", "Error downloading catalog", e)
-        val errorMessage = "Failed to download catalog: ${e.message ?: "Unknown error"}"
-        _downloadEvents.emit(DownloadEvent.DownloadError(errorMessage))
+        val detail = e.message ?: getString(R.string.download_unknown_error)
+        _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_catalog_failed, detail)))
       }
     }
   }

@@ -112,8 +112,6 @@ class TranslatorAccessibilityService : AccessibilityService() {
         val languagesFlow = kotlinx.coroutines.flow.MutableStateFlow(catalog.languageList)
         overlayTextTranslationHelper =
           OverlayTextTranslationHelper(
-            settingsManager = settingsManager,
-            translationService = translationService,
             langStateManager = langStateManager,
             languageMetadataManager = LanguageMetadataManager(this@TranslatorAccessibilityService, languagesFlow),
           )

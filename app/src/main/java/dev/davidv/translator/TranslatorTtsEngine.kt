@@ -276,7 +276,7 @@ class TranslatorTtsDataActivity : Activity() {
     val iso3Lang = intent?.getStringExtra("language").orEmpty()
     val sample =
       TranslatorTtsEngine.sampleText(this, iso3Lang)
-        ?: "This is a text-to-speech sample from Offline Translator."
+        ?: getString(R.string.tts_sample_fallback)
     val data = Intent().putExtra(TextToSpeech.Engine.EXTRA_SAMPLE_TEXT, sample)
     setResult(TextToSpeech.LANG_AVAILABLE, data)
     finish()

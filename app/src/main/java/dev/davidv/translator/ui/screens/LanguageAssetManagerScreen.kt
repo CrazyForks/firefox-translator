@@ -76,6 +76,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -232,7 +233,7 @@ private fun VoicePickerDialog(
               fontWeight = FontWeight.SemiBold,
             )
             Text(
-              text = "Voices",
+              text = stringResource(R.string.langmgr_voices),
               style = MaterialTheme.typography.headlineSmall,
               fontWeight = FontWeight.SemiBold,
             )
@@ -413,7 +414,7 @@ private fun VoiceRow(
     ) {
       if (isDefault) {
         Text(
-          text = "DEFAULT",
+          text = stringResource(R.string.langmgr_default),
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
           fontWeight = FontWeight.SemiBold,
@@ -561,7 +562,7 @@ private fun FavoriteButton(
 }
 
 private data class LanguageFeatureRow(
-  val label: String,
+  @androidx.annotation.StringRes val labelRes: Int,
   val secondaryLabel: String? = null,
   val installed: Boolean,
   val downloadState: DownloadState?,
@@ -723,7 +724,7 @@ fun LanguageAssetManagerScreen(
             .fillMaxWidth()
             .padding(top = 2.dp, bottom = 6.dp),
         singleLine = true,
-        label = { Text("Filter languages") },
+        label = { Text(stringResource(R.string.langmgr_filter)) },
       )
 
       if (ppocrModelUpgrade.languages.isNotEmpty()) {
@@ -855,10 +856,10 @@ fun LanguageAssetManagerScreen(
     val sharedNames = pendingDelete.sharedWith.joinToString(", ") { it.displayName }
     AlertDialog(
       onDismissRequest = { pendingSharedDictionaryDelete = null },
-      title = { Text("Delete shared dictionary?") },
+      title = { Text(stringResource(R.string.langmgr_delete_shared_title)) },
       text = {
         Text(
-          "This dictionary is shared with $sharedNames.\nDeleting it will remove the dictionary for all of them.",
+          stringResource(R.string.langmgr_delete_shared_body, sharedNames),
         )
       },
       confirmButton = {
@@ -874,14 +875,14 @@ fun LanguageAssetManagerScreen(
             pendingSharedDictionaryDelete = null
           },
         ) {
-          Text("OK")
+          Text(stringResource(R.string.common_ok))
         }
       },
       dismissButton = {
         TextButton(
           onClick = { pendingSharedDictionaryDelete = null },
         ) {
-          Text("Cancel")
+          Text(stringResource(R.string.common_cancel))
         }
       },
     )
@@ -1082,7 +1083,7 @@ private fun buildFeatureRows(
   if (row.translationVisible) {
     featureRows +=
       LanguageFeatureRow(
-        label = "Translation",
+        labelRes = R.string.feature_translation,
         secondaryLabel = formatSize(row.translationSizeBytes),
         installed = row.translationInstalled,
         downloadState = translationDownloadState,
@@ -1095,7 +1096,7 @@ private fun buildFeatureRows(
   if (row.dictionaryVisible) {
     featureRows +=
       LanguageFeatureRow(
-        label = "Dictionary",
+        labelRes = R.string.feature_dictionary,
         secondaryLabel =
           buildDictionarySecondaryLabel(
             sizeBytes = row.dictionaryInfo?.size ?: 0L,
@@ -1112,7 +1113,7 @@ private fun buildFeatureRows(
   if (row.ttsVisible) {
     featureRows +=
       LanguageFeatureRow(
-        label = "Text-to-speech",
+        labelRes = R.string.feature_tts,
         secondaryLabel = formatSize(row.ttsSizeBytes),
         installed = row.ttsInstalled,
         downloadState = ttsDownloadState,
@@ -1142,7 +1143,7 @@ private fun FeatureRow(featureRow: LanguageFeatureRow) {
       horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
       Text(
-        text = featureRow.label,
+        text = stringResource(featureRow.labelRes),
         style = MaterialTheme.typography.bodyMedium,
       )
       featureRow.secondaryLabel?.let { secondaryLabel ->
@@ -1165,6 +1166,9 @@ private fun FeatureRow(featureRow: LanguageFeatureRow) {
   }
 }
 
+// Non-translatable single-letter glyph marking the translation feature.
+private const val TRANSLATION_FEATURE_BADGE = "T"
+
 @Composable
 private fun FeaturePresenceIndicators(row: LanguageAssetRow) {
   val installedTint = MaterialTheme.colorScheme.onSurface
@@ -1176,7 +1180,7 @@ private fun FeaturePresenceIndicators(row: LanguageAssetRow) {
   ) {
     if (row.translationVisible) {
       Text(
-        text = "T",
+        text = TRANSLATION_FEATURE_BADGE,
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.Bold,
         color =
@@ -1371,7 +1375,7 @@ private fun OcrUpgradeCard(
         modifier = Modifier.weight(1f),
       )
       TextButton(onClick = onDownload) {
-        Text("Download ${formatSize(totalBytes)}")
+        Text(stringResource(R.string.langmgr_download_size, formatSize(totalBytes)))
       }
     }
   }

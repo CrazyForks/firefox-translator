@@ -17,8 +17,12 @@
 
 package dev.davidv.translator
 
-enum class ReadonlyModalOutputAlignment(val displayName: String) {
-  TOP("Top"),
-  MIDDLE("Middle"),
-  BOTTOM("Bottom"),
+import androidx.annotation.StringRes
+
+enum class ReadonlyModalOutputAlignment(
+  @StringRes val labelRes: Int,
+) {
+  TOP(R.string.align_top),
+  MIDDLE(R.string.align_middle),
+  BOTTOM(R.string.align_bottom),
 }

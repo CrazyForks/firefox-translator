@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -237,7 +238,7 @@ fun ImageCaptureHandler(
       deleteTemporaryImageUri(context, destUri)
       pendingImport.value = null
       Log.w("ImageCrop", "Remote image crop is unsupported: $sourceUri")
-      Toast.makeText(context, "Remote images cannot be cropped directly", Toast.LENGTH_SHORT).show()
+      Toast.makeText(context, context.getString(R.string.image_no_crop_remote), Toast.LENGTH_SHORT).show()
       return
     }
 
@@ -312,7 +313,7 @@ fun ImageCaptureHandler(
               )
             } catch (e: Exception) {
               Log.e("FilePicker", "Failed to import document: $uri", e)
-              Toast.makeText(context, "Failed to open file", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, context.getString(R.string.image_open_failed), Toast.LENGTH_SHORT).show()
             }
           }
         }
@@ -414,7 +415,7 @@ fun ImageSourceBottomSheet(
             tint = screenTint,
           )
           Text(
-            text = "Screen",
+            text = stringResource(R.string.image_source_screen),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = screenTint,
@@ -436,7 +437,7 @@ fun ImageSourceBottomSheet(
             tint = MaterialTheme.colorScheme.onSurface,
           )
           Text(
-            text = "Document",
+            text = stringResource(R.string.image_source_document),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
           )
@@ -459,7 +460,7 @@ fun ImageSourceBottomSheet(
               tint = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-              text = "Photos",
+              text = stringResource(R.string.image_source_photos),
               style = MaterialTheme.typography.bodyMedium,
               textAlign = TextAlign.Center,
             )
@@ -481,7 +482,7 @@ fun ImageSourceBottomSheet(
               tint = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-              text = "Gallery",
+              text = stringResource(R.string.image_source_gallery),
               style = MaterialTheme.typography.bodyMedium,
               textAlign = TextAlign.Center,
             )
@@ -503,7 +504,7 @@ fun ImageSourceBottomSheet(
             tint = MaterialTheme.colorScheme.onSurface,
           )
           Text(
-            text = "Camera",
+            text = stringResource(R.string.image_source_camera),
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
           )

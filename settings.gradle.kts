@@ -23,3 +23,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Translator"
 include(":app")
+include(":detekt-rules")

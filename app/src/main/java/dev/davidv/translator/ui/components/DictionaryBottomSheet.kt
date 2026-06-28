@@ -62,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -185,6 +186,9 @@ fun DictionaryBottomSheet(
   }
 }
 
+// The dictionary target is always English; this is a language code, not translatable text.
+private const val ENGLISH_LANGUAGE_CODE = "en"
+
 @Composable
 fun DictionaryEntry(
   dictionaryWord: WordWithTaggedEntries,
@@ -257,7 +261,7 @@ fun DictionaryEntry(
               modifier = Modifier.padding(4.dp),
             )
             Text(
-              "en",
+              ENGLISH_LANGUAGE_CODE,
               style =
                 MaterialTheme.typography.titleMedium.copy(
                   fontWeight = if (selectedEntryIndex == 1) FontWeight.Bold else FontWeight.Normal,
@@ -302,7 +306,7 @@ fun DictionaryEntry(
     if (dictionaryWord.redirects.isNotEmpty()) {
       Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
         Text(
-          text = "Also as:",
+          text = stringResource(R.string.dict_also_as),
           style = MaterialTheme.typography.bodyMedium,
           modifier = Modifier.padding(end = 4.dp),
         )

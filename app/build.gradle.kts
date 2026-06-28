@@ -432,6 +432,7 @@ dependencies {
   implementation(libs.androidx.camera.camera2)
   implementation(libs.androidx.camera.lifecycle)
   implementation(libs.androidx.camera.view)
+  detektPlugins(project(":detekt-rules"))
 }
 
 ktlint {
@@ -453,8 +454,24 @@ detekt {
   allRules = false
 }
 
+tasks.register<io.gitlab.arturbosch.detekt.Detekt>("detektHardcodedStrings") {
+  description = "Fails the build on any hardcoded user-facing string (NoHardcodedUiString)."
+  group = "verification"
+  buildUponDefaultConfig = false
+  config.setFrom(file("$projectDir/detekt-hardcoded-strings.yml"))
+  setSource(files("src/main/java"))
+  include("**/*.kt")
+  reports {
+    html.required.set(false)
+    xml.required.set(false)
+    txt.required.set(false)
+    sarif.required.set(false)
+    md.required.set(false)
+  }
+}
+
 tasks.register("lintAll") {
-  dependsOn("ktlintCheck", "detekt")
+  dependsOn("ktlintCheck", "detekt", "detektHardcodedStrings")
   description = "Run all lint checks (ktlint and detekt)"
   group = "verification"
 }

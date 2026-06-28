@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
@@ -87,7 +88,6 @@ import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
-import dev.davidv.translator.SUPPORTED_DOCUMENT_URL_TOAST
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.WordWithTaggedEntries
@@ -346,7 +346,7 @@ fun MainScreen(
                     onDictionaryLookup = { word ->
                       onMessage(TranslatorMessage.DictionaryLookup(word, from))
                     },
-                    placeholder = if (displayImage == null) "Enter text" else null,
+                    placeholder = if (displayImage == null) stringResource(R.string.main_input_placeholder) else null,
                     modifier =
                       Modifier
                         .fillMaxWidth()
@@ -614,7 +614,7 @@ fun PasteButton(
         val trimmed = text.trim()
         if (isWebUrl(trimmed)) {
           if (isSupportedDocumentUrl(trimmed)) {
-            Toast.makeText(context, SUPPORTED_DOCUMENT_URL_TOAST, Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.doc_url_unsupported), Toast.LENGTH_LONG).show()
           } else {
             val browserIntent =
               Intent(context, BrowserActivity::class.java).apply {

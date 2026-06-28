@@ -18,6 +18,7 @@
 package dev.davidv.translator.ui.components
 
 import android.text.format.Formatter
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,10 +45,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageMetadata
+import dev.davidv.translator.R
 import dev.davidv.translator.TxtLayoutChoice
 import kotlin.math.roundToInt
 
@@ -57,11 +60,12 @@ private enum class LayoutMode {
   REFLOW_WRAP,
 }
 
-private fun LayoutMode.label(): String =
+@StringRes
+private fun LayoutMode.labelRes(): Int =
   when (this) {
-    LayoutMode.PRESERVE -> "Preserve line breaks"
-    LayoutMode.REFLOW -> "Reflow into paragraphs"
-    LayoutMode.REFLOW_WRAP -> "Reflow and wrap"
+    LayoutMode.PRESERVE -> R.string.layout_preserve
+    LayoutMode.REFLOW -> R.string.layout_reflow
+    LayoutMode.REFLOW_WRAP -> R.string.layout_reflow_wrap
   }
 
 private const val WRAP_MIN = 70
@@ -151,7 +155,7 @@ fun DocumentConfigureSheet(
         if (layoutMode == LayoutMode.REFLOW_WRAP) {
           Column {
             Text(
-              text = "Wrap at $wrapColumns columns",
+              text = stringResource(R.string.document_wrap_columns, wrapColumns),
               style = MaterialTheme.typography.bodySmall,
             )
             Slider(
@@ -170,7 +174,7 @@ fun DocumentConfigureSheet(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-          Text("Translate images in PDF")
+          Text(stringResource(R.string.document_translate_pdf_images))
           Switch(
             checked = translatePdfImages,
             onCheckedChange = { translatePdfImages = it },
@@ -190,7 +194,7 @@ fun DocumentConfigureSheet(
         },
         modifier = Modifier.fillMaxWidth(),
       ) {
-        Text("Translate")
+        Text(stringResource(R.string.translate_text))
       }
 
       Spacer(modifier = Modifier.navigationBarsPadding())
@@ -209,7 +213,7 @@ private fun LayoutModeDropdown(
       onClick = { expanded = true },
       modifier = Modifier.fillMaxWidth(),
     ) {
-      Text(selected.label(), modifier = Modifier.weight(1f))
+      Text(stringResource(selected.labelRes()), modifier = Modifier.weight(1f))
       Text("▾")
     }
     DropdownMenu(
@@ -218,7 +222,7 @@ private fun LayoutModeDropdown(
     ) {
       LayoutMode.entries.forEach { mode ->
         DropdownMenuItem(
-          text = { Text(mode.label()) },
+          text = { Text(stringResource(mode.labelRes())) },
           onClick = {
             onSelected(mode)
             expanded = false

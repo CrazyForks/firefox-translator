@@ -29,6 +29,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -204,25 +206,28 @@ private fun MigrationBlockingScreen(
         is MigrationUiState.AwaitTtsDecision -> {
           val savedMb = state.savedBytes / 1_000_000.0
           Text(
-            text = "Updating speech models",
+            text = stringResource(R.string.migration_updating_speech_models),
             textAlign = TextAlign.Center,
           )
           Spacer(Modifier.height(12.dp))
           Text(
             text =
-              "You have ${state.ttsCount} text-to-speech " +
-                "${if (state.ttsCount == 1) "model" else "models"} to convert to a new " +
-                "format. It will take approximately ${6 * state.ttsCount} seconds. You will save " +
-                "%.0f MB of disk space.".format(savedMb),
+              pluralStringResource(
+                R.plurals.migration_convert_prompt,
+                state.ttsCount,
+                state.ttsCount,
+                6 * state.ttsCount,
+                savedMb,
+              ),
             textAlign = TextAlign.Center,
           )
           Spacer(Modifier.height(24.dp))
           Button(modifier = Modifier.fillMaxWidth(), onClick = onConvert) {
-            Text("Accept and convert")
+            Text(stringResource(R.string.migration_accept_convert))
           }
           Spacer(Modifier.height(8.dp))
           OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onDeleteAll) {
-            Text("Delete all instead")
+            Text(stringResource(R.string.migration_delete_all))
           }
         }
 
@@ -239,7 +244,10 @@ private fun MigrationBlockingScreen(
             animationSpec = infiniteRepeatable(tween(1800), RepeatMode.Reverse),
             label = "convert-breath-alpha",
           )
-          Text(text = "Converting ${state.current + 1} of ${state.total}", textAlign = TextAlign.Center)
+          Text(
+            text = stringResource(R.string.migration_converting, state.current + 1, state.total),
+            textAlign = TextAlign.Center,
+          )
           Spacer(Modifier.height(8.dp))
           Text(text = state.label, textAlign = TextAlign.Center)
           Spacer(Modifier.height(24.dp))
@@ -253,7 +261,7 @@ private fun MigrationBlockingScreen(
         else -> {
           CircularProgressIndicator()
           Spacer(Modifier.height(16.dp))
-          Text(text = "Optimizing models", textAlign = TextAlign.Center)
+          Text(text = stringResource(R.string.migration_optimizing), textAlign = TextAlign.Center)
         }
       }
     }

@@ -93,6 +93,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -230,13 +231,13 @@ private fun PermissionPrompt(
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Text(
-      text = "Camera permission is needed for live translate.",
+      text = stringResource(R.string.camera_permission_rationale),
       color = Color.White,
     )
     Spacer(modifier = Modifier.size(16.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
       Text(
-        text = "Grant",
+        text = stringResource(R.string.common_grant),
         color = Color.White,
         modifier =
           Modifier
@@ -246,7 +247,7 @@ private fun PermissionPrompt(
             .padding(horizontal = 16.dp, vertical = 8.dp),
       )
       Text(
-        text = "Cancel",
+        text = stringResource(R.string.common_cancel),
         color = Color.White,
         modifier =
           Modifier
@@ -782,7 +783,7 @@ private fun CameraSurface(
           Toast
             .makeText(
               context,
-              "You need to download the OCR models for this language",
+              context.getString(R.string.camera_need_ocr_models),
               Toast.LENGTH_SHORT,
             )
             .show()

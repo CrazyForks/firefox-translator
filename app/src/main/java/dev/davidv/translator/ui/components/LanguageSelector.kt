@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -72,7 +73,7 @@ fun LanguageSelector(
   val displayText =
     when {
       isAutoSource && detectedInstalled != null -> "✨ ${detectedInstalled.displayName}"
-      isAutoSource -> "✨ Auto"
+      isAutoSource -> stringResource(R.string.langsel_auto)
       else -> selectedLanguage.displayName
     }
 
@@ -109,7 +110,7 @@ fun LanguageSelector(
         DropdownMenuItem(
           text = {
             Text(
-              text = "✨ Auto",
+              text = stringResource(R.string.langsel_auto),
               color =
                 if (isAutoSource) {
                   MaterialTheme.colorScheme.primary

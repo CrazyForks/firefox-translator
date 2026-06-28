@@ -21,7 +21,14 @@ repos:
         language: system
         files: \.kt$
         pass_filenames: false
-        
+
+      - id: detekt-hardcoded-strings
+        name: detekt hardcoded UI strings
+        entry: ./gradlew detektHardcodedStrings
+        language: system
+        files: \.kt$
+        pass_filenames: false
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:

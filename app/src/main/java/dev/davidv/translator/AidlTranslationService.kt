@@ -99,7 +99,7 @@ class AidlTranslationService : Service() {
               TranslationError().apply {
                 type = ErrorType.UNEXPECTED
                 language = null
-                message = "Target language not available"
+                message = getString(R.string.aidl_target_unavailable)
               }
             callback.onTranslationError(err)
             return@launch

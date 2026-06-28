@@ -55,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
@@ -263,7 +264,7 @@ fun SpeechPlaybackButton(
             .padding(horizontal = 12.dp, vertical = 8.dp),
       ) {
         Text(
-          text = "Playback speed",
+          text = stringResource(R.string.voice_playback_speed),
           style = MaterialTheme.typography.labelLarge,
         )
         SpeechSpeedControl(
@@ -277,7 +278,7 @@ fun SpeechPlaybackButton(
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
         Text(
-          text = "Voice",
+          text = stringResource(R.string.voice_label),
           style = MaterialTheme.typography.labelLarge,
         )
         Column(
@@ -289,7 +290,7 @@ fun SpeechPlaybackButton(
         ) {
           if (availableVoices.isEmpty()) {
             Text(
-              text = "Default voice",
+              text = stringResource(R.string.voice_default),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

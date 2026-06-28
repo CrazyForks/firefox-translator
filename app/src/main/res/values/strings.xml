@@ -15,4 +15,214 @@
     <string name="tap_to_translate_channel">Tap to Translate</string>
     <string name="tap_to_translate_channel_description">Persistent notification for quick access to the translator popup</string>
     <string name="quick_tile_label">Translate</string>
+
+    <!-- common -->
+    <string name="common_ok">OK</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_done">Done</string>
+    <string name="common_grant">Grant</string>
+    <string name="common_manage">Manage</string>
+
+    <!-- settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_languages">Languages</string>
+    <string name="settings_language_packs">Language Packs</string>
+    <string name="settings_general">General</string>
+    <string name="settings_font_size">Font Size</string>
+    <string name="settings_font_sample">This is some example text</string>
+    <string name="settings_tap_notification">Tap to Translate notification</string>
+    <string name="settings_tap_notification_desc">Persistent notification that opens the popup.</string>
+    <string name="settings_web_translator">Web Translator</string>
+    <string name="settings_clear_browsing">Clear browsing data on close</string>
+    <string name="settings_clear_browsing_desc">Deletes cookies, cache and local storage.</string>
+    <string name="settings_popup_settings">Popup settings</string>
+    <string name="settings_popup_desc">Popup shows up when selecting \'Translate\' from the long-press menu</string>
+    <string name="settings_hide_input">Hide input</string>
+    <string name="settings_popup_position">Popup position</string>
+    <string name="settings_popup_size">Popup size: %1$d%%</string>
+    <string name="settings_screen_translation">Screen translation</string>
+    <string name="settings_screen_translation_desc">Translate text directly on top of other apps.</string>
+    <string name="settings_floating_button">Always-on floating button</string>
+    <string name="settings_floating_button_desc">Requires accessibility role</string>
+    <string name="settings_shortcut">Translate screen on shortcut</string>
+    <string name="settings_shortcut_desc">Long-press home or power to trigger</string>
+    <string name="settings_on_shortcut">On shortcut invocation</string>
+    <string name="settings_ocr">OCR</string>
+    <string name="settings_background_mode">Background Mode</string>
+    <string name="settings_min_confidence">Min Confidence: %1$d%%</string>
+    <string name="settings_max_image_size">Max Image Size: %1$dpx</string>
+    <string name="settings_advanced">Advanced Settings</string>
+    <string name="settings_catalog_url">Catalog Index URL</string>
+    <string name="settings_external_storage">Use external storage</string>
+    <string name="settings_disable_autodetect">Disable automatic language detection</string>
+    <string name="settings_translit_output">Show transliteration for output</string>
+    <string name="settings_translit_input">Show transliteration for input</string>
+    <string name="settings_translit_japanese_spaces">Add spaces for Japanese transliteration</string>
+    <string name="settings_translate_pdf_images">Translate images in PDFs</string>
+    <string name="settings_translate_pdf_images_desc">OCR and translate raster images embedded in PDF pages.</string>
+    <string name="settings_camera_live_default">Translate camera live by default</string>
+    <string name="settings_register_browser">Register as browser</string>
+    <string name="settings_register_browser_desc">Offer to translate links from other apps.</string>
+    <string name="settings_external_storage_perm_title">External Storage Permission</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version %1$s</string>
+    <string name="settings_no_languages_available">No languages available</string>
+    <string name="settings_default_from">Default \'from\' language</string>
+    <string name="settings_default_to">Default \'to\' language</string>
+    <string name="settings_adblock_support">Adblock support</string>
+    <string name="settings_about_get_help">Get help / report issue</string>
+    <string name="settings_about_support">Support development</string>
+    <string name="settings_external_storage_perm_body">To store translation files in your Documents folder, this app needs access to manage all files.\nYou\'ll be taken to Settings where you can grant \'Allow access to manage all files\' permission.</string>
+
+    <!-- language manager / setup / how-to -->
+    <string name="langmgr_voices">Voices</string>
+    <string name="langmgr_default">DEFAULT</string>
+    <string name="langmgr_filter">Filter languages</string>
+    <string name="langmgr_delete_shared_title">Delete shared dictionary?</string>
+    <string name="langmgr_delete_shared_body">This dictionary is shared with %1$s.\nDeleting it will remove the dictionary for all of them.</string>
+    <string name="langmgr_download_size">Download %1$s</string>
+    <string name="nolang_title">Language Setup</string>
+    <string name="nolang_prompt">Download language packs to start translating</string>
+    <string name="howto_title">How to use</string>
+
+    <!-- image capture / voice / dictionary / language selector -->
+    <string name="image_no_crop_remote">Remote images cannot be cropped directly</string>
+    <string name="image_open_failed">Failed to open file</string>
+    <string name="image_source_screen">Screen</string>
+    <string name="image_source_document">Document</string>
+    <string name="image_source_photos">Photos</string>
+    <string name="image_source_gallery">Gallery</string>
+    <string name="image_source_camera">Camera</string>
+    <string name="voice_playback_speed">Playback speed</string>
+    <string name="voice_label">Voice</string>
+    <string name="voice_default">Default voice</string>
+    <string name="langsel_auto">✨ Auto</string>
+    <string name="dict_also_as">Also as:</string>
+
+    <!-- camera / browser / screen translate -->
+    <string name="camera_permission_rationale">Camera permission is needed for live translate.</string>
+    <string name="camera_need_ocr_models">You need to download the OCR models for this language</string>
+    <string name="browser_no_source_language">No source language available. Install one from the main screen first, or set a default source language in settings.</string>
+    <string name="browser_reader_unavailable">Reader mode unavailable for this page</string>
+    <string name="browser_translate_image">Translate image</string>
+    <string name="screen_translating_notification">Translating screen</string>
+
+    <!-- enums -->
+    <string name="align_top">Top</string>
+    <string name="align_middle">Middle</string>
+    <string name="align_bottom">Bottom</string>
+    <string name="assistant_action_still_image">Translate once</string>
+    <string name="assistant_action_live_screen">Start live translation</string>
+    <string name="background_mode_white_on_black">White on Black</string>
+    <string name="background_mode_black_on_white">Black on White</string>
+    <string name="background_mode_auto_detect">Auto-detect Colors</string>
+    
+    <!-- tts / speech errors -->
+    <string name="tts_nothing_to_speak">Nothing to speak</string>
+    <string name="tts_catalog_unavailable">Catalog unavailable</string>
+    <string name="tts_no_voice">No TTS voice installed for %1$s</string>
+    <string name="tts_synthesis_failed">Speech synthesis failed for %1$s</string>
+    <string name="tts_sample_fallback">This is a text-to-speech sample from Offline Translator.</string>
+    
+    <!-- translation -->
+    <string name="translation_error">Translation error: %1$s</string>
+    
+    <!-- download errors -->
+    <string name="download_failed_core">%1$s download failed</string>
+    <string name="download_failed_ocr">%1$s OCR download failed</string>
+    <string name="download_failed_ocr_batch">OCR batch download failed</string>
+    <string name="download_failed_dictionary">%1$s dictionary download failed</string>
+    <string name="download_failed_tts">%1$s TTS download failed</string>
+    <string name="download_failed_adblock">Adblock download failed</string>
+    <string name="download_catalog_unavailable">Catalog unavailable</string>
+    <string name="download_catalog_save_failed">Failed to save catalog</string>
+    <string name="download_unknown_error">Unknown error</string>
+    <string name="download_catalog_failed">Failed to download catalog: %1$s</string>
+    
+    <!-- assistant overlay status -->
+    <string name="assistant_invoke_prompt">Invoke this assistant on top of text to translate it</string>
+    <string name="assistant_collecting_context">Collecting screen context…</string>
+    <string name="assistant_screenshot_disabled">Screenshot access is disabled for this assistant. Enable it in the system assistant settings.</string>
+    <string name="assistant_no_screen_data">No screen data received. Enable \'Use screenshot\' for this assistant.</string>
+    <string name="assistant_no_screenshot">This app did not provide a screenshot.</string>
+    <string name="assistant_set_source_ocr">Set a default source language for OCR.</string>
+    <string name="assistant_langs_not_ready">Translation languages aren\'t ready yet. Try again.</string>
+    <string name="assistant_ocr_failed">OCR failed</string>
+    <string name="assistant_set_source_live">Set a default source language in Settings to use live screen translation.</string>
+    
+    <!-- migration gate -->
+    <string name="migration_updating_speech_models">Updating speech models</string>
+    <string name="migration_accept_convert">Accept and convert</string>
+    <string name="migration_delete_all">Delete all instead</string>
+    <string name="migration_converting">Converting %1$d of %2$d</string>
+    <string name="migration_optimizing">Optimizing models</string>
+    <plurals name="migration_convert_prompt">
+      <item quantity="one">You have %1$d text-to-speech model to convert to a new format. It will take approximately %2$d seconds. You will save %3$.0f MB of disk space.</item>
+      <item quantity="other">You have %1$d text-to-speech models to convert to a new format. It will take approximately %2$d seconds. You will save %3$.0f MB of disk space.</item>
+    </plurals>
+    
+    <!-- document translation notification + progress -->
+    <string name="doc_notif_translating">Translating file</string>
+    <string name="doc_notif_translated">Translated file</string>
+    <string name="doc_notif_phase_text">Text %1$d%%</string>
+    <string name="doc_notif_phase_images">Images %1$d/%2$d</string>
+    <string name="doc_notif_phase_raster">Bitmap pages %1$d/%2$d</string>
+    <string name="doc_notif_progress_percent">%1$d%%</string>
+    <string name="doc_notif_channel_name">Document translation</string>
+    <string name="doc_notif_channel_desc">Shows progress while translating documents</string>
+    <string name="doc_progress_preparing">Preparing file</string>
+    <string name="doc_progress_translating">Translating</string>
+    <string name="doc_progress_translated">Translated file</string>
+    <string name="doc_progress_saving">Saving translated file</string>
+    <string name="doc_translation_failed">Document translation failed</string>
+    <string name="doc_url_unsupported">Download the document and open it with the app instead</string>
+    
+    <!-- document configure sheet -->
+    <string name="document_wrap_columns">Wrap at %1$d columns</string>
+    <string name="document_translate_pdf_images">Translate images in PDF</string>
+    <string name="layout_preserve">Preserve line breaks</string>
+    <string name="layout_reflow">Reflow into paragraphs</string>
+    <string name="layout_reflow_wrap">Reflow and wrap</string>
+    
+    <!-- common (additional) -->
+    <string name="common_open">Open</string>
+    <string name="common_close">Close</string>
+    <string name="common_save">Save</string>
+    
+    <!-- translator app -->
+    <string name="translator_percent">%1$d%%</string>
+    <string name="translator_translated_file">Translated file: %1$s</string>
+    <string name="translator_document_saved">Document saved</string>
+    <string name="translator_document_save_failed">Failed to save document</string>
+    <string name="translator_audio_playback_failed">Audio playback failed: %1$s</string>
+    <string name="translator_no_app_to_open">No app found to open this file</string>
+    
+    <!-- document alignment -->
+    <string name="docalign_decode_failed">Unable to decode image.</string>
+    <string name="docalign_detecting">Detecting corners…</string>
+    <string name="docalign_redetecting">Re-detecting…</string>
+    <string name="docalign_help">A precise perimeter around the document improves recognition quality. It is important that the lines are parallel to the text.\n\nZooming or panning usually makes the algorithm automatically pick up the document, but you can still manually adjust if it\'s not found.</string>
+
+    <!-- how to use -->
+    <string name="howto_section_other_apps">From other apps</string>
+    <string name="howto_share_title">Share to translate</string>
+    <string name="howto_share_body">Share text, links, or images from any app to translate them.</string>
+    <string name="howto_copy_title">Translate without leaving other apps</string>
+    <string name="howto_copy_body">Select text anywhere, then tap \"Translate\" in the copy toolbar to see the translation in a compact popup.</string>
+    <string name="howto_section_in_app">Inside the app</string>
+    <string name="howto_docs_title">Translate documents</string>
+    <string name="howto_docs_body">Open the Documents tab to translate EPUB, PDF, and TXT files.</string>
+    <string name="howto_dict_title">Dictionary lookup</string>
+    <string name="howto_dict_body">Long-press any word in a translation to see its definition. Data sourced from Wiktionary.</string>
+    <string name="howto_voice_title">Change voice or speed</string>
+    <string name="howto_voice_body">Long-press the play button to pick a different TTS voice or adjust playback speed.</string>
+
+    <!-- feature row labels -->
+    <string name="feature_translation">Translation</string>
+    <string name="feature_dictionary">Dictionary</string>
+    <string name="feature_tts">Text-to-speech</string>
+
+    <!-- misc -->
+    <string name="main_input_placeholder">Enter text</string>
+    <string name="aidl_target_unavailable">Target language not available</string>
 </resources>

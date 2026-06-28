@@ -49,8 +49,6 @@ class TranslatorVoiceInteractionSessionService : VoiceInteractionSessionService(
       )
     overlayTextTranslationHelper =
       OverlayTextTranslationHelper(
-        settingsManager = settingsManager,
-        translationService = translationService,
         langStateManager = langStateManager,
         languageMetadataManager = languageMetadataManager,
       )

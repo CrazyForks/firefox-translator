@@ -66,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -201,7 +202,7 @@ private fun BrowserScreen(
   if (from == null) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
       Text(
-        text = "No source language available. Install one from the main screen first, or set a default source language in settings.",
+        text = stringResource(R.string.browser_no_source_language),
         color = MaterialTheme.colorScheme.onBackground,
       )
     }
@@ -296,7 +297,7 @@ private fun BrowserScreen(
                   val webView = webViewRef[0]
                   if (webView != null) {
                     readerController.toggle(webView) {
-                      Toast.makeText(context, "Reader mode unavailable for this page", Toast.LENGTH_SHORT).show()
+                      Toast.makeText(context, context.getString(R.string.browser_reader_unavailable), Toast.LENGTH_SHORT).show()
                     }
                   }
                 }
@@ -545,7 +546,7 @@ private fun BrowserWebView(
           shadowElevation = 8.dp,
         ) {
           Text(
-            text = "Translate image",
+            text = stringResource(R.string.browser_translate_image),
             color = MaterialTheme.colorScheme.onSurface,
             modifier =
               Modifier

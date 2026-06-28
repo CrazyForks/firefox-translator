@@ -21,6 +21,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -37,8 +38,10 @@ import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.PcmAudio
 import dev.davidv.translator.PdfPhaseProgress
 import dev.davidv.translator.PreparedImageOverlay
+import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
+import dev.davidv.translator.SpeechError
 import dev.davidv.translator.SpeechSynthesisResult
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslationCoordinator
@@ -458,7 +461,7 @@ class TranslatorViewModel(
             is SpeechSynthesisResult.Success -> _uiEvents.emit(UiEvent.PlayAudio(result.audioChunks))
             is SpeechSynthesisResult.Error -> {
               _uiEvents.emit(UiEvent.AudioLoadingStopped)
-              _uiEvents.emit(UiEvent.ShowToast(result.message))
+              _uiEvents.emit(UiEvent.ShowToast(speechErrorMessage(appContext, result.reason)))
             }
           }
         }
@@ -681,7 +684,7 @@ class TranslatorViewModel(
           is TranslationResult.Success -> _output.value = result.result
           is TranslationResult.Error -> {
             _output.value = null
-            _uiEvents.emit(UiEvent.ShowToast("Translation error: ${result.message}"))
+            _uiEvents.emit(UiEvent.ShowToast(appContext.getString(R.string.translation_error, result.message)))
           }
         }
       }
@@ -958,7 +961,7 @@ data class DocumentTranslationUiState(
   val outputFileName: String? = null,
   val outputMimeType: String? = null,
   val errorMessage: String? = null,
-  val progressLabel: String = "Preparing file",
+  @StringRes val progressLabelRes: Int = R.string.doc_progress_preparing,
   val pdfPhases: PdfPhaseProgress? = null,
   val progressFraction: Float? = null,
 ) {
@@ -975,7 +978,7 @@ private fun DocumentTranslationServiceState.toUiState(): DocumentTranslationUiSt
     outputFileName = outputPath?.let { File(it).name },
     outputMimeType = outputPath?.let { mimeTypeForDocumentPath(it) },
     errorMessage = errorMessage,
-    progressLabel = progressLabel,
+    progressLabelRes = progressLabelRes,
     pdfPhases = pdfPhases,
     progressFraction = progressFraction,
   )
@@ -1010,3 +1013,16 @@ class TranslatorViewModelFactory(
       initialLaunchMode = initialLaunchMode,
     ) as T
 }
+
+private fun speechErrorMessage(
+  context: android.content.Context,
+  reason: SpeechError,
+): String =
+  when (reason) {
+    SpeechError.NothingToSpeak -> context.getString(R.string.tts_nothing_to_speak)
+    SpeechError.CatalogUnavailable -> context.getString(R.string.tts_catalog_unavailable)
+    is SpeechError.NoVoiceInstalled ->
+      context.getString(R.string.tts_no_voice, reason.language.displayName)
+    is SpeechError.SynthesisFailed ->
+      context.getString(R.string.tts_synthesis_failed, reason.language.displayName)
+  }

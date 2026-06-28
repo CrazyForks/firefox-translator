@@ -1,6 +1,13 @@
 build:
   maxIssues: -1
 
+translator-rules:
+  active: true
+  NoHardcodedUiString:
+    active: true
+    excludes: ['**/test/**', '**/androidTest/**']
+    sinks: ['Text', 'makeText', 'setContentTitle', 'setContentText', 'setDescription', 'showStatus']
+
 style:
   active: true
   UnusedImports:

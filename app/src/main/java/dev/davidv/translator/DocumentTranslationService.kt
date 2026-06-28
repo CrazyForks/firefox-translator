@@ -28,6 +28,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -64,7 +65,7 @@ data class DocumentTranslationServiceState(
   val fileSizeBytes: Long,
   val outputPath: String? = null,
   val errorMessage: String? = null,
-  val progressLabel: String = "Preparing file",
+  @StringRes val progressLabelRes: Int = R.string.doc_progress_preparing,
   // Set once a PdfPlan event arrives. While non-null the UI renders
   // three labelled progress bars (text pages / images / raster
   // pages); each phase ticks its own counter. Null for non-PDF
@@ -207,7 +208,7 @@ class DocumentTranslationService : Service() {
           .toList()
 
       updateState(request.taskId) {
-        it.copy(progressLabel = "Preparing file", progressFraction = null)
+        it.copy(progressLabelRes = R.string.doc_progress_preparing, progressFraction = null)
       }
 
       var result: Result<String>? = null
@@ -242,7 +243,7 @@ class DocumentTranslationService : Service() {
             it.copy(
               outputPath = outputPath,
               errorMessage = null,
-              progressLabel = "Translated file",
+              progressLabelRes = R.string.doc_progress_translated,
               progressFraction = 1f,
               pdfPhases =
                 it.pdfPhases?.let { p ->
@@ -255,7 +256,7 @@ class DocumentTranslationService : Service() {
             )
           }
         }.onFailure { error ->
-          val message = error.message ?: "Document translation failed"
+          val message = error.message ?: getString(R.string.doc_translation_failed)
           updateState(request.taskId) {
             it.copy(errorMessage = message)
           }
@@ -267,7 +268,7 @@ class DocumentTranslationService : Service() {
       }
       Log.e("DocumentTranslationService", "Document translation failed", e)
       updateState(request.taskId) {
-        it.copy(errorMessage = e.message ?: "Document translation failed")
+        it.copy(errorMessage = e.message ?: getString(R.string.doc_translation_failed))
       }
     } finally {
       if (request.deleteAfterLoad) {
@@ -301,11 +302,11 @@ class DocumentTranslationService : Service() {
       when (progress) {
         DocumentTranslationProgress.Preparing ->
           current.copy(
-            progressLabel = "Preparing file",
+            progressLabelRes = R.string.doc_progress_preparing,
           )
         is DocumentTranslationProgress.PdfPlan ->
           current.copy(
-            progressLabel = "Translating",
+            progressLabelRes = R.string.doc_progress_translating,
             pdfPhases =
               PdfPhaseProgress(
                 textTotal = progress.textPages,
@@ -316,18 +317,18 @@ class DocumentTranslationService : Service() {
         is DocumentTranslationProgress.TranslatingText ->
           if (current.pdfPhases != null) {
             current.copy(
-              progressLabel = "Translating",
+              progressLabelRes = R.string.doc_progress_translating,
               pdfPhases = current.pdfPhases.copy(textFraction = progress.fraction),
             )
           } else {
             current.copy(
-              progressLabel = "Translating",
+              progressLabelRes = R.string.doc_progress_translating,
               progressFraction = progress.fraction,
             )
           }
         is DocumentTranslationProgress.TranslatingImages ->
           current.copy(
-            progressLabel = "Translating",
+            progressLabelRes = R.string.doc_progress_translating,
             pdfPhases =
               current.pdfPhases?.copy(
                 imageCurrent = progress.current,
@@ -336,7 +337,7 @@ class DocumentTranslationService : Service() {
           )
         is DocumentTranslationProgress.TranslatingRasterPages ->
           current.copy(
-            progressLabel = "Translating",
+            progressLabelRes = R.string.doc_progress_translating,
             pdfPhases =
               current.pdfPhases?.copy(
                 rasterCurrent = progress.current,
@@ -345,7 +346,7 @@ class DocumentTranslationService : Service() {
           )
         DocumentTranslationProgress.Writing ->
           current.copy(
-            progressLabel = "Saving translated file",
+            progressLabelRes = R.string.doc_progress_saving,
           )
       }
     }
@@ -378,7 +379,11 @@ class DocumentTranslationService : Service() {
     val notification =
       NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_translate_button)
-        .setContentTitle(if (state.isTranslating) "Translating file" else "Translated file")
+        .setContentTitle(
+          getString(
+            if (state.isTranslating) R.string.doc_notif_translating else R.string.doc_notif_translated,
+          ),
+        )
         .setContentText(notificationText(state))
         .setContentIntent(openPendingIntent)
         .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -419,19 +424,17 @@ class DocumentTranslationService : Service() {
     if (phases != null) {
       // One line with all three phases so pending work stays visible: text as
       // a percentage, image/raster as real counts.
-      return buildString {
-        append("Text ").append((phases.textFraction * 100).toInt()).append('%')
-        append("  •  ")
-        append("Images ").append(phases.imageCurrent).append('/').append(phases.imageTotal)
-        append("  •  ")
-        append("Bitmap pages ").append(phases.rasterCurrent).append('/').append(phases.rasterTotal)
-      }
+      return listOf(
+        getString(R.string.doc_notif_phase_text, (phases.textFraction * 100).toInt()),
+        getString(R.string.doc_notif_phase_images, phases.imageCurrent, phases.imageTotal),
+        getString(R.string.doc_notif_phase_raster, phases.rasterCurrent, phases.rasterTotal),
+      ).joinToString("  •  ")
     }
     val fraction = state.progressFraction
     if (fraction != null) {
-      return "${(fraction * 100).toInt()}%"
+      return getString(R.string.doc_notif_progress_percent, (fraction * 100).toInt())
     }
-    return state.progressLabel
+    return getString(state.progressLabelRes)
   }
 
   private fun updateNotification(state: DocumentTranslationServiceState) {
@@ -463,10 +466,10 @@ class DocumentTranslationService : Service() {
     val channel =
       NotificationChannel(
         CHANNEL_ID,
-        "Document translation",
+        getString(R.string.doc_notif_channel_name),
         NotificationManager.IMPORTANCE_LOW,
       ).apply {
-        description = "Shows progress while translating documents"
+        description = getString(R.string.doc_notif_channel_desc)
         setShowBadge(false)
       }
     nm.createNotificationChannel(channel)

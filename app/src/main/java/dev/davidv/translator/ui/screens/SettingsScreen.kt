@@ -67,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.AppSettings
@@ -80,7 +81,7 @@ import dev.davidv.translator.PermissionHelper
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadonlyModalOutputAlignment
 import dev.davidv.translator.TapToTranslateNotification
-import dev.davidv.translator.displayName
+import dev.davidv.translator.labelRes
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -112,7 +113,7 @@ private fun LanguageDropdown(
     modifier = Modifier.fillMaxWidth(),
   ) {
     OutlinedTextField(
-      value = selectedLanguage?.displayName ?: fallbackLanguage?.displayName ?: "No languages available",
+      value = selectedLanguage?.displayName ?: fallbackLanguage?.displayName ?: stringResource(R.string.settings_no_languages_available),
       onValueChange = {},
       readOnly = true,
       trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -193,7 +194,7 @@ fun SettingsScreen(
   Scaffold(
     topBar = {
       TopAppBar(
-        title = { Text("Settings") },
+        title = { Text(stringResource(R.string.settings_title)) },
       )
     },
   ) { paddingValues ->
@@ -219,7 +220,7 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
           Text(
-            text = "Languages",
+            text = stringResource(R.string.settings_languages),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
           )
@@ -231,7 +232,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Text(
-              text = "Language Packs",
+              text = stringResource(R.string.settings_language_packs),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurface,
               modifier = Modifier.weight(1f).padding(end = 8.dp),
@@ -240,7 +241,7 @@ fun SettingsScreen(
             TextButton(
               onClick = onManageLanguages,
             ) {
-              Text("Manage")
+              Text(stringResource(R.string.common_manage))
             }
           }
         }
@@ -259,13 +260,13 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           Text(
-            text = "General",
+            text = stringResource(R.string.settings_general),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
           )
 
           LanguageDropdown(
-            label = "Default 'from' language",
+            label = stringResource(R.string.settings_default_from),
             selectedLanguage = settings.defaultSourceLanguageCode?.let { catalog?.languageByCode(it) },
             availableLanguages = availableLanguages,
             fallbackLanguage = availableLanguages.firstOrNull { it.code != settings.defaultTargetLanguageCode },
@@ -275,7 +276,7 @@ fun SettingsScreen(
           )
 
           LanguageDropdown(
-            label = "Default 'to' language",
+            label = stringResource(R.string.settings_default_to),
             selectedLanguage = catalog?.languageByCode(settings.defaultTargetLanguageCode),
             availableLanguages = availableLanguages,
             fallbackLanguage = null,
@@ -285,7 +286,7 @@ fun SettingsScreen(
           )
 
           Text(
-            text = "Font Size",
+            text = stringResource(R.string.settings_font_size),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -312,7 +313,7 @@ fun SettingsScreen(
 
           if (showExampleText) {
             Text(
-              text = "This is some example text",
+              text = stringResource(R.string.settings_font_sample),
               style =
                 MaterialTheme.typography.bodyLarge.copy(
                   fontSize = (MaterialTheme.typography.bodyLarge.fontSize * settings.fontFactor),
@@ -331,12 +332,12 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Tap to Translate notification",
+                text = stringResource(R.string.settings_tap_notification),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
               )
               Text(
-                text = "Persistent notification that opens the popup.",
+                text = stringResource(R.string.settings_tap_notification_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -380,13 +381,13 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           Text(
-            text = "Web Translator",
+            text = stringResource(R.string.settings_web_translator),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
           )
 
           WebTranslatorAssetRow(
-            label = "Adblock support",
+            label = stringResource(R.string.settings_adblock_support),
             secondaryLabel = catalog?.supportSizeBytesByKind("adblock")?.let(::formatSize),
             installed = adblockInstalled,
             downloadState = adblockDownloadState,
@@ -402,12 +403,12 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Clear browsing data on close",
+                text = stringResource(R.string.settings_clear_browsing),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
               )
               Text(
-                text = "Deletes cookies, cache and local storage.",
+                text = stringResource(R.string.settings_clear_browsing_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -434,13 +435,13 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           Text(
-            text = "Popup settings",
+            text = stringResource(R.string.settings_popup_settings),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
           )
 
           Text(
-            text = "Popup shows up when selecting 'Translate' from the long-press menu",
+            text = stringResource(R.string.settings_popup_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -452,7 +453,7 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Hide input",
+                text = stringResource(R.string.settings_hide_input),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
               )
@@ -469,7 +470,7 @@ fun SettingsScreen(
           var readonlyModalAlignmentExpanded by remember { mutableStateOf(false) }
 
           Text(
-            text = "Popup position",
+            text = stringResource(R.string.settings_popup_position),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -480,7 +481,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
           ) {
             OutlinedTextField(
-              value = settings.readonlyModalOutputAlignment.displayName,
+              value = stringResource(settings.readonlyModalOutputAlignment.labelRes),
               onValueChange = {},
               readOnly = true,
               trailingIcon = {
@@ -499,7 +500,7 @@ fun SettingsScreen(
             ) {
               ReadonlyModalOutputAlignment.entries.forEach { alignment ->
                 DropdownMenuItem(
-                  text = { Text(alignment.displayName) },
+                  text = { Text(stringResource(alignment.labelRes)) },
                   onClick = {
                     onSettingsChange(settings.copy(readonlyModalOutputAlignment = alignment))
                     readonlyModalAlignmentExpanded = false
@@ -510,7 +511,7 @@ fun SettingsScreen(
           }
 
           Text(
-            text = "Popup size: ${(settings.readonlyModalCompactHeightFactor * 100).toInt()}%",
+            text = stringResource(R.string.settings_popup_size, (settings.readonlyModalCompactHeightFactor * 100).toInt()),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -541,13 +542,13 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           Text(
-            text = "Screen translation",
+            text = stringResource(R.string.settings_screen_translation),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
           )
 
           Text(
-            text = "Translate text directly on top of other apps.",
+            text = stringResource(R.string.settings_screen_translation_desc),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -559,12 +560,12 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Always-on floating button",
+                text = stringResource(R.string.settings_floating_button),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
               )
               Text(
-                text = "Requires accessibility role",
+                text = stringResource(R.string.settings_floating_button_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -575,7 +576,7 @@ fun SettingsScreen(
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
               },
             ) {
-              Text("Manage")
+              Text(stringResource(R.string.common_manage))
             }
           }
 
@@ -586,12 +587,12 @@ fun SettingsScreen(
           ) {
             Column(modifier = Modifier.weight(1f)) {
               Text(
-                text = "Translate screen on shortcut",
+                text = stringResource(R.string.settings_shortcut),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
               )
               Text(
-                text = "Long-press home or power to trigger",
+                text = stringResource(R.string.settings_shortcut_desc),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -609,14 +610,14 @@ fun SettingsScreen(
                 }
               },
             ) {
-              Text("Manage")
+              Text(stringResource(R.string.common_manage))
             }
           }
 
           var assistantActionExpanded by remember { mutableStateOf(false) }
 
           Text(
-            text = "On shortcut invocation",
+            text = stringResource(R.string.settings_on_shortcut),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -627,7 +628,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
           ) {
             OutlinedTextField(
-              value = settings.assistantAction.displayName,
+              value = stringResource(settings.assistantAction.labelRes),
               onValueChange = {},
               readOnly = true,
               trailingIcon = {
@@ -645,7 +646,7 @@ fun SettingsScreen(
             ) {
               dev.davidv.translator.AssistantAction.entries.forEach { action ->
                 DropdownMenuItem(
-                  text = { Text(action.displayName) },
+                  text = { Text(stringResource(action.labelRes)) },
                   onClick = {
                     onSettingsChange(settings.copy(assistantAction = action))
                     assistantActionExpanded = false
@@ -669,7 +670,7 @@ fun SettingsScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           Text(
-            text = "OCR",
+            text = stringResource(R.string.settings_ocr),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.primary,
           )
@@ -678,7 +679,7 @@ fun SettingsScreen(
           var backgroundModeExpanded by remember { mutableStateOf(false) }
 
           Text(
-            text = "Background Mode",
+            text = stringResource(R.string.settings_background_mode),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -689,7 +690,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
           ) {
             OutlinedTextField(
-              value = settings.backgroundMode.displayName,
+              value = stringResource(settings.backgroundMode.labelRes),
               onValueChange = {},
               readOnly = true,
               trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = backgroundModeExpanded) },
@@ -706,7 +707,7 @@ fun SettingsScreen(
             ) {
               BackgroundMode.entries.forEach { mode ->
                 DropdownMenuItem(
-                  text = { Text(mode.displayName) },
+                  text = { Text(stringResource(mode.labelRes)) },
                   onClick = {
                     onSettingsChange(settings.copy(backgroundMode = mode))
                     backgroundModeExpanded = false
@@ -718,7 +719,7 @@ fun SettingsScreen(
 
           // Min Confidence Slider
           Text(
-            text = "Min Confidence: ${settings.minConfidence}%",
+            text = stringResource(R.string.settings_min_confidence, settings.minConfidence),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -735,7 +736,7 @@ fun SettingsScreen(
 
           // Max Image Size Slider
           Text(
-            text = "Max Image Size: ${settings.maxImageSize}px",
+            text = stringResource(R.string.settings_max_image_size, settings.maxImageSize),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
           )
@@ -775,7 +776,7 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Text(
-              text = "Advanced Settings",
+              text = stringResource(R.string.settings_advanced),
               style = MaterialTheme.typography.headlineSmall,
               color = MaterialTheme.colorScheme.primary,
             )
@@ -794,7 +795,7 @@ fun SettingsScreen(
           if (advancedExpanded) {
             // Catalog Index URL
             Text(
-              text = "Catalog Index URL",
+              text = stringResource(R.string.settings_catalog_url),
               style = MaterialTheme.typography.bodyMedium,
               color = MaterialTheme.colorScheme.onSurface,
             )
@@ -815,7 +816,7 @@ fun SettingsScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "Use external storage",
+                text = stringResource(R.string.settings_external_storage),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
@@ -853,7 +854,7 @@ fun SettingsScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "Disable automatic language detection",
+                text = stringResource(R.string.settings_disable_autodetect),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
@@ -874,7 +875,7 @@ fun SettingsScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "Show transliteration for output",
+                text = stringResource(R.string.settings_translit_output),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
@@ -895,7 +896,7 @@ fun SettingsScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "Show transliteration for input",
+                text = stringResource(R.string.settings_translit_input),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
@@ -916,7 +917,7 @@ fun SettingsScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "Add spaces for Japanese transliteration",
+                text = stringResource(R.string.settings_translit_japanese_spaces),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
@@ -938,12 +939,12 @@ fun SettingsScreen(
             ) {
               Column(modifier = Modifier.weight(1f)) {
                 Text(
-                  text = "Translate images in PDFs",
+                  text = stringResource(R.string.settings_translate_pdf_images),
                   style = MaterialTheme.typography.bodyMedium,
                   color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                  text = "OCR and translate raster images embedded in PDF pages.",
+                  text = stringResource(R.string.settings_translate_pdf_images_desc),
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -962,7 +963,7 @@ fun SettingsScreen(
               verticalAlignment = Alignment.CenterVertically,
             ) {
               Text(
-                text = "Translate camera live by default",
+                text = stringResource(R.string.settings_camera_live_default),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f).padding(end = 8.dp),
@@ -982,12 +983,12 @@ fun SettingsScreen(
             ) {
               Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
-                  text = "Register as browser",
+                  text = stringResource(R.string.settings_register_browser),
                   style = MaterialTheme.typography.bodyMedium,
                   color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                  text = "Offer to translate links from other apps.",
+                  text = stringResource(R.string.settings_register_browser_desc),
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1025,13 +1026,9 @@ fun SettingsScreen(
       onDismissRequest = {
         showPermissionDialog = false
       },
-      title = { Text("External Storage Permission") },
+      title = { Text(stringResource(R.string.settings_external_storage_perm_title)) },
       text = {
-        Text(
-          "To store translation files in your Documents folder, " +
-            "this app needs access to manage all files.\nYou'll be taken to Settings where you can grant " +
-            "'Allow access to manage all files' permission.",
-        )
+        Text(stringResource(R.string.settings_external_storage_perm_body))
       },
       confirmButton = {
         TextButton(
@@ -1041,7 +1038,7 @@ fun SettingsScreen(
             manageStorageLauncher.launch(intent)
           },
         ) {
-          Text("OK")
+          Text(stringResource(R.string.common_ok))
         }
       },
       dismissButton = {
@@ -1050,7 +1047,7 @@ fun SettingsScreen(
             showPermissionDialog = false
           },
         ) {
-          Text("Cancel")
+          Text(stringResource(R.string.common_cancel))
         }
       },
     )
@@ -1080,18 +1077,18 @@ private fun AboutCard(
   ) {
     Column(modifier = Modifier.padding(vertical = 16.dp)) {
       Text(
-        text = "About",
+        text = stringResource(R.string.settings_about),
         style = MaterialTheme.typography.headlineSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
       )
 
-      AboutNavRow(label = "How to use", iconRes = R.drawable.question, onClick = onHowToUse)
-      AboutNavRow(label = "Get help / report issue", iconRes = R.drawable.info, onClick = onGetHelp)
-      AboutNavRow(label = "Support development", iconRes = R.drawable.heart, onClick = onSupport)
+      AboutNavRow(label = stringResource(R.string.howto_title), iconRes = R.drawable.question, onClick = onHowToUse)
+      AboutNavRow(label = stringResource(R.string.settings_about_get_help), iconRes = R.drawable.info, onClick = onGetHelp)
+      AboutNavRow(label = stringResource(R.string.settings_about_support), iconRes = R.drawable.heart, onClick = onSupport)
 
       Text(
-        text = "Version $versionName",
+        text = stringResource(R.string.settings_version, versionName),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,

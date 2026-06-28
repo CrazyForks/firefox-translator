@@ -603,7 +603,7 @@ class ScreenTranslateService : Service() {
     val notification: Notification =
       androidx.core.app.NotificationCompat.Builder(this, channelId)
         .setContentTitle(getString(R.string.app_name))
-        .setContentText("Translating screen")
+        .setContentText(getString(R.string.screen_translating_notification))
         .setSmallIcon(R.drawable.ic_translate_button)
         .setOngoing(true)
         .addAction(R.drawable.cancel, "Stop", stopPending)

@@ -17,15 +17,17 @@
 
 package dev.davidv.translator
 
+import androidx.annotation.StringRes
+
 object Constants {
   const val DEFAULT_CATALOG_INDEX_URL = "https://offline-translator.davidv.dev/index_v5.json"
 }
 
 enum class AssistantAction(
-  val displayName: String,
+  @StringRes val labelRes: Int,
 ) {
-  STILL_IMAGE("Translate once"),
-  LIVE_SCREEN("Start live translation"),
+  STILL_IMAGE(R.string.assistant_action_still_image),
+  LIVE_SCREEN(R.string.assistant_action_live_screen),
 }
 
 data class AppSettings(

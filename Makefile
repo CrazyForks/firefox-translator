@@ -8,4 +8,4 @@ lint-fix:
 build:
 	./build.sh
 check:
-	./gradlew detekt
+	./gradlew detekt detektHardcodedStrings

@@ -261,7 +261,7 @@ class TranslatorVoiceInteractionSession(
 
     resultHost!!.installOn(rootView)
 
-    showStatus("Invoke this assistant on top of text to translate it")
+    showStatus(context.getString(R.string.assistant_invoke_prompt))
     updateBackdrop()
     return rootView
   }
@@ -282,11 +282,11 @@ class TranslatorVoiceInteractionSession(
       return
     }
 
-    showStatus("Collecting screen context...")
+    showStatus(context.getString(R.string.assistant_collecting_context))
 
     if (!isAssistScreenshotEnabled()) {
       Log.w(tag, "Assistant screenshot capture is disabled in system settings")
-      showStatus("Screenshot access is disabled for this assistant. Enable it in the system assistant settings.")
+      showStatus(context.getString(R.string.assistant_screenshot_disabled))
       return
     }
 
@@ -294,7 +294,7 @@ class TranslatorVoiceInteractionSession(
       sessionScope.launch {
         delay(CAPTURE_TIMEOUT_MS)
         if (screenshotBitmap == null && !processing) {
-          showStatus("No screen data received. Enable 'Use screenshot' for this assistant.")
+          showStatus(context.getString(R.string.assistant_no_screen_data))
         }
       }
   }
@@ -346,7 +346,7 @@ class TranslatorVoiceInteractionSession(
     captureTimeoutJob = null
     Log.d(tag, "Screenshot callback received bitmap=${screenshot?.width}x${screenshot?.height}")
     if (screenshot == null) {
-      showStatus("This app did not provide a screenshot.")
+      showStatus(context.getString(R.string.assistant_no_screenshot))
       return
     }
     val oldSs = screenshotBitmap
@@ -370,14 +370,14 @@ class TranslatorVoiceInteractionSession(
     val sourceLanguage = ocrSourceLanguage()
     if (!isAutoSource && sourceLanguage == null) {
       processing = false
-      showStatus("Set a default source language for OCR.")
+      showStatus(context.getString(R.string.assistant_set_source_ocr))
       return
     }
 
     val targetLanguage = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
     if (targetLanguage == null) {
       processing = false
-      showStatus("Translation languages aren't ready yet. Try again.")
+      showStatus(context.getString(R.string.assistant_langs_not_ready))
       return
     }
     val ocrSourceLanguage = sourceLanguage ?: targetLanguage
@@ -418,7 +418,7 @@ class TranslatorVoiceInteractionSession(
         ensureActive()
         processing = false
         if (result == null) {
-          showStatus("OCR failed")
+          showStatus(context.getString(R.string.assistant_ocr_failed))
           clearResultOverlay()
           return@launch
         }
@@ -591,7 +591,7 @@ class TranslatorVoiceInteractionSession(
     val settings = settingsManager.settings.value
     val sourceCode = settings.defaultSourceLanguageCode
     if (sourceCode == null) {
-      showStatus("Set a default source language in Settings to use live screen translation.")
+      showStatus(context.getString(R.string.assistant_set_source_live))
       return
     }
     runCatching {

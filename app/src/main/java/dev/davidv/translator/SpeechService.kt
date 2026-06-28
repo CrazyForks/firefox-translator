@@ -35,16 +35,14 @@ class SpeechService(
   ): SpeechSynthesisResult =
     withContext(Dispatchers.IO) {
       if (text.isBlank()) {
-        return@withContext SpeechSynthesisResult.Error("Nothing to speak")
+        return@withContext SpeechSynthesisResult.Error(SpeechError.NothingToSpeak)
       }
 
       val catalog =
         filePathManager.loadCatalog()
-          ?: return@withContext SpeechSynthesisResult.Error("Catalog unavailable")
+          ?: return@withContext SpeechSynthesisResult.Error(SpeechError.CatalogUnavailable)
       if (!catalog.hasTtsVoices(language.code)) {
-        return@withContext SpeechSynthesisResult.Error(
-          "No TTS voice installed for ${language.displayName}",
-        )
+        return@withContext SpeechSynthesisResult.Error(SpeechError.NoVoiceInstalled(language))
       }
 
       val settings = settingsManager.settings.value
@@ -70,9 +68,7 @@ class SpeechService(
           packId = selectedPackId,
         )
       if (chunkRequests.isEmpty()) {
-        return@withContext SpeechSynthesisResult.Error(
-          "Speech synthesis failed for ${language.displayName}",
-        )
+        return@withContext SpeechSynthesisResult.Error(SpeechError.SynthesisFailed(language))
       }
 
       SpeechSynthesisResult.Success(
@@ -164,6 +160,20 @@ sealed class SpeechSynthesisResult {
   ) : SpeechSynthesisResult()
 
   data class Error(
-    val message: String,
+    val reason: SpeechError,
   ) : SpeechSynthesisResult()
+}
+
+sealed interface SpeechError {
+  data object NothingToSpeak : SpeechError
+
+  data object CatalogUnavailable : SpeechError
+
+  data class NoVoiceInstalled(
+    val language: Language,
+  ) : SpeechError
+
+  data class SynthesisFailed(
+    val language: Language,
+  ) : SpeechError
 }

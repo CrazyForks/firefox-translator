@@ -17,6 +17,7 @@
 
 package dev.davidv.translator.ui.screens
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -49,51 +51,51 @@ import dev.davidv.translator.ui.theme.TranslatorTheme
 
 private data class Tip(
   val iconRes: Int,
-  val title: String,
-  val body: String,
+  @StringRes val titleRes: Int,
+  @StringRes val bodyRes: Int,
 )
 
 private data class TipSection(
-  val title: String,
+  @StringRes val titleRes: Int,
   val tips: List<Tip>,
 )
 
 private val sections =
   listOf(
     TipSection(
-      title = "From other apps",
+      titleRes = R.string.howto_section_other_apps,
       tips =
         listOf(
           Tip(
             iconRes = R.drawable.share,
-            title = "Share to translate",
-            body = "Share text, links, or images from any app to translate them.",
+            titleRes = R.string.howto_share_title,
+            bodyRes = R.string.howto_share_body,
           ),
           Tip(
             iconRes = R.drawable.copy,
-            title = "Translate without leaving other apps",
-            body = "Select text anywhere, then tap \"Translate\" in the copy toolbar to see the translation in a compact popup.",
+            titleRes = R.string.howto_copy_title,
+            bodyRes = R.string.howto_copy_body,
           ),
         ),
     ),
     TipSection(
-      title = "Inside the app",
+      titleRes = R.string.howto_section_in_app,
       tips =
         listOf(
           Tip(
             iconRes = R.drawable.draft,
-            title = "Translate documents",
-            body = "Open the Documents tab to translate EPUB, PDF, and TXT files.",
+            titleRes = R.string.howto_docs_title,
+            bodyRes = R.string.howto_docs_body,
           ),
           Tip(
             iconRes = R.drawable.dictionary,
-            title = "Dictionary lookup",
-            body = "Long-press any word in a translation to see its definition. Data sourced from Wiktionary.",
+            titleRes = R.string.howto_dict_title,
+            bodyRes = R.string.howto_dict_body,
           ),
           Tip(
             iconRes = R.drawable.volume_up,
-            title = "Change voice or speed",
-            body = "Long-press the play button to pick a different TTS voice or adjust playback speed.",
+            titleRes = R.string.howto_voice_title,
+            bodyRes = R.string.howto_voice_body,
           ),
         ),
     ),
@@ -105,7 +107,7 @@ fun HowToUseScreen(onBack: () -> Unit) {
   Scaffold(
     topBar = {
       TopAppBar(
-        title = { Text("How to use") },
+        title = { Text(stringResource(R.string.howto_title)) },
         navigationIcon = {
           IconButton(onClick = onBack) {
             Icon(
@@ -129,7 +131,7 @@ fun HowToUseScreen(onBack: () -> Unit) {
 
       sections.forEach { section ->
         Text(
-          text = section.title,
+          text = stringResource(section.titleRes),
           style = MaterialTheme.typography.titleSmall,
           color = MaterialTheme.colorScheme.primary,
           modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
@@ -175,13 +177,13 @@ private fun TipRow(tip: Tip) {
       modifier = Modifier.padding(start = 16.dp),
     ) {
       Text(
-        text = tip.title,
+        text = stringResource(tip.titleRes),
         style = MaterialTheme.typography.bodyMedium,
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface,
       )
       Text(
-        text = tip.body,
+        text = stringResource(tip.bodyRes),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 4.dp),
