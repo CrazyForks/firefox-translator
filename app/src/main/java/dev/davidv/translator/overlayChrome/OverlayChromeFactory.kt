@@ -15,6 +15,7 @@ import android.widget.TextView
 import dev.davidv.translator.Language
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
+import dev.davidv.translator.localizedName
 
 data class LanguageToolbarViews(
   val root: View,
@@ -328,7 +329,7 @@ object OverlayChromeFactory {
     }
 
     for (lang in availableLangs) {
-      addMenuItem(context, list, dpToPx, lang.displayName) {
+      addMenuItem(context, list, dpToPx, lang.localizedName()) {
         onPick(lang)
       }
     }

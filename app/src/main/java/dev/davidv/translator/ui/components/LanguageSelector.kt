@@ -51,6 +51,8 @@ import androidx.compose.ui.unit.dp
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.R
+import dev.davidv.translator.languageNameComparator
+import dev.davidv.translator.localizedName
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 @Composable
@@ -72,9 +74,9 @@ fun LanguageSelector(
 
   val displayText =
     when {
-      isAutoSource && detectedInstalled != null -> "✨ ${detectedInstalled.displayName}"
+      isAutoSource && detectedInstalled != null -> "✨ ${detectedInstalled.localizedName()}"
       isAutoSource -> stringResource(R.string.langsel_auto)
-      else -> selectedLanguage.displayName
+      else -> selectedLanguage.localizedName()
     }
 
   Box(
@@ -129,7 +131,7 @@ fun LanguageSelector(
       availableLanguages
         .sortedWith(
           compareByDescending<Language> { languageMetadata[it]?.favorite ?: false }
-            .thenBy { it.displayName },
+            .thenBy(languageNameComparator()) { it.localizedName() },
         ).forEach { language ->
           val isFavorite = languageMetadata[language]?.favorite ?: false
           DropdownMenuItem(
@@ -139,7 +141,7 @@ fun LanguageSelector(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth(),
               ) {
-                Text(language.displayName)
+                Text(language.localizedName())
                 if (isFavorite) {
                   Icon(
                     painter = painterResource(id = R.drawable.star_filled),

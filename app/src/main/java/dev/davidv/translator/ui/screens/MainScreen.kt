@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -238,32 +239,34 @@ fun MainScreen(
             .fillMaxSize()
             .padding(horizontal = 16.dp),
       ) {
-        LanguageSelectionRow(
-          from = from,
-          to = to,
-          canSwap = canSwapLanguages,
-          languageState = languageState,
-          languageMetadata = languageMetadata,
-          onMessage = onMessage,
-          isAutoSource = isAutoSource,
-          detectedInstalled = detectedInstalled,
-          showAutoOption = !settings.disableCLD,
-          drawable =
-            if (launchMode == LaunchMode.Normal) {
-              Pair("Settings", R.drawable.settings)
-            } else {
-              Pair(
-                "Expand",
-                R.drawable.open_in_full,
-              )
-            },
-          onSettings =
-            if (launchMode == LaunchMode.Normal) {
-              onSettings
-            } else {
-              { onMessage(TranslatorMessage.ChangeLaunchMode(LaunchMode.Normal)) }
-            },
-        )
+        Box(modifier = Modifier.testTag("export-section:Language selection")) {
+          LanguageSelectionRow(
+            from = from,
+            to = to,
+            canSwap = canSwapLanguages,
+            languageState = languageState,
+            languageMetadata = languageMetadata,
+            onMessage = onMessage,
+            isAutoSource = isAutoSource,
+            detectedInstalled = detectedInstalled,
+            showAutoOption = !settings.disableCLD,
+            drawable =
+              if (launchMode == LaunchMode.Normal) {
+                Pair("Settings", R.drawable.settings)
+              } else {
+                Pair(
+                  "Expand",
+                  R.drawable.open_in_full,
+                )
+              },
+            onSettings =
+              if (launchMode == LaunchMode.Normal) {
+                onSettings
+              } else {
+                { onMessage(TranslatorMessage.ChangeLaunchMode(LaunchMode.Normal)) }
+              },
+          )
+        }
 
         BoxWithConstraints(
           modifier =
@@ -286,7 +289,7 @@ fun MainScreen(
                   detectedRegions = detectedRegions,
                   wordSelection = imageWordSelection,
                   maxHeight = parentHeight * 0.85f,
-                  modifier = Modifier.fillMaxWidth(),
+                  modifier = Modifier.fillMaxWidth().testTag("export-section:Image"),
                 )
                 Row(
                   modifier =
@@ -333,6 +336,7 @@ fun MainScreen(
                     Modifier
                       .fillMaxWidth()
                       .weight(3f, fill = true)
+                      .testTag("export-section:Input")
                       .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
@@ -430,21 +434,23 @@ fun MainScreen(
               }
             }
 
-            DetectedLanguageSection(
-              detectedLanguage = detectedLanguage,
-              from = from,
-              languageState = languageState,
-              onMessage = onMessage,
-              downloadStates = downloadStates,
-              isAutoSource = isAutoSource,
-              onEvent = { event ->
-                when (event) {
-                  is LanguageEvent.Download -> DownloadService.startDownload(context, event.language)
-                  is LanguageEvent.Cancel -> DownloadService.cancelDownload(context, event.language)
-                  else -> Log.e("MainScreen", "Got unexpected event: $event")
-                }
-              },
-            )
+            Box(modifier = Modifier.testTag("export-section:Detected language")) {
+              DetectedLanguageSection(
+                detectedLanguage = detectedLanguage,
+                from = from,
+                languageState = languageState,
+                onMessage = onMessage,
+                downloadStates = downloadStates,
+                isAutoSource = isAutoSource,
+                onEvent = { event ->
+                  when (event) {
+                    is LanguageEvent.Download -> DownloadService.startDownload(context, event.language)
+                    is LanguageEvent.Cancel -> DownloadService.cancelDownload(context, event.language)
+                    else -> Log.e("MainScreen", "Got unexpected event: $event")
+                  }
+                },
+              )
+            }
 
             if (!showOnlyOutputInReadonlyModal && displayImage == null) {
               Box(
@@ -469,6 +475,7 @@ fun MainScreen(
                 modifier =
                   Modifier
                     .fillMaxWidth()
+                    .testTag("export-section:Output")
                     .let { m ->
                       if (displayImage == null) m.weight(1f, fill = true) else m.height(parentHeight * 0.5f)
                     },

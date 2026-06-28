@@ -12,7 +12,7 @@ class OverlayTextTranslationHelper(
       .translatorLanguages(requireOcr = isSource)
       .sortedWith(
         compareByDescending<Language> { metadata[it]?.favorite ?: false }
-          .thenBy { it.displayName },
+          .thenBy(languageNameComparator()) { it.localizedName() },
       )
   }
 

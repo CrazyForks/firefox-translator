@@ -51,6 +51,7 @@ import dev.davidv.translator.TxtLayoutChoice
 import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.copyDocumentUriToCache
 import dev.davidv.translator.displayNameForUri
+import dev.davidv.translator.localizedName
 import dev.davidv.translator.sizeBytesForUri
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.ImageWordSelection
@@ -836,7 +837,7 @@ class TranslatorViewModel(
         catalog?.lookupDictionary(language, str)
       } catch (e: uniffi.bindings.CatalogException.MissingAsset) {
         viewModelScope.launch {
-          _uiEvents.emit(UiEvent.ShowToast("No ${language.displayName} dictionary installed"))
+          _uiEvents.emit(UiEvent.ShowToast("No ${language.localizedName()} dictionary installed"))
         }
         return
       } catch (e: uniffi.bindings.CatalogException.Other) {
@@ -1022,7 +1023,7 @@ private fun speechErrorMessage(
     SpeechError.NothingToSpeak -> context.getString(R.string.tts_nothing_to_speak)
     SpeechError.CatalogUnavailable -> context.getString(R.string.tts_catalog_unavailable)
     is SpeechError.NoVoiceInstalled ->
-      context.getString(R.string.tts_no_voice, reason.language.displayName)
+      context.getString(R.string.tts_no_voice, reason.language.localizedName())
     is SpeechError.SynthesisFailed ->
-      context.getString(R.string.tts_synthesis_failed, reason.language.displayName)
+      context.getString(R.string.tts_synthesis_failed, reason.language.localizedName())
   }

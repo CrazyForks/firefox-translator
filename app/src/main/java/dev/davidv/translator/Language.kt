@@ -17,6 +17,9 @@
 
 package dev.davidv.translator
 
+import java.text.Collator
+import java.util.Locale
+
 data class Language(
   val code: String,
   val displayName: String,
@@ -31,4 +34,23 @@ data class Language(
   override fun hashCode(): Int = code.hashCode()
 
   override fun toString(): String = "Language($code)"
+}
+
+fun Language.localizedName(locale: Locale = Locale.getDefault()): String {
+  val tag =
+    when (code) {
+      "zh" -> "zh-Hans"
+      "zh_hant" -> "zh-Hant"
+      else -> code
+    }
+  val raw = Locale.forLanguageTag(tag).getDisplayName(locale)
+  // forLanguageTag echoes the subtag back verbatim when CLDR has no entry for it
+  val name = if (raw.isBlank() || raw.equals(tag, ignoreCase = true)) displayName else raw
+  // CLDR lowercases language names in many locales (e.g. fr "persan"); title-case for list display
+  return name.replaceFirstChar { if (it.isLowerCase()) it.titlecase(locale) else it.toString() }
+}
+
+fun languageNameComparator(locale: Locale = Locale.getDefault()): Comparator<String> {
+  val collator = Collator.getInstance(locale).apply { strength = Collator.SECONDARY }
+  return Comparator { a, b -> collator.compare(a, b) }
 }

@@ -225,7 +225,12 @@ private fun DocumentTranslationDialog(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-          text = if (document.isTranslating) "Translating file" else "Translated file",
+          text =
+            if (document.isTranslating) {
+              stringResource(R.string.doc_notif_translating)
+            } else {
+              stringResource(R.string.doc_notif_translated)
+            },
           modifier = Modifier.weight(1f),
         )
         if (document.isTranslating) {

@@ -75,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -95,6 +96,8 @@ import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.R
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.encodeVoiceOverride
+import dev.davidv.translator.languageNameComparator
+import dev.davidv.translator.localizedName
 import dev.davidv.translator.parseVoiceOverride
 import dev.davidv.translator.ui.components.SamplePlaybackState
 import dev.davidv.translator.ui.components.SamplePlayer
@@ -217,6 +220,7 @@ private fun VoicePickerDialog(
 
   BasicAlertDialog(onDismissRequest = onDismiss) {
     Surface(
+      modifier = Modifier.testTag("export-section:Voice picker"),
       shape = RoundedCornerShape(28.dp),
       color = MaterialTheme.colorScheme.surfaceContainerHigh,
       tonalElevation = 6.dp,
@@ -227,7 +231,7 @@ private fun VoicePickerDialog(
         Row(verticalAlignment = Alignment.Top) {
           Column(modifier = Modifier.weight(1f)) {
             Text(
-              text = language.displayName.uppercase(),
+              text = language.localizedName().uppercase(),
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.primary,
               fontWeight = FontWeight.SemiBold,
@@ -263,7 +267,7 @@ private fun VoicePickerDialog(
         ) {
           val dimAvailable = orderedDownloaded.isNotEmpty()
           if (orderedDownloaded.isNotEmpty()) {
-            VoiceSectionHeader("DOWNLOADED")
+            VoiceSectionHeader(stringResource(R.string.voice_section_downloaded))
             orderedDownloaded.forEach { entry ->
               VoiceRow(
                 voice = entry,
@@ -299,7 +303,7 @@ private fun VoicePickerDialog(
                 modifier = Modifier.padding(vertical = 4.dp),
               )
             }
-            VoiceSectionHeader("AVAILABLE")
+            VoiceSectionHeader(stringResource(R.string.voice_section_available))
             orderedAvailable.forEach { entry ->
               val isPackActive = activeTtsPackId == entry.pack.packId
               val isPackQueued = entry.pack.packId in queuedTtsPackIds
@@ -571,6 +575,7 @@ private data class LanguageFeatureRow(
   val onCancel: () -> Unit,
   @androidx.annotation.DrawableRes val installedIconRes: Int = R.drawable.delete,
   val installedDescription: String = "Delete",
+  val actionTag: String? = null,
 )
 
 @Immutable
@@ -627,7 +632,7 @@ fun LanguageAssetManagerScreen(
       catalog
         ?.let { loadedCatalog ->
           languageAvailabilityState.availableLanguages
-            .sortedBy { it.language.displayName }
+            .sortedWith(compareBy(languageNameComparator()) { it.language.localizedName() })
             .mapNotNull { entry ->
               val language = entry.language
               val availability = entry.availability
@@ -655,7 +660,7 @@ fun LanguageAssetManagerScreen(
               } else {
                 val language = row.language
                 val haystack =
-                  listOf(language.displayName, language.shortDisplayName, language.code)
+                  listOf(language.localizedName(), language.displayName, language.shortDisplayName, language.code)
                     .joinToString(" ")
                     .lowercase()
                 normalizedFilter in haystack
@@ -729,7 +734,7 @@ fun LanguageAssetManagerScreen(
 
       if (ppocrModelUpgrade.languages.isNotEmpty()) {
         OcrUpgradeCard(
-          text = "An improved text detection model is available.",
+          text = stringResource(R.string.langmgr_ocr_upgrade_available),
           totalBytes = ppocrModelUpgrade.totalBytes,
           onDownload = {
             DownloadService.startOcrEngineUpgrades(context, ppocrModelUpgrade.languages, "ppocr")
@@ -982,7 +987,7 @@ private fun LanguageAssetCard(
         verticalArrangement = Arrangement.spacedBy(0.dp),
       ) {
         Text(
-          text = row.language.displayName,
+          text = row.language.localizedName(),
           style = MaterialTheme.typography.bodyLarge,
           fontWeight = FontWeight.SemiBold,
         )
@@ -1122,6 +1127,7 @@ private fun buildFeatureRows(
         onCancel = onCancelTts,
         installedIconRes = R.drawable.settings,
         installedDescription = "Manage voices",
+        actionTag = "export-trigger:voice",
       )
   }
 
@@ -1162,6 +1168,7 @@ private fun FeatureRow(featureRow: LanguageFeatureRow) {
       onCancel = featureRow.onCancel,
       installedIconRes = featureRow.installedIconRes,
       installedDescription = featureRow.installedDescription,
+      actionTag = featureRow.actionTag,
     )
   }
 }
@@ -1276,6 +1283,7 @@ private fun FeatureActionButton(
   onCancel: () -> Unit,
   @androidx.annotation.DrawableRes installedIconRes: Int,
   installedDescription: String,
+  actionTag: String? = null,
 ) {
   if (downloadState?.isDownloading == true) {
     ProgressIconButton(
@@ -1288,7 +1296,10 @@ private fun FeatureActionButton(
 
   IconButton(
     onClick = if (isInstalled) onInstalledAction else onDownload,
-    modifier = Modifier.size(32.dp),
+    modifier =
+      Modifier
+        .size(32.dp)
+        .then(if (actionTag != null) Modifier.testTag(actionTag) else Modifier),
   ) {
     Icon(
       painter =

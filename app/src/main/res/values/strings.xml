@@ -76,8 +76,11 @@
 
     <!-- language manager / setup / how-to -->
     <string name="langmgr_voices">Voices</string>
+    <string name="voice_section_downloaded">DOWNLOADED</string>
+    <string name="voice_section_available">AVAILABLE</string>
     <string name="langmgr_default">DEFAULT</string>
     <string name="langmgr_filter">Filter languages</string>
+    <string name="langmgr_ocr_upgrade_available">An improved text detection model is available.</string>
     <string name="langmgr_delete_shared_title">Delete shared dictionary?</string>
     <string name="langmgr_delete_shared_body">This dictionary is shared with %1$s.\nDeleting it will remove the dictionary for all of them.</string>
     <string name="langmgr_download_size">Download %1$s</string>
@@ -223,6 +226,8 @@
     <string name="feature_tts">Voice</string>
 
     <!-- misc -->
+    <string name="detected_translate_from">Translate from</string>
+    <string name="detected_missing_language">Missing language</string>
     <string name="main_input_placeholder">Enter text</string>
     <string name="aidl_target_unavailable">Target language not available</string>
 </resources>

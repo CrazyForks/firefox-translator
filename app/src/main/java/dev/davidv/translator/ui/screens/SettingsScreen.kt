@@ -82,6 +82,8 @@ import dev.davidv.translator.R
 import dev.davidv.translator.ReadonlyModalOutputAlignment
 import dev.davidv.translator.TapToTranslateNotification
 import dev.davidv.translator.labelRes
+import dev.davidv.translator.languageNameComparator
+import dev.davidv.translator.localizedName
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -98,7 +100,7 @@ private fun LanguageDropdown(
   var expanded by remember { mutableStateOf(false) }
   val languagesByDisplayName =
     remember(availableLanguages) {
-      availableLanguages.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.displayName })
+      availableLanguages.sortedWith(compareBy(languageNameComparator()) { it.localizedName() })
     }
 
   Text(
@@ -113,7 +115,7 @@ private fun LanguageDropdown(
     modifier = Modifier.fillMaxWidth(),
   ) {
     OutlinedTextField(
-      value = selectedLanguage?.displayName ?: fallbackLanguage?.displayName ?: stringResource(R.string.settings_no_languages_available),
+      value = selectedLanguage?.localizedName() ?: fallbackLanguage?.localizedName() ?: stringResource(R.string.settings_no_languages_available),
       onValueChange = {},
       readOnly = true,
       trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
@@ -129,7 +131,7 @@ private fun LanguageDropdown(
     ) {
       languagesByDisplayName.forEach { language ->
         DropdownMenuItem(
-          text = { Text(language.displayName) },
+          text = { Text(language.localizedName()) },
           onClick = {
             onLanguageSelected(language)
             expanded = false
@@ -209,7 +211,7 @@ fun SettingsScreen(
     ) {
       // Languages Section
       Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("export-section:Languages"),
         colors =
           CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -249,7 +251,7 @@ fun SettingsScreen(
 
       // General Settings Section
       Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("export-section:General"),
         colors =
           CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -370,7 +372,7 @@ fun SettingsScreen(
 
       // Web Translator Section
       Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("export-section:Web Translator"),
         colors =
           CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -424,7 +426,7 @@ fun SettingsScreen(
       }
 
       Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("export-section:Popup"),
         colors =
           CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -531,7 +533,7 @@ fun SettingsScreen(
       }
 
       Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("export-section:Screen translation"),
         colors =
           CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -659,7 +661,7 @@ fun SettingsScreen(
       }
 
       Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("export-section:Images"),
         colors =
           CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -756,7 +758,7 @@ fun SettingsScreen(
       // Advanced Settings Section
       var advancedExpanded by remember { mutableStateOf(false) }
       Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("export-section:Advanced"),
         colors =
           CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
@@ -1069,7 +1071,7 @@ private fun AboutCard(
     }
 
   Card(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier.fillMaxWidth().testTag("export-section:About"),
     colors =
       CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
