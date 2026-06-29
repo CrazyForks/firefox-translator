@@ -18,9 +18,9 @@ and one shared `strings.json` (key -> {lang: value}) in the SVG's directory. Ser
 import argparse
 import json
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from html import unescape
 from pathlib import Path
 
 WEBLATE_BASE = "https://hosted.weblate.org/browse"
@@ -97,13 +97,14 @@ class Resolver:
         return (None, "miss")
 
 
-TEXT_TAG = re.compile(r"<text\b([^>]*)>")
-ATTR = re.compile(r'([\w:-]+)="([^"]*)"')
+def _local(tag: str) -> str:
+    """Local name of a (possibly namespaced) ElementTree tag, e.g. '{...}text' -> 'text'."""
+    return tag.rsplit("}", 1)[-1]
 
 
-def _style(a: dict[str, str]) -> tuple:
+def _style(el: ET.Element) -> tuple:
     """Lines of one wrapped paragraph share transform, left edge, and font styling."""
-    return tuple(a.get(k, "") for k in ("transform", "x", "font-size", "font-weight", "font-style", "fill"))
+    return tuple(el.get(k, "") for k in ("transform", "x", "font-size", "font-weight", "font-style", "fill"))
 
 
 def process_svg(svg_path: Path, resolver: Resolver) -> tuple[dict[str, str | None], dict[str, int]]:
@@ -113,29 +114,26 @@ def process_svg(svg_path: Path, resolver: Resolver) -> tuple[dict[str, str | Non
     string. After matching each line individually, runs of consecutive same-styled misses are
     greedily re-joined and matched as a whole, sharing the recovered key across their lines.
     """
-    recs = []
-    for m in TEXT_TAG.finditer(svg_path.read_text()):
-        a = dict(ATTR.findall(m.group(1)))
-        if "data-key" in a:
-            a["__src"] = unescape(a.get("data-source", ""))
-            recs.append(a)
+    root = ET.parse(svg_path).getroot()
+    recs = [el for el in root.iter() if _local(el.tag) == "text" and "data-key" in el.attrib]
+    src = [el.get("data-source", "") for el in recs]  # ElementTree already unescaped the entities
 
     keys: dict[str, str | None] = {}
     status: dict[str, str] = {}
-    for a in recs:
-        key, st = resolver.resolve(a["__src"])
-        keys[a["data-key"]] = key
-        status[a["data-key"]] = st
+    for el, s in zip(recs, src):
+        key, st = resolver.resolve(s)
+        keys[el.get("data-key")] = key
+        status[el.get("data-key")] = st
 
     i, n = 0, len(recs)
     while i < n:
-        if status[recs[i]["data-key"]] != "miss":
+        if status[recs[i].get("data-key")] != "miss":
             i += 1
             continue
         j = i + 1
         while (
             j < n
-            and status[recs[j]["data-key"]] == "miss"
+            and status[recs[j].get("data-key")] == "miss"
             and _style(recs[j]) == _style(recs[i])
             and float(recs[j].get("y", 0)) > float(recs[j - 1].get("y", 0))
         ):
@@ -143,12 +141,12 @@ def process_svg(svg_path: Path, resolver: Resolver) -> tuple[dict[str, str | Non
         k = i
         while k < j:
             for end in range(j, k + 1, -1):  # longest paragraph first; single lines stay miss
-                joined = " ".join(recs[t]["__src"] for t in range(k, end))
+                joined = " ".join(src[k:end])
                 key, st = resolver.resolve(joined)
                 if key and st in ("exact", "format"):
                     for t in range(k, end):
-                        keys[recs[t]["data-key"]] = key
-                        status[recs[t]["data-key"]] = st
+                        keys[recs[t].get("data-key")] = key
+                        status[recs[t].get("data-key")] = st
                     k = end
                     break
             else:
@@ -156,12 +154,36 @@ def process_svg(svg_path: Path, resolver: Resolver) -> tuple[dict[str, str | Non
         i = j
 
     stats = {"exact": 0, "format": 0, "ambiguous": 0, "miss": 0}
-    for a in recs:
-        dk = a["data-key"]
+    for el, s in zip(recs, src):
+        dk = el.get("data-key")
         stats[status[dk]] += 1
         if status[dk] in ("ambiguous", "miss"):
-            print(f"  [{status[dk]}] {dk}: {a['__src']!r} -> {keys[dk]}", file=sys.stderr)
+            print(f"  [{status[dk]}] {dk}: {s!r} -> {keys[dk]}", file=sys.stderr)
     return keys, stats
+
+
+def export_sections(svg_path: Path, inkscape: str) -> list[Path]:
+    """Render each `<g id="section-*">` to its own cropped PNG, over the screen's background color
+    (the first full-screen rect fill) so the translucent cards composite as they do on device."""
+    root = ET.parse(svg_path).getroot()
+    ids = [
+        el.get("id") for el in root.iter()
+        if _local(el.tag) == "g" and (el.get("id") or "").startswith("section-")
+    ]
+    if not ids:
+        return []
+    bg = next((el.get("fill") for el in root.iter() if _local(el.tag) == "rect" and el.get("fill")), "#000000")
+    out = []
+    for sid in ids:
+        png = svg_path.parent / f"{svg_path.stem}.{sid[len('section-'):]}.png"
+        subprocess.run(
+            [inkscape, str(svg_path), f"--export-id={sid}", "--export-id-only",
+             f"--export-background={bg}", "--export-background-opacity=1",
+             "--export-type=png", f"--export-filename={png}"],
+            check=True, capture_output=True,
+        )
+        out.append(png)
+    return out
 
 
 def main() -> int:
@@ -169,6 +191,9 @@ def main() -> int:
     ap.add_argument("svgs", nargs="+", type=Path)
     ap.add_argument("--res", type=Path, default=Path("app/src/main/res"))
     ap.add_argument("--weblate", default="offline-translator/offline-translator")
+    ap.add_argument("--sections", action="store_true",
+                    help="also render each <g id=section-*> to a cropped PNG (needs inkscape)")
+    ap.add_argument("--inkscape", default="inkscape")
     args = ap.parse_args()
 
     english = load_strings(args.res / "values" / "strings.xml")
@@ -191,10 +216,14 @@ def main() -> int:
         )
         svg.with_suffix(".i18n.html").write_text(page)
         cards.setdefault(out_dir, []).append(svg)
-        print(
+        msg = (
             f"{svg.name}: {stats['exact']} exact, {stats['format']} format, "
             f"{stats['ambiguous']} ambiguous, {stats['miss']} miss -> {svg.with_suffix('.i18n.html').name}"
         )
+        if args.sections:
+            pngs = export_sections(svg, args.inkscape)
+            msg += f" (+{len(pngs)} section PNGs)" if pngs else " (no sections)"
+        print(msg)
 
     index_template = (Path(__file__).resolve().parent / "i18n_index_template.html").read_text()
     for out_dir, svgs in cards.items():

@@ -94,9 +94,8 @@
   }
 
   // Group the consecutive same-key, same-style, vertically-stacked lines that a wrapped paragraph
-  // was drawn as, so a translation can be re-wrapped across the same line slots instead of dumped
-  // onto each line. Single-line labels are groups of 1; if their translation is longer than the
-  // English fit, we synthesize extra line slots below (or shrink, when wrapping can't help).
+  // was drawn as, so its translation can be rendered as one block instead of duplicated onto each
+  // line. Multi-line groups hand wrapping to a <foreignObject>; single-line labels stay <text>.
   const VB_W = svg.viewBox.baseVal.width;
   const leftX = t => {
     const m = (t.getAttribute('transform') || '').match(/matrix\(([^)]+)\)/);
@@ -116,77 +115,63 @@
         parseFloat(t.getAttribute('y')) > parseFloat(prev.getAttribute('y'))) {
       last.lines.push(t);
     } else {
-      groups.push({ key: t.getAttribute('data-i18n'), lines: [t], synth: [] });
+      groups.push({ key: t.getAttribute('data-i18n'), lines: [t] });
     }
   }
+  const XHTML = 'http://www.w3.org/1999/xhtml';
+  // Every keyed label — single line or wrapped paragraph — becomes a <foreignObject> holding a
+  // dir="auto" <div>, so the browser wraps the translation natively (a longer language grows down
+  // a line instead of shrinking). We toggle it against the original <text> lines, which stay the
+  // source of truth for English. Box width = the app's own column: a multi-line paragraph's widest
+  // English line, or for a single line the content width (symmetric-padding guess), clamped to never
+  // fall below the label's own width — the guess goes negative for right-half labels (e.g. a row of
+  // tabs), which would make the box vanish. text-anchor is honored for box origin + alignment, so an
+  // end/middle-anchored label stays put. Overflow stays visible, so a much longer translation spills
+  // below — inherent to a static, non-reflowing capture.
   groups.forEach(g => {
     const f = g.lines[0];
-    g.size = parseFloat(f.getAttribute('font-size'));
-    g.lineH = g.lines.length > 1
-      ? parseFloat(g.lines[1].getAttribute('y')) - parseFloat(f.getAttribute('y'))
-      : g.size * 1.3;
-    // Multi-line: wrap to the app's own column (widest English line). Single-line: the label can
-    // grow to the content width (symmetric padding => viewBox minus twice the left inset).
-    g.width = g.lines.length > 1
-      ? Math.max(...g.lines.map(l => l.getComputedTextLength()))
-      : VB_W - 2 * leftX(f);
+    g.size0 = parseFloat(f.getAttribute('font-size'));
     g.lines.forEach(l => attachHit(l, g.key));
+    const y1 = parseFloat(f.getAttribute('y'));
+    const yN = parseFloat(g.lines[g.lines.length - 1].getAttribute('y'));
+    g.lineH = g.lines.length > 1 ? (yN - y1) / (g.lines.length - 1) : g.size0 * 1.35;
+    const ownW = f.getComputedTextLength();
+    const colW = g.lines.length > 1
+      ? Math.max(...g.lines.map(l => l.getComputedTextLength())) + 4
+      : Math.max(VB_W - 2 * leftX(f), ownW + g.size0);
+    const anchor = f.getAttribute('text-anchor') || 'start';
+    const ax = parseFloat(f.getAttribute('x') || 0);
+    const fo = document.createElementNS(SVGNS, 'foreignObject');
+    if (f.getAttribute('transform')) fo.setAttribute('transform', f.getAttribute('transform'));
+    fo.setAttribute('x', anchor === 'end' ? ax - colW : anchor === 'middle' ? ax - colW / 2 : ax);
+    // Place the box so the div's first-line baseline lands on the original <text> baseline (y1):
+    // in the CSS line box, the baseline sits ~lineH/2 + 0.3·fontSize below the box top.
+    fo.setAttribute('y', y1 - g.lineH / 2 - g.size0 * 0.3);
+    fo.setAttribute('width', colW);
+    fo.setAttribute('height', (yN - y1) + g.lineH);
+    fo.setAttribute('display', 'none');
+    fo.style.overflow = 'visible';
+    const div = document.createElementNS(XHTML, 'div');
+    div.setAttribute('dir', 'auto');
+    div.style.cssText =
+      `margin:0;font-family:sans-serif;font-size:${g.size0}px;line-height:${g.lineH}px;` +
+      `font-weight:${f.getAttribute('font-weight') || 'normal'};font-style:${f.getAttribute('font-style') || 'normal'};` +
+      `color:${f.getAttribute('fill') || '#000'};overflow-wrap:break-word;cursor:pointer;` +
+      `text-align:${anchor === 'end' ? 'right' : anchor === 'middle' ? 'center' : 'left'};`;
+    div.addEventListener('click', () => openWeblate(g.key));
+    fo.appendChild(div);
+    f.parentNode.insertBefore(fo, f);
+    g.fo = fo; g.div = div;
   });
 
-  // Off-canvas probe to measure candidate lines at a group's font before committing them.
-  const probe = document.createElementNS(SVGNS, 'text');
-  probe.setAttribute('y', '-10000');
-  svg.appendChild(probe);
-  function measure(s, g) {
-    probe.setAttribute('font-size', g.size);
-    probe.setAttribute('font-weight', g.lines[0].getAttribute('font-weight') || 'normal');
-    probe.textContent = s;
-    return probe.getComputedTextLength();
-  }
-  function wrapWords(full, g, width) {
-    const words = full.split(/\s+/).filter(Boolean);
-    const lines = [];
-    let line = '';
-    for (const word of words) {
-      const trial = line ? line + ' ' + word : word;
-      if (line && measure(trial, g) > width) { lines.push(line); line = word; }
-      else line = trial;
-    }
-    if (line) lines.push(line);
-    return lines;
-  }
-  function synthSlot(g, pos) {
-    const last = g.lines[g.lines.length - 1];
-    const el = last.cloneNode(true);
-    el.setAttribute('y', parseFloat(last.getAttribute('y')) + (pos - g.lines.length + 1) * g.lineH);
-    last.parentNode.insertBefore(el, last.nextSibling);
-    attachHit(el, g.key);
-    g.synth.push(el);
-    return el;
-  }
-  // Render a translated string into a group, wrapping across slots; shrink only if a single word
-  // still overflows the available width (can't be broken).
   function render(g, full) {
-    let width = g.width;
-    let lines = wrapWords(full, g, width);
-    g.size0 = g.size0 || g.size;
-    g.size = g.size0;
-    const longest = Math.max(...lines.map(l => measure(l, g)));
-    if (longest > width) {
-      g.size = Math.max(g.size0 * width / longest, g.size0 * 0.6);
-      lines = wrapWords(full, g, width);
-    }
-    const total = Math.max(lines.length, g.lines.length);
-    for (let p = 0; p < total; p++) {
-      const slot = p < g.lines.length ? g.lines[p] : (g.synth[p - g.lines.length] || synthSlot(g, p));
-      slot.setAttribute('font-size', g.size);
-      slot.textContent = lines[p] || '';
-    }
+    g.div.textContent = full;
+    g.fo.setAttribute('display', '');
+    g.lines.forEach(l => l.setAttribute('display', 'none'));
   }
   function restore(g) {
-    g.size = g.size0 || g.size;
-    g.lines.forEach(l => { l.textContent = english.get(l); l.setAttribute('font-size', g.size); });
-    g.synth.forEach(e => { e.textContent = ''; });
+    g.fo.setAttribute('display', 'none');
+    g.lines.forEach(l => { l.setAttribute('display', ''); l.textContent = english.get(l); });
   }
 
   function outline(t, on) {
@@ -213,7 +198,7 @@
       const val = strings[g.key] && strings[g.key][lang];
       const hasIt = val != null && lang !== 'en';
       if (hasIt) render(g, val); else restore(g);
-      g.lines.concat(g.synth).forEach(l => {
+      g.lines.forEach(l => {
         const flag = hasIt === false && lang !== 'en' && l.textContent !== '';
         l.classList.toggle('untranslated', flag);
         outline(l, flag);
