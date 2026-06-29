@@ -124,6 +124,22 @@
       groups.push({ key: t.getAttribute('data-i18n'), lines: [t] });
     }
   }
+  // Non-text controls (the toggle pills, flag icons, chevrons …) that sit to the right of a label must
+  // clip its wrap width, or a longer translation runs under the switch. Capture each drawable's absolute
+  // box once (own transform translate + local getBBox); a single-line label is then capped to the nearest
+  // control on its row instead of running to the mirrored right margin. Containers (page/card/dropdown
+  // backgrounds) start at or left of the label, so the `left > label left` test drops them.
+  const translateXY = el => {
+    const m = (el.getAttribute('transform') || '').match(/matrix\(([^)]+)\)/);
+    if (!m) return [0, 0];
+    const p = m[1].trim().split(/[\s,]+/).map(parseFloat);
+    return [p[4] || 0, p[5] || 0];
+  };
+  const obstacles = [...svg.querySelectorAll('rect,image,circle,ellipse,path,line,polygon,polyline')].map(el => {
+    const [tx, ty] = translateXY(el);
+    const b = el.getBBox();
+    return { left: tx + b.x, top: ty + b.y, right: tx + b.x + b.width, bottom: ty + b.y + b.height };
+  });
   const XHTML = 'http://www.w3.org/1999/xhtml';
   // Every keyed label — single line or wrapped paragraph — becomes a <foreignObject> holding a
   // dir="auto" <div>, so the browser wraps the translation natively (a longer language grows down
@@ -141,11 +157,25 @@
     const yN = parseFloat(g.lines[g.lines.length - 1].getAttribute('y'));
     g.lineH = g.lines.length > 1 ? (yN - y1) / (g.lines.length - 1) : g.size0 * 1.35;
     const ownW = f.getComputedTextLength();
-    const colW = g.lines.length > 1
+    let colW = g.lines.length > 1
       ? Math.max(...g.lines.map(l => l.getComputedTextLength())) + 4
       : Math.max(VB_W - 2 * leftX(f), ownW + g.size0);
     const anchor = f.getAttribute('text-anchor') || 'start';
     const ax = parseFloat(f.getAttribute('x') || 0);
+    // Cap a left-aligned label's box at the nearest control to its right on the same row, so a longer
+    // translation wraps down instead of running under a toggle/icon. Right/centre-anchored labels are the
+    // right-half cases the symmetric guess already clamps, so leave them alone.
+    if (anchor === 'start') {
+      const [, fty] = translateXY(f);
+      const rowTop = fty + y1 - g.size0;
+      const rowBot = fty + yN + g.size0 * 0.3;
+      const startLeft = leftX(f);
+      let capRight = Infinity;
+      for (const o of obstacles) {
+        if (o.left > startLeft + 1 && o.bottom > rowTop && o.top < rowBot) capRight = Math.min(capRight, o.left);
+      }
+      if (capRight < Infinity) colW = Math.min(colW, capRight - startLeft - g.size0 * 0.5);
+    }
     const fo = document.createElementNS(SVGNS, 'foreignObject');
     if (f.getAttribute('transform')) fo.setAttribute('transform', f.getAttribute('transform'));
     fo.setAttribute('x', anchor === 'end' ? ax - colW : anchor === 'middle' ? ax - colW / 2 : ax);
