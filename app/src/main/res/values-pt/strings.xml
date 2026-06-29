@@ -70,6 +70,7 @@
     <string name="settings_default_to">Idioma de destino padrão</string>
     <string name="settings_adblock_support">Bloqueio de anúncios</string>
     <string name="settings_about_get_help">Obter ajuda / relatar problema</string>
+    <string name="settings_logs_copied">Registos da app copiados para a área de transferência</string>
     <string name="settings_about_support">Apoiar o desenvolvimento</string>
     <string name="settings_external_storage_perm_body">Para guardar arquivos de tradução na sua pasta Documentos, este app precisa de acesso para gerenciar todos os arquivos.\nVocê será levado às Configurações, onde poderá conceder a permissão \'Permitir acesso para gerenciar todos os arquivos\'.</string>
 

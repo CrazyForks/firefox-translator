@@ -70,6 +70,7 @@
     <string name="settings_default_to">既定の\'翻訳先\'言語</string>
     <string name="settings_adblock_support">広告ブロック</string>
     <string name="settings_about_get_help">ヘルプ / 問題を報告</string>
+    <string name="settings_logs_copied">アプリのログをクリップボードにコピーしました</string>
     <string name="settings_about_support">開発を支援する</string>
     <string name="settings_external_storage_perm_body">翻訳ファイルをドキュメントフォルダに保存するには、すべてのファイルを管理する権限が必要です。\n設定画面が開くので、\'すべてのファイルへのアクセスを許可\'を有効にしてください。</string>
 

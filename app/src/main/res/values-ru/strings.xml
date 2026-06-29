@@ -69,6 +69,7 @@
     <string name="settings_default_to">Язык перевода по умолчанию</string>
     <string name="settings_adblock_support">Блокировка рекламы</string>
     <string name="settings_about_get_help">Получить помощь / сообщить о проблеме</string>
+    <string name="settings_logs_copied">Журналы приложения скопированы в буфер обмена</string>
     <string name="settings_about_support">Поддержать разработку</string>
     <string name="settings_external_storage_perm_body">Чтобы хранить файлы перевода в папке «Документы», приложению нужен доступ к управлению всеми файлами.\nВас перенесёт в Настройки, где Вы сможете выбрать \'Разрешить доступ к управлению всеми файлами\'.</string>
     <!-- language manager / setup / how-to -->

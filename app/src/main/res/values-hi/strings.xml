@@ -70,6 +70,7 @@
     <string name="settings_default_to">डिफ़ॉल्ट \'में\' भाषा</string>
     <string name="settings_adblock_support">विज्ञापन रोकना</string>
     <string name="settings_about_get_help">मदद पाएं / समस्या बताएं</string>
+    <string name="settings_logs_copied">ऐप लॉग क्लिपबोर्ड पर कॉपी किए गए</string>
     <string name="settings_about_support">विकास में सहयोग दें</string>
     <string name="settings_external_storage_perm_body">अनुवाद फ़ाइलें आपके Documents फ़ोल्डर में रखने के लिए, इस ऐप को सभी फ़ाइलें प्रबंधित करने की पहुंच चाहिए।\nआपको सेटिंग्स में ले जाया जाएगा जहां आप \'सभी फ़ाइलें प्रबंधित करने की अनुमति दें\' दे सकते हैं।</string>
 

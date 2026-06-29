@@ -71,6 +71,7 @@
     <string name="settings_default_to">Default \'to\' language</string>
     <string name="settings_adblock_support">Ad blocking</string>
     <string name="settings_about_get_help">Get help / report issue</string>
+    <string name="settings_logs_copied">App logs copied to clipboard</string>
     <string name="settings_about_support">Support development</string>
     <string name="settings_external_storage_perm_body">To store translation files in your Documents folder, this app needs access to manage all files.\nYou\'ll be taken to Settings where you can grant \'Allow access to manage all files\' permission.</string>
 

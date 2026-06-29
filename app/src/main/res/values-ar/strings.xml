@@ -70,6 +70,7 @@
     <string name="settings_default_to">لغة \'إلى\' الافتراضية</string>
     <string name="settings_adblock_support">حظر الإعلانات</string>
     <string name="settings_about_get_help">الحصول على مساعدة / الإبلاغ عن مشكلة</string>
+    <string name="settings_logs_copied">تم نسخ سجلات التطبيق إلى الحافظة</string>
     <string name="settings_about_support">دعم التطوير</string>
     <string name="settings_external_storage_perm_body">لتخزين ملفات الترجمة في مجلد المستندات، يحتاج هذا التطبيق إلى صلاحية إدارة جميع الملفات.\nسيتم نقلك إلى الإعدادات حيث يمكنك منح صلاحية \'السماح بالوصول لإدارة جميع الملفات\'.</string>
 

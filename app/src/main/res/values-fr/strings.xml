@@ -70,6 +70,7 @@
     <string name="settings_default_to">Langue \'cible\' par défaut</string>
     <string name="settings_adblock_support">Blocage des publicités</string>
     <string name="settings_about_get_help">Obtenir de l\'aide / signaler un problème</string>
+    <string name="settings_logs_copied">Journaux de l\'app copiés dans le presse-papiers</string>
     <string name="settings_about_support">Soutenir le développement</string>
     <string name="settings_external_storage_perm_body">Pour stocker les fichiers de traduction dans votre dossier Documents, cette appli a besoin d\'accéder à la gestion de tous les fichiers.\nVous serez dirigé vers les Paramètres où vous pourrez accorder l\'autorisation \'Autoriser l\'accès pour gérer tous les fichiers\'.</string>
 

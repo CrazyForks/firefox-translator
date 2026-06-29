@@ -70,6 +70,7 @@
     <string name="settings_default_to">Standard-\'Nach\'-Sprache</string>
     <string name="settings_adblock_support">Werbeblockierung</string>
     <string name="settings_about_get_help">Hilfe holen / Problem melden</string>
+    <string name="settings_logs_copied">App-Protokolle in die Zwischenablage kopiert</string>
     <string name="settings_about_support">Entwicklung unterstützen</string>
     <string name="settings_external_storage_perm_body">Um Übersetzungsdateien in deinem Dokumente-Ordner zu speichern, braucht diese App Zugriff zur Verwaltung aller Dateien.\nDu wirst zu den Einstellungen geleitet, wo du die Berechtigung \'Zugriff zur Verwaltung aller Dateien erlauben\' erteilen kannst.</string>
 

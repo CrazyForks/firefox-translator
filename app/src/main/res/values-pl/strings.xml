@@ -70,6 +70,7 @@
     <string name="settings_default_to">Domyślny język \'na\'</string>
     <string name="settings_adblock_support">Blokowanie reklam</string>
     <string name="settings_about_get_help">Pomoc / zgłoś problem</string>
+    <string name="settings_logs_copied">Dzienniki aplikacji skopiowano do schowka</string>
     <string name="settings_about_support">Wesprzyj rozwój</string>
     <string name="settings_external_storage_perm_body">Aby przechowywać pliki tłumaczeń w folderze Dokumenty, ta aplikacja potrzebuje dostępu do zarządzania wszystkimi plikami.\nNastąpi przejście do Ustawień, gdzie możesz przyznać uprawnienie \'Zezwól na zarządzanie wszystkimi plikami\'.</string>
 

@@ -70,6 +70,7 @@
     <string name="settings_default_to">ডিফল্ট \'যে ভাষায়\'</string>
     <string name="settings_adblock_support">বিজ্ঞাপন ব্লক করা</string>
     <string name="settings_about_get_help">সাহায্য নিন / সমস্যা জানান</string>
+    <string name="settings_logs_copied">অ্যাপ লগ ক্লিপবোর্ডে কপি করা হয়েছে</string>
     <string name="settings_about_support">উন্নয়নে সহায়তা করুন</string>
     <string name="settings_external_storage_perm_body">আপনার Documents ফোল্ডারে অনুবাদ ফাইল রাখতে এই অ্যাপের সব ফাইল পরিচালনার অনুমতি প্রয়োজন।\nআপনাকে সেটিংসে নিয়ে যাওয়া হবে, যেখানে আপনি \'সব ফাইল পরিচালনার অনুমতি দিন\' অনুমতিটি দিতে পারবেন।</string>
 

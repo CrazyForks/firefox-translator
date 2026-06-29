@@ -70,6 +70,7 @@
     <string name="settings_default_to">Standardspråk att översätta \'till\'</string>
     <string name="settings_adblock_support">Annonsblockering</string>
     <string name="settings_about_get_help">Få hjälp / rapportera problem</string>
+    <string name="settings_logs_copied">Apploggar kopierade till urklipp</string>
     <string name="settings_about_support">Stöd utvecklingen</string>
     <string name="settings_external_storage_perm_body">För att lagra översättningsfiler i din Dokument-mapp behöver den här appen åtkomst för att hantera alla filer.\nDu kommer att tas till Inställningar där du kan bevilja behörigheten \'Tillåt åtkomst för att hantera alla filer\'.</string>
 

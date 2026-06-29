@@ -70,6 +70,7 @@
     <string name="settings_default_to">Oletuskieli \'mihin\'</string>
     <string name="settings_adblock_support">Mainosten esto</string>
     <string name="settings_about_get_help">Hae apua / ilmoita ongelmasta</string>
+    <string name="settings_logs_copied">Sovelluslokit kopioitu leikepöydälle</string>
     <string name="settings_about_support">Tue kehitystä</string>
     <string name="settings_external_storage_perm_body">Tallentaakseen käännöstiedostot Tiedostot-kansioosi tämä sovellus tarvitsee oikeuden hallita kaikkia tiedostoja.\nSinut ohjataan Asetuksiin, jossa voit myöntää \'Salli kaikkien tiedostojen hallinta\' -oikeuden.</string>
 

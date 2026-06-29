@@ -18,11 +18,14 @@
 package dev.davidv.translator.ui.screens
 
 import android.app.role.RoleManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
@@ -1009,6 +1012,9 @@ fun SettingsScreen(
       AboutCard(
         onHowToUse = onHowToUse,
         onGetHelp = {
+          val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+          clipboard.setPrimaryClip(ClipData.newPlainText("App logs", captureAppLogs()))
+          Toast.makeText(context, context.getString(R.string.settings_logs_copied), Toast.LENGTH_SHORT).show()
           context.startActivity(
             Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/DavidVentura/offline-translator/issues")),
           )
@@ -1128,6 +1134,12 @@ private fun AboutNavRow(
     )
   }
 }
+
+private fun captureAppLogs(): String =
+  runCatching {
+    val process = Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "threadtime", "-t", "2000"))
+    process.inputStream.bufferedReader().use { it.readText() }
+  }.getOrElse { "Failed to read logs: ${it.message}" }
 
 @Composable
 private fun WebTranslatorAssetRow(

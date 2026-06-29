@@ -16,4 +16,5 @@
     <string name="settings_general">Üldseadistused</string>
     <string name="settings_font_size">Kirjatüübi suurus</string>
     <string name="settings_font_sample">See on üks rõõmus näidistekst</string>
+    <string name="settings_logs_copied">Rakenduse logid kopeeriti lõikelauale</string>
 </resources>

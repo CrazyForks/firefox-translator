@@ -70,6 +70,7 @@
     <string name="settings_default_to">Lingua \'di arrivo\' predefinita</string>
     <string name="settings_adblock_support">Blocco pubblicità</string>
     <string name="settings_about_get_help">Ottieni aiuto / segnala un problema</string>
+    <string name="settings_logs_copied">Log dell\'app copiati negli appunti</string>
     <string name="settings_about_support">Sostieni lo sviluppo</string>
     <string name="settings_external_storage_perm_body">Per salvare i file di traduzione nella cartella Documenti, questa app ha bisogno dell\'accesso per gestire tutti i file.\nVerrai portato alle Impostazioni dove potrai concedere l\'autorizzazione \'Consenti l\'accesso per gestire tutti i file\'.</string>
 

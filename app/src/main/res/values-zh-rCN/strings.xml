@@ -70,6 +70,7 @@
     <string name="settings_default_to">默认\'目标\'语言</string>
     <string name="settings_adblock_support">广告拦截</string>
     <string name="settings_about_get_help">获取帮助 / 反馈问题</string>
+    <string name="settings_logs_copied">应用日志已复制到剪贴板</string>
     <string name="settings_about_support">支持开发</string>
     <string name="settings_external_storage_perm_body">为了将翻译文件存储到你的“文档”文件夹，此应用需要管理所有文件的权限。\n你将被带到“设置”页面，在那里授予\'允许管理所有文件\'权限。</string>
 

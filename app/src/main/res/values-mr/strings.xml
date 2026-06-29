@@ -70,6 +70,7 @@
     <string name="settings_default_to">डीफॉल्ट \'पर्यंत\' भाषा</string>
     <string name="settings_adblock_support">जाहिरात अडवणे</string>
     <string name="settings_about_get_help">मदत मिळवा / समस्या कळवा</string>
+    <string name="settings_logs_copied">अॅप लॉग क्लिपबोर्डवर कॉपी केले</string>
     <string name="settings_about_support">विकासाला पाठिंबा द्या</string>
     <string name="settings_external_storage_perm_body">तुमच्या Documents फोल्डरमध्ये भाषांतर फायली साठवण्यासाठी, या अॅपला सर्व फायली व्यवस्थापित करण्याचा प्रवेश हवा आहे.\nतुम्हाला सेटिंग्जमध्ये नेले जाईल जिथे तुम्ही \'सर्व फायली व्यवस्थापित करण्याचा प्रवेश अनुमती द्या\' ही परवानगी देऊ शकता.</string>
 
