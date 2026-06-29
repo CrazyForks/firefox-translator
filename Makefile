@@ -20,4 +20,4 @@ screenshots:
 	  -e additionalTestOutputDir /sdcard/Download/ui-export-out \
 	  dev.davidv.translator.test/androidx.test.runner.AndroidJUnitRunner
 	rm -rf ui-export && adb pull /sdcard/Download/ui-export-out/ui-export ./ui-export
-	python3 scripts/weblate_screenshots.py --ui-export ui-export
+#	python3 scripts/weblate_screenshots.py --ui-export ui-export

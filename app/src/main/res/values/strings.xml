@@ -119,7 +119,7 @@
     <string name="assistant_action_live_screen">Start live translation</string>
     <string name="background_mode_white_on_black">White on Black</string>
     <string name="background_mode_black_on_white">Black on White</string>
-    <string name="background_mode_auto_detect">Auto-detect Colors</string>
+    <string name="background_mode_auto_detect">Original Image Colors</string>
     
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Nothing to speak</string>
@@ -214,8 +214,8 @@
     <string name="howto_copy_title">Translate without leaving other apps</string>
     <string name="howto_copy_body">Select text anywhere, then tap \"Translate\" in the copy toolbar to see the translation in a compact popup.</string>
     <string name="howto_section_in_app">Inside the app</string>
-    <string name="howto_docs_title">Translate documents</string>
-    <string name="howto_docs_body">Open the Documents tab to translate EPUB, PDF, and TXT files.</string>
+    <string name="howto_docs_title">Translate documents and images</string>
+    <string name="howto_docs_body">Open the Documents tab to translate images or EPUB, PDF, and TXT files.</string>
     <string name="howto_dict_title">Dictionary lookup</string>
     <string name="howto_dict_body">Long-press any word in a translation to see its definition. Data sourced from Wiktionary.</string>
     <string name="howto_voice_title">Change voice or speed</string>

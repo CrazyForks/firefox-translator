@@ -29,7 +29,7 @@
     <string name="settings_general">General</string>
     <string name="settings_font_size">Tamaño de fuente</string>
     <string name="settings_font_sample">Este es un texto de ejemplo</string>
-    <string name="settings_tap_notification">Notificación de Traducción rápida</string>
+    <string name="settings_tap_notification">Notificación para traducción rápida</string>
     <string name="settings_tap_notification_desc">Notificación persistente que abre la ventana emergente.</string>
     <string name="settings_web_translator">Traductor web</string>
     <string name="settings_clear_browsing">Borrar datos de navegación al cerrar</string>
@@ -115,7 +115,7 @@
     <string name="assistant_action_live_screen">Iniciar traducción en vivo</string>
     <string name="background_mode_white_on_black">Blanco sobre negro</string>
     <string name="background_mode_black_on_white">Negro sobre blanco</string>
-    <string name="background_mode_auto_detect">Detectar colores automáticamente</string>
+    <string name="background_mode_auto_detect">Colores de la imagen original</string>
 
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">No hay nada que leer</string>
@@ -203,17 +203,17 @@
 
     <!-- how to use -->
     <string name="howto_section_other_apps">Desde otras apps</string>
-    <string name="howto_share_title">Compartir para traducir</string>
+    <string name="howto_share_title">Traduce con solo compartir</string>
     <string name="howto_share_body">Comparte texto, enlaces o imágenes desde cualquier app para traducirlos.</string>
     <string name="howto_copy_title">Traduce sin salir de otras apps</string>
     <string name="howto_copy_body">Selecciona texto en cualquier lugar y toca \"Traducir\" en el menú de selección de texto para ver la traducción en una ventana compacta.</string>
     <string name="howto_section_in_app">Dentro de la app</string>
-    <string name="howto_docs_title">Traducir documentos</string>
-    <string name="howto_docs_body">Abre la pestaña Documentos para traducir archivos EPUB, PDF y TXT.</string>
+    <string name="howto_docs_title">Traducir documentos e imágenes</string>
+    <string name="howto_docs_body">Abre la pestaña Documentos para traducir imágenes o archivos EPUB, PDF y TXT.</string>
     <string name="howto_dict_title">Búsqueda en el diccionario</string>
     <string name="howto_dict_body">Mantén pulsada cualquier palabra de una traducción para ver su definición. Datos obtenidos de Wiktionary.</string>
     <string name="howto_voice_title">Cambiar voz o velocidad</string>
-    <string name="howto_voice_body">Mantén pulsado el botón de reproducción para elegir otra voz TTS o ajustar la velocidad de reproducción.</string>
+    <string name="howto_voice_body">Mantén pulsado el botón de reproducción para elegir otra voz o ajustar la velocidad de reproducción.</string>
 
     <!-- feature row labels -->
     <string name="feature_translation">Traducción</string>
