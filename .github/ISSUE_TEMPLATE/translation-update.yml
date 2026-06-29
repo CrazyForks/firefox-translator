@@ -21,13 +21,13 @@ body:
       placeholder: e.g. German (de), Brazilian Portuguese (pt-BR)
     validations:
       required: true
-  - type: checkboxes
+  - type: dropdown
     id: source
     attributes:
       label: How was this translation produced?
       options:
-        - label: Human generated
-        - label: Machine generated (AI, translation tools)
+        - Human generated
+        - Machine generated (AI, translation tools)
     validations:
       required: true
   - type: textarea
