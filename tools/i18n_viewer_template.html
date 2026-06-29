@@ -203,9 +203,11 @@
   const changesLink = document.getElementById('changes');
   const refresh = () => {
     applyLang(showEn.checked ? 'en' : sel.value);
-    // Carry the current language through Index and Changes so it survives navigation.
-    back.href = 'index.html?lang=' + encodeURIComponent(sel.value);
-    changesLink.href = 'changes.html?lang=' + encodeURIComponent(sel.value);
+    // Carry the current language through Index, Changes, and this page's own URL (so reload/share keeps it).
+    const q = '?lang=' + encodeURIComponent(sel.value);
+    back.href = 'index.html' + q;
+    changesLink.href = 'changes.html' + q;
+    history.replaceState(null, '', q);
   };
   sel.addEventListener('change', () => { showEn.checked = false; refresh(); });
   showEn.addEventListener('change', refresh);

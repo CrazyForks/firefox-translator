@@ -1,0 +1,39 @@
+name: Translation update
+description: Submit new or corrected UI translations for a language
+title: "<Language>: Translation update"
+labels: ["translation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping translate the app!
+
+        If you have used [the batch translation tool](https://translator.davidv.dev/files/ui-export/) and have your XML file, it's more convenient if you upload directly to weblate.
+
+        If you don't have a weblate account and don't want to make one, you can attach the file here and I'll merge it for you when I can.
+
+        You can also use [Weblate](https://hosted.weblate.org/projects/offline-translator/offline-translator/) directly if you prefer that workflow.
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: Which language is this for?
+      placeholder: e.g. German (de), Brazilian Portuguese (pt-BR)
+    validations:
+      required: true
+  - type: checkboxes
+    id: source
+    attributes:
+      label: How was this translation produced?
+      options:
+        - label: Human generated
+        - label: Machine generated (AI, translation tools)
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Translation and notes
+      description: Add your file here and any context for the reviewer.
+    validations:
+      required: true
