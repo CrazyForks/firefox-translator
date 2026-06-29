@@ -2,37 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>i18n viewer — __NAME__</title>
+<link rel="stylesheet" href="i18n.css">
 <style>
-  body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; }
-  #panel { width: 260px; padding: 16px; box-sizing: border-box; border-right: 1px solid #ccc; overflow: auto; }
-  #stage { flex: 1; overflow: auto; background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; padding: 16px; box-sizing: border-box; }
-  #stage svg { width: min(420px, 100%); height: auto; display: block; }
-  h3 { margin: 0 0 12px; }
-  label { display: block; font-size: 13px; margin: 12px 0 4px; color: #555; }
-  select { width: 100%; padding: 6px; font-size: 14px; }
-  .check { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 14px; color: #333; cursor: pointer; }
-  .check input { margin: 0; }
-  .hint { font-size: 12px; color: #777; margin-top: 16px; line-height: 1.5; }
-  .error { color: #b00; font-size: 13px; margin-top: 12px; line-height: 1.5; }
-  .stat { font-size: 12px; color: #555; margin-top: 12px; line-height: 1.6; }
-  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
-  text[data-i18n] { cursor: pointer; }
-  text.untranslated { opacity: 0.92; }
+  body { height: 100vh; display: flex; flex-direction: column; }
+  #stat { display: none; }
+  #stage { flex: 1 1 auto; min-height: 0; overflow: auto; background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; padding: 8px; box-sizing: border-box; }
+  /* Width-capped so phones fill the screen but desktop stops at phone width; height scrolls. */
+  #stage svg { width: min(100%, 480px); height: auto; display: block; }
+  foreignObject div.edited { text-decoration: underline; text-decoration-color: #4a8cff; text-decoration-thickness: 2px; }
+  foreignObject div.untranslated { opacity: 0.55; }
+  foreignObject div:focus { background: rgba(106,124,255,0.20); border-radius: 2px; }
 </style>
 </head>
 <body>
-<div id="panel">
-  <h3>i18n viewer</h3>
-  <label for="lang">Language</label>
+<div class="topbar">
+  <a id="back" class="btn" href="index.html" title="Index">←</a>
   <select id="lang"></select>
   <label class="check"><input type="checkbox" id="showEn"> Show English</label>
-  <p class="stat" id="stat"></p>
-  <p class="hint"><span class="swatch" style="background:#e0a000"></span>amber outline = no translation in this language (showing English).<br><br>
-  Click any label to open it in Weblate.</p>
-  <p class="error" id="error" style="display:none"></p>
+  <a id="changes" class="btn right" href="changes.html">Changes (<span id="ccount">0</span>)</a>
+  <span id="stat"></span>
+  <span id="error" class="error" style="display:none"></span>
 </div>
 <div id="stage"></div>
+<script src="i18n_store.js"></script>
 <script>
 (async function () {
   const SVGNS = "http://www.w3.org/2000/svg";
@@ -51,7 +45,9 @@
 
   let svg, keys, strings;
   try {
-    const [svgRes, keysRes, strRes] = await Promise.all([fetch(NAME), fetch(KEYS), fetch('strings.json')]);
+    // no-cache => revalidate each load, so a regenerated svg/strings.json shows up without a hard refresh.
+    const nc = { cache: 'no-cache' };
+    const [svgRes, keysRes, strRes] = await Promise.all([fetch(NAME, nc), fetch(KEYS, nc), fetch('strings.json', nc)]);
     for (const [r, n] of [[svgRes, NAME], [keysRes, KEYS], [strRes, 'strings.json']]) {
       if (!r.ok) throw new Error(`${n}: ${r.status} ${r.statusText}`);
     }
@@ -74,23 +70,33 @@
     if (key) t.setAttribute('data-i18n', key);
   });
 
-  function openWeblate(key) {
-    const lang = document.getElementById('lang').value;
-    window.open(`https://hosted.weblate.org/browse/${WEBLATE}/${lang}/?q=context:=${encodeURIComponent(key)}`,
-      '_blank', 'noopener');
+  // Edit store. effective() = your local edit ?? the Weblate value ?? the English seed.
+  let curLang = 'en';
+  function effective(key, lang) {
+    const e = I18N.get(lang, key);
+    if (e != null) return { text: e, edited: true, has: true };
+    const v = strings[key] && strings[key][lang];
+    if (v != null) return { text: v, edited: false, has: true };
+    return { text: (strings[key] && strings[key].en) || '', edited: false, has: false };
   }
-  // SVG <text> only takes clicks on painted glyph pixels; cover each with a transparent hit-rect.
-  function attachHit(t, key) {
-    const b = t.getBBox(), pad = 6;
-    const hit = document.createElementNS(SVGNS, 'rect');
-    if (t.getAttribute('transform')) hit.setAttribute('transform', t.getAttribute('transform'));
-    hit.setAttribute('x', b.x - pad); hit.setAttribute('y', b.y - pad);
-    hit.setAttribute('width', b.width + pad * 2); hit.setAttribute('height', b.height + pad * 2);
-    hit.setAttribute('fill', 'transparent');
-    hit.style.pointerEvents = 'all';
-    hit.style.cursor = 'pointer';
-    hit.addEventListener('click', () => openWeblate(key));
-    t.parentNode.insertBefore(hit, t.nextSibling);
+  function paint(g, lang) {
+    const edited = I18N.get(lang, g.key) != null;
+    const has = edited || (strings[g.key] && strings[g.key][lang] != null);
+    g.div.classList.toggle('edited', edited);
+    g.div.classList.toggle('untranslated', !has);
+  }
+  function updateCount() { document.getElementById('ccount').textContent = I18N.count(); }
+  // Commit an in-place edit; clear it if it equals the Weblate value (or, for an untranslated string,
+  // the untouched English seed) so leaving a label alone never records a change.
+  function commit(g) {
+    if (curLang === 'en') return;
+    const val = g.div.textContent;
+    const weblate = strings[g.key] && strings[g.key][curLang];
+    const seed = (strings[g.key] && strings[g.key].en) || '';
+    if (val === weblate || (weblate == null && val === seed)) I18N.remove(curLang, g.key);
+    else I18N.set(curLang, g.key, val);
+    paint(g, curLang);
+    updateCount();
   }
 
   // Group the consecutive same-key, same-style, vertically-stacked lines that a wrapped paragraph
@@ -131,7 +137,6 @@
   groups.forEach(g => {
     const f = g.lines[0];
     g.size0 = parseFloat(f.getAttribute('font-size'));
-    g.lines.forEach(l => attachHit(l, g.key));
     const y1 = parseFloat(f.getAttribute('y'));
     const yN = parseFloat(g.lines[g.lines.length - 1].getAttribute('y'));
     g.lineH = g.lines.length > 1 ? (yN - y1) / (g.lines.length - 1) : g.size0 * 1.35;
@@ -156,57 +161,34 @@
     div.style.cssText =
       `margin:0;font-family:sans-serif;font-size:${g.size0}px;line-height:${g.lineH}px;` +
       `font-weight:${f.getAttribute('font-weight') || 'normal'};font-style:${f.getAttribute('font-style') || 'normal'};` +
-      `color:${f.getAttribute('fill') || '#000'};overflow-wrap:break-word;cursor:pointer;` +
+      `color:${f.getAttribute('fill') || '#000'};overflow-wrap:break-word;cursor:text;` +
       `text-align:${anchor === 'end' ? 'right' : anchor === 'middle' ? 'center' : 'left'};`;
-    div.addEventListener('click', () => openWeblate(g.key));
+    // Enter = done editing (commit via blur), not a newline; Shift+Enter still inserts one.
+    div.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); div.blur(); } });
+    div.addEventListener('blur', () => commit(g));
     fo.appendChild(div);
     f.parentNode.insertBefore(fo, f);
     g.fo = fo; g.div = div;
   });
 
-  function render(g, full) {
-    g.div.textContent = full;
+  // Target language: show the editable foreignObject (your edit ?? Weblate ?? English seed). English:
+  // show the original <text> lines, read-only. Don't clobber a div the user is mid-edit in.
+  function showEdit(g, lang) {
+    if (g.div !== document.activeElement) g.div.textContent = effective(g.key, lang).text;
+    g.div.contentEditable = 'true';
     g.fo.setAttribute('display', '');
     g.lines.forEach(l => l.setAttribute('display', 'none'));
+    paint(g, lang);
   }
-  function restore(g) {
+  function showSource(g) {
     g.fo.setAttribute('display', 'none');
+    g.div.contentEditable = 'false';
     g.lines.forEach(l => { l.setAttribute('display', ''); l.textContent = english.get(l); });
   }
-
-  function outline(t, on) {
-    let r = t.previousElementSibling;
-    const isMine = r && r.getAttribute && r.getAttribute('data-outline') === t.getAttribute('data-key');
-    if (!on) { if (isMine) r.remove(); return; }
-    if (isMine) return;
-    const b = t.getBBox();
-    r = document.createElementNS(SVGNS, 'rect');
-    r.setAttribute('data-outline', t.getAttribute('data-key'));
-    if (t.getAttribute('transform')) r.setAttribute('transform', t.getAttribute('transform'));
-    r.setAttribute('x', b.x - 2); r.setAttribute('y', b.y - 2);
-    r.setAttribute('width', b.width + 4); r.setAttribute('height', b.height + 4);
-    r.setAttribute('rx', 2); r.setAttribute('fill', 'none');
-    r.setAttribute('stroke', '#e0a000'); r.setAttribute('stroke-width', '1.5');
-    r.setAttribute('pointer-events', 'none');
-    t.parentNode.insertBefore(r, t);
-  }
-
   function applyLang(lang) {
-    let translated = 0, missing = 0;
-    const unkeyed = texts.filter(t => !t.getAttribute('data-i18n')).length;
-    for (const g of groups) {
-      const val = strings[g.key] && strings[g.key][lang];
-      const hasIt = val != null && lang !== 'en';
-      if (hasIt) render(g, val); else restore(g);
-      g.lines.forEach(l => {
-        const flag = hasIt === false && lang !== 'en' && l.textContent !== '';
-        l.classList.toggle('untranslated', flag);
-        outline(l, flag);
-      });
-      if (lang === 'en' || hasIt) translated++; else missing++;
-    }
-    document.getElementById('stat').innerHTML =
-      `${translated} resolved · ${missing} untranslated · ${unkeyed} unmatched`;
+    curLang = lang;
+    for (const g of groups) (lang === 'en') ? showSource(g) : showEdit(g, lang);
+    updateCount();
   }
 
   const sel = document.getElementById('lang');
@@ -214,8 +196,17 @@
   // Dropdown picks the target language; the checkbox flips to English without touching the dropdown.
   const targets = LANGS.filter(l => l !== 'en');
   LANGS.forEach(l => { const o = document.createElement('option'); o.value = o.textContent = l; sel.appendChild(o); });
-  sel.value = targets[0] || 'en';
-  const refresh = () => applyLang(showEn.checked ? 'en' : sel.value);
+  // ?lang=<code> (e.g. linked from index.html) picks the initial language; default to the first target.
+  const urlLang = new URLSearchParams(location.search).get('lang');
+  sel.value = (urlLang && LANGS.includes(urlLang)) ? urlLang : (targets[0] || 'en');
+  const back = document.getElementById('back');
+  const changesLink = document.getElementById('changes');
+  const refresh = () => {
+    applyLang(showEn.checked ? 'en' : sel.value);
+    // Carry the current language through Index and Changes so it survives navigation.
+    back.href = 'index.html?lang=' + encodeURIComponent(sel.value);
+    changesLink.href = 'changes.html?lang=' + encodeURIComponent(sel.value);
+  };
   sel.addEventListener('change', () => { showEn.checked = false; refresh(); });
   showEn.addEventListener('change', refresh);
   refresh();

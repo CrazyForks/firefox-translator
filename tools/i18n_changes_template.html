@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pending translation changes</title>
+<link rel="stylesheet" href="i18n.css">
+<style>
+  main { padding: 8px 24px 40px; }
+  .empty { color: #888; padding: 40px 0; font-size: 15px; }
+  .langblock { margin-top: 28px; }
+  .langhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .langhead h2 { margin: 0; font-size: 16px; }
+  .langhead .hint { font-size: 12px; color: #888; flex-basis: 100%; }
+  .entry { border-bottom: 1px solid #2c2c2c; padding: 9px 0; }
+  .ehead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .ehead .key { font-family: ui-monospace, monospace; font-size: 12px; color: #9aa; word-break: break-all; }
+  .screenhead { color: #6a6; font-size: 11px; font-family: ui-monospace, monospace; margin: 14px 0 2px; }
+  .erow { display: flex; gap: 8px; margin-top: 3px; font-size: 13px; line-height: 1.35; }
+  .elabel { flex: 0 0 80px; color: #888; font-size: 11px; padding-top: 2px; }
+  .en { color: #bbb; }
+  .prev { color: #8a8a8a; }
+  .new { color: #eaeaea; }
+  .revert { color: #c77; cursor: pointer; font-size: 12px; white-space: nowrap; }
+  @media (max-width: 480px) { main { padding: 8px 12px 40px; } }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="btn" id="back" href="index.html" title="Index">←</a>
+  <h1>Pending changes</h1>
+</header>
+<main id="main"></main>
+<script src="i18n_store.js"></script>
+<script>
+(async function () {
+  const WEBLATE = "__WEBLATE__";
+  const main = document.getElementById('main');
+  // Preserve the language we arrived with on the way back to the index.
+  const urlLang = new URLSearchParams(location.search).get('lang');
+  if (urlLang) document.getElementById('back').href = 'index.html?lang=' + encodeURIComponent(urlLang);
+  let strings = {}, screensOf = {};
+  const nc = { cache: 'no-cache' };  // revalidate so regenerated data reflects without a hard refresh
+  try {
+    strings = await (await fetch('strings.json', nc)).json();
+    // key -> [screen names], so we can show where each string appears (best-effort).
+    screensOf = await (await fetch('keymap.json', nc)).json();
+  } catch (e) { /* strings.json is required; keymap is optional */ }
+
+  function download(name, text) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: 'application/xml' }));
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function render() {
+    const edits = I18N.all();
+    const langs = Object.keys(edits).sort();
+    main.innerHTML = '';
+    if (!langs.length) { main.innerHTML = '<p class="empty">No pending changes. Edit labels in a screen, then come back here to review and download.</p>'; return; }
+
+    for (const lang of langs) {
+      const keys = Object.keys(edits[lang]).sort();
+      const block = document.createElement('div');
+      block.className = 'langblock';
+      const entry = (k) => {
+        const en = (strings[k] && strings[k].en) || '';
+        const prev = (strings[k] && strings[k][lang]) || '—';
+        return `<div class="entry">
+          <div class="ehead">
+            <span class="key">${esc(k)}</span>
+            <span class="revert" data-lang="${lang}" data-key="${esc(k)}">revert</span>
+          </div>
+          <div class="erow"><span class="elabel">English</span><span class="en">${esc(en)}</span></div>
+          <div class="erow"><span class="elabel">Weblate</span><span class="prev">${esc(prev)}</span></div>
+          <div class="erow"><span class="elabel">Your change</span><span class="new">${esc(edits[lang][k])}</span></div>
+        </div>`;
+      };
+      // Group this language's edits by the screen they appear on; the screen is a small header.
+      const byScreen = {};
+      for (const k of keys) { const s = (screensOf[k] || []).join(', ') || '(unmapped)'; (byScreen[s] = byScreen[s] || []).push(k); }
+      const entries = Object.keys(byScreen).sort()
+        .map(s => `<div class="screenhead">${esc(s)}</div>${byScreen[s].map(entry).join('')}`).join('');
+      block.innerHTML = `
+        <div class="langhead">
+          <h2>${lang} <span class="hint">(${keys.length})</span></h2>
+          <button class="btn dl" data-lang="${lang}">Download</button>
+          <a class="btn" target="_blank" rel="noopener" href="https://hosted.weblate.org/projects/${WEBLATE}/${lang}/#upload">Open Weblate ↗</a>
+          <button class="btn clearlang right" data-lang="${lang}">Clear</button>
+          <span class="hint">If you have a weblate account, upload directly. If not, upload the file in a GitHub issue.</span>
+        </div>
+        ${entries}`;
+      main.appendChild(block);
+    }
+
+    main.querySelectorAll('.dl').forEach(b => b.onclick = () => {
+      const lang = b.dataset.lang;
+      download(`strings-${lang}.xml`, I18N.stringsXml(lang));
+    });
+    main.querySelectorAll('.revert').forEach(s => s.onclick = () => {
+      I18N.remove(s.dataset.lang, s.dataset.key);
+      render();
+    });
+    main.querySelectorAll('.clearlang').forEach(b => b.onclick = () => {
+      if (confirm(`Clear all pending ${b.dataset.lang} changes? (do this after you've uploaded them)`)) {
+        I18N.clearLang(b.dataset.lang);
+        render();
+        window.scrollTo(0, 0);
+      }
+    });
+  }
+
+  function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+  render();
+})();
+</script>
+</body>
+</html>

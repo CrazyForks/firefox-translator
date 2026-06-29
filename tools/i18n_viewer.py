@@ -203,11 +203,16 @@ def main() -> int:
     template = (Path(__file__).resolve().parent / "i18n_viewer_template.html").read_text()
 
     cards: dict[Path, list[Path]] = {}
+    keymap: dict[Path, dict[str, set[str]]] = {}  # out_dir -> {R.string key -> {screen names}}
     for svg in args.svgs:
         keys, stats = process_svg(svg, resolver)
         out_dir = svg.parent
         (out_dir / "strings.json").write_text(json.dumps(locales, ensure_ascii=False))
         (svg.with_suffix(".keys.json")).write_text(json.dumps(keys, ensure_ascii=False))
+        screens = keymap.setdefault(out_dir, {})
+        for key in keys.values():
+            if key:
+                screens.setdefault(key, set()).add(svg.stem)
         page = (
             template.replace("__NAME__", svg.name)
             .replace("__KEYS__", svg.with_suffix(".keys.json").name)
@@ -225,16 +230,27 @@ def main() -> int:
             msg += f" (+{len(pngs)} section PNGs)" if pngs else " (no sections)"
         print(msg)
 
-    index_template = (Path(__file__).resolve().parent / "i18n_index_template.html").read_text()
+    here = Path(__file__).resolve().parent
+    index_template = (here / "i18n_index_template.html").read_text()
+    changes_template = (here / "i18n_changes_template.html").read_text()
+    store_js = (here / "i18n_store.js").read_text()
+    shared_css = (here / "i18n.css").read_text()
     for out_dir, svgs in cards.items():
         html = []
         for svg in sorted(svgs, key=lambda p: p.name):
+            base = svg.with_suffix(".i18n.html").name
             html.append(
-                f'  <a class="card" href="{svg.with_suffix(".i18n.html").name}">'
+                f'  <a class="card" href="{base}" data-base="{base}">'
                 f'<div class="thumb"><img src="{svg.name}" alt="{svg.stem}"></div>'
                 f'<div class="name">{svg.stem}</div></a>'
             )
-        (out_dir / "index.html").write_text(index_template.replace("__CARDS__", "\n".join(html)))
+        page = index_template.replace("__CARDS__", "\n".join(html)).replace("__LANGS__", json.dumps(langs))
+        (out_dir / "index.html").write_text(page)
+        (out_dir / "i18n_store.js").write_text(store_js)
+        (out_dir / "i18n.css").write_text(shared_css)
+        (out_dir / "changes.html").write_text(changes_template.replace("__WEBLATE__", args.weblate))
+        screens = {k: sorted(v) for k, v in sorted(keymap.get(out_dir, {}).items())}
+        (out_dir / "keymap.json").write_text(json.dumps(screens, ensure_ascii=False))
         print(f"{out_dir}/index.html: {len(svgs)} screens")
     return 0
 
