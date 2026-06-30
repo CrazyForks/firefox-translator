@@ -56,7 +56,7 @@
     <string name="settings_translit_input">为原文显示音译</string>
     <string name="settings_translit_japanese_spaces">为日语音译添加空格</string>
     <string name="settings_translate_pdf_images">翻译 PDF 中的图片</string>
-    <string name="settings_translate_pdf_images_desc">对 PDF 页面中嵌入的位图图片进行 OCR 并翻译。</string>
+    <string name="settings_translate_pdf_images_desc">识别并翻译 PDF 文件中图片里的文字。</string>
     <string name="settings_camera_live_default">默认使用相机实时翻译</string>
     <string name="settings_register_browser">注册为浏览器</string>
     <string name="settings_register_browser_desc">提供翻译来自其他应用的链接。</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">也作：</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">实时翻译需要相机权限。</string>
-    <string name="camera_need_ocr_models">你需要下载此语言的 OCR 模型</string>
+    <string name="camera_need_ocr_models">你需要下载此语言的文字识别模型</string>
     <string name="browser_no_source_language">没有可用的源语言。请先在主界面安装一种，或在设置中设定默认源语言。</string>
     <string name="browser_reader_unavailable">此页面不支持阅读模式</string>
     <string name="browser_translate_image">翻译图片</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">没有可朗读的内容</string>
     <string name="tts_catalog_unavailable">目录不可用</string>
-    <string name="tts_no_voice">未安装 %1$s 的 TTS 语音</string>
+    <string name="tts_no_voice">未安装 %1$s 的语音</string>
     <string name="tts_synthesis_failed">%1$s 的语音合成失败</string>
     <string name="tts_sample_fallback">这是来自 Offline Translator 的语音合成示例。</string>
     <!-- translation -->
     <string name="translation_error">翻译错误：%1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">%1$s 下载失败</string>
-    <string name="download_failed_ocr">%1$s OCR 下载失败</string>
-    <string name="download_failed_ocr_batch">OCR 批量下载失败</string>
+    <string name="download_failed_ocr">%1$s 文字识别下载失败</string>
+    <string name="download_failed_ocr_batch">文字识别批量下载失败</string>
     <string name="download_failed_dictionary">%1$s 词典下载失败</string>
-    <string name="download_failed_tts">%1$s TTS 下载失败</string>
+    <string name="download_failed_tts">%1$s 语音下载失败</string>
     <string name="download_failed_adblock">Adblock 下载失败</string>
     <string name="download_catalog_unavailable">目录不可用</string>
     <string name="download_catalog_save_failed">保存目录失败</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">此助手的截屏权限已关闭。请在系统助手设置中开启。</string>
     <string name="assistant_no_screen_data">未收到屏幕数据。请为此助手开启\'使用截屏\'。</string>
     <string name="assistant_no_screenshot">此应用未提供截屏。</string>
-    <string name="assistant_set_source_ocr">请为 OCR 设置默认源语言。</string>
+    <string name="assistant_set_source_ocr">请为文字识别设置默认源语言。</string>
     <string name="assistant_langs_not_ready">翻译语言尚未就绪。请重试。</string>
-    <string name="assistant_ocr_failed">OCR 失败</string>
+    <string name="assistant_ocr_failed">文字识别失败</string>
     <string name="assistant_set_source_live">在设置中设定默认源语言即可使用实时屏幕翻译。</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">正在更新语音模型</string>
@@ -195,7 +195,7 @@
     <string name="howto_dict_title">词典查询</string>
     <string name="howto_dict_body">长按译文中的任意词语即可查看释义。数据来自 Wiktionary。</string>
     <string name="howto_voice_title">更改语音或速度</string>
-    <string name="howto_voice_body">长按播放按钮即可选择不同的 TTS 语音或调整播放速度。</string>
+    <string name="howto_voice_body">长按播放按钮即可选择不同的语音或调整播放速度。</string>
     <!-- feature row labels -->
     <string name="feature_translation">翻译</string>
     <string name="feature_dictionary">词典</string>

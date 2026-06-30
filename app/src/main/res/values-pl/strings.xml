@@ -56,7 +56,7 @@
     <string name="settings_translit_input">Pokaż transliterację oryginalnego tekstu</string>
     <string name="settings_translit_japanese_spaces">Dodaj spacje w transliteracji japońskiej</string>
     <string name="settings_translate_pdf_images">Tłumacz obrazy w plikach PDF</string>
-    <string name="settings_translate_pdf_images_desc">Rozpoznaj (OCR) i tłumacz obrazy rastrowe osadzone na stronach PDF.</string>
+    <string name="settings_translate_pdf_images_desc">Rozpoznawaj i tłumacz tekst na obrazach w plikach PDF.</string>
     <string name="settings_camera_live_default">Domyślnie tłumacz aparat na żywo</string>
     <string name="settings_register_browser">Zarejestruj jako przeglądarkę</string>
     <string name="settings_register_browser_desc">Proponuj tłumaczenie linków z innych aplikacji.</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">Również jako:</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">Tłumaczenie na żywo wymaga dostępu do aparatu.</string>
-    <string name="camera_need_ocr_models">Musisz pobrać modele OCR dla tego języka</string>
+    <string name="camera_need_ocr_models">Musisz pobrać modele rozpoznawania tekstu dla tego języka</string>
     <string name="browser_no_source_language">Brak dostępnego języka źródłowego. Zainstaluj go najpierw na ekranie głównym lub ustaw domyślny język źródłowy w ustawieniach.</string>
     <string name="browser_reader_unavailable">Tryb czytnika niedostępny dla tej strony</string>
     <string name="browser_translate_image">Przetłumacz obraz</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Brak tekstu do odczytania</string>
     <string name="tts_catalog_unavailable">Katalog niedostępny</string>
-    <string name="tts_no_voice">Brak zainstalowanego głosu TTS dla języka %1$s</string>
+    <string name="tts_no_voice">Brak zainstalowanego głosu dla języka %1$s</string>
     <string name="tts_synthesis_failed">Synteza mowy nie powiodła się dla %1$s</string>
     <string name="tts_sample_fallback">To jest próbka mowy z Offline Translator.</string>
     <!-- translation -->
     <string name="translation_error">Błąd tłumaczenia: %1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">Pobieranie %1$s nie powiodło się</string>
-    <string name="download_failed_ocr">Pobieranie OCR %1$s nie powiodło się</string>
-    <string name="download_failed_ocr_batch">Wsadowe pobieranie OCR nie powiodło się</string>
+    <string name="download_failed_ocr">Pobieranie rozpoznawania tekstu %1$s nie powiodło się</string>
+    <string name="download_failed_ocr_batch">Wsadowe pobieranie rozpoznawania tekstu nie powiodło się</string>
     <string name="download_failed_dictionary">Pobieranie słownika %1$s nie powiodło się</string>
-    <string name="download_failed_tts">Pobieranie TTS %1$s nie powiodło się</string>
+    <string name="download_failed_tts">Pobieranie głosu %1$s nie powiodło się</string>
     <string name="download_failed_adblock">Pobieranie Adblock nie powiodło się</string>
     <string name="download_catalog_unavailable">Katalog niedostępny</string>
     <string name="download_catalog_save_failed">Nie udało się zapisać katalogu</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">Dostęp do zrzutu ekranu jest wyłączony dla tego asystenta. Włącz go w ustawieniach asystenta systemowego.</string>
     <string name="assistant_no_screen_data">Nie otrzymano danych z ekranu. Włącz \'Użyj zrzutu ekranu\' dla tego asystenta.</string>
     <string name="assistant_no_screenshot">Ta aplikacja nie dostarczyła zrzutu ekranu.</string>
-    <string name="assistant_set_source_ocr">Ustaw domyślny język źródłowy dla OCR.</string>
+    <string name="assistant_set_source_ocr">Ustaw domyślny język źródłowy dla rozpoznawania tekstu.</string>
     <string name="assistant_langs_not_ready">Języki tłumaczenia nie są jeszcze gotowe. Spróbuj ponownie.</string>
-    <string name="assistant_ocr_failed">OCR nie powiódł się</string>
+    <string name="assistant_ocr_failed">Rozpoznawanie tekstu nie powiodło się</string>
     <string name="assistant_set_source_live">Ustaw domyślny język źródłowy w Ustawieniach, aby korzystać z tłumaczenia ekranu na żywo.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Aktualizowanie modeli mowy</string>
@@ -198,7 +198,7 @@
     <string name="howto_dict_title">Wyszukiwanie w słowniku</string>
     <string name="howto_dict_body">Przytrzymaj dowolne słowo w tłumaczeniu, aby zobaczyć jego definicję. Dane pochodzą z Wiktionary.</string>
     <string name="howto_voice_title">Zmień głos lub prędkość</string>
-    <string name="howto_voice_body">Przytrzymaj przycisk odtwarzania, aby wybrać inny głos TTS lub dostosować prędkość odtwarzania.</string>
+    <string name="howto_voice_body">Przytrzymaj przycisk odtwarzania, aby wybrać inny głos lub dostosować prędkość odtwarzania.</string>
     <!-- feature row labels -->
     <string name="feature_translation">Tłumaczenie</string>
     <string name="feature_dictionary">Słownik</string>

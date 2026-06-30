@@ -56,7 +56,7 @@
     <string name="settings_translit_input">Transliteration für Originaltext anzeigen</string>
     <string name="settings_translit_japanese_spaces">Leerzeichen für japanische Transliteration hinzufügen</string>
     <string name="settings_translate_pdf_images">Bilder in PDFs übersetzen</string>
-    <string name="settings_translate_pdf_images_desc">Rasterbilder in PDF-Seiten per OCR erkennen und übersetzen.</string>
+    <string name="settings_translate_pdf_images_desc">Text in Bildern innerhalb von PDF-Dateien erkennen und übersetzen.</string>
     <string name="settings_camera_live_default">Kamera standardmäßig live übersetzen</string>
     <string name="settings_register_browser">Als Browser registrieren</string>
     <string name="settings_register_browser_desc">Anbieten, Links aus anderen Apps zu übersetzen.</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">Auch als:</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">Für die Live-Übersetzung wird die Kamera-Berechtigung benötigt.</string>
-    <string name="camera_need_ocr_models">Du musst die OCR-Modelle für diese Sprache herunterladen</string>
+    <string name="camera_need_ocr_models">Du musst die Texterkennungsmodelle für diese Sprache herunterladen</string>
     <string name="browser_no_source_language">Keine Quellsprache verfügbar. Installiere zuerst eine über den Hauptbildschirm oder lege eine Standard-Quellsprache in den Einstellungen fest.</string>
     <string name="browser_reader_unavailable">Lesemodus für diese Seite nicht verfügbar</string>
     <string name="browser_translate_image">Bild übersetzen</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Nichts vorzulesen</string>
     <string name="tts_catalog_unavailable">Katalog nicht verfügbar</string>
-    <string name="tts_no_voice">Keine TTS-Stimme für %1$s installiert</string>
+    <string name="tts_no_voice">Keine Stimme für %1$s installiert</string>
     <string name="tts_synthesis_failed">Sprachsynthese für %1$s fehlgeschlagen</string>
     <string name="tts_sample_fallback">Dies ist ein Sprachausgabe-Beispiel von Offline Translator.</string>
     <!-- translation -->
     <string name="translation_error">Übersetzungsfehler: %1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">%1$s-Download fehlgeschlagen</string>
-    <string name="download_failed_ocr">%1$s-OCR-Download fehlgeschlagen</string>
-    <string name="download_failed_ocr_batch">OCR-Stapeldownload fehlgeschlagen</string>
+    <string name="download_failed_ocr">Download der Texterkennung für %1$s fehlgeschlagen</string>
+    <string name="download_failed_ocr_batch">Stapeldownload der Texterkennung fehlgeschlagen</string>
     <string name="download_failed_dictionary">%1$s-Wörterbuch-Download fehlgeschlagen</string>
-    <string name="download_failed_tts">%1$s-TTS-Download fehlgeschlagen</string>
+    <string name="download_failed_tts">Download der Stimme für %1$s fehlgeschlagen</string>
     <string name="download_failed_adblock">Adblock-Download fehlgeschlagen</string>
     <string name="download_catalog_unavailable">Katalog nicht verfügbar</string>
     <string name="download_catalog_save_failed">Katalog konnte nicht gespeichert werden</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">Der Screenshot-Zugriff ist für diesen Assistenten deaktiviert. Aktiviere ihn in den System-Assistenteneinstellungen.</string>
     <string name="assistant_no_screen_data">Keine Bildschirmdaten empfangen. Aktiviere \'Screenshot verwenden\' für diesen Assistenten.</string>
     <string name="assistant_no_screenshot">Diese App hat keinen Screenshot bereitgestellt.</string>
-    <string name="assistant_set_source_ocr">Lege eine Standard-Quellsprache für OCR fest.</string>
+    <string name="assistant_set_source_ocr">Lege eine Standard-Quellsprache für die Texterkennung fest.</string>
     <string name="assistant_langs_not_ready">Die Übersetzungssprachen sind noch nicht bereit. Versuche es erneut.</string>
-    <string name="assistant_ocr_failed">OCR fehlgeschlagen</string>
+    <string name="assistant_ocr_failed">Texterkennung fehlgeschlagen</string>
     <string name="assistant_set_source_live">Lege in den Einstellungen eine Standard-Quellsprache fest, um die Live-Bildschirmübersetzung zu nutzen.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Sprachmodelle werden aktualisiert</string>
@@ -196,7 +196,7 @@
     <string name="howto_dict_title">Wörterbuch nachschlagen</string>
     <string name="howto_dict_body">Drücke lange auf ein beliebiges Wort in einer Übersetzung, um seine Definition zu sehen. Daten von Wiktionary.</string>
     <string name="howto_voice_title">Stimme oder Geschwindigkeit ändern</string>
-    <string name="howto_voice_body">Drücke lange auf die Wiedergabetaste, um eine andere TTS-Stimme zu wählen oder die Wiedergabegeschwindigkeit anzupassen.</string>
+    <string name="howto_voice_body">Drücke lange auf die Wiedergabetaste, um eine andere Stimme zu wählen oder die Wiedergabegeschwindigkeit anzupassen.</string>
     <!-- feature row labels -->
     <string name="feature_translation">Übersetzung</string>
     <string name="feature_dictionary">Wörterbuch</string>

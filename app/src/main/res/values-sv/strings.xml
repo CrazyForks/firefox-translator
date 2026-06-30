@@ -56,7 +56,7 @@
     <string name="settings_translit_input">Visa translitterering för originaltext</string>
     <string name="settings_translit_japanese_spaces">Lägg till mellanslag för japansk translitterering</string>
     <string name="settings_translate_pdf_images">Översätt bilder i PDF-filer</string>
-    <string name="settings_translate_pdf_images_desc">OCR och översätt rasterbilder inbäddade i PDF-sidor.</string>
+    <string name="settings_translate_pdf_images_desc">Känn igen och översätt text i bilder i PDF-filer.</string>
     <string name="settings_camera_live_default">Översätt kameran live som standard</string>
     <string name="settings_register_browser">Registrera som webbläsare</string>
     <string name="settings_register_browser_desc">Erbjud att översätta länkar från andra appar.</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">Även som:</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">Kamerabehörighet krävs för live-översättning.</string>
-    <string name="camera_need_ocr_models">Du behöver ladda ner OCR-modellerna för det här språket</string>
+    <string name="camera_need_ocr_models">Du behöver ladda ner textigenkänningsmodellerna för det här språket</string>
     <string name="browser_no_source_language">Inget källspråk tillgängligt. Installera ett från huvudskärmen först, eller ange ett standardkällspråk i inställningarna.</string>
     <string name="browser_reader_unavailable">Läsläge är inte tillgängligt för den här sidan</string>
     <string name="browser_translate_image">Översätt bild</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Inget att läsa upp</string>
     <string name="tts_catalog_unavailable">Katalogen är inte tillgänglig</string>
-    <string name="tts_no_voice">Ingen TTS-röst installerad för %1$s</string>
+    <string name="tts_no_voice">Ingen röst installerad för %1$s</string>
     <string name="tts_synthesis_failed">Talsyntes misslyckades för %1$s</string>
     <string name="tts_sample_fallback">Det här är ett text-till-tal-exempel från Offline Translator.</string>
     <!-- translation -->
     <string name="translation_error">Översättningsfel: %1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">Nedladdningen av %1$s misslyckades</string>
-    <string name="download_failed_ocr">OCR-nedladdningen av %1$s misslyckades</string>
-    <string name="download_failed_ocr_batch">OCR-batchnedladdningen misslyckades</string>
+    <string name="download_failed_ocr">Nedladdningen av textigenkänning för %1$s misslyckades</string>
+    <string name="download_failed_ocr_batch">Batchnedladdningen av textigenkänning misslyckades</string>
     <string name="download_failed_dictionary">Ordboksnedladdningen för %1$s misslyckades</string>
-    <string name="download_failed_tts">TTS-nedladdningen för %1$s misslyckades</string>
+    <string name="download_failed_tts">Röstnedladdningen för %1$s misslyckades</string>
     <string name="download_failed_adblock">Adblock-nedladdningen misslyckades</string>
     <string name="download_catalog_unavailable">Katalogen är inte tillgänglig</string>
     <string name="download_catalog_save_failed">Det gick inte att spara katalogen</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">Skärmdumpsåtkomst är inaktiverad för den här assistenten. Aktivera den i systemets assistentinställningar.</string>
     <string name="assistant_no_screen_data">Inga skärmdata mottagna. Aktivera \'Använd skärmdump\' för den här assistenten.</string>
     <string name="assistant_no_screenshot">Den här appen tillhandahöll ingen skärmdump.</string>
-    <string name="assistant_set_source_ocr">Ange ett standardkällspråk för OCR.</string>
+    <string name="assistant_set_source_ocr">Ange ett standardkällspråk för textigenkänning.</string>
     <string name="assistant_langs_not_ready">Översättningsspråken är inte redo än. Försök igen.</string>
-    <string name="assistant_ocr_failed">OCR misslyckades</string>
+    <string name="assistant_ocr_failed">Textigenkänning misslyckades</string>
     <string name="assistant_set_source_live">Ange ett standardkällspråk i Inställningar för att använda live-översättning av skärmen.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Uppdaterar talmodeller</string>
@@ -196,7 +196,7 @@
     <string name="howto_dict_title">Slå upp i ordbok</string>
     <string name="howto_dict_body">Håll in valfritt ord i en översättning för att se dess definition. Data hämtad från Wiktionary.</string>
     <string name="howto_voice_title">Ändra röst eller hastighet</string>
-    <string name="howto_voice_body">Håll in uppspelningsknappen för att välja en annan TTS-röst eller justera uppspelningshastigheten.</string>
+    <string name="howto_voice_body">Håll in uppspelningsknappen för att välja en annan röst eller justera uppspelningshastigheten.</string>
     <!-- feature row labels -->
     <string name="feature_translation">Översättning</string>
     <string name="feature_dictionary">Ordbok</string>

@@ -52,7 +52,7 @@
     <string name="howto_dict_title">Otsing sõnastikust</string>
     <string name="howto_dict_body">Pika vajutusega sõnal saad näha tema selgitust. Andmed on pärist Wiktionary\'st.</string>
     <string name="howto_voice_title">Hääle või esituskiiruse muutmine</string>
-    <string name="howto_voice_body">Pika vajutusega esitusnupul saad valida muu kõnesünteesi hääle või kohendada taasesituse kiirust.</string>
+    <string name="howto_voice_body">Pika vajutusega esitusnupul saad valida muu hääle või kohendada taasesituse kiirust.</string>
     <string name="feature_translation">Tõlge</string>
     <string name="feature_dictionary">Sõnastik</string>
     <string name="feature_tts">Hääl</string>
@@ -92,7 +92,7 @@
     <string name="settings_translit_input">Näita lähteteksti puhul transliteratsiooni</string>
     <string name="settings_translit_japanese_spaces">Lisa tühikud jaapani keele transliteratsiooni</string>
     <string name="settings_translate_pdf_images">Tõlgi PDF-failides leiduvaid pilte</string>
-    <string name="settings_translate_pdf_images_desc">Tõlgi PDF-failidesse lõimitud rasterpltide sisu ja tõlgi see.</string>
+    <string name="settings_translate_pdf_images_desc">Tuvasta ja tõlgi PDF-failides leiduvate piltide tekst.</string>
     <string name="settings_camera_live_default">Vaikimisi tõlgi kaamerapilt reaalajas</string>
     <string name="settings_register_browser">Registreeri veebibrauserina</string>
     <string name="settings_register_browser_desc">See võimaldab pakkuda linkide tõlketeenust teistest rakendustest.</string>
@@ -112,7 +112,7 @@
     <string name="voice_default">Vaikimisi hääl</string>
     <string name="dict_also_as">Lisaks vormingus:</string>
     <string name="camera_permission_rationale">Reaalajas tõlkimiseks on vaja õigus kaamera kasutamiseks.</string>
-    <string name="camera_need_ocr_models">Sa pead laadima alla selle keele optilise märgituvastuse mudelid</string>
+    <string name="camera_need_ocr_models">Sa pead laadima alla selle keele tekstituvastuse mudelid</string>
     <string name="browser_reader_unavailable">Lugemisrežiim pole selle leha jaoks saadaval</string>
     <string name="browser_translate_image">Tõlgi pildi sisu</string>
     <string name="screen_translating_notification">Ekraanivaate tõlkimine on töös</string>
@@ -125,15 +125,15 @@
     <string name="background_mode_black_on_white">Must valgel taustal</string>
     <string name="background_mode_auto_detect">Pildi algsed värvid</string>
     <string name="tts_catalog_unavailable">Kataloog pole saadaval</string>
-    <string name="tts_no_voice">Kõnesünteesi häält pole paigaldatud keelele: %1$s</string>
+    <string name="tts_no_voice">Häält pole paigaldatud keelele: %1$s</string>
     <string name="tts_synthesis_failed">Kõnesüntees ei toiminud antud keele puhul: %1$s</string>
     <string name="tts_sample_fallback">See on kõnesünteesi näide rakendusest Offline Translator.</string>
     <string name="translation_error">Tõlkeviga: %1$s</string>
     <string name="download_failed_core">Allalaadimine ei õnnestunud: %1$s</string>
-    <string name="download_failed_ocr">Optilise märgituvastuse allalaadimine ei õnnestunud: %1$s</string>
-    <string name="download_failed_ocr_batch">Optilise märgituvastuse allalaadimine pakina ei õnnestunud</string>
+    <string name="download_failed_ocr">%1$s tekstituvastuse allalaadimine ei õnnestunud</string>
+    <string name="download_failed_ocr_batch">Tekstituvastuse allalaadimine pakina ei õnnestunud</string>
     <string name="download_failed_dictionary">Sõnastiku allalaadimine ei õnnestunud: %1$s</string>
-    <string name="download_failed_tts">Kõnesünteesimudeli allalaadimine ei õnnestunud: %1$s</string>
+    <string name="download_failed_tts">%1$s hääle allalaadimine ei õnnestunud</string>
     <string name="download_failed_adblock">Reklaamiblokeerija andmete allalaadimine ei õnnestunud</string>
     <string name="download_catalog_unavailable">Kataloog pole saadaval</string>
     <string name="download_catalog_save_failed">Kataloogi salvestamine ei õnnestunud</string>

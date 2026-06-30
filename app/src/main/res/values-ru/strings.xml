@@ -56,7 +56,7 @@
     <string name="settings_translit_input">Показывать транслитерацию оригинала</string>
     <string name="settings_translit_japanese_spaces">Добавлять пробелы в японской транслитерации</string>
     <string name="settings_translate_pdf_images">Переводить изображения в PDF</string>
-    <string name="settings_translate_pdf_images_desc">Распознавать (OCR) и переводить растровые изображения на страницах PDF.</string>
+    <string name="settings_translate_pdf_images_desc">Распознавать и переводить текст на изображениях в файлах PDF.</string>
     <string name="settings_camera_live_default">Переводить камеру вживую по умолчанию</string>
     <string name="settings_register_browser">Зарегистрировать как браузер</string>
     <string name="settings_register_browser_desc">Предлагать перевод ссылок из других приложений.</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">Также как:</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">Для перевода вживую нужно разрешение на камеру.</string>
-    <string name="camera_need_ocr_models">Нужно скачать модели OCR для этого языка</string>
+    <string name="camera_need_ocr_models">Нужно скачать модели распознавания текста для этого языка</string>
     <string name="browser_no_source_language">Нет доступного языка оригинала. Сначала установите его на главном экране или задайте язык оригинала по умолчанию в настройках.</string>
     <string name="browser_reader_unavailable">Режим чтения недоступен для этой страницы</string>
     <string name="browser_translate_image">Перевести изображение</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Нечего озвучивать</string>
     <string name="tts_catalog_unavailable">Каталог недоступен</string>
-    <string name="tts_no_voice">Нет установленного голоса TTS для %1$s</string>
+    <string name="tts_no_voice">Нет установленного голоса для %1$s</string>
     <string name="tts_synthesis_failed">Не удалось синтезировать речь для %1$s</string>
     <string name="tts_sample_fallback">Это пример синтеза речи от Offline Translator.</string>
     <!-- translation -->
     <string name="translation_error">Ошибка перевода: %1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">Не удалось скачать %1$s</string>
-    <string name="download_failed_ocr">Не удалось скачать OCR для %1$s</string>
-    <string name="download_failed_ocr_batch">Не удалось скачать пакет OCR</string>
+    <string name="download_failed_ocr">Не удалось скачать распознавание текста для %1$s</string>
+    <string name="download_failed_ocr_batch">Не удалось скачать пакет распознавания текста</string>
     <string name="download_failed_dictionary">Не удалось скачать словарь %1$s</string>
-    <string name="download_failed_tts">Не удалось скачать TTS для %1$s</string>
+    <string name="download_failed_tts">Не удалось скачать голос для %1$s</string>
     <string name="download_failed_adblock">Не удалось скачать Adblock</string>
     <string name="download_catalog_unavailable">Каталог недоступен</string>
     <string name="download_catalog_save_failed">Не удалось сохранить каталог</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">Доступ к снимку экрана отключён для этого ассистента. Включите его в системных настройках ассистента.</string>
     <string name="assistant_no_screen_data">Данные экрана не получены. Включите \'Использовать снимок экрана\' для этого ассистента.</string>
     <string name="assistant_no_screenshot">Это приложение не предоставило снимок экрана.</string>
-    <string name="assistant_set_source_ocr">Задайте язык оригинала по умолчанию для OCR.</string>
+    <string name="assistant_set_source_ocr">Задайте язык оригинала по умолчанию для распознавания текста.</string>
     <string name="assistant_langs_not_ready">Языки перевода ещё не готовы. Попробуйте снова.</string>
-    <string name="assistant_ocr_failed">Ошибка OCR</string>
+    <string name="assistant_ocr_failed">Ошибка распознавания текста</string>
     <string name="assistant_set_source_live">Задайте язык оригинала по умолчанию в Настройках, чтобы использовать перевод экрана вживую.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Обновление моделей речи</string>
@@ -198,7 +198,7 @@
     <string name="howto_dict_title">Поиск в словаре</string>
     <string name="howto_dict_body">Удерживайте любое слово в переводе, чтобы увидеть его определение. Данные из Wiktionary.</string>
     <string name="howto_voice_title">Изменить голос или скорость</string>
-    <string name="howto_voice_body">Удерживайте кнопку воспроизведения, чтобы выбрать другой голос TTS или изменить скорость воспроизведения.</string>
+    <string name="howto_voice_body">Удерживайте кнопку воспроизведения, чтобы выбрать другой голос или изменить скорость воспроизведения.</string>
     <!-- feature row labels -->
     <string name="feature_translation">Перевод</string>
     <string name="feature_dictionary">Словарь</string>

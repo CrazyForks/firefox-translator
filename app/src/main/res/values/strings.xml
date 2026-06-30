@@ -58,7 +58,7 @@
     <string name="settings_translit_input">Show transliteration for original text</string>
     <string name="settings_translit_japanese_spaces">Add spaces for Japanese transliteration</string>
     <string name="settings_translate_pdf_images">Translate images in PDFs</string>
-    <string name="settings_translate_pdf_images_desc">OCR and translate raster images embedded in PDF pages.</string>
+    <string name="settings_translate_pdf_images_desc">Recognize and translate text in images inside PDF files.</string>
     <string name="settings_camera_live_default">Translate camera live by default</string>
     <string name="settings_register_browser">Register as browser</string>
     <string name="settings_register_browser_desc">Offer to translate links from other apps.</string>
@@ -104,7 +104,7 @@
 
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">Camera permission is needed for live translate.</string>
-    <string name="camera_need_ocr_models">You need to download the OCR models for this language</string>
+    <string name="camera_need_ocr_models">You need to download the text-recognition models for this language</string>
     <string name="browser_no_source_language">No source language available. Install one from the main screen first, or set a default source language in settings.</string>
     <string name="browser_reader_unavailable">Reader mode unavailable for this page</string>
     <string name="browser_translate_image">Translate image</string>
@@ -123,7 +123,7 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Nothing to speak</string>
     <string name="tts_catalog_unavailable">Catalog unavailable</string>
-    <string name="tts_no_voice">No TTS voice installed for %1$s</string>
+    <string name="tts_no_voice">No voice installed for %1$s</string>
     <string name="tts_synthesis_failed">Speech synthesis failed for %1$s</string>
     <string name="tts_sample_fallback">This is a text-to-speech sample from Offline Translator.</string>
     
@@ -132,10 +132,10 @@
     
     <!-- download errors -->
     <string name="download_failed_core">%1$s download failed</string>
-    <string name="download_failed_ocr">%1$s OCR download failed</string>
-    <string name="download_failed_ocr_batch">OCR batch download failed</string>
+    <string name="download_failed_ocr">%1$s text recognition download failed</string>
+    <string name="download_failed_ocr_batch">Text recognition batch download failed</string>
     <string name="download_failed_dictionary">%1$s dictionary download failed</string>
-    <string name="download_failed_tts">%1$s TTS download failed</string>
+    <string name="download_failed_tts">%1$s voice download failed</string>
     <string name="download_failed_adblock">Adblock download failed</string>
     <string name="download_catalog_unavailable">Catalog unavailable</string>
     <string name="download_catalog_save_failed">Failed to save catalog</string>
@@ -148,9 +148,9 @@
     <string name="assistant_screenshot_disabled">Screenshot access is disabled for this assistant. Enable it in the system assistant settings.</string>
     <string name="assistant_no_screen_data">No screen data received. Enable \'Use screenshot\' for this assistant.</string>
     <string name="assistant_no_screenshot">This app did not provide a screenshot.</string>
-    <string name="assistant_set_source_ocr">Set a default source language for OCR.</string>
+    <string name="assistant_set_source_ocr">Set a default source language for text recognition.</string>
     <string name="assistant_langs_not_ready">Translation languages aren\'t ready yet. Try again.</string>
-    <string name="assistant_ocr_failed">OCR failed</string>
+    <string name="assistant_ocr_failed">Text recognition failed</string>
     <string name="assistant_set_source_live">Set a default source language in Settings to use live screen translation.</string>
     
     <!-- migration gate -->
@@ -218,7 +218,7 @@
     <string name="howto_dict_title">Dictionary lookup</string>
     <string name="howto_dict_body">Long-press any word in a translation to see its definition. Data sourced from Wiktionary.</string>
     <string name="howto_voice_title">Change voice or speed</string>
-    <string name="howto_voice_body">Long-press the play button to pick a different TTS voice or adjust playback speed.</string>
+    <string name="howto_voice_body">Long-press the play button to pick a different voice or adjust playback speed.</string>
 
     <!-- feature row labels -->
     <string name="feature_translation">Translation</string>

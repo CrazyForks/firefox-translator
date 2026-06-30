@@ -56,7 +56,7 @@
     <string name="settings_translit_input">元の文字に発音表記を表示</string>
     <string name="settings_translit_japanese_spaces">日本語の発音表記にスペースを追加</string>
     <string name="settings_translate_pdf_images">PDF 内の画像も翻訳</string>
-    <string name="settings_translate_pdf_images_desc">PDF ページに埋め込まれた画像を OCR して翻訳します。</string>
+    <string name="settings_translate_pdf_images_desc">PDF ファイル内の画像にある文字を認識して翻訳します。</string>
     <string name="settings_camera_live_default">カメラを最初からリアルタイム翻訳</string>
     <string name="settings_register_browser">ブラウザーとして登録</string>
     <string name="settings_register_browser_desc">他のアプリからのリンクを翻訳できるようにします。</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">別の表記:</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">リアルタイム翻訳にはカメラの権限が必要です。</string>
-    <string name="camera_need_ocr_models">この言語の OCR モデルをダウンロードする必要があります</string>
+    <string name="camera_need_ocr_models">この言語の文字認識モデルをダウンロードする必要があります</string>
     <string name="browser_no_source_language">利用できる翻訳元の言語がありません。まずメイン画面でインストールするか、設定で既定の翻訳元の言語を指定してください。</string>
     <string name="browser_reader_unavailable">このページではリーダーモードを利用できません</string>
     <string name="browser_translate_image">画像を翻訳</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">読み上げる内容がありません</string>
     <string name="tts_catalog_unavailable">カタログを利用できません</string>
-    <string name="tts_no_voice">%1$s の TTS 音声がインストールされていません</string>
+    <string name="tts_no_voice">%1$s の音声がインストールされていません</string>
     <string name="tts_synthesis_failed">%1$s の音声合成に失敗しました</string>
     <string name="tts_sample_fallback">これは Offline Translator の音声読み上げのサンプルです。</string>
     <!-- translation -->
     <string name="translation_error">翻訳エラー: %1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">%1$s のダウンロードに失敗しました</string>
-    <string name="download_failed_ocr">%1$s の OCR ダウンロードに失敗しました</string>
-    <string name="download_failed_ocr_batch">OCR の一括ダウンロードに失敗しました</string>
+    <string name="download_failed_ocr">%1$s の文字認識のダウンロードに失敗しました</string>
+    <string name="download_failed_ocr_batch">文字認識の一括ダウンロードに失敗しました</string>
     <string name="download_failed_dictionary">%1$s の辞書ダウンロードに失敗しました</string>
-    <string name="download_failed_tts">%1$s の TTS ダウンロードに失敗しました</string>
+    <string name="download_failed_tts">%1$s の音声のダウンロードに失敗しました</string>
     <string name="download_failed_adblock">Adblock のダウンロードに失敗しました</string>
     <string name="download_catalog_unavailable">カタログを利用できません</string>
     <string name="download_catalog_save_failed">カタログを保存できませんでした</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">このアシスタントではスクリーンショットの利用が無効になっています。システムのアシスタント設定で有効にしてください。</string>
     <string name="assistant_no_screen_data">画面のデータを受信できませんでした。このアシスタントで\'スクリーンショットを使用\'を有効にしてください。</string>
     <string name="assistant_no_screenshot">このアプリはスクリーンショットを提供しませんでした。</string>
-    <string name="assistant_set_source_ocr">OCR 用に既定の翻訳元の言語を指定してください。</string>
+    <string name="assistant_set_source_ocr">文字認識用に既定の翻訳元の言語を指定してください。</string>
     <string name="assistant_langs_not_ready">翻訳の言語がまだ準備できていません。もう一度お試しください。</string>
-    <string name="assistant_ocr_failed">OCR に失敗しました</string>
+    <string name="assistant_ocr_failed">文字認識に失敗しました</string>
     <string name="assistant_set_source_live">画面のリアルタイム翻訳を使うには、設定で既定の翻訳元の言語を指定してください。</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">音声モデルを更新中</string>
@@ -195,7 +195,7 @@
     <string name="howto_dict_title">辞書で調べる</string>
     <string name="howto_dict_body">翻訳内の単語を長押しすると意味が表示されます。データは Wiktionary を使用しています。</string>
     <string name="howto_voice_title">音声や速度を変える</string>
-    <string name="howto_voice_body">再生ボタンを長押しすると、別の TTS 音声を選んだり再生速度を調整したりできます。</string>
+    <string name="howto_voice_body">再生ボタンを長押しすると、別の音声を選んだり再生速度を調整したりできます。</string>
     <!-- feature row labels -->
     <string name="feature_translation">翻訳</string>
     <string name="feature_dictionary">辞書</string>

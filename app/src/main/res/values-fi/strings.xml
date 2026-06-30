@@ -56,7 +56,7 @@
     <string name="settings_translit_input">Näytä translitterointi alkuperäiselle tekstille</string>
     <string name="settings_translit_japanese_spaces">Lisää välilyönnit japanin translitterointiin</string>
     <string name="settings_translate_pdf_images">Käännä PDF-tiedostojen kuvat</string>
-    <string name="settings_translate_pdf_images_desc">Tunnista (OCR) ja käännä PDF-sivuihin upotetut rasterikuvat.</string>
+    <string name="settings_translate_pdf_images_desc">Tunnista ja käännä PDF-tiedostojen kuvissa oleva teksti.</string>
     <string name="settings_camera_live_default">Käännä kamera reaaliajassa oletuksena</string>
     <string name="settings_register_browser">Rekisteröidy selaimeksi</string>
     <string name="settings_register_browser_desc">Tarjoa linkkien kääntämistä muista sovelluksista.</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">Myös muodossa:</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">Kameran käyttöoikeus tarvitaan reaaliaikaiseen kääntämiseen.</string>
-    <string name="camera_need_ocr_models">Sinun täytyy ladata OCR-mallit tälle kielelle</string>
+    <string name="camera_need_ocr_models">Sinun täytyy ladata tekstintunnistusmallit tälle kielelle</string>
     <string name="browser_no_source_language">Lähdekieltä ei ole saatavilla. Asenna sellainen ensin päänäytöltä tai aseta oletuslähdekieli asetuksissa.</string>
     <string name="browser_reader_unavailable">Lukutila ei ole käytettävissä tällä sivulla</string>
     <string name="browser_translate_image">Käännä kuva</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Ei mitään puhuttavaa</string>
     <string name="tts_catalog_unavailable">Luettelo ei ole saatavilla</string>
-    <string name="tts_no_voice">Kielelle %1$s ei ole asennettu TTS-ääntä</string>
+    <string name="tts_no_voice">Kielelle %1$s ei ole asennettu ääntä</string>
     <string name="tts_synthesis_failed">Puhesynteesi epäonnistui kielelle %1$s</string>
     <string name="tts_sample_fallback">Tämä on tekstistä puheeksi -näyte sovelluksesta Offline Translator.</string>
     <!-- translation -->
     <string name="translation_error">Käännösvirhe: %1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">%1$s lataus epäonnistui</string>
-    <string name="download_failed_ocr">%1$s OCR-lataus epäonnistui</string>
-    <string name="download_failed_ocr_batch">OCR-erälataus epäonnistui</string>
+    <string name="download_failed_ocr">%1$s tekstintunnistuksen lataus epäonnistui</string>
+    <string name="download_failed_ocr_batch">Tekstintunnistuksen erälataus epäonnistui</string>
     <string name="download_failed_dictionary">%1$s sanakirjan lataus epäonnistui</string>
-    <string name="download_failed_tts">%1$s TTS-lataus epäonnistui</string>
+    <string name="download_failed_tts">%1$s äänen lataus epäonnistui</string>
     <string name="download_failed_adblock">Adblock-lataus epäonnistui</string>
     <string name="download_catalog_unavailable">Luettelo ei ole saatavilla</string>
     <string name="download_catalog_save_failed">Luettelon tallentaminen epäonnistui</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">Kuvakaappausten käyttö on poistettu käytöstä tältä avustajalta. Ota se käyttöön järjestelmän avustaja-asetuksissa.</string>
     <string name="assistant_no_screen_data">Näytön tietoja ei vastaanotettu. Ota \'Käytä kuvakaappausta\' käyttöön tälle avustajalle.</string>
     <string name="assistant_no_screenshot">Tämä sovellus ei tarjonnut kuvakaappausta.</string>
-    <string name="assistant_set_source_ocr">Aseta oletuslähdekieli OCR:lle.</string>
+    <string name="assistant_set_source_ocr">Aseta oletuslähdekieli tekstintunnistukselle.</string>
     <string name="assistant_langs_not_ready">Käännöskielet eivät ole vielä valmiina. Yritä uudelleen.</string>
-    <string name="assistant_ocr_failed">OCR epäonnistui</string>
+    <string name="assistant_ocr_failed">Tekstintunnistus epäonnistui</string>
     <string name="assistant_set_source_live">Aseta oletuslähdekieli asetuksissa käyttääksesi reaaliaikaista näytön kääntämistä.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Päivitetään puhemalleja</string>
@@ -196,7 +196,7 @@
     <string name="howto_dict_title">Sanakirjahaku</string>
     <string name="howto_dict_body">Paina pitkään mitä tahansa käännöksen sanaa nähdäksesi sen määritelmän. Tiedot peräisin Wiktionarysta.</string>
     <string name="howto_voice_title">Vaihda ääntä tai nopeutta</string>
-    <string name="howto_voice_body">Paina pitkään toistopainiketta valitaksesi eri TTS-äänen tai säätääksesi toistonopeutta.</string>
+    <string name="howto_voice_body">Paina pitkään toistopainiketta valitaksesi eri äänen tai säätääksesi toistonopeutta.</string>
     <!-- feature row labels -->
     <string name="feature_translation">Käännös</string>
     <string name="feature_dictionary">Sanakirja</string>

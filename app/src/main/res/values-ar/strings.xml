@@ -56,7 +56,7 @@
     <string name="settings_translit_input">اعرض الكتابة الصوتية للنص الأصلي</string>
     <string name="settings_translit_japanese_spaces">أضف مسافات للكتابة الصوتية اليابانية</string>
     <string name="settings_translate_pdf_images">ترجم الصور في ملفات PDF</string>
-    <string name="settings_translate_pdf_images_desc">افصح OCR وترجمة الصور النقطية المضمّنة في صفحات PDF.</string>
+    <string name="settings_translate_pdf_images_desc">التعرّف على النص في الصور داخل ملفات PDF وترجمته.</string>
     <string name="settings_camera_live_default">ترجم الكاميرا مباشرةً افتراضيًا</string>
     <string name="settings_register_browser">سجِّل كمتصفح</string>
     <string name="settings_register_browser_desc">اقترح ترجمة الروابط من التطبيقات الأخرى.</string>
@@ -96,7 +96,7 @@
     <string name="dict_also_as">أيضًا كـ:</string>
     <!-- camera / browser / screen translate -->
     <string name="camera_permission_rationale">إذن الكاميرا مطلوب للترجمة المباشرة.</string>
-    <string name="camera_need_ocr_models">تحتاج إلى تنزيل نماذج OCR لهذه اللغة</string>
+    <string name="camera_need_ocr_models">تحتاج إلى تنزيل نماذج التعرّف على النص لهذه اللغة</string>
     <string name="browser_no_source_language">لا توجد لغة مصدر متاحة. ثبّت واحدة من الشاشة الرئيسية أولاً، أو حدّد لغة مصدر افتراضية في الإعدادات.</string>
     <string name="browser_reader_unavailable">وضع القارئ غير متاح لهذه الصفحة</string>
     <string name="browser_translate_image">ترجمة الصورة</string>
@@ -113,17 +113,17 @@
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">لا يوجد شيء لقراءته</string>
     <string name="tts_catalog_unavailable">الفهرس المفصل غير متاح</string>
-    <string name="tts_no_voice">لا يوجد صوت TTS مثبّت للغة %1$s</string>
+    <string name="tts_no_voice">لا يوجد صوت مثبّت للغة %1$s</string>
     <string name="tts_synthesis_failed">فشل توليد الكلام للغة %1$s</string>
     <string name="tts_sample_fallback">هذا نموذج لتحويل النص إلى كلام من Offline Translator.</string>
     <!-- translation -->
     <string name="translation_error">خطأ في الترجمة: %1$s</string>
     <!-- download errors -->
     <string name="download_failed_core">فشل تنزيل %1$s</string>
-    <string name="download_failed_ocr">فشل تنزيل OCR للغة %1$s</string>
-    <string name="download_failed_ocr_batch">فشل التنزيل الدفعي لـ OCR</string>
+    <string name="download_failed_ocr">فشل تنزيل التعرّف على النص للغة %1$s</string>
+    <string name="download_failed_ocr_batch">فشل التنزيل الدفعي للتعرّف على النص</string>
     <string name="download_failed_dictionary">فشل تنزيل قاموس %1$s</string>
-    <string name="download_failed_tts">فشل تنزيل TTS للغة %1$s</string>
+    <string name="download_failed_tts">فشل تنزيل الصوت للغة %1$s</string>
     <string name="download_failed_adblock">فشل تنزيل Adblock</string>
     <string name="download_catalog_unavailable">الفهرس المفصل غير متاح</string>
     <string name="download_catalog_save_failed">تعذّر حفظ الفهرس المفصل</string>
@@ -135,9 +135,9 @@
     <string name="assistant_screenshot_disabled">الوصول إلى لقطة الشاشة معطّل لهذا المساعد. فعّله من إعدادات مساعد النظام.</string>
     <string name="assistant_no_screen_data">لم يستلم أي بيانات من الشاشة. فعّل \'استخدام لقطة الشاشة\' لهذا المساعد.</string>
     <string name="assistant_no_screenshot">لم يوفّر هذا التطبيق لقطة شاشة.</string>
-    <string name="assistant_set_source_ocr">حدّد لغة مصدر افتراضية لـ OCR.</string>
+    <string name="assistant_set_source_ocr">حدّد لغة مصدر افتراضية للتعرّف على النص.</string>
     <string name="assistant_langs_not_ready">لغات الترجمة ليست جاهزة بعد. حاول مرة أخرى.</string>
-    <string name="assistant_ocr_failed">فشل OCR</string>
+    <string name="assistant_ocr_failed">فشل التعرّف على النص</string>
     <string name="assistant_set_source_live">حدّد لغة مصدر افتراضية في الإعدادات لاستخدام الترجمة المباشرة للشاشة.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">يحدِّث نماذج الكلام</string>
@@ -200,7 +200,7 @@
     <string name="howto_dict_title">البحث في القاموس</string>
     <string name="howto_dict_body">اضغط مطولاً على أي كلمة في الترجمة لرؤية تعريفها. البيانات مصدرها Wiktionary.</string>
     <string name="howto_voice_title">تغيير الصوت أو السرعة</string>
-    <string name="howto_voice_body">اضغط مطولاً على زر التشغيل لاختيار صوت TTS مختلف أو ضبط سرعة التشغيل.</string>
+    <string name="howto_voice_body">اضغط مطولاً على زر التشغيل لاختيار صوت مختلف أو ضبط سرعة التشغيل.</string>
     <!-- feature row labels -->
     <string name="feature_translation">الترجمة</string>
     <string name="feature_dictionary">القاموس</string>
