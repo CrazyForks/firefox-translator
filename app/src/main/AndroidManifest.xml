@@ -257,6 +257,7 @@
 
         <service
             android:name=".accessibilityOverlay.TranslatorAccessibilityService"
+            android:enabled="@bool/accessibility_service_enabled"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>

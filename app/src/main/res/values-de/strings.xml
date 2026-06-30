@@ -4,7 +4,6 @@
     <string name="resume">Fortsetzen</string>
     <string name="region_select_menu">Übersetzungsbereich festlegen</string>
     <string name="screen_translate_needs_source">Quellsprache angeben</string>
-    <string name="a11y_still_needs_r">Einmal übersetzen braucht Android 11 oder neuer</string>
     <string name="live_tile_label">Bildschirm live übersetzen</string>
     <string name="translate_text">Übersetzen</string>
     <string name="translate_link">Link übersetzen</string>

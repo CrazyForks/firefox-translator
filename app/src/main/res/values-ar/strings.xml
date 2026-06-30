@@ -4,7 +4,6 @@
     <string name="resume">استئناف</string>
     <string name="region_select_menu">تحديد منطقة الترجمة</string>
     <string name="screen_translate_needs_source">حدّد لغة المصدر</string>
-    <string name="a11y_still_needs_r">تتطلب الترجمة مرة واحدة أندرويد 11 أو أحدث</string>
     <string name="live_tile_label">ترجمة الشاشة مباشرةً</string>
     <string name="translate_text">ترجمة</string>
     <string name="translate_link">ترجمة الرابط</string>

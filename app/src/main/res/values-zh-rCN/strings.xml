@@ -4,7 +4,6 @@
     <string name="resume">继续</string>
     <string name="region_select_menu">设置翻译区域</string>
     <string name="screen_translate_needs_source">请指定源语言</string>
-    <string name="a11y_still_needs_r">单次翻译需要 Android 11 或更高版本</string>
     <string name="live_tile_label">实时翻译屏幕</string>
     <string name="translate_text">翻译</string>
     <string name="translate_link">翻译链接</string>

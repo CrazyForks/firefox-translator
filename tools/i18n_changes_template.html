@@ -8,6 +8,8 @@
 <style>
   main { padding: 8px 24px 40px; }
   .empty { color: #888; padding: 40px 0; font-size: 15px; }
+  .intro { color: #bbb; font-size: 14px; line-height: 1.5; max-width: 640px; margin: 8px 0 4px; }
+  .intro p { margin: 0 0 10px; }
   .langblock { margin-top: 28px; }
   .langhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
   .langhead h2 { margin: 0; font-size: 16px; }
@@ -61,6 +63,13 @@
     main.innerHTML = '';
     if (!langs.length) { main.innerHTML = '<p class="empty">No pending changes. Edit labels in a screen, then come back here to review and download.</p>'; return; }
 
+    const intro = document.createElement('div');
+    intro.className = 'intro';
+    intro.innerHTML = `
+      <p>Once you are finished with your translations, you need to download the translations in a file and submit it to either Weblate or GitHub.</p>
+      <p>Both Weblate and GitHub require accounts to submit files. Otherwise you can email me the file directly.</p>`;
+    main.appendChild(intro);
+
     for (const lang of langs) {
       const keys = Object.keys(edits[lang]).sort();
       const block = document.createElement('div');
@@ -91,7 +100,6 @@
           <a class="btn" target="_blank" rel="noopener"
       href="https://github.com/DavidVentura/offline-translator/issues/new?template=translation-update.yml&title=${lang}:+Translation+update&language=${lang}">Open GitHub ↗</a>
           <button class="btn clearlang right" data-lang="${lang}">Clear</button>
-          <span class="hint">If you have a weblate account, upload directly. If not, upload the file in a GitHub issue.</span>
         </div>
         ${entries}`;
       main.appendChild(block);

@@ -4,7 +4,6 @@
     <string name="resume">Retomar</string>
     <string name="region_select_menu">Definir área de tradução</string>
     <string name="screen_translate_needs_source">Informe o idioma de origem</string>
-    <string name="a11y_still_needs_r">Traduzir uma vez precisa do Android 11 ou mais recente</string>
     <string name="live_tile_label">Traduzir tela ao vivo</string>
     <string name="translate_text">Traduzir</string>
     <string name="translate_link">Traduzir link</string>

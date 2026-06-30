@@ -4,7 +4,6 @@
     <string name="resume">再開</string>
     <string name="region_select_menu">翻訳する範囲を指定</string>
     <string name="screen_translate_needs_source">翻訳元の言語を指定してください</string>
-    <string name="a11y_still_needs_r">一度だけ翻訳するには Android 11 以降が必要です</string>
     <string name="live_tile_label">画面をリアルタイム翻訳</string>
     <string name="translate_text">翻訳</string>
     <string name="translate_link">リンクを翻訳</string>

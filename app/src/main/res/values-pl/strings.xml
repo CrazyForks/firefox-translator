@@ -4,7 +4,6 @@
     <string name="resume">Wznów</string>
     <string name="region_select_menu">Ustaw obszar tłumaczenia</string>
     <string name="screen_translate_needs_source">Podaj język źródłowy</string>
-    <string name="a11y_still_needs_r">Tłumaczenie jednorazowe wymaga Androida 11 lub nowszego</string>
     <string name="live_tile_label">Tłumacz ekran na żywo</string>
     <string name="translate_text">Przetłumacz</string>
     <string name="translate_link">Przetłumacz link</string>

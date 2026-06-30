@@ -171,10 +171,6 @@ class TranslatorAccessibilityService : AccessibilityService() {
 
   fun activate() {
     if (active) return
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-      Toast.makeText(this, getString(R.string.a11y_still_needs_r), Toast.LENGTH_LONG).show()
-      return
-    }
     active = true
     serviceInfo =
       serviceInfo.apply {

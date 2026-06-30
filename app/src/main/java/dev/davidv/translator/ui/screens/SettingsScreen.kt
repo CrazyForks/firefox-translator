@@ -558,30 +558,32 @@ fun SettingsScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
 
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = stringResource(R.string.settings_floating_button),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-              )
-              Text(
-                text = stringResource(R.string.settings_floating_button_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-
-            TextButton(
-              onClick = {
-                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-              },
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
             ) {
-              Text(stringResource(R.string.common_manage))
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = stringResource(R.string.settings_floating_button),
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = stringResource(R.string.settings_floating_button_desc),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+
+              TextButton(
+                onClick = {
+                  context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                },
+              ) {
+                Text(stringResource(R.string.common_manage))
+              }
             }
           }
 

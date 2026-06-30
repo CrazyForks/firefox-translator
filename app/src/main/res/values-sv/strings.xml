@@ -4,7 +4,6 @@
     <string name="resume">Återuppta</string>
     <string name="region_select_menu">Ange översättningsområde</string>
     <string name="screen_translate_needs_source">Ange källspråk</string>
-    <string name="a11y_still_needs_r">Översätt en gång kräver Android 11 eller senare</string>
     <string name="live_tile_label">Översätt skärmen live</string>
     <string name="translate_text">Översätt</string>
     <string name="translate_link">Översätt länk</string>

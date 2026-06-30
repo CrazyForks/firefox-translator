@@ -4,7 +4,6 @@
     <string name="resume">पुन्हा सुरू करा</string>
     <string name="region_select_menu">भाषांतर क्षेत्र निवडा</string>
     <string name="screen_translate_needs_source">स्रोत भाषा निवडा</string>
-    <string name="a11y_still_needs_r">एकदा भाषांतर करण्यासाठी Android 11 किंवा नवीन आवृत्ती लागते</string>
     <string name="live_tile_label">स्क्रीन थेट भाषांतर करा</string>
     <string name="translate_text">भाषांतर करा</string>
     <string name="translate_link">दुवा भाषांतर करा</string>

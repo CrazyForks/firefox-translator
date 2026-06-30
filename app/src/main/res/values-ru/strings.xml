@@ -5,7 +5,6 @@
     <string name="resume">Продолжить</string>
     <string name="region_select_menu">Задайте область перевода</string>
     <string name="screen_translate_needs_source">Укажите язык оригинала</string>
-    <string name="a11y_still_needs_r">Для перевода одним касанием нужен Android 11 или новее</string>
     <string name="live_tile_label">Переводить экран вживую</string>
     <string name="translate_text">Перевести</string>
     <string name="translate_link">Перевести ссылку</string>

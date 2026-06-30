@@ -4,7 +4,6 @@
     <string name="resume">আবার চালু করুন</string>
     <string name="region_select_menu">অনুবাদের এলাকা ঠিক করুন</string>
     <string name="screen_translate_needs_source">উৎস ভাষা নির্দিষ্ট করুন</string>
-    <string name="a11y_still_needs_r">একবার অনুবাদের জন্য Android 11 বা নতুন সংস্করণ লাগবে</string>
     <string name="live_tile_label">স্ক্রিন লাইভ অনুবাদ করুন</string>
     <string name="translate_text">অনুবাদ করুন</string>
     <string name="translate_link">লিঙ্ক অনুবাদ করুন</string>

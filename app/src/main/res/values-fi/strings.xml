@@ -4,7 +4,6 @@
     <string name="resume">Jatka</string>
     <string name="region_select_menu">Aseta käännösalue</string>
     <string name="screen_translate_needs_source">Määritä lähdekieli</string>
-    <string name="a11y_still_needs_r">Käännä kerran vaatii Android 11:n tai uudemman</string>
     <string name="live_tile_label">Käännä näyttö reaaliajassa</string>
     <string name="translate_text">Käännä</string>
     <string name="translate_link">Käännä linkki</string>
