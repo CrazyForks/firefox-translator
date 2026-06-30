@@ -158,5 +158,4 @@
     <string name="docalign_decode_failed">Pildi dekodeerimine ei õnnestunud.</string>
     <string name="docalign_detecting">Tuvastan nurki…</string>
     <string name="docalign_redetecting">Tuvastan uuesti…</string>
-    <string name="a11y_still_needs_r">Ühekordselt tõlkimine eeldab Androidi versiooni 11 või uuemat</string>
 </resources>
