@@ -11,9 +11,13 @@
   #stage { flex: 1 1 auto; min-height: 0; overflow: auto; background: #2a2a2a; display: flex; justify-content: center; align-items: flex-start; padding: 8px; box-sizing: border-box; }
   /* Width-capped so phones fill the screen but desktop stops at phone width; height scrolls. */
   #stage svg { width: min(100%, 480px); height: auto; display: block; }
-  foreignObject div.edited { text-decoration: underline; text-decoration-color: #4a8cff; text-decoration-thickness: 2px; }
+  /* Non-editable text gets a faint backing rect (added in JS — SVG text has no CSS background); editable
+     stays plain. Fills, not thin underlines, which scale sub-pixel at the ~1/3 display size. */
+  foreignObject div.edited { background: rgba(74,140,255,0.32); border-radius: 3px; }
   foreignObject div.untranslated { opacity: 0.55; }
-  foreignObject div:focus { background: rgba(106,124,255,0.20); border-radius: 2px; }
+  foreignObject div:focus { background: rgba(106,124,255,0.34); border-radius: 3px; }
+  /* Source text isn't editable, so no I-beam (only the editable divs set cursor:text). */
+  #stage svg text { cursor: default; }
 </style>
 </head>
 <body>
@@ -205,14 +209,76 @@
       `margin:0;font-family:sans-serif;font-size:${g.size0}px;line-height:${g.lineH}px;` +
       `font-weight:${f.getAttribute('font-weight') || 'normal'};font-style:${f.getAttribute('font-style') || 'normal'};` +
       `color:${f.getAttribute('fill') || '#000'};overflow-wrap:break-word;cursor:text;` +
+      `white-space:${g.lines.length > 1 ? 'normal' : 'nowrap'};` +
       `text-align:${anchor === 'end' ? 'right' : anchor === 'middle' ? 'center' : 'left'};`;
     // Enter = done editing (commit via blur), not a newline; Shift+Enter still inserts one.
     div.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); div.blur(); } });
     div.addEventListener('blur', () => commit(g));
+    div.addEventListener('input', () => { fit(g); reflow(g, div.textContent); });
     fo.appendChild(div);
     f.parentNode.insertBefore(fo, f);
-    g.fo = fo; g.div = div;
+    g.anchor = anchor; g.ax = ax; g.fo = fo; g.div = div;
   });
+
+  // The dictionary "Also as:" is the one place the app reflows horizontally: a wider translation must
+  // push the fixed redirect words right, not overrun them. meas is off-canvas because a display:none
+  // node reports 0 width.
+  const meas = document.createElementNS(SVGNS, 'text');
+  meas.setAttribute('visibility', 'hidden');
+  svg.appendChild(meas);
+  function measure(str, g) {
+    const f = g.lines[0];
+    meas.setAttribute('font-size', g.size0);
+    meas.setAttribute('font-weight', f.getAttribute('font-weight') || 'normal');
+    meas.setAttribute('font-style', f.getAttribute('font-style') || 'normal');
+    meas.textContent = str;
+    return meas.getComputedTextLength();
+  }
+  const staticTexts = [...svg.querySelectorAll('text')].filter(t => t !== meas && !t.getAttribute('data-i18n'));
+  groups.forEach(g => {
+    g.followers = [];
+    const f = g.lines[0];
+    if (g.lines.length !== 1 || (f.getAttribute('text-anchor') || 'start') !== 'start') return;
+    g.englishW = measure(english.get(f), g);
+    const fy = translateXY(f)[1] + parseFloat(f.getAttribute('y'));
+    const englishRight = leftX(f) + g.englishW;
+    const row = staticTexts
+      .map(t => ({ el: t, left: leftX(t), y: translateXY(t)[1] + parseFloat(t.getAttribute('y')) }))
+      .filter(a => Math.abs(a.y - fy) < g.size0 * 0.6 && a.left > leftX(f))
+      .sort((a, b) => a.left - b.left);
+    // Only reflow when the run abuts the label; a far, right-aligned value is a separate column.
+    if (!row.length || row[0].left - englishRight > g.size0 * 1.5) return;
+    g.followers = row.map(a => ({ el: a.el, base: a.el.getAttribute('transform') || '' }));
+  });
+  // Skip reflow followers: their transform shifts per language but a backing rect wouldn't follow.
+  const followerEls = new Set(groups.flatMap(g => g.followers.map(fo => fo.el)));
+  staticTexts.forEach(t => {
+    if (followerEls.has(t)) return;
+    const b = t.getBBox();
+    if (!b.width || !b.height) return;
+    const r = document.createElementNS(SVGNS, 'rect');
+    if (t.getAttribute('transform')) r.setAttribute('transform', t.getAttribute('transform'));
+    r.setAttribute('x', b.x - 6);
+    r.setAttribute('y', b.y - 3);
+    r.setAttribute('width', b.width + 12);
+    r.setAttribute('height', b.height + 6);
+    r.setAttribute('rx', 5);
+    r.setAttribute('fill', 'rgba(150,150,165,0.13)');
+    t.parentNode.insertBefore(r, t);
+  });
+  function reflow(g, text) {
+    if (!g.followers || !g.followers.length) return;
+    const delta = Math.max(0, measure(text, g) - g.englishW);
+    g.followers.forEach(fo => fo.el.setAttribute('transform', `translate(${delta} 0) ${fo.base}`.trim()));
+  }
+  // Size a single-line box to its content so its hit area doesn't cover (and swallow the clicks of)
+  // adjacent labels — the image-source column row. Multi-line keeps its wrap width.
+  function fit(g) {
+    if (g.lines.length !== 1) return;
+    const w = measure(g.div.textContent, g) + g.size0 * 0.5;
+    g.fo.setAttribute('width', w);
+    g.fo.setAttribute('x', g.anchor === 'end' ? g.ax - w : g.anchor === 'middle' ? g.ax - w / 2 : g.ax);
+  }
 
   // Target language: show the editable foreignObject (your edit ?? Weblate ?? English seed). English:
   // show the original <text> lines, read-only. Don't clobber a div the user is mid-edit in.
@@ -221,12 +287,15 @@
     g.div.contentEditable = 'true';
     g.fo.setAttribute('display', '');
     g.lines.forEach(l => l.setAttribute('display', 'none'));
+    fit(g);
+    reflow(g, g.div.textContent);
     paint(g, lang);
   }
   function showSource(g) {
     g.fo.setAttribute('display', 'none');
     g.div.contentEditable = 'false';
     g.lines.forEach(l => { l.setAttribute('display', ''); l.textContent = english.get(l); });
+    reflow(g, english.get(g.lines[0]));
   }
   function applyLang(lang) {
     curLang = lang;

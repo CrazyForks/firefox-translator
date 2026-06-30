@@ -36,6 +36,7 @@ import androidx.test.uiautomator.UiDevice
 import dev.davidv.translator.MainActivity
 import dev.davidv.translator.R
 import dev.davidv.translator.TestUtils
+import dev.davidv.translator.UiExportRecorder
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -79,9 +80,14 @@ class UiExportInstrumentedTest {
                 val previousLocales = localeManager?.applicationLocales
                 localeManager?.applicationLocales = android.os.LocaleList.forLanguageTags("en-US")
                 TestUtils.setupLanguagesForApp()
+                // Record R.string lookups before MainActivity is created (its attachBaseContext reads
+                // this), so every label can be stamped with the exact string id it resolved from.
+                UiExportRecorder.reset()
+                UiExportRecorder.active = true
                 try {
                   base.evaluate()
                 } finally {
+                  UiExportRecorder.active = false
                   if (previousLocales != null) localeManager.applicationLocales = previousLocales
                 }
               }
@@ -97,7 +103,6 @@ class UiExportInstrumentedTest {
   @Test
   fun exportScreens() {
     awaitAnyContentDescription("Main screen", "Settings")
-    capture.captureRoute("main")
 
     // FAB image-source sheet: a Material3 ModalBottomSheet (separate window) captured via the
     // all-windows draw + draw-time overlay labeling. Best-effort: never break the rest of the export.
@@ -117,13 +122,14 @@ class UiExportInstrumentedTest {
 
     composeTestRule.onAllNodesWithText(str(R.string.common_manage)).onFirst().performScrollTo().performClick()
     composeTestRule.waitForIdle()
-    composeTestRule.onNodeWithText("Bulgarian").performScrollTo().performClick()
+    // Albanian is near the top of the list (so no long scroll) and ships two voices, so the picker
+    // shows more than one row.
+    composeTestRule.onNodeWithText("Albanian").performScrollTo().performClick()
     composeTestRule.waitForIdle()
 
     // Voice-download dialog: a BasicAlertDialog (separate window) — drawing all root views captures
-    // it too. Done BEFORE the scrolling capture below, while the just-expanded row (and its tagged
-    // trigger) is still composed; capturing language_manager scrolls the LazyColumn and would
-    // dispose it. Best-effort; trigger is tagged export-trigger:voice on the TTS feature-row action.
+    // it too. Captured while the just-expanded Albanian row (and its tagged trigger) is still
+    // composed. Best-effort; trigger is tagged export-trigger:voice on the TTS feature-row action.
     runCatching {
       composeTestRule
         .onAllNodes(SemanticsMatcher("voice trigger") { textTag(it).startsWith("export-trigger:voice") })
@@ -135,7 +141,6 @@ class UiExportInstrumentedTest {
       dismissOverlay()
     }.onFailure { Log.w("UiExport", "voice_picker capture failed", it) }
 
-    capture.captureRoute("language_manager")
     goBack()
 
     composeTestRule.onNodeWithText(str(R.string.howto_title)).performScrollTo().performClick()
@@ -191,7 +196,18 @@ class UiExportInstrumentedTest {
         .distinct()
 
     for (tag in tags) {
-      val name = tag.substringAfter("export-options:")
+      // The tag suffix is the dropdown label's R.string name, so the synthesized panel title is the
+      // real (translatable) label and carries its exact id; the slug drops the settings_ prefix to
+      // keep the per-dropdown filename (e.g. settings.background_mode.svg) stable.
+      val resName = tag.substringAfter("export-options:")
+      val resId =
+        composeTestRule.activity.resources.getIdentifier(
+          resName,
+          "string",
+          composeTestRule.activity.packageName,
+        )
+      val title = if (resId != 0) str(resId) else resName
+      val titleId = if (resId != 0) resName else null
       composeTestRule.onNodeWithTag(tag).performScrollTo()
       composeTestRule.waitForIdle()
 
@@ -212,8 +228,8 @@ class UiExportInstrumentedTest {
       composeTestRule.onNodeWithTag(tag).performClick()
       composeTestRule.waitForIdle()
 
-      val slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
-      val svg = SvgEmitter.emitOptionsPanel(name, "$route:$slug", options)
+      val slug = resName.removePrefix("settings_").lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_')
+      val svg = SvgEmitter.emitOptionsPanel(title, titleId, "$route:$slug", options)
       File(File(outputDir(), "ui-export"), "$route.$slug.svg").writeText(svg)
       Log.i("UiExport", "wrote $route.$slug.svg (${options.size} options: $options)")
     }

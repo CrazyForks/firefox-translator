@@ -31,6 +31,7 @@ object SvgEmitter {
     ops: List<DrawOp>,
     width: Int,
     height: Int,
+    idFor: (String) -> String? = { null },
   ): String {
     val sb = StringBuilder()
     sb.append("""<?xml version="1.0" encoding="UTF-8"?>""").append('\n')
@@ -57,7 +58,7 @@ object SvgEmitter {
         is DrawOp.Line -> sb.appendLine(line(op))
         is DrawOp.Path -> sb.appendLine(path(op))
         is DrawOp.Image -> sb.appendLine(image(op, imageKey(route, op, imageKeyCounts) { imageSeq++ }))
-        is DrawOp.TextRun -> sb.appendLine(text(op, "$route:${textSeq++}", containers))
+        is DrawOp.TextRun -> sb.appendLine(text(op, "$route:${textSeq++}", containers, idFor))
       }
     }
 
@@ -89,6 +90,7 @@ object SvgEmitter {
    */
   fun emitOptionsPanel(
     title: String,
+    titleId: String?,
     keyBase: String,
     options: List<String>,
   ): String {
@@ -104,9 +106,10 @@ object SvgEmitter {
     sb.append("""<svg xmlns="http://www.w3.org/2000/svg" width="$width" height="$height" """)
     sb.append("""viewBox="0 0 $width $height" font-family="sans-serif">""").append('\n')
     sb.appendLine("""  <rect x="0" y="0" width="$width" height="$height" fill="#14121c"/>""")
+    val titleIdAttr = titleId?.let { """ data-id="$it"""" } ?: ""
     sb.appendLine(
-      """  <text data-key="$keyBase:title" data-source="${esc(title)}" x="$pad" y="${pad + titleSize.toInt()}"""" +
-        """ font-size="${num(titleSize)}" fill="#c9beff">${esc(title)}</text>""",
+      """  <text data-key="$keyBase:title"$titleIdAttr data-source="${esc(title)}" x="$pad"""" +
+        """ y="${pad + titleSize.toInt()}" font-size="${num(titleSize)}" fill="#c9beff">${esc(title)}</text>""",
     )
     options.forEachIndexed { i, option ->
       val y = pad + 70 + i * rowH + rowSize.toInt()
@@ -123,12 +126,17 @@ object SvgEmitter {
     op: DrawOp.TextRun,
     key: String,
     containers: List<DrawOp.Rect>,
+    idFor: (String) -> String?,
   ): String {
     val weight = if (op.bold) "bold" else "normal"
     val style = if (op.italic) "italic" else "normal"
     val (anchor, anchorX) = horizontalAnchor(op, containers)
     val anchorAttr = if (anchor == "start") "" else """ text-anchor="$anchor""""
-    return """  <text data-key="$key" data-source="${esc(op.text)}" transform="${svgMatrix(op.matrix)}"""" +
+    // Exact R.string recovered from the resource lookup the app made (single-line labels only; a
+    // wrapped paragraph draws fragments that never equal the resolved string, so those fall back to
+    // the viewer's text matching). Absent for synthetic/dynamic text.
+    val idAttr = idFor(op.text)?.let { """ data-id="$it"""" } ?: ""
+    return """  <text data-key="$key"$idAttr data-source="${esc(op.text)}" transform="${svgMatrix(op.matrix)}"""" +
       """ x="${num(anchorX)}" y="${num(op.baselineY)}" font-size="${num(op.sizePx)}"""" +
       """ font-weight="$weight" font-style="$style"$anchorAttr${fill(op.color)}>${esc(op.text)}</text>"""
   }

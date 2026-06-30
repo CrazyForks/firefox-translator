@@ -496,7 +496,7 @@ fun SettingsScreen(
                 Modifier
                   .menuAnchor()
                   .fillMaxWidth()
-                  .testTag("export-options:Popup position"),
+                  .testTag("export-options:settings_popup_position"),
               colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             )
             ExposedDropdownMenu(
@@ -705,7 +705,7 @@ fun SettingsScreen(
                 Modifier
                   .menuAnchor()
                   .fillMaxWidth()
-                  .testTag("export-options:Background Mode"),
+                  .testTag("export-options:settings_background_mode"),
               colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
             )
             ExposedDropdownMenu(

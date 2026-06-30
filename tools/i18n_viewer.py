@@ -147,9 +147,15 @@ def process_svg(svg_path: Path, resolver: Resolver) -> tuple[dict[str, str | Non
     keys: dict[str, str | None] = {}
     status: dict[str, str] = {}
     for el, s in zip(recs, src):
-        key, st = resolver.resolve(s)
-        keys[el.get("data-key")] = key
-        status[el.get("data-key")] = st
+        dk = el.get("data-key")
+        # `data-id` is the exact R.string the app resolved this label from (recorded at capture time);
+        # trust it and skip the text-matching guesswork. Only labels without one fall back to matching.
+        rid = el.get("data-id")
+        if rid:
+            keys[dk] = rid
+            status[dk] = "id"
+        else:
+            keys[dk], status[dk] = resolver.resolve(s)
 
     i, n = 0, len(recs)
     while i < n:
@@ -179,12 +185,22 @@ def process_svg(svg_path: Path, resolver: Resolver) -> tuple[dict[str, str | Non
                 k += 1
         i = j
 
-    stats = {"exact": 0, "format": 0, "ambiguous": 0, "miss": 0}
+    stats = {"id": 0, "exact": 0, "format": 0, "ambiguous": 0, "miss": 0}
     for el, s in zip(recs, src):
         dk = el.get("data-key")
         stats[status[dk]] += 1
         if status[dk] in ("ambiguous", "miss"):
             print(f"  [{status[dk]}] {dk}: {s!r} -> {keys[dk]}", file=sys.stderr)
+
+    # Editable boxes = the viewer's editable foreignObjects: maximal runs of consecutive same-keyed
+    # lines collapse into one (a wrapped paragraph is a single box). Drives the index ordering.
+    boxes, prev = 0, None
+    for el in recs:
+        key = keys[el.get("data-key")]
+        if key is not None and key != prev:
+            boxes += 1
+        prev = key
+    stats["boxes"] = boxes
     return keys, stats
 
 
@@ -231,9 +247,11 @@ def main() -> int:
     template = (Path(__file__).resolve().parent / "i18n_viewer_template.html").read_text()
 
     cards: dict[Path, list[Path]] = {}
+    boxes: dict[Path, int] = {}  # svg -> editable box count, for index ordering
     keymap: dict[Path, dict[str, set[str]]] = {}  # out_dir -> {R.string key -> {screen names}}
     for svg in args.svgs:
         keys, stats = process_svg(svg, resolver)
+        boxes[svg] = stats["boxes"]
         out_dir = svg.parent
         (out_dir / "strings.json").write_text(json.dumps(locales, ensure_ascii=False))
         (svg.with_suffix(".keys.json")).write_text(json.dumps(keys, ensure_ascii=False))
@@ -250,7 +268,7 @@ def main() -> int:
         svg.with_suffix(".i18n.html").write_text(page)
         cards.setdefault(out_dir, []).append(svg)
         msg = (
-            f"{svg.name}: {stats['exact']} exact, {stats['format']} format, "
+            f"{svg.name}: {stats['id']} id, {stats['exact']} exact, {stats['format']} format, "
             f"{stats['ambiguous']} ambiguous, {stats['miss']} miss -> {svg.with_suffix('.i18n.html').name}"
         )
         if args.sections:
@@ -265,7 +283,7 @@ def main() -> int:
     shared_css = (here / "i18n.css").read_text()
     for out_dir, svgs in cards.items():
         html = []
-        for svg in sorted(svgs, key=lambda p: p.name):
+        for svg in sorted(svgs, key=lambda p: (-boxes.get(p, 0), p.name)):
             base = svg.with_suffix(".i18n.html").name
             html.append(
                 f'  <a class="card" href="{base}" data-base="{base}">'
