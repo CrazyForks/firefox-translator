@@ -18,7 +18,12 @@
 package dev.davidv.translator
 
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
+import android.os.UserManager
 import android.util.Log
 import dev.davidv.translator.adblock.AdblockManager
 
@@ -43,8 +48,45 @@ class TranslatorApplication : Application() {
     languagesFlow.value = languageCatalog?.languageList ?: emptyList()
   }
 
+  private var servicesInitialized = false
+
   override fun onCreate() {
     super.onCreate()
+
+    // The assistant VoiceInteractionService is directBootAware, so the system starts
+    // this process before the user unlocks. Service init below touches credential-encrypted
+    // SharedPreferences, which throw until unlock — so defer it until the user is unlocked.
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isUserUnlocked()) {
+      Log.d("TranslatorApplication", "User locked (direct boot); deferring service init until unlock")
+      registerUnlockReceiver()
+      return
+    }
+
+    initializeServices()
+  }
+
+  private fun isUserUnlocked(): Boolean = getSystemService(UserManager::class.java).isUserUnlocked
+
+  private fun registerUnlockReceiver() {
+    val receiver =
+      object : BroadcastReceiver() {
+        override fun onReceive(
+          context: Context,
+          intent: Intent,
+        ) {
+          Log.d("TranslatorApplication", "User unlocked; running deferred service init")
+          initializeServices()
+          unregisterReceiver(this)
+        }
+      }
+    registerReceiver(receiver, IntentFilter(Intent.ACTION_USER_UNLOCKED))
+  }
+
+  private fun initializeServices() {
+    if (servicesInitialized) {
+      return
+    }
+    servicesInitialized = true
     Log.d("TranslatorApplication", "Initializing application services")
 
     settingsManager = SettingsManager(this)
