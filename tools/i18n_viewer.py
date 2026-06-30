@@ -50,8 +50,28 @@ def load_strings(values_xml: Path) -> dict[str, str]:
     return out
 
 
+def load_plurals(values_xml: Path) -> dict[str, dict[str, str]]:
+    """name -> {quantity: visible value} for each translatable <plurals>."""
+    root = ET.parse(values_xml).getroot()
+    out: dict[str, dict[str, str]] = {}
+    for p in root.findall("plurals"):
+        if p.get("translatable") == "false":
+            continue
+        out[p.get("name")] = {
+            item.get("quantity"): android_unescape("".join(item.itertext()))
+            for item in p.findall("item")
+        }
+    return out
+
+
+def _plural_display(forms: dict[str, str]) -> str | None:
+    """The single form to show as 'the' translation: `other` is present in every CLDR language."""
+    return forms.get("other") or forms.get("many") or next(iter(forms.values()), None)
+
+
 def load_all_locales(res_dir: Path) -> dict[str, dict[str, str]]:
-    """key -> {lang: value} across values/ (en) and every values-<qualifier>/."""
+    """key -> {lang: value} across values/ (en) and every values-<qualifier>/. Plurals collapse to
+    their `other` form so a keyed plural label still has something to show per language."""
     by_key: dict[str, dict[str, str]] = {}
     for xml in sorted(res_dir.glob("values*/strings.xml")):
         qualifier = xml.parent.name
@@ -60,20 +80,25 @@ def load_all_locales(res_dir: Path) -> dict[str, dict[str, str]]:
         )
         for key, val in load_strings(xml).items():
             by_key.setdefault(key, {})[lang] = val
+        for name, forms in load_plurals(xml).items():
+            disp = _plural_display(forms)
+            if disp is not None:
+                by_key.setdefault(name, {})[lang] = disp
     return by_key
 
 
 class Resolver:
     """Recovers an R.string key from a rendered English label."""
 
-    def __init__(self, english: dict[str, str]):
+    def __init__(self, english: dict[str, str], plural_items: list[tuple[str, str]] = ()):
+        # Plural items contribute several (key, form) pairs that share one R.plurals name; the rendered
+        # text always has its arguments substituted, so they only ever match via the format patterns.
         self.exact: dict[str, list[str]] = {}
-        for key, val in english.items():
-            self.exact.setdefault(val, []).append(key)
         # Keys whose value carries a real format specifier: match the rendered text against a regex
         # built by escaping the literal segments and turning each specifier into a wildcard.
         self.patterns: list[tuple[re.Pattern, str]] = []
-        for key, val in english.items():
+        for key, val in [*english.items(), *plural_items]:
+            self.exact.setdefault(val, []).append(key)
             specs = list(FORMAT_SPEC.finditer(val))
             if not any(m.group(0) != "%%" for m in specs):
                 continue
@@ -103,8 +128,9 @@ def _local(tag: str) -> str:
 
 
 def _style(el: ET.Element) -> tuple:
-    """Lines of one wrapped paragraph share transform, left edge, and font styling."""
-    return tuple(el.get(k, "") for k in ("transform", "x", "font-size", "font-weight", "font-style", "fill"))
+    """Lines of one wrapped paragraph share transform and font styling. `x` is excluded: a centred
+    paragraph re-centres every line, so its lines carry different `x` yet are the same paragraph."""
+    return tuple(el.get(k, "") for k in ("transform", "font-size", "font-weight", "font-style", "fill"))
 
 
 def process_svg(svg_path: Path, resolver: Resolver) -> tuple[dict[str, str | None], dict[str, int]]:
@@ -197,8 +223,10 @@ def main() -> int:
     args = ap.parse_args()
 
     english = load_strings(args.res / "values" / "strings.xml")
+    en_plurals = load_plurals(args.res / "values" / "strings.xml")
+    plural_items = [(name, form) for name, forms in en_plurals.items() for form in forms.values()]
     locales = load_all_locales(args.res)
-    resolver = Resolver(english)
+    resolver = Resolver(english, plural_items)
     langs = sorted({lang for v in locales.values() for lang in v})
     template = (Path(__file__).resolve().parent / "i18n_viewer_template.html").read_text()
 

@@ -191,7 +191,7 @@ fun MigrationGate(
 }
 
 @Composable
-private fun MigrationBlockingScreen(
+internal fun MigrationBlockingScreen(
   state: MigrationUiState,
   onConvert: () -> Unit,
   onDeleteAll: () -> Unit,

@@ -72,19 +72,6 @@ object TestUtils {
     copyFile(testContext, dictionariesPath, "index.json")
   }
 
-  fun cleanupLanguagesForApp() {
-    val appContext =
-      androidx.test.platform.app.InstrumentationRegistry
-        .getInstrumentation()
-        .targetContext
-    val settingsManager = SettingsManager(appContext)
-    val filePathManager = FilePathManager(appContext, settingsManager.settings)
-    listOf(
-      filePathManager.getDataDir(),
-      filePathManager.getDictionariesDir(),
-    ).forEach { it.deleteRecursively() }
-  }
-
   fun logUiChildren(
     node: Any?,
     depth: Int = 0,

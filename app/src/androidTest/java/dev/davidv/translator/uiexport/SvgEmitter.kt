@@ -105,7 +105,8 @@ object SvgEmitter {
     sb.append("""viewBox="0 0 $width $height" font-family="sans-serif">""").append('\n')
     sb.appendLine("""  <rect x="0" y="0" width="$width" height="$height" fill="#14121c"/>""")
     sb.appendLine(
-      """  <text x="$pad" y="${pad + titleSize.toInt()}" font-size="${num(titleSize)}" fill="#c9beff">${esc(title)}</text>""",
+      """  <text data-key="$keyBase:title" data-source="${esc(title)}" x="$pad" y="${pad + titleSize.toInt()}"""" +
+        """ font-size="${num(titleSize)}" fill="#c9beff">${esc(title)}</text>""",
     )
     options.forEachIndexed { i, option ->
       val y = pad + 70 + i * rowH + rowSize.toInt()

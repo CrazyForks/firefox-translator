@@ -76,6 +76,7 @@ import dev.davidv.translator.Sense
 import dev.davidv.translator.WordEntryComplete
 import dev.davidv.translator.WordTag
 import dev.davidv.translator.WordWithTaggedEntries
+import dev.davidv.translator.ui.theme.TranslatorTheme
 import dev.davidv.translator.wordTag
 
 @Composable
@@ -443,7 +444,7 @@ fun DictionaryBottomSheetPreview() {
       redirects = listOf("book", "libro"),
     )
 
-  MaterialTheme {
+  TranslatorTheme {
     Surface {
       DictionaryEntry(
         dictionaryWord = sampleWord,

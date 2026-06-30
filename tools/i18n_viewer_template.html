@@ -157,11 +157,24 @@
     const yN = parseFloat(g.lines[g.lines.length - 1].getAttribute('y'));
     g.lineH = g.lines.length > 1 ? (yN - y1) / (g.lines.length - 1) : g.size0 * 1.35;
     const ownW = f.getComputedTextLength();
-    let colW = g.lines.length > 1
-      ? Math.max(...g.lines.map(l => l.getComputedTextLength())) + 4
-      : Math.max(VB_W - 2 * leftX(f), ownW + g.size0);
     const anchor = f.getAttribute('text-anchor') || 'start';
     const ax = parseFloat(f.getAttribute('x') || 0);
+    // leftX is the SVG x in absolute coords: left edge for start, centre for middle, right edge for end.
+    const axAbs = leftX(f);
+    let colW;
+    if (g.lines.length > 1) {
+      colW = Math.max(...g.lines.map(l => l.getComputedTextLength())) + 4;
+    } else if (anchor === 'middle') {
+      // centred: the full symmetric room to the nearest screen edge, so a longer translation that
+      // still fits the screen stays on one line instead of wrapping to the English width.
+      colW = Math.max(2 * Math.min(axAbs, VB_W - axAbs), ownW + g.size0);
+    } else if (anchor === 'end') {
+      // right-aligned: room from the left screen edge up to the anchor.
+      colW = Math.max(axAbs, ownW + g.size0);
+    } else {
+      // left-aligned: mirror the left margin on the right (symmetric-padding guess).
+      colW = Math.max(VB_W - 2 * axAbs, ownW + g.size0);
+    }
     // Cap a left-aligned label's box at the nearest control to its right on the same row, so a longer
     // translation wraps down instead of running under a toggle/icon. Right/centre-anchored labels are the
     // right-half cases the symmetric guess already clamps, so leave them alone.
