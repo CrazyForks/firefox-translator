@@ -3,3 +3,4 @@
 - The button 'report issue' now copies app logs to clipboard
 - Improve image recognition angle detection on short text
 - Fix text-to-speech unable to say numbers for MMS voices
+- Fix crash on translating some words

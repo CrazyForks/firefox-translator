@@ -1,5 +1,7 @@
-- Translate app to 16 languages. Contribute your own!
+- Translate app to 30 languages, mostly machine generated.
 - Fix assistant getting deactivated on reboot
 - The button 'report issue' now copies app logs to clipboard
 - Improve image recognition angle detection on short text
-- Fix text-to-speech unable to say numbers for MMS voices (Marathi, Bengali, Gujarati, Tamil, Kannada, Thai)
+- Fix text-to-speech unable to say numbers for MMS voices
+- Fix crash on translating some words
+
