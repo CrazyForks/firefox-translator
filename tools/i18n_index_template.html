@@ -27,9 +27,10 @@ __CARDS__
 <script>
 (function () {
   const LANGS = __LANGS__;
+  const NAMES = __LANG_NAMES__;
   const sel = document.getElementById('lang');
   const targets = LANGS.filter(l => l !== 'en');
-  LANGS.forEach(l => { const o = document.createElement('option'); o.value = o.textContent = l; sel.appendChild(o); });
+  LANGS.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = NAMES[l] || l; sel.appendChild(o); });
   const urlLang = new URLSearchParams(location.search).get('lang');
   sel.value = (urlLang && LANGS.includes(urlLang)) ? urlLang : (targets[0] || 'en');
   document.getElementById('ccount').textContent = I18N.count();

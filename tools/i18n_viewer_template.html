@@ -38,6 +38,7 @@
   const KEYS = "__KEYS__";
   const WEBLATE = "__WEBLATE__";
   const LANGS = __LANGS__;
+  const NAMES = __LANG_NAMES__;
   const stage = document.getElementById('stage');
   const errEl = document.getElementById('error');
 
@@ -307,7 +308,7 @@
   const showEn = document.getElementById('showEn');
   // Dropdown picks the target language; the checkbox flips to English without touching the dropdown.
   const targets = LANGS.filter(l => l !== 'en');
-  LANGS.forEach(l => { const o = document.createElement('option'); o.value = o.textContent = l; sel.appendChild(o); });
+  LANGS.forEach(l => { const o = document.createElement('option'); o.value = l; o.textContent = NAMES[l] || l; sel.appendChild(o); });
   // ?lang=<code> (e.g. linked from index.html) picks the initial language; default to the first target.
   const urlLang = new URLSearchParams(location.search).get('lang');
   sel.value = (urlLang && LANGS.includes(urlLang)) ? urlLang : (targets[0] || 'en');

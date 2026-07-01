@@ -26,6 +26,8 @@ from pathlib import Path
 WEBLATE_BASE = "https://hosted.weblate.org/browse"
 # Android resource qualifier -> Weblate language code (only the non-identity ones).
 QUALIFIER_TO_WEBLATE = {"zh-rCN": "zh_Hans"}
+# Dropdown codes that don't match an index_v5.json language key (Android/Weblate vs catalog codes).
+WEBLATE_TO_INDEX = {"zh_Hans": "zh", "zh-rTW": "zh_hant", "in": "id"}
 
 FORMAT_SPEC = re.compile(r"%(\d+\$)?[-#+ 0,(]?\d*(?:\.\d+)?[a-zA-Z%]")
 
@@ -85,6 +87,18 @@ def load_all_locales(res_dir: Path) -> dict[str, dict[str, str]]:
             if disp is not None:
                 by_key.setdefault(name, {})[lang] = disp
     return by_key
+
+
+def load_lang_names(res_dir: Path, langs: list[str]) -> dict[str, str]:
+    """Dropdown code -> human language name from index_v5.json (e.g. 'ta' -> 'Tamil'). Codes absent
+    from the catalog are left out; the dropdown falls back to the code itself for those."""
+    meta = json.loads((res_dir.parent / "assets" / "index_v5.json").read_text())["languages"]
+    names = {}
+    for code in langs:
+        entry = meta.get(WEBLATE_TO_INDEX.get(code, code))
+        if entry:
+            names[code] = entry["meta"]["name"]
+    return names
 
 
 class Resolver:
@@ -244,6 +258,8 @@ def main() -> int:
     locales = load_all_locales(args.res)
     resolver = Resolver(english, plural_items)
     langs = sorted({lang for v in locales.values() for lang in v})
+    lang_names = load_lang_names(args.res, langs)
+    langs.sort(key=lambda c: lang_names.get(c, c).casefold())
     template = (Path(__file__).resolve().parent / "i18n_viewer_template.html").read_text()
 
     cards: dict[Path, list[Path]] = {}
@@ -264,6 +280,7 @@ def main() -> int:
             .replace("__KEYS__", svg.with_suffix(".keys.json").name)
             .replace("__WEBLATE__", args.weblate)
             .replace("__LANGS__", json.dumps(langs))
+            .replace("__LANG_NAMES__", json.dumps(lang_names, ensure_ascii=False))
         )
         svg.with_suffix(".i18n.html").write_text(page)
         cards.setdefault(out_dir, []).append(svg)
@@ -290,7 +307,9 @@ def main() -> int:
                 f'<div class="thumb"><img src="{svg.name}" alt="{svg.stem}"></div>'
                 f'<div class="name">{svg.stem}</div></a>'
             )
-        page = index_template.replace("__CARDS__", "\n".join(html)).replace("__LANGS__", json.dumps(langs))
+        page = (index_template.replace("__CARDS__", "\n".join(html))
+                .replace("__LANGS__", json.dumps(langs))
+                .replace("__LANG_NAMES__", json.dumps(lang_names, ensure_ascii=False)))
         (out_dir / "index.html").write_text(page)
         (out_dir / "i18n_store.js").write_text(store_js)
         (out_dir / "i18n.css").write_text(shared_css)
