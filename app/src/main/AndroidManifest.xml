@@ -290,14 +290,7 @@
             android:name=".assistantOverlay.TranslatorRecognitionService"
             android:exported="true"
             android:directBootAware="true"
-            android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
-            <intent-filter>
-                <action android:name="android.speech.RecognitionService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.speech"
-                android:resource="@xml/recognition_service" />
-        </service>
+            android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE" />
 
     </application>
 
