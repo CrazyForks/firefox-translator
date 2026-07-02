@@ -39,6 +39,7 @@
   const WEBLATE = "__WEBLATE__";
   const LANGS = __LANGS__;
   const NAMES = __LANG_NAMES__;
+  const FALLBACKS = __FALLBACKS__;
   const stage = document.getElementById('stage');
   const errEl = document.getElementById('error');
 
@@ -75,14 +76,23 @@
     if (key) t.setAttribute('data-i18n', key);
   });
 
-  // Edit store. effective() = your local edit ?? the Weblate value ?? the English seed.
+  // Edit store. effective() = your local edit ?? the Weblate value ?? the fallback seed. resolved()
+  // walks the Android resolution chain (e.g. pt_PT -> pt -> en) so a string not translated in this
+  // exact locale shows what a device on that locale actually renders — its base language — not English.
   let curLang = 'en';
+  function resolved(key, lang) {
+    for (const l of (FALLBACKS[lang] || [lang, 'en'])) {
+      const v = strings[key] && strings[key][l];
+      if (v != null) return v;
+    }
+    return '';
+  }
   function effective(key, lang) {
     const e = I18N.get(lang, key);
     if (e != null) return { text: e, edited: true, has: true };
     const v = strings[key] && strings[key][lang];
     if (v != null) return { text: v, edited: false, has: true };
-    return { text: (strings[key] && strings[key].en) || '', edited: false, has: false };
+    return { text: resolved(key, lang), edited: false, has: false };
   }
   function paint(g, lang) {
     const edited = I18N.get(lang, g.key) != null;
@@ -92,12 +102,12 @@
   }
   function updateCount() { document.getElementById('ccount').textContent = I18N.count(); }
   // Commit an in-place edit; clear it if it equals the Weblate value (or, for an untranslated string,
-  // the untouched English seed) so leaving a label alone never records a change.
+  // the untouched fallback seed) so leaving a label alone never records a change.
   function commit(g) {
     if (curLang === 'en') return;
     const val = g.div.textContent;
     const weblate = strings[g.key] && strings[g.key][curLang];
-    const seed = (strings[g.key] && strings[g.key].en) || '';
+    const seed = resolved(g.key, curLang);
     if (val === weblate || (weblate == null && val === seed)) I18N.remove(curLang, g.key);
     else I18N.set(curLang, g.key, val);
     paint(g, curLang);

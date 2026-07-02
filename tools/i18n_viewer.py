@@ -24,10 +24,23 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 WEBLATE_BASE = "https://hosted.weblate.org/browse"
-# Android resource qualifier -> Weblate language code (only the non-identity ones).
-QUALIFIER_TO_WEBLATE = {"zh-rCN": "zh_Hans"}
-# Dropdown codes that don't match an index_v5.json language key (Android/Weblate vs catalog codes).
-WEBLATE_TO_INDEX = {"zh_Hans": "zh", "zh-rTW": "zh_hant", "in": "id"}
+# Android resource qualifier -> Weblate language code. The mechanical case (xx-rYY -> xx_YY) is
+# handled by qualifier_to_weblate; only genuine exceptions live here — the CN/TW regions carry Han
+# script variants in Weblate rather than a bare region.
+QUALIFIER_OVERRIDES = {"zh-rCN": "zh_Hans", "zh-rTW": "zh_Hant"}
+# Weblate language code -> index_v5.json key, where the catalog names it differently.
+WEBLATE_TO_INDEX = {"zh_Hans": "zh", "zh_Hant": "zh_hant", "in": "id"}
+
+REGION_QUALIFIER = re.compile(r"^([a-z]{2,3})-r([A-Z]{2})$")
+
+
+def qualifier_to_weblate(qualifier: str) -> str:
+    """Android resource qualifier (minus the 'values-' prefix) -> Weblate language code."""
+    if qualifier in QUALIFIER_OVERRIDES:
+        return QUALIFIER_OVERRIDES[qualifier]
+    m = REGION_QUALIFIER.match(qualifier)
+    return f"{m.group(1)}_{m.group(2)}" if m else qualifier
+
 
 FORMAT_SPEC = re.compile(r"%(\d+\$)?[-#+ 0,(]?\d*(?:\.\d+)?[a-zA-Z%]")
 
@@ -77,9 +90,7 @@ def load_all_locales(res_dir: Path) -> dict[str, dict[str, str]]:
     by_key: dict[str, dict[str, str]] = {}
     for xml in sorted(res_dir.glob("values*/strings.xml")):
         qualifier = xml.parent.name
-        lang = "en" if qualifier == "values" else QUALIFIER_TO_WEBLATE.get(
-            qualifier[len("values-"):], qualifier[len("values-"):]
-        )
+        lang = "en" if qualifier == "values" else qualifier_to_weblate(qualifier[len("values-"):])
         for key, val in load_strings(xml).items():
             by_key.setdefault(key, {})[lang] = val
         for name, forms in load_plurals(xml).items():
@@ -90,15 +101,36 @@ def load_all_locales(res_dir: Path) -> dict[str, dict[str, str]]:
 
 
 def load_lang_names(res_dir: Path, langs: list[str]) -> dict[str, str]:
-    """Dropdown code -> human language name from index_v5.json (e.g. 'ta' -> 'Tamil'). Codes absent
-    from the catalog are left out; the dropdown falls back to the code itself for those."""
+    """Dropdown code -> human language name from index_v5.json (e.g. 'ta' -> 'Tamil'). A region/script
+    variant the catalog has no entry for (e.g. 'pt_PT') derives '<base name> (<suffix>)' from its base
+    language. Codes with no resolvable base are left out; the dropdown falls back to the code itself."""
     meta = json.loads((res_dir.parent / "assets" / "index_v5.json").read_text())["languages"]
     names = {}
     for code in langs:
         entry = meta.get(WEBLATE_TO_INDEX.get(code, code))
         if entry:
             names[code] = entry["meta"]["name"]
+            continue
+        m = re.match(r"^([a-z]{2,3})[_-](.+)$", code)
+        base = m and meta.get(WEBLATE_TO_INDEX.get(m.group(1), m.group(1)))
+        if base:
+            names[code] = f"{base['meta']['name']} ({m.group(2)})"
     return names
+
+
+def build_fallbacks(res_dir: Path) -> dict[str, list[str]]:
+    """lang code -> ordered chain of langs to consult (itself first, ending at 'en'), mirroring
+    Android's resource resolution: a device on pt-rPT reads values-pt-rPT, then values-pt, then
+    values. A region variant only falls through to its base language when that base dir exists."""
+    quals = {p.parent.name[len("values-"):] for p in res_dir.glob("values-*/strings.xml")}
+    out: dict[str, list[str]] = {"en": ["en"]}
+    for q in quals:
+        chain = [q]
+        m = REGION_QUALIFIER.match(q)
+        if m and m.group(1) in quals:
+            chain.append(m.group(1))
+        out[qualifier_to_weblate(q)] = [qualifier_to_weblate(c) for c in chain] + ["en"]
+    return out
 
 
 class Resolver:
@@ -259,6 +291,7 @@ def main() -> int:
     resolver = Resolver(english, plural_items)
     langs = sorted({lang for v in locales.values() for lang in v})
     lang_names = load_lang_names(args.res, langs)
+    fallbacks = build_fallbacks(args.res)
     langs.sort(key=lambda c: lang_names.get(c, c).casefold())
     template = (Path(__file__).resolve().parent / "i18n_viewer_template.html").read_text()
 
@@ -281,6 +314,7 @@ def main() -> int:
             .replace("__WEBLATE__", args.weblate)
             .replace("__LANGS__", json.dumps(langs))
             .replace("__LANG_NAMES__", json.dumps(lang_names, ensure_ascii=False))
+            .replace("__FALLBACKS__", json.dumps(fallbacks))
         )
         svg.with_suffix(".i18n.html").write_text(page)
         cards.setdefault(out_dir, []).append(svg)
