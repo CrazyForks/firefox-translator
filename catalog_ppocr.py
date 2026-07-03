@@ -24,7 +24,10 @@ PPOCR_DETECTOR_PACK_ID = "ocr-ppocr-detector"
 # The v6 tiny detector has its DBNet head folded to emit the probability
 # map at 1/4 resolution (same boxes, ~35% faster than the v5 detector).
 PPOCR_DETECTOR_FILENAMES = [
-#    "PP-OCRv5_mobile_det_int8.mnn",
+    # Dropping this entry stranded every v0.6.0-v0.6.2 OCR install: their only
+    # on-disk detector stopped being listed, the pack flipped to not-installed
+    # and screen translation died with no UI trace (issue #246).
+    "PP-OCRv5_mobile_det_int8.mnn",
 #    "det_quarter_int8.mnn",
     "PP-OCRv6_tiny_det_half_int8.mnn",
     "PP-OCRv6_tiny_det_int8.mnn",
