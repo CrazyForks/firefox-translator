@@ -671,18 +671,7 @@ private fun CameraSurface(
         // external texture + overlay into the EGL surface. One camera
         // consumer; no `ImageAnalysis` stream, no per-frame CPU bytes.
         preview.setSurfaceProvider(cameraSurfaceExecutor) { request ->
-          val resolution = request.resolution
-          Log.i(TAG, "Preview SurfaceRequest resolution=${resolution.width}x${resolution.height}")
-          liveSurfaceView.setCameraBufferSize(resolution.width, resolution.height)
-          val surface = liveSurfaceView.awaitCameraSurface()
-          if (surface == null) {
-            request.willNotProvideSurface()
-            return@setSurfaceProvider
-          }
-          request.provideSurface(surface, cameraSurfaceExecutor) {
-            // The Surface is released when the GL thread tears down
-            // (surfaceDestroyed); CameraX's release callback is a no-op.
-          }
+          liveSurfaceView.provideSurfaceRequest(request, cameraSurfaceExecutor)
         }
         val boundCamera =
           provider.bindToLifecycle(

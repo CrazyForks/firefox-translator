@@ -28,8 +28,10 @@ import android.util.Log
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
+import androidx.camera.core.SurfaceRequest
 import dev.davidv.translator.GlEgl
 import dev.davidv.translator.LivePipelineJni
+import java.util.concurrent.Executor
 import kotlin.math.max
 
 /**
@@ -85,43 +87,100 @@ class LiveGlSurfaceView(context: Context) :
     holder.addCallback(this)
   }
 
-  /** Surface CameraX `Preview` writes into. Becomes non-null once the EGL
-   *  context exists and the OES texture has been minted; the caller polls
-   *  via [awaitCameraSurface]. */
-  @Volatile
-  private var cameraSurface: Surface? = null
-  private val cameraSurfaceLock = Object()
+  // Reconciliation between "CameraX wants a surface" (an open SurfaceRequest)
+  // and "the GL thread has a live Surface to give it". Both sides change
+  // independently: CameraX (re)issues requests as the camera opens/closes,
+  // the GL surface comes and goes with surfaceCreated/surfaceDestroyed. All
+  // three fields are guarded by surfaceLock and reconciled whenever either
+  // side moves, so a request that arrives before the surface exists is
+  // fulfilled the moment it's minted, and vice versa.
+  private val surfaceLock = Object()
 
-  /** Block until the GL thread has minted the camera Surface (driven by
-   *  `surfaceCreated`). Times out after `timeoutMs`; returns null if the
-   *  GL setup failed or the timeout fires. Call from CameraX's executor. */
-  fun awaitCameraSurface(timeoutMs: Long = 5_000): Surface? {
-    val deadline = System.currentTimeMillis() + timeoutMs
-    synchronized(cameraSurfaceLock) {
-      while (cameraSurface == null) {
-        val remaining = deadline - System.currentTimeMillis()
-        if (remaining <= 0) return null
-        try {
-          cameraSurfaceLock.wait(remaining)
-        } catch (_: InterruptedException) {
-          return null
+  /** Live Surface the GL thread minted for CameraX to write into; null
+   *  while the EGL context / OES texture aren't up. */
+  private var cameraSurface: Surface? = null
+
+  /** A request from CameraX we haven't handed a surface to yet (surface
+   *  wasn't live when it arrived). Fulfilled on the next mint. */
+  private var pendingRequest: SurfaceRequest? = null
+
+  /** The request we've already provided [cameraSurface] to. Kept so that
+   *  when the surface dies (surfaceDestroyed) we can `invalidate()` it —
+   *  otherwise CameraX reuses the now-dead surface across a stop/resume
+   *  and the preview goes black (issue #248). */
+  private var providedRequest: SurfaceRequest? = null
+
+  /** Executor CameraX gave us for surface callbacks; needed to fulfill a
+   *  pending request from the GL thread once the surface is minted. */
+  @Volatile
+  private var requestExecutor: Executor? = null
+
+  /** Last camera buffer size seen from a SurfaceRequest, kept at the view
+   *  level so it survives GL-thread recreation. A fresh GlThread starts
+   *  with buffer size 0 and gates its whole render loop on it; without
+   *  this it would stay black until (if ever) CameraX re-issued a request
+   *  after the thread existed. */
+  @Volatile
+  private var lastCamBufW = 0
+
+  @Volatile
+  private var lastCamBufH = 0
+
+  /** Entry point for CameraX's `Preview.SurfaceProvider`. Owns the whole
+   *  request lifecycle: records the buffer size, provides the live surface
+   *  if we have one, else parks the request until the GL thread mints one. */
+  fun provideSurfaceRequest(
+    request: SurfaceRequest,
+    executor: Executor,
+  ) {
+    val resolution = request.resolution
+    Log.i(TAG, "Preview SurfaceRequest resolution=${resolution.width}x${resolution.height}")
+    synchronized(surfaceLock) {
+      requestExecutor = executor
+      lastCamBufW = resolution.width
+      lastCamBufH = resolution.height
+      glThread?.setCameraBufferSize(resolution.width, resolution.height)
+      request.addRequestCancellationListener(executor) {
+        synchronized(surfaceLock) {
+          if (pendingRequest === request) pendingRequest = null
+          if (providedRequest === request) providedRequest = null
         }
       }
-      return cameraSurface
+      val surface = cameraSurface
+      if (surface != null) {
+        fulfill(request, surface, executor)
+      } else {
+        pendingRequest = request
+      }
     }
   }
 
-  /** Tell CameraX what buffer size to write. Called from the
-   *  `SurfaceProvider` once the request resolution is known. */
-  fun setCameraBufferSize(
-    width: Int,
-    height: Int,
+  /** Provide [surface] to [request]. Caller holds [surfaceLock]. */
+  private fun fulfill(
+    request: SurfaceRequest,
+    surface: Surface,
+    executor: Executor,
   ) {
-    glThread?.setCameraBufferSize(width, height)
+    runCatching {
+      request.provideSurface(surface, executor) {
+        // The Surface is released by the GL thread on teardown
+        // (surfaceDestroyed); CameraX's release callback is a no-op.
+      }
+    }.onFailure { Log.w(TAG, "provideSurface failed", it) }
+    providedRequest = request
+    pendingRequest = null
   }
 
   override fun surfaceCreated(holder: SurfaceHolder) {
-    glThread = GlThread(holder.surface).also { it.start() }
+    glThread =
+      GlThread(holder.surface).also { thread ->
+        synchronized(surfaceLock) {
+          if (lastCamBufW > 0 && lastCamBufH > 0) {
+            thread.setCameraBufferSize(lastCamBufW, lastCamBufH)
+          }
+        }
+        thread.start()
+      }
   }
 
   override fun surfaceChanged(
@@ -135,19 +194,29 @@ class LiveGlSurfaceView(context: Context) :
   }
 
   override fun surfaceDestroyed(holder: SurfaceHolder) {
-    synchronized(cameraSurfaceLock) {
+    synchronized(surfaceLock) {
       cameraSurface?.release()
       cameraSurface = null
-      cameraSurfaceLock.notifyAll()
+      // Tell CameraX the surface it holds is dead so it re-requests one
+      // when the camera reopens, instead of rebuilding the capture session
+      // around the released surface (issue #248).
+      runCatching { providedRequest?.invalidate() }
+        .onFailure { Log.w(TAG, "surfaceRequest invalidate failed", it) }
+      providedRequest = null
+      pendingRequest = null
     }
     glThread?.shutdown()
     glThread = null
   }
 
   private fun publishCameraSurface(s: Surface) {
-    synchronized(cameraSurfaceLock) {
+    synchronized(surfaceLock) {
       cameraSurface = s
-      cameraSurfaceLock.notifyAll()
+      val req = pendingRequest
+      val exec = requestExecutor
+      if (req != null && exec != null) {
+        fulfill(req, s, exec)
+      }
     }
   }
 
