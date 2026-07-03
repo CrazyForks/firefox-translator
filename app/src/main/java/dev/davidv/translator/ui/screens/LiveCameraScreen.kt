@@ -59,9 +59,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -81,6 +81,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -744,7 +745,12 @@ private fun CameraSurface(
       Box(
         modifier =
           Modifier
-            .offset {
+            // pt comes from a raw MotionEvent (origin at the physical
+            // left edge), so its placement must ignore layout direction —
+            // absoluteOffset + AbsoluteAlignment.TopLeft, or the ring
+            // mirrors horizontally under RTL locales.
+            .align(AbsoluteAlignment.TopLeft)
+            .absoluteOffset {
               IntOffset(
                 (pt.x - indicatorRadiusPx).toInt(),
                 (pt.y - indicatorRadiusPx).toInt(),
