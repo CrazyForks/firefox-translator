@@ -85,6 +85,8 @@
     <string name="langmgr_delete_shared_title">Видалити спільний словник?</string>
     <string name="langmgr_delete_shared_body">Цей словник спільний з %1$s.\nЯкщо його видалити, словник зникне для всіх них.</string>
     <string name="langmgr_download_size">Завантажити %1$s</string>
+    <string name="langmgr_repair_needed">У деяких завантажених функцій відсутні файли, і вони не працюватимуть до відновлення.</string>
+    <string name="langmgr_repair_size">Відновити %1$s</string>
     <string name="nolang_title">Налаштування мов</string>
     <string name="nolang_prompt">Завантаж мовні пакети, щоб почати перекладати</string>
     <string name="howto_title">Як користуватися</string>
@@ -138,6 +140,7 @@
     <string name="download_failed_dictionary">Не вдалося завантажити словник %1$s</string>
     <string name="download_failed_tts">Не вдалося завантажити голос %1$s</string>
     <string name="download_failed_adblock">Не вдалося завантажити блокувальник реклами</string>
+    <string name="download_failed_repair">Не вдалося завантажити відновлення</string>
     <string name="download_catalog_unavailable">Каталог недоступний</string>
     <string name="download_catalog_save_failed">Не вдалося зберегти каталог</string>
     <string name="download_unknown_error">Невідома помилка</string>
@@ -152,6 +155,7 @@
     <string name="assistant_set_source_ocr">Задай мову оригіналу за замовчуванням для розпізнавання тексту.</string>
     <string name="assistant_langs_not_ready">Мови перекладу ще не готові. Спробуй ще раз.</string>
     <string name="assistant_ocr_failed">Не вдалося розпізнати текст</string>
+    <string name="ocr_models_missing">Моделі розпізнавання тексту відсутні. Відкрийте керування мовами в застосунку, щоб відновити їх.</string>
     <string name="assistant_set_source_live">Задай мову оригіналу за замовчуванням у Налаштуваннях, щоб користуватися перекладом екрана наживо.</string>
 
     <!-- migration gate -->

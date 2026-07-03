@@ -851,6 +851,7 @@ fun TranslatorApp(
               val ttsDownloadStates by curDownloadService.ttsDownloadStates.collectAsState()
               val activeTtsPackIds by curDownloadService.activeTtsPackIds.collectAsState()
               val queuedTtsPackIds by curDownloadService.queuedTtsPackIds.collectAsState()
+              val repairDownloadState by curDownloadService.repairDownloadState.collectAsState()
               Scaffold(
                 modifier =
                   Modifier
@@ -871,6 +872,7 @@ fun TranslatorApp(
                     ttsDownloadStates = ttsDownloadStates,
                     activeTtsPackIds = activeTtsPackIds,
                     queuedTtsPackIds = queuedTtsPackIds,
+                    repairDownloadState = repairDownloadState,
                   )
                 }
               }

@@ -82,6 +82,8 @@
     <string name="langmgr_delete_shared_title">Hapus kamus bersama?</string>
     <string name="langmgr_delete_shared_body">Kamus ini dibagikan dengan %1$s.\nMenghapusnya akan menghilangkan kamus untuk semuanya.</string>
     <string name="langmgr_download_size">Unduh %1$s</string>
+    <string name="langmgr_repair_needed">Beberapa fitur yang diunduh kehilangan berkas dan tidak akan berfungsi hingga diperbaiki.</string>
+    <string name="langmgr_repair_size">Perbaiki %1$s</string>
     <string name="nolang_title">Penyiapan Bahasa</string>
     <string name="nolang_prompt">Unduh paket bahasa untuk mulai menerjemahkan</string>
     <string name="howto_title">Cara penggunaan</string>
@@ -129,6 +131,7 @@
     <string name="download_failed_dictionary">Unduhan kamus %1$s gagal</string>
     <string name="download_failed_tts">Unduhan suara %1$s gagal</string>
     <string name="download_failed_adblock">Unduhan pemblokir iklan gagal</string>
+    <string name="download_failed_repair">Unduhan perbaikan gagal</string>
     <string name="download_catalog_unavailable">Katalog tidak tersedia</string>
     <string name="download_catalog_save_failed">Gagal menyimpan katalog</string>
     <string name="download_unknown_error">Kesalahan tidak diketahui</string>
@@ -142,6 +145,7 @@
     <string name="assistant_set_source_ocr">Tetapkan bahasa sumber bawaan untuk pengenalan teks.</string>
     <string name="assistant_langs_not_ready">Bahasa terjemahan belum siap. Coba lagi.</string>
     <string name="assistant_ocr_failed">Pengenalan teks gagal</string>
+    <string name="ocr_models_missing">Model pengenalan teks tidak ada. Buka Kelola bahasa di aplikasi untuk memperbaiki.</string>
     <string name="assistant_set_source_live">Tetapkan bahasa sumber bawaan di Pengaturan untuk menggunakan terjemahan layar langsung.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Memperbarui model suara</string>

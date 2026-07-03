@@ -115,6 +115,7 @@ fun NoLanguagesScreen(
       val ttsDownloadStates by downloadService.ttsDownloadStates.collectAsState()
       val activeTtsPackIds by downloadService.activeTtsPackIds.collectAsState()
       val queuedTtsPackIds by downloadService.queuedTtsPackIds.collectAsState()
+      val repairDownloadState by downloadService.repairDownloadState.collectAsState()
 
       LanguageAssetManagerScreen(
         context = context,
@@ -128,6 +129,7 @@ fun NoLanguagesScreen(
         ttsDownloadStates = ttsDownloadStates,
         activeTtsPackIds = activeTtsPackIds,
         queuedTtsPackIds = queuedTtsPackIds,
+        repairDownloadState = repairDownloadState,
       )
     }
   }

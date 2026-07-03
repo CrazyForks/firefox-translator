@@ -155,6 +155,7 @@ class TranslationCoordinator(
     readingOrder: ReadingOrder? = null,
     isAutoSource: Boolean = false,
     onMissingDetectedLanguage: (Language) -> Unit = {},
+    onOcrUnavailable: () -> Unit = {},
     onDetectedRegions: (List<uniffi.translator_core.OrientedRect>, Int, Int) -> Unit = { _, _, _ -> },
   ): ProcessedImageResult? =
     withContext(Dispatchers.IO) {
@@ -215,10 +216,18 @@ class TranslationCoordinator(
             )
           } catch (e: uniffi.bindings.CatalogException.MissingAsset) {
             Log.d("OCR", "ocr failed: ${e.message}")
-            if (isAutoSource) {
-              detectedLanguageCodeFromMissingAsset(e.message)
-                ?.let(catalog::languageByCode)
-                ?.let(onMissingDetectedLanguage)
+            val missingDetected =
+              if (isAutoSource) {
+                detectedLanguageCodeFromMissingAsset(e.message)?.let(catalog::languageByCode)
+              } else {
+                null
+              }
+            if (missingDetected != null) {
+              onMissingDetectedLanguage(missingDetected)
+            } else {
+              // Not a translation-pair gap: the OCR model chain itself is
+              // broken/missing (e.g. detector pack) — actionable via repair.
+              onOcrUnavailable()
             }
             ocrImage.close()
             return@withContext null

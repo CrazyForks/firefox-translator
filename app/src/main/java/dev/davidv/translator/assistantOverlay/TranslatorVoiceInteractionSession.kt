@@ -401,6 +401,7 @@ class TranslatorVoiceInteractionSession(
 
     translationJob =
       sessionScope.launch {
+        var ocrUnavailable = false
         val result =
           withContext(Dispatchers.IO) {
             translationCoordinator.translateImageWithOverlay(
@@ -410,6 +411,7 @@ class TranslatorVoiceInteractionSession(
               onMessage = {},
               readingOrder = currentReadingOrderFor(sourceLanguage),
               isAutoSource = isAutoSource,
+              onOcrUnavailable = { ocrUnavailable = true },
               onDetectedRegions = { boxes, w, h ->
                 assistantRegions.value = DetectedRegions(w, h, boxes)
               },
@@ -418,7 +420,8 @@ class TranslatorVoiceInteractionSession(
         ensureActive()
         processing = false
         if (result == null) {
-          showStatus(context.getString(R.string.assistant_ocr_failed))
+          val statusRes = if (ocrUnavailable) R.string.ocr_models_missing else R.string.assistant_ocr_failed
+          showStatus(context.getString(statusRes))
           clearResultOverlay()
           return@launch
         }

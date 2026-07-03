@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Supprimer le dictionnaire partagé ?</string>
     <string name="langmgr_delete_shared_body">Ce dictionnaire est partagé avec %1$s.\nLe supprimer le retirera pour toutes ces langues.</string>
     <string name="langmgr_download_size">Télécharger %1$s</string>
+    <string name="langmgr_repair_needed">Certaines fonctionnalités téléchargées ont des fichiers manquants et ne fonctionneront pas tant qu\'elles ne sont pas réparées.</string>
+    <string name="langmgr_repair_size">Réparer %1$s</string>
     <string name="nolang_title">Configuration des langues</string>
     <string name="nolang_prompt">Téléchargez des packs de langues pour commencer à traduire</string>
     <string name="howto_title">Comment utiliser</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">Échec du téléchargement du dictionnaire %1$s</string>
     <string name="download_failed_tts">Échec du téléchargement de la voix pour %1$s</string>
     <string name="download_failed_adblock">Échec du téléchargement d\'Adblock</string>
+    <string name="download_failed_repair">Échec du téléchargement de réparation</string>
     <string name="download_catalog_unavailable">Catalogue indisponible</string>
     <string name="download_catalog_save_failed">Échec de l\'enregistrement du catalogue</string>
     <string name="download_unknown_error">Erreur inconnue</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Définissez une langue source par défaut pour la reconnaissance de texte.</string>
     <string name="assistant_langs_not_ready">Les langues de traduction ne sont pas encore prêtes. Réessayez.</string>
     <string name="assistant_ocr_failed">Échec de la reconnaissance de texte</string>
+    <string name="ocr_models_missing">Les modèles de reconnaissance de texte sont manquants. Ouvrez Gérer les langues dans l\'application pour réparer.</string>
     <string name="assistant_set_source_live">Définissez une langue source par défaut dans les Paramètres pour utiliser la traduction d\'écran en direct.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Mise à jour des modèles vocaux</string>

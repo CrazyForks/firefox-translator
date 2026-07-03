@@ -82,6 +82,8 @@
     <string name="langmgr_delete_shared_title">دیکشنری مشترک حذف شود؟</string>
     <string name="langmgr_delete_shared_body">این دیکشنری با %1$s به اشتراک گذاشته شده است.\nبا حذف آن، دیکشنری برای همه آن‌ها حذف می‌شود.</string>
     <string name="langmgr_download_size">دانلود %1$s</string>
+    <string name="langmgr_repair_needed">برخی از قابلیت‌های دانلودشده فایل‌های ناقص دارند و تا زمان تعمیر کار نمی‌کنند.</string>
+    <string name="langmgr_repair_size">تعمیر %1$s</string>
     <string name="nolang_title">راه‌اندازی زبان</string>
     <string name="nolang_prompt">برای شروع ترجمه، بسته‌های زبان را دانلود کنید</string>
     <string name="howto_title">نحوه استفاده</string>
@@ -129,6 +131,7 @@
     <string name="download_failed_dictionary">دانلود دیکشنری %1$s ناموفق بود</string>
     <string name="download_failed_tts">دانلود صدای %1$s ناموفق بود</string>
     <string name="download_failed_adblock">دانلود مسدودکننده تبلیغات ناموفق بود</string>
+    <string name="download_failed_repair">دانلود تعمیر ناموفق بود</string>
     <string name="download_catalog_unavailable">کاتالوگ در دسترس نیست</string>
     <string name="download_catalog_save_failed">ذخیره کاتالوگ ناموفق بود</string>
     <string name="download_unknown_error">خطای ناشناخته</string>
@@ -142,6 +145,7 @@
     <string name="assistant_set_source_ocr">یک زبان مبدأ پیش‌فرض برای شناسایی متن تعیین کنید.</string>
     <string name="assistant_langs_not_ready">زبان‌های ترجمه هنوز آماده نیستند. دوباره تلاش کنید.</string>
     <string name="assistant_ocr_failed">شناسایی متن ناموفق بود</string>
+    <string name="ocr_models_missing">مدل‌های شناسایی متن موجود نیستند. برای تعمیر، مدیریت زبان‌ها را در برنامه باز کنید.</string>
     <string name="assistant_set_source_live">برای استفاده از ترجمه زنده صفحه، در تنظیمات یک زبان مبدأ پیش‌فرض تعیین کنید.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">در حال به‌روزرسانی مدل‌های گفتار</string>

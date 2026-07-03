@@ -85,6 +85,8 @@
     <string name="langmgr_delete_shared_title">பகிரப்பட்ட அகராதியை நீக்கவா?</string>
     <string name="langmgr_delete_shared_body">இந்த அகராதி %1$s உடன் பகிரப்பட்டுள்ளது.\nஇதை நீக்கினால் அவர்கள் அனைவருக்கும் இந்த அகராதி நீக்கப்படும்.</string>
     <string name="langmgr_download_size">%1$s டவுன்லோடு செய்</string>
+    <string name="langmgr_repair_needed">சில டவுன்லோடு செய்யப்பட்ட அம்சங்களுக்கான கோப்புகள் இல்லை, சரிசெய்யும் வரை அவை வேலை செய்யாது.</string>
+    <string name="langmgr_repair_size">%1$s சரிசெய்</string>
     <string name="nolang_title">மொழி அமைப்பு</string>
     <string name="nolang_prompt">மொழிபெயர்க்கத் தொடங்க மொழித் தொகுப்புகளை டவுன்லோடு செய்யுங்கள்</string>
     <string name="howto_title">எப்படிப் பயன்படுத்துவது</string>
@@ -138,6 +140,7 @@
     <string name="download_failed_dictionary">%1$s அகராதி டவுன்லோடு தோல்வியடைந்தது</string>
     <string name="download_failed_tts">%1$s குரல் டவுன்லோடு தோல்வியடைந்தது</string>
     <string name="download_failed_adblock">விளம்பரத் தடுப்பான் டவுன்லோடு தோல்வியடைந்தது</string>
+    <string name="download_failed_repair">சரிசெய்தல் டவுன்லோடு தோல்வியடைந்தது</string>
     <string name="download_catalog_unavailable">பட்டியல் கிடைக்கவில்லை</string>
     <string name="download_catalog_save_failed">பட்டியலைச் சேமிக்க முடியவில்லை</string>
     <string name="download_unknown_error">தெரியாத பிழை</string>
@@ -152,6 +155,7 @@
     <string name="assistant_set_source_ocr">படத்திலிருந்து உரை அடையாளம் காண இயல்பான மூல மொழியை அமைக்கவும்.</string>
     <string name="assistant_langs_not_ready">மொழிபெயர்ப்பு மொழிகள் இன்னும் தயாராகவில்லை. மீண்டும் முயற்சிக்கவும்.</string>
     <string name="assistant_ocr_failed">படத்திலிருந்து உரை அடையாளம் காண்பது தோல்வியடைந்தது</string>
+    <string name="ocr_models_missing">உரை அடையாளம் காணும் மாதிரிகள் இல்லை. சரிசெய்ய, ஆப்பில் மொழி மேலாண்மையைத் திற.</string>
     <string name="assistant_set_source_live">நேரலைத் திரை மொழிபெயர்ப்பைப் பயன்படுத்த அமைப்புகளில் இயல்பான மூல மொழியை அமைக்கவும்.</string>
 
     <!-- migration gate -->

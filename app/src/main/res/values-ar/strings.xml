@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">حذف القاموس المشترك؟</string>
     <string name="langmgr_delete_shared_body">هذا القاموس مشترك مع %1$s.\nسيؤدي حذفه إلى إزالة القاموس لهم جميعًا.</string>
     <string name="langmgr_download_size">نزِّل %1$s</string>
+    <string name="langmgr_repair_needed">بعض الميزات المنزَّلة تنقصها ملفات ولن تعمل حتى يتم إصلاحها.</string>
+    <string name="langmgr_repair_size">إصلاح %1$s</string>
     <string name="nolang_title">إعداد اللغة</string>
     <string name="nolang_prompt">نزِّل حزم اللغات لبدء الترجمة</string>
     <string name="howto_title">طريقة الاستخدام</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">فشل تنزيل قاموس %1$s</string>
     <string name="download_failed_tts">فشل تنزيل الصوت للغة %1$s</string>
     <string name="download_failed_adblock">فشل تنزيل Adblock</string>
+    <string name="download_failed_repair">فشل تنزيل الإصلاح</string>
     <string name="download_catalog_unavailable">الفهرس المفصل غير متاح</string>
     <string name="download_catalog_save_failed">تعذّر حفظ الفهرس المفصل</string>
     <string name="download_unknown_error">خطأ غير معروف</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">حدّد لغة مصدر افتراضية للتعرّف على النص.</string>
     <string name="assistant_langs_not_ready">لغات الترجمة ليست جاهزة بعد. حاول مرة أخرى.</string>
     <string name="assistant_ocr_failed">فشل التعرّف على النص</string>
+    <string name="ocr_models_missing">ملفات التعرّف على النص مفقودة. افتح إدارة اللغات في التطبيق للإصلاح.</string>
     <string name="assistant_set_source_live">حدّد لغة مصدر افتراضية في الإعدادات لاستخدام الترجمة المباشرة للشاشة.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">يحدِّث نماذج الكلام</string>

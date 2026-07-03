@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Ta bort delad ordbok?</string>
     <string name="langmgr_delete_shared_body">Den här ordboken delas med %1$s.\nOm du tar bort den försvinner ordboken för alla.</string>
     <string name="langmgr_download_size">Ladda ner %1$s</string>
+    <string name="langmgr_repair_needed">Vissa nedladdade funktioner saknar filer och fungerar inte förrän de reparerats.</string>
+    <string name="langmgr_repair_size">Reparera %1$s</string>
     <string name="nolang_title">Språkinställning</string>
     <string name="nolang_prompt">Ladda ner språkpaket för att börja översätta</string>
     <string name="howto_title">Så här använder du</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">Ordboksnedladdningen för %1$s misslyckades</string>
     <string name="download_failed_tts">Röstnedladdningen för %1$s misslyckades</string>
     <string name="download_failed_adblock">Adblock-nedladdningen misslyckades</string>
+    <string name="download_failed_repair">Nedladdning av reparation misslyckades</string>
     <string name="download_catalog_unavailable">Katalogen är inte tillgänglig</string>
     <string name="download_catalog_save_failed">Det gick inte att spara katalogen</string>
     <string name="download_unknown_error">Okänt fel</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Ange ett standardkällspråk för textigenkänning.</string>
     <string name="assistant_langs_not_ready">Översättningsspråken är inte redo än. Försök igen.</string>
     <string name="assistant_ocr_failed">Textigenkänning misslyckades</string>
+    <string name="ocr_models_missing">Textigenkänningsmodeller saknas. Öppna Hantera språk i appen för att reparera.</string>
     <string name="assistant_set_source_live">Ange ett standardkällspråk i Inställningar för att använda live-översättning av skärmen.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Uppdaterar talmodeller</string>

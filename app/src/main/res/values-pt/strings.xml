@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Excluir dicionário compartilhado?</string>
     <string name="langmgr_delete_shared_body">Este dicionário é compartilhado com %1$s.\nExcluí-lo removerá o dicionário de todos eles.</string>
     <string name="langmgr_download_size">Baixar %1$s</string>
+    <string name="langmgr_repair_needed">Alguns recursos baixados estão com arquivos ausentes e não funcionarão até serem reparados.</string>
+    <string name="langmgr_repair_size">Reparar %1$s</string>
     <string name="nolang_title">Configuração de idiomas</string>
     <string name="nolang_prompt">Baixe pacotes de idiomas para começar a traduzir</string>
     <string name="howto_title">Como usar</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">Falha ao baixar o dicionário de %1$s</string>
     <string name="download_failed_tts">Falha ao baixar a voz de %1$s</string>
     <string name="download_failed_adblock">Falha ao baixar o Adblock</string>
+    <string name="download_failed_repair">Falha ao baixar o reparo</string>
     <string name="download_catalog_unavailable">Catálogo indisponível</string>
     <string name="download_catalog_save_failed">Falha ao salvar o catálogo</string>
     <string name="download_unknown_error">Erro desconhecido</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Defina um idioma de origem padrão para o reconhecimento de texto.</string>
     <string name="assistant_langs_not_ready">Os idiomas de tradução ainda não estão prontos. Tente novamente.</string>
     <string name="assistant_ocr_failed">Falha no reconhecimento de texto</string>
+    <string name="ocr_models_missing">Os modelos de reconhecimento de texto estão ausentes. Abra Gerenciar idiomas no app para reparar.</string>
     <string name="assistant_set_source_live">Defina um idioma de origem padrão nas Configurações para usar a tradução de tela ao vivo.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Atualizando modelos de fala</string>

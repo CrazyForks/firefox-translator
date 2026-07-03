@@ -122,6 +122,9 @@ class DownloadService : Service() {
   private val _adblockDownloadState = MutableStateFlow(DownloadState())
   val adblockDownloadState: StateFlow<DownloadState> = _adblockDownloadState
 
+  private val _repairDownloadState = MutableStateFlow(DownloadState())
+  val repairDownloadState: StateFlow<DownloadState> = _repairDownloadState
+
   private val _downloadEvents = MutableSharedFlow<DownloadEvent>()
   val downloadEvents: SharedFlow<DownloadEvent> = _downloadEvents.asSharedFlow()
 
@@ -129,6 +132,7 @@ class DownloadService : Service() {
   private val dictionaryDownloadJobs = mutableMapOf<Language, Job>()
   private val ttsDownloadJobs = mutableMapOf<Language, Job>()
   private var adblockDownloadJob: Job? = null
+  private var repairDownloadJob: Job? = null
   private val fileDownloadLocksGuard = Any()
   private val fileDownloadLocks = mutableMapOf<String, Mutex>()
   private val baseDirPath: String
@@ -279,6 +283,14 @@ class DownloadService : Service() {
         }
       context.startService(intent)
     }
+
+    fun startRepairDownload(context: Context) {
+      val intent =
+        Intent(context, DownloadService::class.java).apply {
+          action = "START_REPAIR_DOWNLOAD"
+        }
+      context.startService(intent)
+    }
   }
 
   override fun onStartCommand(
@@ -366,6 +378,10 @@ class DownloadService : Service() {
 
       "FETCH_CATALOG" -> {
         fetchCatalog()
+      }
+
+      "START_REPAIR_DOWNLOAD" -> {
+        startRepairDownload()
       }
     }
     return START_STICKY
@@ -851,6 +867,72 @@ class DownloadService : Service() {
     adblockDownloadJob = job
   }
 
+  private fun startRepairDownload() {
+    if (_repairDownloadState.value.isDownloading) return
+    updateRepairDownloadState {
+      DownloadState(
+        isDownloading = true,
+        isCompleted = false,
+        downloaded = 1,
+      )
+    }
+    val job =
+      serviceScope.launch {
+        try {
+          val catalog =
+            getCatalog() ?: run {
+              updateRepairDownloadState {
+                it.copy(isDownloading = false, error = "Catalog unavailable")
+              }
+              _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_catalog_unavailable)))
+              return@launch
+            }
+          val downloadPlan = catalog.planRepair()
+          var success = true
+          if (downloadPlan.tasks.isNotEmpty()) {
+            updateRepairDownloadState {
+              it.copy(
+                isDownloading = true,
+                downloaded = 1,
+                totalSize = downloadPlan.totalSize.toLong(),
+              )
+            }
+            Log.i("DownloadService", "Starting repair download: ${downloadPlan.tasks.size} files")
+            for (task in downloadPlan.tasks) {
+              if (!downloadPackFile(task, ::incrementRepairDownloadBytes)) {
+                success = false
+              }
+            }
+          }
+
+          updateRepairDownloadState {
+            DownloadState(
+              isDownloading = false,
+              isCompleted = success,
+            )
+          }
+
+          if (success) {
+            filePathManager.reloadCatalog()
+            Log.i("DownloadService", "Repair download complete")
+            _downloadEvents.emit(DownloadEvent.NewSupportAvailable(REPAIR_KIND))
+          } else {
+            _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_repair)))
+          }
+        } catch (e: Exception) {
+          Log.e("DownloadService", "Repair download failed", e)
+          updateRepairDownloadState {
+            it.copy(isDownloading = false, error = e.message)
+          }
+          _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_repair)))
+        } finally {
+          repairDownloadJob = null
+        }
+      }
+
+    repairDownloadJob = job
+  }
+
   private fun cancelAdblockDownload() {
     adblockDownloadJob?.cancel()
     adblockDownloadJob = null
@@ -974,6 +1056,18 @@ class DownloadService : Service() {
 
   private fun incrementAdblockDownloadBytes(incrementalBytes: Long) {
     updateAdblockDownloadState {
+      it.copy(downloaded = it.downloaded + incrementalBytes)
+    }
+  }
+
+  private fun updateRepairDownloadState(update: (DownloadState) -> DownloadState) {
+    synchronized(this) {
+      _repairDownloadState.value = update(_repairDownloadState.value)
+    }
+  }
+
+  private fun incrementRepairDownloadBytes(incrementalBytes: Long) {
+    updateRepairDownloadState {
       it.copy(downloaded = it.downloaded + incrementalBytes)
     }
   }
@@ -1276,3 +1370,7 @@ data class DownloadState(
 
 private const val ADBLOCK_KIND = "adblock"
 private const val DOC_DETECT_KIND = "doc_detect"
+
+// Not a catalog pack kind: the NewSupportAvailable event key for a finished
+// repair download, so availability listeners refresh like any support install.
+private const val REPAIR_KIND = "repair"

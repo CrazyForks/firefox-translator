@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">¿Eliminar diccionario compartido?</string>
     <string name="langmgr_delete_shared_body">Este diccionario se comparte con %1$s.\nSi lo eliminas, se eliminará el diccionario para todos ellos.</string>
     <string name="langmgr_download_size">Descargar %1$s</string>
+    <string name="langmgr_repair_needed">A algunas funciones descargadas les faltan archivos y no funcionarán hasta que se reparen.</string>
+    <string name="langmgr_repair_size">Reparar %1$s</string>
     <string name="nolang_title">Configuración de idiomas</string>
     <string name="nolang_prompt">Descarga paquetes de idioma para empezar a traducir</string>
     <string name="howto_title">Cómo usar</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">Falló la descarga del diccionario de %1$s</string>
     <string name="download_failed_tts">Falló la descarga de la voz de %1$s</string>
     <string name="download_failed_adblock">Falló la descarga de Adblock</string>
+    <string name="download_failed_repair">Falló la descarga de reparación</string>
     <string name="download_catalog_unavailable">Catálogo no disponible</string>
     <string name="download_catalog_save_failed">No se pudo guardar el catálogo</string>
     <string name="download_unknown_error">Error desconocido</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Define un idioma de origen predeterminado para el reconocimiento de texto.</string>
     <string name="assistant_langs_not_ready">Los idiomas de traducción aún no están listos. Inténtalo de nuevo.</string>
     <string name="assistant_ocr_failed">Error de reconocimiento de texto</string>
+    <string name="ocr_models_missing">Faltan los modelos de reconocimiento de texto. Abre Gestionar idiomas en la app para repararlos.</string>
     <string name="assistant_set_source_live">Define un idioma de origen predeterminado en Ajustes para usar la traducción de pantalla en vivo.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Actualizando modelos de voz</string>

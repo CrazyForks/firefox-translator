@@ -85,6 +85,8 @@
     <string name="langmgr_delete_shared_title">షేర్ చేసిన నిఘంటువును తొలగించాలా?</string>
     <string name="langmgr_delete_shared_body">ఈ నిఘంటువు %1$sతో షేర్ చేయబడింది.\nదీన్ని తొలగిస్తే వారందరికీ ఈ నిఘంటువు తొలగిపోతుంది.</string>
     <string name="langmgr_download_size">%1$s డౌన్‌లోడ్ చేయి</string>
+    <string name="langmgr_repair_needed">కొన్ని డౌన్‌లోడ్ చేసిన ఫీచర్‌లకు ఫైల్‌లు లేవు, మరమ్మతు చేసే వరకు పని చేయవు.</string>
+    <string name="langmgr_repair_size">%1$s మరమ్మతు చేయి</string>
     <string name="nolang_title">భాషల సెటప్</string>
     <string name="nolang_prompt">అనువాదం మొదలుపెట్టడానికి భాషా ప్యాక్‌లను డౌన్‌లోడ్ చేయండి</string>
     <string name="howto_title">ఎలా వాడాలి</string>
@@ -138,6 +140,7 @@
     <string name="download_failed_dictionary">%1$s నిఘంటువు డౌన్‌లోడ్ విఫలమైంది</string>
     <string name="download_failed_tts">%1$s వాయిస్ డౌన్‌లోడ్ విఫలమైంది</string>
     <string name="download_failed_adblock">ప్రకటనల బ్లాకర్ డౌన్‌లోడ్ విఫలమైంది</string>
+    <string name="download_failed_repair">మరమ్మతు డౌన్‌లోడ్ విఫలమైంది</string>
     <string name="download_catalog_unavailable">కేటలాగ్ అందుబాటులో లేదు</string>
     <string name="download_catalog_save_failed">కేటలాగ్‌ను సేవ్ చేయడం విఫలమైంది</string>
     <string name="download_unknown_error">తెలియని లోపం</string>
@@ -152,6 +155,7 @@
     <string name="assistant_set_source_ocr">చిత్రాల్లోని టెక్స్ట్‌ను గుర్తించడానికి డిఫాల్ట్ మూల భాషను సెట్ చేయండి.</string>
     <string name="assistant_langs_not_ready">అనువాద భాషలు ఇంకా సిద్ధంగా లేవు. మళ్లీ ప్రయత్నించండి.</string>
     <string name="assistant_ocr_failed">చిత్రంలో టెక్స్ట్‌ను గుర్తించడం విఫలమైంది</string>
+    <string name="ocr_models_missing">టెక్స్ట్ గుర్తింపు మోడల్‌లు లేవు. మరమ్మతు చేయడానికి యాప్‌లో భాషల నిర్వహణ తెరవండి.</string>
     <string name="assistant_set_source_live">లైవ్ స్క్రీన్ అనువాదాన్ని వాడటానికి సెట్టింగ్‌లలో డిఫాల్ట్ మూల భాషను సెట్ చేయండి.</string>
 
     <!-- migration gate -->

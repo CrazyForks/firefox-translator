@@ -613,6 +613,7 @@ fun LanguageAssetManagerScreen(
   ttsDownloadStates: Map<Language, DownloadState>,
   activeTtsPackIds: Map<Language, String> = emptyMap(),
   queuedTtsPackIds: Map<Language, List<String>> = emptyMap(),
+  repairDownloadState: DownloadState = DownloadState(),
 ) {
   val languageMetadata by languageMetadataManager.metadata.collectAsState()
   val expandedLanguages = remember { mutableStateMapOf<String, Boolean>() }
@@ -624,6 +625,14 @@ fun LanguageAssetManagerScreen(
 
   LaunchedEffect(catalogRefreshToken) {
     isRefreshing = false
+  }
+
+  // Re-check the filesystem on entry: install state can drift without a
+  // download event (files lost to storage issues, a newly fetched catalog
+  // orphaning an on-disk variant), and this screen is where that surfaces
+  // as the repair banner.
+  LaunchedEffect(Unit) {
+    languageStateManager.refreshLanguageAvailability()
   }
 
   val normalizedFilter = filterQuery.trim().lowercase()
@@ -669,6 +678,14 @@ fun LanguageAssetManagerScreen(
         }
         ?: emptyList()
     }
+  // Packs with files on disk but missing required ones (partial download, or a
+  // catalog change that orphaned the installed variant): without a repair these
+  // read as not-installed and their feature silently stops working (issue #246).
+  val repairPlanSize =
+    remember(catalog, catalogRefreshToken, repairDownloadState.isCompleted) {
+      catalog?.planRepair()?.takeIf { it.tasks.isNotEmpty() }?.totalSize?.toLong() ?: 0L
+    }
+
   val ppocrModelUpgrade =
     remember(catalog, rows, catalogRefreshToken) {
       if (catalog == null) {
@@ -731,6 +748,14 @@ fun LanguageAssetManagerScreen(
         singleLine = true,
         label = { Text(stringResource(R.string.langmgr_filter)) },
       )
+
+      if (repairPlanSize > 0L) {
+        RepairCard(
+          totalBytes = repairPlanSize,
+          isDownloading = repairDownloadState.isDownloading,
+          onRepair = { DownloadService.startRepairDownload(context) },
+        )
+      }
 
       if (ppocrModelUpgrade.languages.isNotEmpty()) {
         OcrUpgradeCard(
@@ -1358,6 +1383,41 @@ private fun ProgressIconButton(
         contentDescription = contentDescription,
         modifier = Modifier.size(14.dp),
       )
+    }
+  }
+}
+
+@Composable
+private fun RepairCard(
+  totalBytes: Long,
+  isDownloading: Boolean,
+  onRepair: () -> Unit,
+) {
+  Surface(
+    color = MaterialTheme.colorScheme.errorContainer,
+    shape = RoundedCornerShape(12.dp),
+    modifier =
+      Modifier
+        .fillMaxWidth()
+        .padding(bottom = 6.dp),
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Text(
+        text = stringResource(R.string.langmgr_repair_needed),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onErrorContainer,
+        modifier = Modifier.weight(1f),
+      )
+      if (isDownloading) {
+        CircularProgressIndicator(modifier = Modifier.size(20.dp))
+      } else {
+        TextButton(onClick = onRepair) {
+          Text(stringResource(R.string.langmgr_repair_size, formatSize(totalBytes)))
+        }
+      }
     }
   }
 }

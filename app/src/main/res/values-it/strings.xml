@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Eliminare il dizionario condiviso?</string>
     <string name="langmgr_delete_shared_body">Questo dizionario è condiviso con %1$s.\nEliminandolo verrà rimosso il dizionario per tutti.</string>
     <string name="langmgr_download_size">Scarica %1$s</string>
+    <string name="langmgr_repair_needed">Ad alcune funzionalità scaricate mancano dei file e non funzioneranno finché non verranno riparate.</string>
+    <string name="langmgr_repair_size">Ripara %1$s</string>
     <string name="nolang_title">Configurazione lingua</string>
     <string name="nolang_prompt">Scarica i pacchetti lingua per iniziare a tradurre</string>
     <string name="howto_title">Come si usa</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">Download del dizionario di %1$s non riuscito</string>
     <string name="download_failed_tts">Download della voce di %1$s non riuscito</string>
     <string name="download_failed_adblock">Download Adblock non riuscito</string>
+    <string name="download_failed_repair">Download della riparazione non riuscito</string>
     <string name="download_catalog_unavailable">Catalogo non disponibile</string>
     <string name="download_catalog_save_failed">Impossibile salvare il catalogo</string>
     <string name="download_unknown_error">Errore sconosciuto</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Imposta una lingua di partenza predefinita per il riconoscimento del testo.</string>
     <string name="assistant_langs_not_ready">Le lingue di traduzione non sono ancora pronte. Riprova.</string>
     <string name="assistant_ocr_failed">Riconoscimento del testo non riuscito</string>
+    <string name="ocr_models_missing">Mancano i modelli di riconoscimento del testo. Apri Gestisci lingue nell\'app per ripararli.</string>
     <string name="assistant_set_source_live">Imposta una lingua di partenza predefinita nelle Impostazioni per usare la traduzione dello schermo in tempo reale.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Aggiornamento dei modelli vocali</string>

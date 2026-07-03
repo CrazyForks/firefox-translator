@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">सामायिक शब्दकोश हटवायचा?</string>
     <string name="langmgr_delete_shared_body">हा शब्दकोश %1$s सोबत सामायिक आहे.\nतो हटवल्यास त्या सर्वांसाठीचा शब्दकोश काढून टाकला जाईल.</string>
     <string name="langmgr_download_size">%1$s डाउनलोड करा</string>
+    <string name="langmgr_repair_needed">काही डाउनलोड केलेल्या वैशिष्ट्यांच्या फायली गहाळ आहेत आणि दुरुस्ती होईपर्यंत काम करणार नाहीत.</string>
+    <string name="langmgr_repair_size">%1$s दुरुस्त करा</string>
     <string name="nolang_title">भाषा सेटअप</string>
     <string name="nolang_prompt">भाषांतर सुरू करण्यासाठी भाषा पॅक डाउनलोड करा</string>
     <string name="howto_title">कसे वापरावे</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">%1$s शब्दकोश डाउनलोड अयशस्वी</string>
     <string name="download_failed_tts">%1$s आवाज डाउनलोड अयशस्वी</string>
     <string name="download_failed_adblock">Adblock डाउनलोड अयशस्वी</string>
+    <string name="download_failed_repair">दुरुस्ती डाउनलोड अयशस्वी</string>
     <string name="download_catalog_unavailable">कॅटलॉग उपलब्ध नाही</string>
     <string name="download_catalog_save_failed">कॅटलॉग जतन करता आला नाही</string>
     <string name="download_unknown_error">अज्ञात त्रुटी</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">मजकूर ओळखीसाठी डीफॉल्ट स्रोत भाषा निवडा.</string>
     <string name="assistant_langs_not_ready">भाषांतर भाषा अद्याप तयार नाहीत. पुन्हा प्रयत्न करा.</string>
     <string name="assistant_ocr_failed">मजकूर ओळख अयशस्वी</string>
+    <string name="ocr_models_missing">मजकूर ओळख मॉडेल गहाळ आहेत. दुरुस्तीसाठी अ‍ॅपमध्ये भाषा व्यवस्थापन उघडा.</string>
     <string name="assistant_set_source_live">थेट स्क्रीन भाषांतर वापरण्यासाठी सेटिंग्जमध्ये डीफॉल्ट स्रोत भाषा निवडा.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">आवाज मॉडेल अद्यतनित होत आहेत</string>

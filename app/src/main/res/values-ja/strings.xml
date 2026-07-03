@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">共有辞書を削除しますか？</string>
     <string name="langmgr_delete_shared_body">この辞書は %1$s と共有されています。\n削除すると、それらすべてから辞書がなくなります。</string>
     <string name="langmgr_download_size">%1$s をダウンロード</string>
+    <string name="langmgr_repair_needed">一部のダウンロード済み機能はファイルが不足しており、修復するまで動作しません。</string>
+    <string name="langmgr_repair_size">%1$s を修復</string>
     <string name="nolang_title">言語の設定</string>
     <string name="nolang_prompt">翻訳を始めるには言語パックをダウンロードしてください</string>
     <string name="howto_title">使い方</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">%1$s の辞書ダウンロードに失敗しました</string>
     <string name="download_failed_tts">%1$s の音声のダウンロードに失敗しました</string>
     <string name="download_failed_adblock">Adblock のダウンロードに失敗しました</string>
+    <string name="download_failed_repair">修復のダウンロードに失敗しました</string>
     <string name="download_catalog_unavailable">カタログを利用できません</string>
     <string name="download_catalog_save_failed">カタログを保存できませんでした</string>
     <string name="download_unknown_error">不明なエラー</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">文字認識用に既定の翻訳元の言語を指定してください。</string>
     <string name="assistant_langs_not_ready">翻訳の言語がまだ準備できていません。もう一度お試しください。</string>
     <string name="assistant_ocr_failed">文字認識に失敗しました</string>
+    <string name="ocr_models_missing">文字認識モデルがありません。アプリの言語管理を開いて修復してください。</string>
     <string name="assistant_set_source_live">画面のリアルタイム翻訳を使うには、設定で既定の翻訳元の言語を指定してください。</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">音声モデルを更新中</string>

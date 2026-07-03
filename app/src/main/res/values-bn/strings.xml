@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">শেয়ার করা অভিধান মুছবেন?</string>
     <string name="langmgr_delete_shared_body">এই অভিধানটি %1$s-এর সাথে শেয়ার করা।\nএটি মুছলে সবার জন্যই অভিধানটি মুছে যাবে।</string>
     <string name="langmgr_download_size">%1$s ডাউনলোড করুন</string>
+    <string name="langmgr_repair_needed">কিছু ডাউনলোড করা ফিচারের ফাইল অনুপস্থিত এবং মেরামত না করা পর্যন্ত কাজ করবে না।</string>
+    <string name="langmgr_repair_size">%1$s মেরামত করুন</string>
     <string name="nolang_title">ভাষা সেটআপ</string>
     <string name="nolang_prompt">অনুবাদ শুরু করতে ভাষা প্যাক ডাউনলোড করুন</string>
     <string name="howto_title">যেভাবে ব্যবহার করবেন</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">%1$s অভিধান ডাউনলোড ব্যর্থ</string>
     <string name="download_failed_tts">%1$s ভয়েস ডাউনলোড ব্যর্থ</string>
     <string name="download_failed_adblock">Adblock ডাউনলোড ব্যর্থ</string>
+    <string name="download_failed_repair">মেরামত ডাউনলোড ব্যর্থ</string>
     <string name="download_catalog_unavailable">ক্যাটালগ পাওয়া যাচ্ছে না</string>
     <string name="download_catalog_save_failed">ক্যাটালগ সংরক্ষণ করতে ব্যর্থ</string>
     <string name="download_unknown_error">অজানা সমস্যা</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">লেখা শনাক্তকরণের জন্য একটি ডিফল্ট উৎস ভাষা ঠিক করুন।</string>
     <string name="assistant_langs_not_ready">অনুবাদের ভাষা এখনো প্রস্তুত নয়। আবার চেষ্টা করুন।</string>
     <string name="assistant_ocr_failed">লেখা শনাক্তকরণ ব্যর্থ</string>
+    <string name="ocr_models_missing">লেখা শনাক্তকরণের মডেল অনুপস্থিত। মেরামত করতে অ্যাপে ভাষা ব্যবস্থাপনা খুলুন।</string>
     <string name="assistant_set_source_live">লাইভ স্ক্রিন অনুবাদ ব্যবহার করতে সেটিংসে একটি ডিফল্ট উৎস ভাষা ঠিক করুন।</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">কণ্ঠ মডেল আপডেট করা হচ্ছে</string>

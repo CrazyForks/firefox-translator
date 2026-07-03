@@ -82,6 +82,8 @@
     <string name="langmgr_delete_shared_title">શૅર કરેલો ડિક્શનરી ડિલીટ કરવો છે?</string>
     <string name="langmgr_delete_shared_body">આ ડિક્શનરી %1$s સાથે શૅર કરેલો છે.\nએ ડિલીટ કરવાથી એ બધા માટે ડિક્શનરી હટી જશે.</string>
     <string name="langmgr_download_size">%1$s ડાઉનલોડ કરો</string>
+    <string name="langmgr_repair_needed">કેટલીક ડાઉનલોડ કરેલી સુવિધાઓની ફાઇલો ખૂટે છે અને સમારકામ ન થાય ત્યાં સુધી કામ કરશે નહીં.</string>
+    <string name="langmgr_repair_size">%1$s સમારકામ કરો</string>
     <string name="nolang_title">ભાષા સેટઅપ</string>
     <string name="nolang_prompt">અનુવાદ શરૂ કરવા ભાષા પૅક ડાઉનલોડ કરો</string>
     <string name="howto_title">કેવી રીતે વાપરવું</string>
@@ -129,6 +131,7 @@
     <string name="download_failed_dictionary">%1$s ડિક્શનરી ડાઉનલોડ નિષ્ફળ</string>
     <string name="download_failed_tts">%1$s અવાજ ડાઉનલોડ નિષ્ફળ</string>
     <string name="download_failed_adblock">જાહેરાત-બ્લૉક ડાઉનલોડ નિષ્ફળ</string>
+    <string name="download_failed_repair">સમારકામ ડાઉનલોડ નિષ્ફળ</string>
     <string name="download_catalog_unavailable">કૅટલૉગ ઉપલબ્ધ નથી</string>
     <string name="download_catalog_save_failed">કૅટલૉગ સાચવવામાં નિષ્ફળ</string>
     <string name="download_unknown_error">અજાણી ભૂલ</string>
@@ -142,6 +145,7 @@
     <string name="assistant_set_source_ocr">ઇમેજમાંથી લખાણ ઓળખવા માટે ડિફૉલ્ટ સ્રોત ભાષા સેટ કરો.</string>
     <string name="assistant_langs_not_ready">અનુવાદની ભાષાઓ હજી તૈયાર નથી. ફરી પ્રયત્ન કરો.</string>
     <string name="assistant_ocr_failed">લખાણ ઓળખવામાં નિષ્ફળ</string>
+    <string name="ocr_models_missing">લખાણ ઓળખવાના મૉડલ ખૂટે છે. સમારકામ માટે એપમાં ભાષા વ્યવસ્થાપન ખોલો.</string>
     <string name="assistant_set_source_live">લાઇવ સ્ક્રીન અનુવાદ વાપરવા સેટિંગ્સમાં ડિફૉલ્ટ સ્રોત ભાષા સેટ કરો.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">અવાજનાં મૉડેલ અપડેટ થઈ રહ્યાં છે</string>

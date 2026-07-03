@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">مشترکہ لغت حذف کریں؟</string>
     <string name="langmgr_delete_shared_body">یہ لغت %1$s کے ساتھ مشترک ہے۔\nاسے حذف کرنے سے یہ لغت ان سب کے لیے ہٹ جائے گی۔</string>
     <string name="langmgr_download_size">%1$s ڈاؤن لوڈ کریں</string>
+    <string name="langmgr_repair_needed">کچھ ڈاؤن لوڈ کردہ خصوصیات کی فائلیں غائب ہیں اور مرمت ہونے تک کام نہیں کریں گی۔</string>
+    <string name="langmgr_repair_size">%1$s کی مرمت کریں</string>
     <string name="nolang_title">زبان کی ترتیب</string>
     <string name="nolang_prompt">ترجمہ شروع کرنے کے لیے زبان کے پیکجز ڈاؤن لوڈ کریں</string>
     <string name="howto_title">استعمال کا طریقہ</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">%1$s لغت ڈاؤن لوڈ ناکام</string>
     <string name="download_failed_tts">%1$s آواز ڈاؤن لوڈ ناکام</string>
     <string name="download_failed_adblock">اشتہار روکنے والی ڈاؤن لوڈ ناکام</string>
+    <string name="download_failed_repair">مرمت ڈاؤن لوڈ ناکام</string>
     <string name="download_catalog_unavailable">کیٹلاگ دستیاب نہیں</string>
     <string name="download_catalog_save_failed">کیٹلاگ محفوظ کرنے میں ناکامی</string>
     <string name="download_unknown_error">نامعلوم خرابی</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">تصاویر سے متن پہچاننے کے لیے ڈیفالٹ ماخذ زبان مقرر کریں۔</string>
     <string name="assistant_langs_not_ready">ترجمے کی زبانیں ابھی تیار نہیں ہیں۔ دوبارہ کوشش کریں۔</string>
     <string name="assistant_ocr_failed">تصاویر سے متن پہچاننے میں ناکامی</string>
+    <string name="ocr_models_missing">متن پہچاننے والے ماڈل غائب ہیں۔ مرمت کے لیے ایپ میں زبان کا انتظام کھولیں۔</string>
     <string name="assistant_set_source_live">براہِ راست اسکرین ترجمہ استعمال کرنے کے لیے ترتیبات میں ڈیفالٹ ماخذ زبان مقرر کریں۔</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">آواز کے ماڈلز اپ ڈیٹ ہو رہے ہیں</string>

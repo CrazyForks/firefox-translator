@@ -85,6 +85,8 @@
     <string name="langmgr_delete_shared_title">ลบพจนานุกรมที่ใช้ร่วมกันหรือไม่</string>
     <string name="langmgr_delete_shared_body">พจนานุกรมนี้ใช้ร่วมกับ %1$s\nการลบจะนำพจนานุกรมออกสำหรับทั้งหมด</string>
     <string name="langmgr_download_size">ดาวน์โหลด %1$s</string>
+    <string name="langmgr_repair_needed">คุณสมบัติที่ดาวน์โหลดบางอย่างมีไฟล์ขาดหายไปและจะไม่ทำงานจนกว่าจะซ่อมแซม</string>
+    <string name="langmgr_repair_size">ซ่อมแซม %1$s</string>
     <string name="nolang_title">ตั้งค่าภาษา</string>
     <string name="nolang_prompt">ดาวน์โหลดแพ็กภาษาเพื่อเริ่มแปล</string>
     <string name="howto_title">วิธีใช้</string>
@@ -138,6 +140,7 @@
     <string name="download_failed_dictionary">ดาวน์โหลดพจนานุกรมของ %1$s ไม่สำเร็จ</string>
     <string name="download_failed_tts">ดาวน์โหลดเสียงของ %1$s ไม่สำเร็จ</string>
     <string name="download_failed_adblock">ดาวน์โหลดข้อมูลบล็อกโฆษณาไม่สำเร็จ</string>
+    <string name="download_failed_repair">ดาวน์โหลดการซ่อมแซมไม่สำเร็จ</string>
     <string name="download_catalog_unavailable">แคตตาล็อกไม่พร้อมใช้งาน</string>
     <string name="download_catalog_save_failed">บันทึกแคตตาล็อกไม่สำเร็จ</string>
     <string name="download_unknown_error">ข้อผิดพลาดที่ไม่รู้จัก</string>
@@ -152,6 +155,7 @@
     <string name="assistant_set_source_ocr">กำหนดภาษาต้นทางเริ่มต้นสำหรับการอ่านข้อความจากรูปภาพ</string>
     <string name="assistant_langs_not_ready">ภาษาสำหรับการแปลยังไม่พร้อม ลองอีกครั้ง</string>
     <string name="assistant_ocr_failed">อ่านข้อความจากรูปภาพไม่สำเร็จ</string>
+    <string name="ocr_models_missing">ไม่มีโมเดลการอ่านข้อความ เปิดจัดการภาษาในแอปเพื่อซ่อมแซม</string>
     <string name="assistant_set_source_live">กำหนดภาษาต้นทางเริ่มต้นในการตั้งค่าเพื่อใช้การแปลหน้าจอแบบสด</string>
 
     <!-- migration gate -->

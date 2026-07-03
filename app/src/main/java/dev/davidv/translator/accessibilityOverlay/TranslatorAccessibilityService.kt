@@ -347,6 +347,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
     val targetLang = forcedTargetLanguage ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return
     val ocrSourceLang = sourceLang ?: targetLang
 
+    var ocrUnavailable = false
     val result =
       withContext(Dispatchers.IO) {
         translationCoordinator.translateImageWithOverlay(
@@ -356,6 +357,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
           onMessage = {},
           readingOrder = currentReadingOrderFor(sourceLang),
           isAutoSource = isAutoSource,
+          onOcrUnavailable = { ocrUnavailable = true },
         )
       }
 
@@ -364,6 +366,8 @@ class TranslatorAccessibilityService : AccessibilityService() {
       lastOriginalText = result.extractedText
       lastTranslatedText = result.translatedText
       ui.showBitmapOverlay(result.correctedBitmap, region)
+    } else if (ocrUnavailable) {
+      ui.showOverlayMessage(getString(R.string.ocr_models_missing))
     }
   }
 

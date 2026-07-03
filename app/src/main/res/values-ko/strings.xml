@@ -85,6 +85,8 @@
     <string name="langmgr_delete_shared_title">공유 사전을 삭제할까요?</string>
     <string name="langmgr_delete_shared_body">이 사전은 %1$s와(과) 공유돼요.\n삭제하면 그 모두에서 사전이 사라져요.</string>
     <string name="langmgr_download_size">%1$s 다운로드</string>
+    <string name="langmgr_repair_needed">일부 다운로드한 기능에 파일이 없어 복구하기 전까지 작동하지 않아요.</string>
+    <string name="langmgr_repair_size">%1$s 복구</string>
     <string name="nolang_title">언어 설정</string>
     <string name="nolang_prompt">번역을 시작하려면 언어 팩을 다운로드하세요</string>
     <string name="howto_title">사용 방법</string>
@@ -138,6 +140,7 @@
     <string name="download_failed_dictionary">%1$s 사전 다운로드에 실패했어요</string>
     <string name="download_failed_tts">%1$s 음성 다운로드에 실패했어요</string>
     <string name="download_failed_adblock">광고 차단 목록 다운로드에 실패했어요</string>
+    <string name="download_failed_repair">복구 다운로드에 실패했어요</string>
     <string name="download_catalog_unavailable">카탈로그를 사용할 수 없어요</string>
     <string name="download_catalog_save_failed">카탈로그를 저장하지 못했어요</string>
     <string name="download_unknown_error">알 수 없는 오류</string>
@@ -152,6 +155,7 @@
     <string name="assistant_set_source_ocr">이미지 텍스트 인식에 쓸 기본 원본 언어를 정해 주세요.</string>
     <string name="assistant_langs_not_ready">번역 언어가 아직 준비되지 않았어요. 다시 시도해 주세요.</string>
     <string name="assistant_ocr_failed">텍스트 인식에 실패했어요</string>
+    <string name="ocr_models_missing">텍스트 인식 모델이 없어요. 복구하려면 앱에서 언어 관리를 열어 주세요.</string>
     <string name="assistant_set_source_live">화면 실시간 번역을 쓰려면 설정에서 기본 원본 언어를 정해 주세요.</string>
 
     <!-- migration gate -->

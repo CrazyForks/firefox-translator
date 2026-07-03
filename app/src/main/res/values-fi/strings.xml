@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Poistetaanko jaettu sanakirja?</string>
     <string name="langmgr_delete_shared_body">Tämä sanakirja on jaettu seuraavien kanssa: %1$s.\nSen poistaminen poistaa sanakirjan niiltä kaikilta.</string>
     <string name="langmgr_download_size">Lataa %1$s</string>
+    <string name="langmgr_repair_needed">Joistakin ladatuista ominaisuuksista puuttuu tiedostoja, eivätkä ne toimi ennen korjausta.</string>
+    <string name="langmgr_repair_size">Korjaa %1$s</string>
     <string name="nolang_title">Kielten määritys</string>
     <string name="nolang_prompt">Lataa kielipaketteja aloittaaksesi kääntämisen</string>
     <string name="howto_title">Käyttöohjeet</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">%1$s sanakirjan lataus epäonnistui</string>
     <string name="download_failed_tts">%1$s äänen lataus epäonnistui</string>
     <string name="download_failed_adblock">Adblock-lataus epäonnistui</string>
+    <string name="download_failed_repair">Korjauksen lataus epäonnistui</string>
     <string name="download_catalog_unavailable">Luettelo ei ole saatavilla</string>
     <string name="download_catalog_save_failed">Luettelon tallentaminen epäonnistui</string>
     <string name="download_unknown_error">Tuntematon virhe</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Aseta oletuslähdekieli tekstintunnistukselle.</string>
     <string name="assistant_langs_not_ready">Käännöskielet eivät ole vielä valmiina. Yritä uudelleen.</string>
     <string name="assistant_ocr_failed">Tekstintunnistus epäonnistui</string>
+    <string name="ocr_models_missing">Tekstintunnistusmallit puuttuvat. Avaa sovelluksessa kielten hallinta korjataksesi ne.</string>
     <string name="assistant_set_source_live">Aseta oletuslähdekieli asetuksissa käyttääksesi reaaliaikaista näytön kääntämistä.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Päivitetään puhemalleja</string>

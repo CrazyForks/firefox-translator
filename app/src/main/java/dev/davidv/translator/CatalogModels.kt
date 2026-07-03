@@ -217,6 +217,10 @@ class LanguageCatalog private constructor(
 
   fun planDeleteSupersededFiles(): DeletePlan = handle.planDeleteSupersededFiles()
 
+  fun planRepair(): DownloadPlan = handle.planRepair()
+
+  fun ocrEngineReady(): Boolean = handle.ocrEngineReady()
+
   fun ttsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.ttsVoicePickerRegions(languageCode)
 
   fun installedTtsVoicePickerRegions(languageCode: String): List<TtsVoicePickerRegion> = handle.installedTtsVoicePickerRegions(languageCode)

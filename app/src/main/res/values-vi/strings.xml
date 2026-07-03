@@ -85,6 +85,8 @@
     <string name="langmgr_delete_shared_title">Xóa từ điển dùng chung?</string>
     <string name="langmgr_delete_shared_body">Từ điển này được dùng chung với %1$s.\nXóa nó sẽ gỡ từ điển cho tất cả.</string>
     <string name="langmgr_download_size">Tải %1$s</string>
+    <string name="langmgr_repair_needed">Một số tính năng đã tải thiếu tệp và sẽ không hoạt động cho đến khi được sửa.</string>
+    <string name="langmgr_repair_size">Sửa %1$s</string>
     <string name="nolang_title">Thiết lập ngôn ngữ</string>
     <string name="nolang_prompt">Tải gói ngôn ngữ để bắt đầu dịch</string>
     <string name="howto_title">Cách sử dụng</string>
@@ -138,6 +140,7 @@
     <string name="download_failed_dictionary">Tải từ điển %1$s thất bại</string>
     <string name="download_failed_tts">Tải giọng nói %1$s thất bại</string>
     <string name="download_failed_adblock">Tải chặn quảng cáo thất bại</string>
+    <string name="download_failed_repair">Tải bản sửa thất bại</string>
     <string name="download_catalog_unavailable">Danh mục không khả dụng</string>
     <string name="download_catalog_save_failed">Không lưu được danh mục</string>
     <string name="download_unknown_error">Lỗi không xác định</string>
@@ -152,6 +155,7 @@
     <string name="assistant_set_source_ocr">Hãy đặt ngôn ngữ nguồn mặc định để nhận diện văn bản.</string>
     <string name="assistant_langs_not_ready">Các ngôn ngữ dịch chưa sẵn sàng. Hãy thử lại.</string>
     <string name="assistant_ocr_failed">Nhận diện văn bản thất bại</string>
+    <string name="ocr_models_missing">Thiếu mô hình nhận diện văn bản. Mở Quản lý ngôn ngữ trong ứng dụng để sửa.</string>
     <string name="assistant_set_source_live">Hãy đặt ngôn ngữ nguồn mặc định trong phần Cài đặt để dùng dịch màn hình trực tiếp.</string>
 
     <!-- migration gate -->

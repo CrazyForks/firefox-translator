@@ -924,6 +924,14 @@ impl CatalogHandle {
         translator::plan_delete_superseded_files(&self.snapshot())
     }
 
+    fn plan_repair(&self) -> translator::DownloadPlan {
+        translator::plan_repair(&self.snapshot())
+    }
+
+    fn ocr_engine_ready(&self) -> bool {
+        translator::ocr_engine_ready(&self.snapshot())
+    }
+
     fn tts_sample_text(&self, language_code: String) -> Option<String> {
         self.snapshot()
             .catalog

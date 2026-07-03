@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Gemeinsames Wörterbuch löschen?</string>
     <string name="langmgr_delete_shared_body">Dieses Wörterbuch wird mit %1$s geteilt.\nWenn du es löschst, wird es für alle entfernt.</string>
     <string name="langmgr_download_size">%1$s herunterladen</string>
+    <string name="langmgr_repair_needed">Bei einigen heruntergeladenen Funktionen fehlen Dateien, die erst nach einer Reparatur funktionieren.</string>
+    <string name="langmgr_repair_size">%1$s reparieren</string>
     <string name="nolang_title">Spracheinrichtung</string>
     <string name="nolang_prompt">Lade Sprachpakete herunter, um mit dem Übersetzen zu beginnen</string>
     <string name="howto_title">Anleitung</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">%1$s-Wörterbuch-Download fehlgeschlagen</string>
     <string name="download_failed_tts">Download der Stimme für %1$s fehlgeschlagen</string>
     <string name="download_failed_adblock">Adblock-Download fehlgeschlagen</string>
+    <string name="download_failed_repair">Reparatur-Download fehlgeschlagen</string>
     <string name="download_catalog_unavailable">Katalog nicht verfügbar</string>
     <string name="download_catalog_save_failed">Katalog konnte nicht gespeichert werden</string>
     <string name="download_unknown_error">Unbekannter Fehler</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Lege eine Standard-Quellsprache für die Texterkennung fest.</string>
     <string name="assistant_langs_not_ready">Die Übersetzungssprachen sind noch nicht bereit. Versuche es erneut.</string>
     <string name="assistant_ocr_failed">Texterkennung fehlgeschlagen</string>
+    <string name="ocr_models_missing">Texterkennungsmodelle fehlen. Öffne die Sprachverwaltung in der App, um sie zu reparieren.</string>
     <string name="assistant_set_source_live">Lege in den Einstellungen eine Standard-Quellsprache fest, um die Live-Bildschirmübersetzung zu nutzen.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Sprachmodelle werden aktualisiert</string>

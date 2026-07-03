@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Usunąć współdzielony słownik?</string>
     <string name="langmgr_delete_shared_body">Ten słownik jest współdzielony z %1$s.\nUsunięcie go spowoduje usunięcie słownika dla wszystkich z nich.</string>
     <string name="langmgr_download_size">Pobierz %1$s</string>
+    <string name="langmgr_repair_needed">W niektórych pobranych funkcjach brakuje plików i nie będą działać do czasu naprawy.</string>
+    <string name="langmgr_repair_size">Napraw %1$s</string>
     <string name="nolang_title">Konfiguracja języka</string>
     <string name="nolang_prompt">Pobierz pakiety językowe, aby rozpocząć tłumaczenie</string>
     <string name="howto_title">Jak korzystać</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">Pobieranie słownika %1$s nie powiodło się</string>
     <string name="download_failed_tts">Pobieranie głosu %1$s nie powiodło się</string>
     <string name="download_failed_adblock">Pobieranie Adblock nie powiodło się</string>
+    <string name="download_failed_repair">Pobieranie naprawy nie powiodło się</string>
     <string name="download_catalog_unavailable">Katalog niedostępny</string>
     <string name="download_catalog_save_failed">Nie udało się zapisać katalogu</string>
     <string name="download_unknown_error">Nieznany błąd</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Ustaw domyślny język źródłowy dla rozpoznawania tekstu.</string>
     <string name="assistant_langs_not_ready">Języki tłumaczenia nie są jeszcze gotowe. Spróbuj ponownie.</string>
     <string name="assistant_ocr_failed">Rozpoznawanie tekstu nie powiodło się</string>
+    <string name="ocr_models_missing">Brak modeli rozpoznawania tekstu. Otwórz Zarządzanie językami w aplikacji, aby je naprawić.</string>
     <string name="assistant_set_source_live">Ustaw domyślny język źródłowy w Ustawieniach, aby korzystać z tłumaczenia ekranu na żywo.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Aktualizowanie modeli mowy</string>

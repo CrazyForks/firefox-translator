@@ -85,6 +85,8 @@
     <string name="langmgr_delete_shared_title">പങ്കിട്ട നിഘണ്ടു ഇല്ലാതാക്കണോ?</string>
     <string name="langmgr_delete_shared_body">ഈ നിഘണ്ടു %1$s-മായി പങ്കിട്ടിരിക്കുന്നു.\nഇത് ഇല്ലാതാക്കിയാൽ അവയ്ക്കെല്ലാം നിഘണ്ടു ഇല്ലാതാകും.</string>
     <string name="langmgr_download_size">%1$s ഡൗൺലോഡ് ചെയ്യുക</string>
+    <string name="langmgr_repair_needed">ചില ഡൗൺലോഡ് ചെയ്ത സവിശേഷതകൾക്ക് ഫയലുകൾ ഇല്ല, നന്നാക്കുന്നതുവരെ പ്രവർത്തിക്കില്ല.</string>
+    <string name="langmgr_repair_size">%1$s നന്നാക്കുക</string>
     <string name="nolang_title">ഭാഷാ ക്രമീകരണം</string>
     <string name="nolang_prompt">വിവർത്തനം തുടങ്ങാൻ ഭാഷാ പാക്കുകൾ ഡൗൺലോഡ് ചെയ്യുക</string>
     <string name="howto_title">എങ്ങനെ ഉപയോഗിക്കാം</string>
@@ -138,6 +140,7 @@
     <string name="download_failed_dictionary">%1$s നിഘണ്ടു ഡൗൺലോഡ് പരാജയപ്പെട്ടു</string>
     <string name="download_failed_tts">%1$s ശബ്ദം ഡൗൺലോഡ് പരാജയപ്പെട്ടു</string>
     <string name="download_failed_adblock">പരസ്യം തടയൽ ഡൗൺലോഡ് പരാജയപ്പെട്ടു</string>
+    <string name="download_failed_repair">നന്നാക്കൽ ഡൗൺലോഡ് പരാജയപ്പെട്ടു</string>
     <string name="download_catalog_unavailable">കാറ്റലോഗ് ലഭ്യമല്ല</string>
     <string name="download_catalog_save_failed">കാറ്റലോഗ് സേവ് ചെയ്യാനായില്ല</string>
     <string name="download_unknown_error">അജ്ഞാത പിശക്</string>
@@ -152,6 +155,7 @@
     <string name="assistant_set_source_ocr">ചിത്രങ്ങളിലെ ടെക്സ്റ്റ് വായിക്കാൻ ഒരു സ്ഥിരം ഭാഷ സജ്ജമാക്കുക.</string>
     <string name="assistant_langs_not_ready">വിവർത്തന ഭാഷകൾ ഇതുവരെ തയ്യാറായിട്ടില്ല. വീണ്ടും ശ്രമിക്കുക.</string>
     <string name="assistant_ocr_failed">ചിത്രങ്ങളിലെ ടെക്സ്റ്റ് വായിക്കാനായില്ല</string>
+    <string name="ocr_models_missing">ടെക്സ്റ്റ് തിരിച്ചറിയൽ മോഡലുകൾ ഇല്ല. നന്നാക്കാൻ ആപ്പിൽ ഭാഷാ മാനേജ്‌മെന്റ് തുറക്കുക.</string>
     <string name="assistant_set_source_live">തത്സമയ സ്ക്രീൻ വിവർത്തനം ഉപയോഗിക്കാൻ സെറ്റിംഗ്സിൽ ഒരു സ്ഥിരം ഭാഷ സജ്ജമാക്കുക.</string>
 
     <!-- migration gate -->

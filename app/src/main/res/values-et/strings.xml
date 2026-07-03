@@ -23,6 +23,8 @@
     <string name="langmgr_delete_shared_title">Kas kustutad jagatud sõnastiku?</string>
     <string name="langmgr_delete_shared_body">See sõnastik on jagatud järgnevalt: %1$s.\nKustutades eemaldad ta kõigi jaoks.</string>
     <string name="langmgr_download_size">Laadi %1$s alla</string>
+    <string name="langmgr_repair_needed">Mõnel allalaaditud funktsioonil puuduvad failid ja need ei tööta enne parandamist.</string>
+    <string name="langmgr_repair_size">Paranda %1$s</string>
     <string name="nolang_title">Keelte seadistus</string>
     <string name="nolang_prompt">Alustamaks tõlkimisega laadi alla keelepakid</string>
     <string name="howto_title">Lühike kasutusjuhend</string>
@@ -136,6 +138,7 @@
     <string name="download_failed_dictionary">Sõnastiku allalaadimine ei õnnestunud: %1$s</string>
     <string name="download_failed_tts">%1$s hääle allalaadimine ei õnnestunud</string>
     <string name="download_failed_adblock">Reklaamiblokeerija andmete allalaadimine ei õnnestunud</string>
+    <string name="download_failed_repair">Paranduse allalaadimine ei õnnestunud</string>
     <string name="download_catalog_unavailable">Kataloog pole saadaval</string>
     <string name="download_catalog_save_failed">Kataloogi salvestamine ei õnnestunud</string>
     <string name="download_unknown_error">Tundmatu viga</string>
@@ -174,6 +177,7 @@
     <string name="assistant_set_source_ocr">Seadista vaikimisi keel optilise märgituvastuse jaoks.</string>
     <string name="assistant_langs_not_ready">Tõlkekeeled pole veel valmis. Palun proovi uuesti.</string>
     <string name="assistant_ocr_failed">Optiline märgituvastus ei toiminud</string>
+    <string name="ocr_models_missing">Optilise märgituvastuse mudelid puuduvad. Parandamiseks ava rakenduses keeltehaldus.</string>
     <string name="assistant_set_source_live">Reaalajas ekraanitõlke jaoks määratle Seadistustest vaikimisi lähtekeel.</string>
     <string name="migration_updating_speech_models">Uuendan kõnemudeleid</string>
     <string name="migration_accept_convert">Nõustu ja teisenda</string>

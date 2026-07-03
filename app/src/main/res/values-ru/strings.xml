@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">Удалить общий словарь?</string>
     <string name="langmgr_delete_shared_body">Этот словарь совмещён с %1$s.\nУдаление словаря исключит его из остальных.</string>
     <string name="langmgr_download_size">Скачать %1$s</string>
+    <string name="langmgr_repair_needed">У некоторых загруженных функций отсутствуют файлы, и они не будут работать до восстановления.</string>
+    <string name="langmgr_repair_size">Восстановить %1$s</string>
     <string name="nolang_title">Настройка языков</string>
     <string name="nolang_prompt">Скачайте языковые пакеты, чтобы начать перевод</string>
     <string name="howto_title">Как пользоваться</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">Не удалось скачать словарь %1$s</string>
     <string name="download_failed_tts">Не удалось скачать голос для %1$s</string>
     <string name="download_failed_adblock">Не удалось скачать Adblock</string>
+    <string name="download_failed_repair">Не удалось скачать восстановление</string>
     <string name="download_catalog_unavailable">Каталог недоступен</string>
     <string name="download_catalog_save_failed">Не удалось сохранить каталог</string>
     <string name="download_unknown_error">Неизвестная ошибка</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">Задайте язык оригинала по умолчанию для распознавания текста.</string>
     <string name="assistant_langs_not_ready">Языки перевода ещё не готовы. Попробуйте снова.</string>
     <string name="assistant_ocr_failed">Ошибка распознавания текста</string>
+    <string name="ocr_models_missing">Модели распознавания текста отсутствуют. Откройте управление языками в приложении, чтобы восстановить их.</string>
     <string name="assistant_set_source_live">Задайте язык оригинала по умолчанию в Настройках, чтобы использовать перевод экрана вживую.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Обновление моделей речи</string>

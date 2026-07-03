@@ -79,6 +79,8 @@
     <string name="langmgr_delete_shared_title">删除共享词典？</string>
     <string name="langmgr_delete_shared_body">此词典与 %1$s 共享。\n删除后将为它们全部移除该词典。</string>
     <string name="langmgr_download_size">下载 %1$s</string>
+    <string name="langmgr_repair_needed">部分已下载的功能缺少文件，修复后才能使用。</string>
+    <string name="langmgr_repair_size">修复 %1$s</string>
     <string name="nolang_title">语言设置</string>
     <string name="nolang_prompt">下载语言包即可开始翻译</string>
     <string name="howto_title">使用方法</string>
@@ -126,6 +128,7 @@
     <string name="download_failed_dictionary">%1$s 词典下载失败</string>
     <string name="download_failed_tts">%1$s 语音下载失败</string>
     <string name="download_failed_adblock">Adblock 下载失败</string>
+    <string name="download_failed_repair">修复下载失败</string>
     <string name="download_catalog_unavailable">目录不可用</string>
     <string name="download_catalog_save_failed">保存目录失败</string>
     <string name="download_unknown_error">未知错误</string>
@@ -139,6 +142,7 @@
     <string name="assistant_set_source_ocr">请为文字识别设置默认源语言。</string>
     <string name="assistant_langs_not_ready">翻译语言尚未就绪。请重试。</string>
     <string name="assistant_ocr_failed">文字识别失败</string>
+    <string name="ocr_models_missing">缺少文字识别模型。请在应用中打开语言管理进行修复。</string>
     <string name="assistant_set_source_live">在设置中设定默认源语言即可使用实时屏幕翻译。</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">正在更新语音模型</string>

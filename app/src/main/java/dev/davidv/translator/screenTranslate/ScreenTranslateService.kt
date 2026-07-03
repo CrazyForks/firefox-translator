@@ -42,6 +42,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
 import dev.davidv.translator.R
@@ -162,6 +163,14 @@ class ScreenTranslateService : Service() {
     val catalog = app.languageCatalog
     if (catalog == null) {
       Log.e(TAG, "No language catalog; stopping")
+      stopEverything()
+      return START_NOT_STICKY
+    }
+    if (!catalog.ocrEngineReady()) {
+      // Without the detector pack every frame fails OCR and the overlay just
+      // sits there empty — refuse to start and say why (issue #246).
+      Log.e(TAG, "OCR detector pack not installed; stopping")
+      Toast.makeText(this, getString(R.string.ocr_models_missing), Toast.LENGTH_LONG).show()
       stopEverything()
       return START_NOT_STICKY
     }

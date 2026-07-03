@@ -82,6 +82,8 @@
     <string name="langmgr_delete_shared_title">ಹಂಚಿಕೊಂಡ ನಿಘಂಟು ಅಳಿಸುವುದೇ?</string>
     <string name="langmgr_delete_shared_body">ಈ ನಿಘಂಟನ್ನು %1$s ಜೊತೆ ಹಂಚಿಕೊಳ್ಳಲಾಗಿದೆ.\nಇದನ್ನು ಅಳಿಸಿದರೆ ಅವರೆಲ್ಲರಿಗೂ ನಿಘಂಟು ತೆಗೆದುಹಾಕಲ್ಪಡುತ್ತದೆ.</string>
     <string name="langmgr_download_size">%1$s ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ</string>
+    <string name="langmgr_repair_needed">ಕೆಲವು ಡೌನ್‌ಲೋಡ್ ಮಾಡಿದ ವೈಶಿಷ್ಟ್ಯಗಳಿಗೆ ಫೈಲ್‌ಗಳು ಕಾಣೆಯಾಗಿವೆ ಮತ್ತು ದುರಸ್ತಿ ಮಾಡುವವರೆಗೆ ಕೆಲಸ ಮಾಡುವುದಿಲ್ಲ.</string>
+    <string name="langmgr_repair_size">%1$s ದುರಸ್ತಿ ಮಾಡಿ</string>
     <string name="nolang_title">ಭಾಷಾ ಸೆಟಪ್</string>
     <string name="nolang_prompt">ಅನುವಾದ ಪ್ರಾರಂಭಿಸಲು ಭಾಷಾ ಪ್ಯಾಕ್‌ಗಳನ್ನು ಡೌನ್‌ಲೋಡ್ ಮಾಡಿ</string>
     <string name="howto_title">ಬಳಸುವುದು ಹೇಗೆ</string>
@@ -129,6 +131,7 @@
     <string name="download_failed_dictionary">%1$s ನಿಘಂಟು ಡೌನ್‌ಲೋಡ್ ವಿಫಲವಾಯಿತು</string>
     <string name="download_failed_tts">%1$s ಧ್ವನಿ ಡೌನ್‌ಲೋಡ್ ವಿಫಲವಾಯಿತು</string>
     <string name="download_failed_adblock">ಜಾಹೀರಾತು ತಡೆ ಡೌನ್‌ಲೋಡ್ ವಿಫಲವಾಯಿತು</string>
+    <string name="download_failed_repair">ದುರಸ್ತಿ ಡೌನ್‌ಲೋಡ್ ವಿಫಲವಾಯಿತು</string>
     <string name="download_catalog_unavailable">ಕ್ಯಾಟಲಾಗ್ ಲಭ್ಯವಿಲ್ಲ</string>
     <string name="download_catalog_save_failed">ಕ್ಯಾಟಲಾಗ್ ಉಳಿಸಲು ವಿಫಲವಾಯಿತು</string>
     <string name="download_unknown_error">ಗೊತ್ತಿಲ್ಲದ ದೋಷ</string>
@@ -142,6 +145,7 @@
     <string name="assistant_set_source_ocr">ಚಿತ್ರಗಳಲ್ಲಿನ ಪಠ್ಯ ಗುರುತಿಸಲು ಪೂರ್ವನಿಯೋಜಿತ ಮೂಲ ಭಾಷೆಯನ್ನು ಹೊಂದಿಸಿ.</string>
     <string name="assistant_langs_not_ready">ಅನುವಾದ ಭಾಷೆಗಳು ಇನ್ನೂ ಸಿದ್ಧವಾಗಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.</string>
     <string name="assistant_ocr_failed">ಚಿತ್ರದಲ್ಲಿನ ಪಠ್ಯ ಗುರುತಿಸಲು ವಿಫಲವಾಯಿತು</string>
+    <string name="ocr_models_missing">ಪಠ್ಯ ಗುರುತಿಸುವಿಕೆ ಮಾದರಿಗಳು ಕಾಣೆಯಾಗಿವೆ. ದುರಸ್ತಿ ಮಾಡಲು ಆ್ಯಪ್‌ನಲ್ಲಿ ಭಾಷಾ ನಿರ್ವಹಣೆ ತೆರೆಯಿರಿ.</string>
     <string name="assistant_set_source_live">ಲೈವ್ ಪರದೆ ಅನುವಾದ ಬಳಸಲು ಸೆಟ್ಟಿಂಗ್‌ಗಳಲ್ಲಿ ಪೂರ್ವನಿಯೋಜಿತ ಮೂಲ ಭಾಷೆಯನ್ನು ಹೊಂದಿಸಿ.</string>
     <!-- migration gate -->
     <string name="migration_updating_speech_models">ಧ್ವನಿ ಮಾದರಿಗಳನ್ನು ಅಪ್‌ಡೇಟ್ ಮಾಡಲಾಗುತ್ತಿದೆ</string>
