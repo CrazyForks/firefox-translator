@@ -34,6 +34,8 @@
     <string name="settings_web_translator">വെബ് വിവർത്തകൻ</string>
     <string name="settings_clear_browsing">അടയ്ക്കുമ്പോൾ ബ്രൗസിംഗ് ഡാറ്റ മായ്ക്കുക</string>
     <string name="settings_clear_browsing_desc">കുക്കികൾ, കാഷെ, ലോക്കൽ സ്റ്റോറേജ് എന്നിവ ഇല്ലാതാക്കുന്നു.</string>
+    <string name="settings_tts_section">ടെക്‌സ്റ്റ് ടു സ്പീച്ച്</string>
+    <string name="settings_tts_read_urls_hashtags">URL-കളും ഹാഷ്‌ടാഗുകളും വായിക്കുക</string>
     <string name="settings_popup_settings">പോപ്പ്അപ്പ്</string>
     <string name="settings_popup_desc">ടെക്സ്റ്റ് സെലക്ഷൻ മെനുവിൽ നിന്ന് \'വിവർത്തനം\' തിരഞ്ഞെടുക്കുമ്പോൾ പോപ്പ്അപ്പ് വരും</string>
     <string name="settings_hide_input">ഇൻപുട്ട് മറയ്ക്കുക</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">യഥാർത്ഥ ടെക്സ്റ്റിന്റെ ലിപ്യന്തരണം കാണിക്കുക</string>
     <string name="settings_translit_japanese_spaces">ജാപ്പനീസ് ലിപ്യന്തരണത്തിന് സ്പേസുകൾ ചേർക്കുക</string>
     <string name="settings_translate_pdf_images">PDF-ലെ ചിത്രങ്ങൾ വിവർത്തനം ചെയ്യുക</string>
-    <string name="settings_translate_pdf_images_desc">PDF പേജുകളിലെ ചിത്രങ്ങളിലെ ടെക്സ്റ്റ് തിരിച്ചറിഞ്ഞ് വിവർത്തനം ചെയ്യുക.</string>
     <string name="settings_camera_live_default">സ്ഥിരമായി ക്യാമറ തത്സമയം വിവർത്തനം ചെയ്യുക</string>
     <string name="settings_register_browser">ബ്രൗസറായി രജിസ്റ്റർ ചെയ്യുക</string>
     <string name="settings_register_browser_desc">മറ്റ് ആപ്പുകളിൽ നിന്നുള്ള ലിങ്കുകൾ വിവർത്തനം ചെയ്യാൻ വാഗ്ദാനം ചെയ്യുക.</string>

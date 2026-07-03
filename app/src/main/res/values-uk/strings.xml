@@ -34,6 +34,8 @@
     <string name="settings_web_translator">Веб-перекладач</string>
     <string name="settings_clear_browsing">Очищати дані перегляду при закритті</string>
     <string name="settings_clear_browsing_desc">Видаляє файли cookie, кеш і локальне сховище.</string>
+    <string name="settings_tts_section">Синтез мовлення</string>
+    <string name="settings_tts_read_urls_hashtags">Читати URL і хештеги</string>
     <string name="settings_popup_settings">Спливаюче вікно</string>
     <string name="settings_popup_desc">Спливаюче вікно з\'являється, коли ти вибираєш \'Перекласти\' в меню виділення тексту</string>
     <string name="settings_hide_input">Приховати ввід</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">Показувати транслітерацію оригінального тексту</string>
     <string name="settings_translit_japanese_spaces">Додавати пробіли в транслітерації японської</string>
     <string name="settings_translate_pdf_images">Перекладати зображення в PDF</string>
-    <string name="settings_translate_pdf_images_desc">Розпізнавати текст і перекладати растрові зображення, вбудовані в сторінки PDF.</string>
     <string name="settings_camera_live_default">Перекладати камеру наживо за замовчуванням</string>
     <string name="settings_register_browser">Зареєструвати як браузер</string>
     <string name="settings_register_browser_desc">Пропонувати переклад посилань з інших застосунків.</string>

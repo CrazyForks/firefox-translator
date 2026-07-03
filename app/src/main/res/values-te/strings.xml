@@ -34,6 +34,8 @@
     <string name="settings_web_translator">వెబ్ అనువాదకం</string>
     <string name="settings_clear_browsing">మూసేటప్పుడు బ్రౌజింగ్ డేటాను తొలగించు</string>
     <string name="settings_clear_browsing_desc">కుకీలు, క్యాష్ మరియు లోకల్ స్టోరేజ్‌ను తొలగిస్తుంది.</string>
+    <string name="settings_tts_section">టెక్స్ట్-టు-స్పీచ్</string>
+    <string name="settings_tts_read_urls_hashtags">URLలు మరియు హ్యాష్‌ట్యాగ్‌లను చదవండి</string>
     <string name="settings_popup_settings">పాపప్</string>
     <string name="settings_popup_desc">టెక్స్ట్ సెలెక్షన్ మెనూలో \'అనువదించు\' ఎంచుకున్నప్పుడు పాపప్ కనిపిస్తుంది</string>
     <string name="settings_hide_input">ఇన్‌పుట్‌ను దాచు</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">అసలు టెక్స్ట్‌కు లిప్యంతరీకరణ చూపించు</string>
     <string name="settings_translit_japanese_spaces">జపనీస్ లిప్యంతరీకరణకు ఖాళీలు జోడించు</string>
     <string name="settings_translate_pdf_images">PDFల్లోని చిత్రాలను అనువదించు</string>
-    <string name="settings_translate_pdf_images_desc">PDF పేజీల్లో ఉన్న చిత్రాల్లోని టెక్స్ట్‌ను గుర్తించి అనువదిస్తుంది.</string>
     <string name="settings_camera_live_default">డిఫాల్ట్‌గా కెమెరాను లైవ్‌గా అనువదించు</string>
     <string name="settings_register_browser">బ్రౌజర్‌గా రిజిస్టర్ చేయి</string>
     <string name="settings_register_browser_desc">వేరే యాప్‌ల నుంచి వచ్చే లింక్‌లను అనువదించడానికి అందిస్తుంది.</string>

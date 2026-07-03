@@ -34,6 +34,8 @@
     <string name="settings_web_translator">வெப் மொழிபெயர்ப்பான்</string>
     <string name="settings_clear_browsing">மூடும்போது உலாவல் தரவை அழி</string>
     <string name="settings_clear_browsing_desc">குக்கீகள், கேஷ் மற்றும் லோக்கல் ஸ்டோரேஜை நீக்கும்.</string>
+    <string name="settings_tts_section">உரையிலிருந்து பேச்சு</string>
+    <string name="settings_tts_read_urls_hashtags">URLகளையும் ஹாஷ்டேக்குகளையும் படி</string>
     <string name="settings_popup_settings">பாப்அப்</string>
     <string name="settings_popup_desc">உரைத் தேர்வு மெனுவில் \'மொழிபெயர்\' என்பதைத் தேர்ந்தெடுக்கும்போது பாப்அப் தோன்றும்</string>
     <string name="settings_hide_input">உள்ளீட்டை மறை</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">மூல உரைக்கு ஒலிபெயர்ப்பைக் காட்டு</string>
     <string name="settings_translit_japanese_spaces">ஜப்பானிய ஒலிபெயர்ப்புக்கு இடைவெளிகளைச் சேர்</string>
     <string name="settings_translate_pdf_images">PDF-களில் உள்ள படங்களை மொழிபெயர்</string>
-    <string name="settings_translate_pdf_images_desc">PDF பக்கங்களில் உள்ள படங்களில் உள்ள உரையை அடையாளம் கண்டு மொழிபெயர்க்கும்.</string>
     <string name="settings_camera_live_default">இயல்பாகவே கேமராவை நேரலையில் மொழிபெயர்</string>
     <string name="settings_register_browser">உலாவியாக பதிவு செய்</string>
     <string name="settings_register_browser_desc">பிற ஆப்களில் இருந்து இணைப்புகளை மொழிபெயர்க்க வழங்கும்.</string>

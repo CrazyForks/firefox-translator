@@ -34,6 +34,8 @@
     <string name="settings_web_translator">Trình dịch web</string>
     <string name="settings_clear_browsing">Xóa dữ liệu duyệt web khi đóng</string>
     <string name="settings_clear_browsing_desc">Xóa cookie, bộ nhớ đệm và bộ nhớ cục bộ.</string>
+    <string name="settings_tts_section">Chuyển văn bản thành giọng nói</string>
+    <string name="settings_tts_read_urls_hashtags">Đọc URL và hashtag</string>
     <string name="settings_popup_settings">Cửa sổ dịch</string>
     <string name="settings_popup_desc">Cửa sổ dịch hiện ra khi chọn \'Dịch\' trong menu chọn văn bản</string>
     <string name="settings_hide_input">Ẩn phần nhập</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">Hiện phiên âm cho văn bản gốc</string>
     <string name="settings_translit_japanese_spaces">Thêm khoảng trắng cho phiên âm tiếng Nhật</string>
     <string name="settings_translate_pdf_images">Dịch hình ảnh trong PDF</string>
-    <string name="settings_translate_pdf_images_desc">Nhận diện và dịch các ảnh nhúng trong trang PDF.</string>
     <string name="settings_camera_live_default">Mặc định dịch camera trực tiếp</string>
     <string name="settings_register_browser">Đăng ký làm trình duyệt</string>
     <string name="settings_register_browser_desc">Đề nghị dịch liên kết từ ứng dụng khác.</string>

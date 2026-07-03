@@ -34,6 +34,8 @@
     <string name="settings_web_translator">ตัวแปลเว็บ</string>
     <string name="settings_clear_browsing">ล้างข้อมูลการเรียกดูเมื่อปิด</string>
     <string name="settings_clear_browsing_desc">ลบคุกกี้ แคช และที่จัดเก็บข้อมูลในเครื่อง</string>
+    <string name="settings_tts_section">อ่านออกเสียงข้อความ</string>
+    <string name="settings_tts_read_urls_hashtags">อ่าน URL และแฮชแท็ก</string>
     <string name="settings_popup_settings">ป๊อปอัป</string>
     <string name="settings_popup_desc">ป๊อปอัปจะปรากฏขึ้นเมื่อเลือก \'แปล\' จากเมนูการเลือกข้อความ</string>
     <string name="settings_hide_input">ซ่อนข้อความที่ป้อน</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">แสดงการถอดอักษรของข้อความต้นฉบับ</string>
     <string name="settings_translit_japanese_spaces">เพิ่มช่องว่างในการถอดอักษรภาษาญี่ปุ่น</string>
     <string name="settings_translate_pdf_images">แปลรูปภาพในไฟล์ PDF</string>
-    <string name="settings_translate_pdf_images_desc">อ่านข้อความจากรูปภาพและแปลรูปภาพที่ฝังอยู่ในหน้า PDF</string>
     <string name="settings_camera_live_default">แปลกล้องแบบสดเป็นค่าเริ่มต้น</string>
     <string name="settings_register_browser">ลงทะเบียนเป็นเบราว์เซอร์</string>
     <string name="settings_register_browser_desc">เสนอให้แปลลิงก์จากแอปอื่น</string>

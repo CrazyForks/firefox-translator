@@ -32,6 +32,8 @@
     <string name="settings_web_translator">ವೆಬ್ ಅನುವಾದಕ</string>
     <string name="settings_clear_browsing">ಮುಚ್ಚುವಾಗ ಬ್ರೌಸಿಂಗ್ ಡೇಟಾ ಅಳಿಸಿ</string>
     <string name="settings_clear_browsing_desc">ಕುಕೀಗಳು, ಕ್ಯಾಶ್ ಮತ್ತು ಲೋಕಲ್ ಸ್ಟೋರೇಜ್ ಅನ್ನು ಅಳಿಸುತ್ತದೆ.</string>
+    <string name="settings_tts_section">ಪಠ್ಯದಿಂದ ಧ್ವನಿ</string>
+    <string name="settings_tts_read_urls_hashtags">URL ಮತ್ತು ಹ್ಯಾಶ್‌ಟ್ಯಾಗ್‌ಗಳನ್ನು ಓದಿ</string>
     <string name="settings_popup_settings">ಪಾಪ್‌ಅಪ್</string>
     <string name="settings_popup_desc">ಪಠ್ಯ ಆಯ್ಕೆ ಮೆನುವಿನಿಂದ \'ಅನುವಾದಿಸಿ\' ಆರಿಸಿದಾಗ ಪಾಪ್‌ಅಪ್ ಕಾಣಿಸಿಕೊಳ್ಳುತ್ತದೆ</string>
     <string name="settings_hide_input">ಇನ್‌ಪುಟ್ ಮರೆಮಾಡಿ</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">ಮೂಲ ಪಠ್ಯಕ್ಕೆ ಲಿಪ್ಯಂತರಣ ತೋರಿಸಿ</string>
     <string name="settings_translit_japanese_spaces">ಜಪಾನೀಸ್ ಲಿಪ್ಯಂತರಣಕ್ಕೆ ಸ್ಪೇಸ್‌ಗಳನ್ನು ಸೇರಿಸಿ</string>
     <string name="settings_translate_pdf_images">PDF ಗಳಲ್ಲಿನ ಚಿತ್ರಗಳನ್ನು ಅನುವಾದಿಸಿ</string>
-    <string name="settings_translate_pdf_images_desc">PDF ಪುಟಗಳಲ್ಲಿ ಅಡಕವಾಗಿರುವ ಚಿತ್ರಗಳಲ್ಲಿನ ಪಠ್ಯವನ್ನು ಗುರುತಿಸಿ ಅನುವಾದಿಸಿ.</string>
     <string name="settings_camera_live_default">ಪೂರ್ವನಿಯೋಜಿತವಾಗಿ ಕ್ಯಾಮೆರಾವನ್ನು ಲೈವ್ ಆಗಿ ಅನುವಾದಿಸಿ</string>
     <string name="settings_register_browser">ಬ್ರೌಸರ್ ಆಗಿ ನೋಂದಾಯಿಸಿ</string>
     <string name="settings_register_browser_desc">ಬೇರೆ ಆ್ಯಪ್‌ಗಳ ಲಿಂಕ್‌ಗಳನ್ನು ಅನುವಾದಿಸುವ ಆಯ್ಕೆ ನೀಡಿ.</string>

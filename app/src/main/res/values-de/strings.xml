@@ -32,6 +32,8 @@
     <string name="settings_web_translator">Web-Übersetzer</string>
     <string name="settings_clear_browsing">Browserdaten beim Schließen löschen</string>
     <string name="settings_clear_browsing_desc">Löscht Cookies, Cache und lokalen Speicher.</string>
+    <string name="settings_tts_section">Sprachausgabe</string>
+    <string name="settings_tts_read_urls_hashtags">URLs und Hashtags vorlesen</string>
     <string name="settings_popup_settings">Popup</string>
     <string name="settings_popup_desc">Das Popup erscheint, wenn du \'Übersetzen\' im Textauswahl-Menü wählst</string>
     <string name="settings_hide_input">Eingabe ausblenden</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">Transliteration für Originaltext anzeigen</string>
     <string name="settings_translit_japanese_spaces">Leerzeichen für japanische Transliteration hinzufügen</string>
     <string name="settings_translate_pdf_images">Bilder in PDFs übersetzen</string>
-    <string name="settings_translate_pdf_images_desc">Text in Bildern innerhalb von PDF-Dateien erkennen und übersetzen.</string>
     <string name="settings_camera_live_default">Kamera standardmäßig live übersetzen</string>
     <string name="settings_register_browser">Als Browser registrieren</string>
     <string name="settings_register_browser_desc">Anbieten, Links aus anderen Apps zu übersetzen.</string>

@@ -32,6 +32,8 @@
     <string name="settings_web_translator">Tradutor web</string>
     <string name="settings_clear_browsing">Limpar dados de navegação ao fechar</string>
     <string name="settings_clear_browsing_desc">Exclui cookies, cache e armazenamento local.</string>
+    <string name="settings_tts_section">Conversão de texto em fala</string>
+    <string name="settings_tts_read_urls_hashtags">Ler URLs e hashtags</string>
     <string name="settings_popup_settings">Popup</string>
     <string name="settings_popup_desc">O popup aparece ao selecionar \'Traduzir\' no menu de seleção de texto</string>
     <string name="settings_hide_input">Ocultar entrada</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">Mostrar transliteração do texto original</string>
     <string name="settings_translit_japanese_spaces">Adicionar espaços na transliteração do japonês</string>
     <string name="settings_translate_pdf_images">Traduzir imagens em PDFs</string>
-    <string name="settings_translate_pdf_images_desc">Reconhecer e traduzir texto em imagens dentro de arquivos PDF.</string>
     <string name="settings_camera_live_default">Traduzir câmera ao vivo por padrão</string>
     <string name="settings_register_browser">Registrar como navegador</string>
     <string name="settings_register_browser_desc">Oferecer tradução de links de outros apps.</string>

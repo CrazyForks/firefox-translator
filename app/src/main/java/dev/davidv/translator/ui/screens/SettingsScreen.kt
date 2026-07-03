@@ -428,6 +428,45 @@ fun SettingsScreen(
         }
       }
 
+      // Text to Speech Section
+      Card(
+        modifier = Modifier.fillMaxWidth().testTag("export-section:Text to speech"),
+        colors =
+          CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+          ),
+      ) {
+        Column(
+          modifier = Modifier.padding(16.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          Text(
+            text = stringResource(R.string.settings_tts_section),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.primary,
+          )
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+              text = stringResource(R.string.settings_tts_read_urls_hashtags),
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurface,
+              modifier = Modifier.weight(1f).padding(end = 8.dp),
+            )
+            Switch(
+              checked = settings.ttsReadUrlsAndHashtags,
+              onCheckedChange = { enabled ->
+                onSettingsChange(settings.copy(ttsReadUrlsAndHashtags = enabled))
+              },
+            )
+          }
+        }
+      }
+
       Card(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Popup"),
         colors =
@@ -944,18 +983,12 @@ fun SettingsScreen(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically,
             ) {
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = stringResource(R.string.settings_translate_pdf_images),
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                  text = stringResource(R.string.settings_translate_pdf_images_desc),
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
+              Text(
+                text = stringResource(R.string.settings_translate_pdf_images),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+              )
               Switch(
                 checked = settings.translatePdfImages,
                 onCheckedChange = { checked ->

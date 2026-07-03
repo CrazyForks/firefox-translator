@@ -32,6 +32,8 @@
     <string name="settings_web_translator">Tłumacz internetowy</string>
     <string name="settings_clear_browsing">Wyczyść dane przeglądania przy zamknięciu</string>
     <string name="settings_clear_browsing_desc">Usuwa pliki cookie, pamięć podręczną i lokalną.</string>
+    <string name="settings_tts_section">Zamiana tekstu na mowę</string>
+    <string name="settings_tts_read_urls_hashtags">Czytaj adresy URL i hashtagi</string>
     <string name="settings_popup_settings">Okienko</string>
     <string name="settings_popup_desc">Okienko pojawia się po wybraniu \'Przetłumacz\' z menu zaznaczania tekstu</string>
     <string name="settings_hide_input">Ukryj pole wprowadzania</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">Pokaż transliterację oryginalnego tekstu</string>
     <string name="settings_translit_japanese_spaces">Dodaj spacje w transliteracji japońskiej</string>
     <string name="settings_translate_pdf_images">Tłumacz obrazy w plikach PDF</string>
-    <string name="settings_translate_pdf_images_desc">Rozpoznawaj i tłumacz tekst na obrazach w plikach PDF.</string>
     <string name="settings_camera_live_default">Domyślnie tłumacz aparat na żywo</string>
     <string name="settings_register_browser">Zarejestruj jako przeglądarkę</string>
     <string name="settings_register_browser_desc">Proponuj tłumaczenie linków z innych aplikacji.</string>

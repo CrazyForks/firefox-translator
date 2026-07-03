@@ -49,6 +49,7 @@ data class AppSettings(
   val ttsPlaybackSpeed: Float = 1.0f,
   val ttsPlaybackSpeedOverrides: Map<String, Float> = emptyMap(),
   val ttsVoiceOverrides: Map<String, String> = emptyMap(),
+  val ttsReadUrlsAndHashtags: Boolean = false,
   val tapToTranslateEnabled: Boolean = false,
   val clearWebTranslatorDataOnClose: Boolean = true,
   val translatePdfImages: Boolean = true,

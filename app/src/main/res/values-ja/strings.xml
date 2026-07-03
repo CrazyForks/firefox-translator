@@ -32,6 +32,8 @@
     <string name="settings_web_translator">ウェブ翻訳</string>
     <string name="settings_clear_browsing">終了時に閲覧データを消去</string>
     <string name="settings_clear_browsing_desc">Cookie、キャッシュ、ローカルストレージを削除します。</string>
+    <string name="settings_tts_section">テキスト読み上げ</string>
+    <string name="settings_tts_read_urls_hashtags">URL とハッシュタグを読み上げる</string>
     <string name="settings_popup_settings">ポップアップ</string>
     <string name="settings_popup_desc">テキスト選択メニューで\'翻訳\'を選ぶとポップアップが表示されます</string>
     <string name="settings_hide_input">入力を非表示</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">元の文字に発音表記を表示</string>
     <string name="settings_translit_japanese_spaces">日本語の発音表記にスペースを追加</string>
     <string name="settings_translate_pdf_images">PDF 内の画像も翻訳</string>
-    <string name="settings_translate_pdf_images_desc">PDF ファイル内の画像にある文字を認識して翻訳します。</string>
     <string name="settings_camera_live_default">カメラを最初からリアルタイム翻訳</string>
     <string name="settings_register_browser">ブラウザーとして登録</string>
     <string name="settings_register_browser_desc">他のアプリからのリンクを翻訳できるようにします。</string>

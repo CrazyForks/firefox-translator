@@ -32,6 +32,8 @@
     <string name="settings_web_translator">Webböversättare</string>
     <string name="settings_clear_browsing">Rensa webbdata vid stängning</string>
     <string name="settings_clear_browsing_desc">Tar bort cookies, cache och lokal lagring.</string>
+    <string name="settings_tts_section">Text till tal</string>
+    <string name="settings_tts_read_urls_hashtags">Läs upp URL:er och hashtaggar</string>
     <string name="settings_popup_settings">Fönster</string>
     <string name="settings_popup_desc">Fönstret visas när du väljer \'Översätt\' i textmarkeringsmenyn</string>
     <string name="settings_hide_input">Dölj inmatning</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">Visa translitterering för originaltext</string>
     <string name="settings_translit_japanese_spaces">Lägg till mellanslag för japansk translitterering</string>
     <string name="settings_translate_pdf_images">Översätt bilder i PDF-filer</string>
-    <string name="settings_translate_pdf_images_desc">Känn igen och översätt text i bilder i PDF-filer.</string>
     <string name="settings_camera_live_default">Översätt kameran live som standard</string>
     <string name="settings_register_browser">Registrera som webbläsare</string>
     <string name="settings_register_browser_desc">Erbjud att översätta länkar från andra appar.</string>

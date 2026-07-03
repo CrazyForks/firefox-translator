@@ -34,6 +34,8 @@
     <string name="settings_web_translator">Web çevirmeni</string>
     <string name="settings_clear_browsing">Kapatınca tarama verilerini sil</string>
     <string name="settings_clear_browsing_desc">Çerezleri, önbelleği ve yerel depolamayı siler.</string>
+    <string name="settings_tts_section">Metin okuma</string>
+    <string name="settings_tts_read_urls_hashtags">URL\'leri ve etiketleri oku</string>
     <string name="settings_popup_settings">Açılır pencere</string>
     <string name="settings_popup_desc">Metin seçim menüsünden \'Çevir\' seçildiğinde açılır pencere görünür</string>
     <string name="settings_hide_input">Girişi gizle</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">Özgün metin için harf çevirisini göster</string>
     <string name="settings_translit_japanese_spaces">Japonca harf çevirisine boşluk ekle</string>
     <string name="settings_translate_pdf_images">PDF\'lerdeki görselleri çevir</string>
-    <string name="settings_translate_pdf_images_desc">PDF sayfalarına gömülü görsellerdeki metni tanıyıp çevir.</string>
     <string name="settings_camera_live_default">Varsayılan olarak kamerayı canlı çevir</string>
     <string name="settings_register_browser">Tarayıcı olarak kaydet</string>
     <string name="settings_register_browser_desc">Diğer uygulamalardan gelen bağlantıları çevirmeyi öner.</string>

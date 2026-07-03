@@ -34,6 +34,8 @@
     <string name="settings_web_translator">Web Translator</string>
     <string name="settings_clear_browsing">Clear browsing data on close</string>
     <string name="settings_clear_browsing_desc">Deletes cookies, cache and local storage.</string>
+    <string name="settings_tts_section">Text to speech</string>
+    <string name="settings_tts_read_urls_hashtags">Read URLs and hashtags</string>
     <string name="settings_popup_settings">Popup</string>
     <string name="settings_popup_desc">Popup shows up when selecting \'Translate\' from the text selection menu</string>
     <string name="settings_hide_input">Hide input</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">Show transliteration for original text</string>
     <string name="settings_translit_japanese_spaces">Add spaces for Japanese transliteration</string>
     <string name="settings_translate_pdf_images">Translate images in PDFs</string>
-    <string name="settings_translate_pdf_images_desc">Recognize and translate text in images inside PDF files.</string>
     <string name="settings_camera_live_default">Translate camera live by default</string>
     <string name="settings_register_browser">Register as browser</string>
     <string name="settings_register_browser_desc">Offer to translate links from other apps.</string>

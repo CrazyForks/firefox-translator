@@ -32,6 +32,8 @@
     <string name="settings_web_translator">网页翻译</string>
     <string name="settings_clear_browsing">关闭时清除浏览数据</string>
     <string name="settings_clear_browsing_desc">删除 Cookie、缓存和本地存储。</string>
+    <string name="settings_tts_section">文字转语音</string>
+    <string name="settings_tts_read_urls_hashtags">朗读网址和话题标签</string>
     <string name="settings_popup_settings">弹窗</string>
     <string name="settings_popup_desc">从文字选择菜单中选择\'翻译\'时会显示弹窗</string>
     <string name="settings_hide_input">隐藏输入框</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">为原文显示音译</string>
     <string name="settings_translit_japanese_spaces">为日语音译添加空格</string>
     <string name="settings_translate_pdf_images">翻译 PDF 中的图片</string>
-    <string name="settings_translate_pdf_images_desc">识别并翻译 PDF 文件中图片里的文字。</string>
     <string name="settings_camera_live_default">默认使用相机实时翻译</string>
     <string name="settings_register_browser">注册为浏览器</string>
     <string name="settings_register_browser_desc">提供翻译来自其他应用的链接。</string>

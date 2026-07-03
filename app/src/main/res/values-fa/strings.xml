@@ -32,6 +32,8 @@
     <string name="settings_web_translator">مترجم وب</string>
     <string name="settings_clear_browsing">پاک کردن داده‌های مرور هنگام بستن</string>
     <string name="settings_clear_browsing_desc">کوکی‌ها، حافظه پنهان و ذخیره‌سازی محلی را حذف می‌کند.</string>
+    <string name="settings_tts_section">تبدیل متن به گفتار</string>
+    <string name="settings_tts_read_urls_hashtags">خواندن نشانی‌ها و هشتگ‌ها</string>
     <string name="settings_popup_settings">پنجره بازشو</string>
     <string name="settings_popup_desc">هنگام انتخاب \'ترجمه\' از منوی انتخاب متن، پنجره بازشو نمایش داده می‌شود</string>
     <string name="settings_hide_input">پنهان کردن ورودی</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">نمایش آوانگاری متن اصلی</string>
     <string name="settings_translit_japanese_spaces">افزودن فاصله در آوانگاری ژاپنی</string>
     <string name="settings_translate_pdf_images">ترجمه تصاویر داخل فایل‌های PDF</string>
-    <string name="settings_translate_pdf_images_desc">شناسایی و ترجمه متن تصاویر جاسازی‌شده در صفحه‌های PDF.</string>
     <string name="settings_camera_live_default">ترجمه زنده دوربین به‌صورت پیش‌فرض</string>
     <string name="settings_register_browser">ثبت به‌عنوان مرورگر</string>
     <string name="settings_register_browser_desc">پیشنهاد ترجمه پیوندهای برنامه‌های دیگر.</string>

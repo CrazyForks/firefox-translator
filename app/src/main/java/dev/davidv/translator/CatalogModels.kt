@@ -487,8 +487,9 @@ class LanguageCatalog private constructor(
     languageCode: String,
     text: String,
     packId: String? = null,
+    readUrlsAndHashtags: Boolean = false,
   ): List<SpeechChunkPlan> =
-    handle.planSpeechChunks(languageCode, text, packId).map { chunk ->
+    handle.planSpeechChunks(languageCode, text, packId, readUrlsAndHashtags).map { chunk ->
       SpeechChunkPlan(
         content = chunk.content,
         isPhonemes = chunk.isPhonemes,

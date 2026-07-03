@@ -34,6 +34,8 @@
     <string name="settings_web_translator">웹 번역기</string>
     <string name="settings_clear_browsing">닫을 때 인터넷 사용 기록 지우기</string>
     <string name="settings_clear_browsing_desc">쿠키, 캐시, 로컬 저장소를 삭제해요.</string>
+    <string name="settings_tts_section">텍스트 음성 변환</string>
+    <string name="settings_tts_read_urls_hashtags">URL 및 해시태그 읽기</string>
     <string name="settings_popup_settings">팝업</string>
     <string name="settings_popup_desc">텍스트 선택 메뉴에서 \'번역\'을 고르면 팝업이 나타나요</string>
     <string name="settings_hide_input">입력 숨기기</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">원본 텍스트의 음역 표시</string>
     <string name="settings_translit_japanese_spaces">일본어 음역에 띄어쓰기 추가</string>
     <string name="settings_translate_pdf_images">PDF 안의 이미지 번역</string>
-    <string name="settings_translate_pdf_images_desc">PDF 페이지에 들어 있는 이미지의 텍스트를 인식해서 번역해요.</string>
     <string name="settings_camera_live_default">기본적으로 카메라 실시간 번역</string>
     <string name="settings_register_browser">브라우저로 등록</string>
     <string name="settings_register_browser_desc">다른 앱의 링크를 번역하도록 제안해요.</string>

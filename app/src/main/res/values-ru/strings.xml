@@ -32,6 +32,8 @@
     <string name="settings_web_translator">Веб-переводчик</string>
     <string name="settings_clear_browsing">Очищать данные браузера при закрытии</string>
     <string name="settings_clear_browsing_desc">Удаляет файлы cookie, кэш и локальное хранилище.</string>
+    <string name="settings_tts_section">Синтез речи</string>
+    <string name="settings_tts_read_urls_hashtags">Читать URL и хештеги</string>
     <string name="settings_popup_settings">Всплывающее окно</string>
     <string name="settings_popup_desc">Всплывающее окно появляется при выборе \'Перевести\' в меню выделения текста</string>
     <string name="settings_hide_input">Скрыть ввод</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">Показывать транслитерацию оригинала</string>
     <string name="settings_translit_japanese_spaces">Добавлять пробелы в японской транслитерации</string>
     <string name="settings_translate_pdf_images">Переводить изображения в PDF</string>
-    <string name="settings_translate_pdf_images_desc">Распознавать и переводить текст на изображениях в файлах PDF.</string>
     <string name="settings_camera_live_default">Переводить камеру вживую по умолчанию</string>
     <string name="settings_register_browser">Зарегистрировать как браузер</string>
     <string name="settings_register_browser_desc">Предлагать перевод ссылок из других приложений.</string>

@@ -165,7 +165,8 @@ class TranslatorTtsService : TextToSpeechService() {
     callback: SynthesisCallback,
   ) {
     val catalog = applicationServices().filePathManager.loadCatalog() ?: error("Catalog unavailable")
-    val chunks = catalog.planSpeechChunks(voice.languageCode, text, voice.packId)
+    val readUrlsAndHashtags = applicationServices().settingsManager.settings.value.ttsReadUrlsAndHashtags
+    val chunks = catalog.planSpeechChunks(voice.languageCode, text, voice.packId, readUrlsAndHashtags)
     if (chunks.isEmpty()) {
       error("No speech chunks planned")
     }

@@ -32,6 +32,8 @@
     <string name="settings_web_translator">مترجم الويب</string>
     <string name="settings_clear_browsing">امحُ بيانات التصفح عند الإغلاق</string>
     <string name="settings_clear_browsing_desc">يحذف ملفات تعريف الارتباط والذاكرة المؤقتة والتخزين المحلي.</string>
+    <string name="settings_tts_section">تحويل النص إلى كلام</string>
+    <string name="settings_tts_read_urls_hashtags">اقرأ الروابط والوسوم</string>
     <string name="settings_popup_settings">النافذة المنبثقة</string>
     <string name="settings_popup_desc">تظهر النافذة المنبثقة عند اختيار \'ترجم\' من قائمة تحديد النص</string>
     <string name="settings_hide_input">أخف الإدخال</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">اعرض الكتابة الصوتية للنص الأصلي</string>
     <string name="settings_translit_japanese_spaces">أضف مسافات للكتابة الصوتية اليابانية</string>
     <string name="settings_translate_pdf_images">ترجم الصور في ملفات PDF</string>
-    <string name="settings_translate_pdf_images_desc">التعرّف على النص في الصور داخل ملفات PDF وترجمته.</string>
     <string name="settings_camera_live_default">ترجم الكاميرا مباشرةً افتراضيًا</string>
     <string name="settings_register_browser">سجِّل كمتصفح</string>
     <string name="settings_register_browser_desc">اقترح ترجمة الروابط من التطبيقات الأخرى.</string>

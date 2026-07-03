@@ -66,6 +66,7 @@ class SpeechService(
           languageCode = language.code,
           text = text,
           packId = selectedPackId,
+          readUrlsAndHashtags = settings.ttsReadUrlsAndHashtags,
         )
       if (chunkRequests.isEmpty()) {
         return@withContext SpeechSynthesisResult.Error(SpeechError.SynthesisFailed(language))

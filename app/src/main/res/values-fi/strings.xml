@@ -32,6 +32,8 @@
     <string name="settings_web_translator">Verkkokääntäjä</string>
     <string name="settings_clear_browsing">Tyhjennä selaustiedot suljettaessa</string>
     <string name="settings_clear_browsing_desc">Poistaa evästeet, välimuistin ja paikallisen tallennustilan.</string>
+    <string name="settings_tts_section">Tekstistä puheeksi</string>
+    <string name="settings_tts_read_urls_hashtags">Lue URL-osoitteet ja hashtagit</string>
     <string name="settings_popup_settings">Ponnahdusikkuna</string>
     <string name="settings_popup_desc">Ponnahdusikkuna avautuu, kun valitset \'Käännä\' tekstin valintavalikosta</string>
     <string name="settings_hide_input">Piilota syöte</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">Näytä translitterointi alkuperäiselle tekstille</string>
     <string name="settings_translit_japanese_spaces">Lisää välilyönnit japanin translitterointiin</string>
     <string name="settings_translate_pdf_images">Käännä PDF-tiedostojen kuvat</string>
-    <string name="settings_translate_pdf_images_desc">Tunnista ja käännä PDF-tiedostojen kuvissa oleva teksti.</string>
     <string name="settings_camera_live_default">Käännä kamera reaaliajassa oletuksena</string>
     <string name="settings_register_browser">Rekisteröidy selaimeksi</string>
     <string name="settings_register_browser_desc">Tarjoa linkkien kääntämistä muista sovelluksista.</string>

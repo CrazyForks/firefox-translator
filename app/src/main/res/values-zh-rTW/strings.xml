@@ -34,6 +34,8 @@
     <string name="settings_web_translator">網頁翻譯</string>
     <string name="settings_clear_browsing">關閉時清除瀏覽資料</string>
     <string name="settings_clear_browsing_desc">刪除 Cookie、快取與本機儲存空間。</string>
+    <string name="settings_tts_section">文字轉語音</string>
+    <string name="settings_tts_read_urls_hashtags">朗讀網址和主題標籤</string>
     <string name="settings_popup_settings">彈出視窗</string>
     <string name="settings_popup_desc">從文字選取選單中選擇「翻譯」時會顯示彈出視窗</string>
     <string name="settings_hide_input">隱藏輸入框</string>
@@ -58,7 +60,6 @@
     <string name="settings_translit_input">為原文顯示音譯</string>
     <string name="settings_translit_japanese_spaces">為日文音譯加上空格</string>
     <string name="settings_translate_pdf_images">翻譯 PDF 中的圖片</string>
-    <string name="settings_translate_pdf_images_desc">對 PDF 頁面中嵌入的點陣圖辨識文字並翻譯。</string>
     <string name="settings_camera_live_default">預設以相機即時翻譯</string>
     <string name="settings_register_browser">註冊為瀏覽器</string>
     <string name="settings_register_browser_desc">提供翻譯其他應用程式的連結。</string>

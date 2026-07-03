@@ -32,6 +32,8 @@
     <string name="settings_web_translator">વેબ અનુવાદક</string>
     <string name="settings_clear_browsing">બંધ કરતી વખતે બ્રાઉઝિંગ ડેટા સાફ કરો</string>
     <string name="settings_clear_browsing_desc">કૂકીઝ, કૅશ અને લોકલ સ્ટોરેજ ડિલીટ કરે છે.</string>
+    <string name="settings_tts_section">ટેક્સ્ટ થી સ્પીચ</string>
+    <string name="settings_tts_read_urls_hashtags">URL અને હૅશટૅગ વાંચો</string>
     <string name="settings_popup_settings">પોપઅપ</string>
     <string name="settings_popup_desc">લખાણ પસંદ કરવાના મેનૂમાંથી \'અનુવાદ કરો\' પસંદ કરો ત્યારે પોપઅપ દેખાય છે</string>
     <string name="settings_hide_input">ઇનપુટ છુપાવો</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">મૂળ લખાણનું લિપ્યંતર બતાવો</string>
     <string name="settings_translit_japanese_spaces">જાપાનીઝ લિપ્યંતરમાં જગ્યા ઉમેરો</string>
     <string name="settings_translate_pdf_images">PDF માંની ઇમેજનો અનુવાદ કરો</string>
-    <string name="settings_translate_pdf_images_desc">PDF પાનામાં રહેલી ઇમેજમાંથી લખાણ ઓળખીને તેનો અનુવાદ કરો.</string>
     <string name="settings_camera_live_default">ડિફૉલ્ટ રીતે કૅમેરા લાઇવ અનુવાદ કરો</string>
     <string name="settings_register_browser">બ્રાઉઝર તરીકે રજિસ્ટર કરો</string>
     <string name="settings_register_browser_desc">બીજી ઍપ્સની લિંકનો અનુવાદ કરવાનું સૂચવો.</string>

@@ -71,6 +71,8 @@
     <string name="settings_web_translator">Tõlge veebist</string>
     <string name="settings_clear_browsing">Sulgemisel kustuta veebibrauseri andmed</string>
     <string name="settings_clear_browsing_desc">Kustutab küpsised, puhverdatud andmed ja kohaliku andmeruumi.</string>
+    <string name="settings_tts_section">Tekst kõneks</string>
+    <string name="settings_tts_read_urls_hashtags">Loe ette URL-id ja teemaviited</string>
     <string name="settings_popup_settings">Hüpikaken</string>
     <string name="settings_popup_desc">Hüpikaken avaneb valimisel tekstivaliku menüüst „Tõlgi“</string>
     <string name="settings_hide_input">Peida sisend</string>
@@ -92,7 +94,6 @@
     <string name="settings_translit_input">Näita lähteteksti puhul transliteratsiooni</string>
     <string name="settings_translit_japanese_spaces">Lisa tühikud jaapani keele transliteratsiooni</string>
     <string name="settings_translate_pdf_images">Tõlgi PDF-failides leiduvaid pilte</string>
-    <string name="settings_translate_pdf_images_desc">Tuvasta ja tõlgi PDF-failides leiduvate piltide tekst.</string>
     <string name="settings_camera_live_default">Vaikimisi tõlgi kaamerapilt reaalajas</string>
     <string name="settings_register_browser">Registreeri veebibrauserina</string>
     <string name="settings_register_browser_desc">See võimaldab pakkuda linkide tõlketeenust teistest rakendustest.</string>

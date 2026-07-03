@@ -32,6 +32,8 @@
     <string name="settings_web_translator">वेब अनुवादक</string>
     <string name="settings_clear_browsing">बंद करने पर ब्राउज़िंग डेटा साफ़ करें</string>
     <string name="settings_clear_browsing_desc">कुकीज़, कैश और लोकल स्टोरेज मिटाता है।</string>
+    <string name="settings_tts_section">टेक्स्ट-टू-स्पीच</string>
+    <string name="settings_tts_read_urls_hashtags">URL और हैशटैग पढ़ें</string>
     <string name="settings_popup_settings">पॉपअप</string>
     <string name="settings_popup_desc">टेक्स्ट चयन मेनू से \'अनुवाद करें\' चुनने पर पॉपअप दिखता है</string>
     <string name="settings_hide_input">इनपुट छिपाएं</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">मूल टेक्स्ट के लिए लिप्यंतरण दिखाएं</string>
     <string name="settings_translit_japanese_spaces">जापानी लिप्यंतरण के लिए स्पेस जोड़ें</string>
     <string name="settings_translate_pdf_images">PDF में इमेज का अनुवाद करें</string>
-    <string name="settings_translate_pdf_images_desc">PDF फ़ाइलों में मौजूद इमेज में टेक्स्ट पहचानें और उसका अनुवाद करें।</string>
     <string name="settings_camera_live_default">डिफ़ॉल्ट रूप से कैमरे का लाइव अनुवाद करें</string>
     <string name="settings_register_browser">ब्राउज़र के रूप में रजिस्टर करें</string>
     <string name="settings_register_browser_desc">दूसरे ऐप्स से लिंक का अनुवाद करने की पेशकश करें।</string>

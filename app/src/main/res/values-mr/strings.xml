@@ -32,6 +32,8 @@
     <string name="settings_web_translator">वेब भाषांतरक</string>
     <string name="settings_clear_browsing">बंद करताना ब्राउझिंग डेटा साफ करा</string>
     <string name="settings_clear_browsing_desc">कुकीज, कॅशे आणि स्थानिक संचयन हटवते.</string>
+    <string name="settings_tts_section">मजकूर-ते-उच्चार</string>
+    <string name="settings_tts_read_urls_hashtags">URL आणि हॅशटॅग वाचा</string>
     <string name="settings_popup_settings">पॉपअप</string>
     <string name="settings_popup_desc">मजकूर निवड मेनूमधून \'भाषांतर करा\' निवडल्यावर पॉपअप दिसतो</string>
     <string name="settings_hide_input">इनपुट लपवा</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">मूळ मजकुरासाठी लिप्यंतर दाखवा</string>
     <string name="settings_translit_japanese_spaces">जपानी लिप्यंतरासाठी मोकळी जागा जोडा</string>
     <string name="settings_translate_pdf_images">PDF मधील प्रतिमा भाषांतर करा</string>
-    <string name="settings_translate_pdf_images_desc">PDF फायलींमधील प्रतिमांतील मजकूर ओळखून भाषांतर करा.</string>
     <string name="settings_camera_live_default">डीफॉल्टनुसार कॅमेरा थेट भाषांतर करा</string>
     <string name="settings_register_browser">ब्राउझर म्हणून नोंदणी करा</string>
     <string name="settings_register_browser_desc">इतर अॅप्समधील दुवे भाषांतर करण्याची सुविधा द्या.</string>

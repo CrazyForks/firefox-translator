@@ -32,6 +32,8 @@
     <string name="settings_web_translator">Penerjemah Web</string>
     <string name="settings_clear_browsing">Hapus data penjelajahan saat ditutup</string>
     <string name="settings_clear_browsing_desc">Menghapus cookie, cache, dan penyimpanan lokal.</string>
+    <string name="settings_tts_section">Teks ke ucapan</string>
+    <string name="settings_tts_read_urls_hashtags">Baca URL dan tagar</string>
     <string name="settings_popup_settings">Popup</string>
     <string name="settings_popup_desc">Popup muncul saat memilih \'Terjemahkan\' dari menu pilihan teks</string>
     <string name="settings_hide_input">Sembunyikan input</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">Tampilkan transliterasi untuk teks asli</string>
     <string name="settings_translit_japanese_spaces">Tambahkan spasi untuk transliterasi bahasa Jepang</string>
     <string name="settings_translate_pdf_images">Terjemahkan gambar dalam PDF</string>
-    <string name="settings_translate_pdf_images_desc">Mengenali teks dan menerjemahkan gambar yang tertanam di halaman PDF.</string>
     <string name="settings_camera_live_default">Terjemahkan kamera secara langsung secara bawaan</string>
     <string name="settings_register_browser">Daftarkan sebagai peramban</string>
     <string name="settings_register_browser_desc">Tawarkan untuk menerjemahkan tautan dari aplikasi lain.</string>

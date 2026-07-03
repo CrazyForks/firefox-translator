@@ -26,5 +26,4 @@
     <string name="settings_screen_translation_desc">Traduza texto diretamente sobre outras aplicações.</string>
     <string name="settings_shortcut">Traduzir ecrã por atalho</string>
     <string name="settings_shortcut_desc">Mantenha premido início ou ligar para acionar</string>
-    <string name="settings_translate_pdf_images_desc">Reconhecer e traduzir texto em imagens dentro de ficheiros PDF.</string>
 </resources>

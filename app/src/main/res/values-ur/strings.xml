@@ -32,6 +32,8 @@
     <string name="settings_web_translator">ویب ٹرانسلیٹر</string>
     <string name="settings_clear_browsing">بند کرتے وقت براؤزنگ ڈیٹا صاف کریں</string>
     <string name="settings_clear_browsing_desc">کوکیز، کیشے اور لوکل اسٹوریج حذف کرتا ہے۔</string>
+    <string name="settings_tts_section">متن سے تقریر</string>
+    <string name="settings_tts_read_urls_hashtags">یو آر ایل اور ہیش ٹیگ پڑھیں</string>
     <string name="settings_popup_settings">پاپ اپ</string>
     <string name="settings_popup_desc">پاپ اپ اس وقت ظاہر ہوتی ہے جب آپ متن کے انتخاب کے مینو سے \'ترجمہ کریں\' منتخب کرتے ہیں</string>
     <string name="settings_hide_input">ان پٹ چھپائیں</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">اصل متن کے لیے نقلِ حرفی دکھائیں</string>
     <string name="settings_translit_japanese_spaces">جاپانی نقلِ حرفی کے لیے خالی جگہیں شامل کریں</string>
     <string name="settings_translate_pdf_images">PDF میں تصاویر کا ترجمہ کریں</string>
-    <string name="settings_translate_pdf_images_desc">PDF صفحات میں موجود تصاویر سے متن پہچان کر اس کا ترجمہ کریں۔</string>
     <string name="settings_camera_live_default">بطورِ ڈیفالٹ کیمرے کا براہِ راست ترجمہ کریں</string>
     <string name="settings_register_browser">براؤزر کے طور پر رجسٹر کریں</string>
     <string name="settings_register_browser_desc">دوسری ایپس کے لنکس کا ترجمہ کرنے کی پیشکش کریں۔</string>

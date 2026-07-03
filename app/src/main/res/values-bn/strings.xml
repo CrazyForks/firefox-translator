@@ -32,6 +32,8 @@
     <string name="settings_web_translator">ওয়েব অনুবাদক</string>
     <string name="settings_clear_browsing">বন্ধ করার সময় ব্রাউজিং তথ্য মুছুন</string>
     <string name="settings_clear_browsing_desc">কুকি, ক্যাশ এবং লোকাল স্টোরেজ মুছে ফেলে।</string>
+    <string name="settings_tts_section">টেক্সট থেকে স্পিচ</string>
+    <string name="settings_tts_read_urls_hashtags">URL এবং হ্যাশট্যাগ পড়ুন</string>
     <string name="settings_popup_settings">পপআপ</string>
     <string name="settings_popup_desc">লেখা নির্বাচন মেনু থেকে \'অনুবাদ করুন\' বেছে নিলে পপআপ দেখা যায়</string>
     <string name="settings_hide_input">ইনপুট লুকান</string>
@@ -56,7 +58,6 @@
     <string name="settings_translit_input">মূল লেখার প্রতিবর্ণীকরণ দেখান</string>
     <string name="settings_translit_japanese_spaces">জাপানি প্রতিবর্ণীকরণে ফাঁকা স্থান যোগ করুন</string>
     <string name="settings_translate_pdf_images">PDF-এর ছবি অনুবাদ করুন</string>
-    <string name="settings_translate_pdf_images_desc">PDF ফাইলের ভেতরের ছবির লেখা শনাক্ত করে অনুবাদ করুন।</string>
     <string name="settings_camera_live_default">ডিফল্টভাবে ক্যামেরা লাইভ অনুবাদ করুন</string>
     <string name="settings_register_browser">ব্রাউজার হিসেবে নিবন্ধন করুন</string>
     <string name="settings_register_browser_desc">অন্য অ্যাপ থেকে লিঙ্ক অনুবাদের প্রস্তাব দিন।</string>

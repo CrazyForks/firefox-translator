@@ -118,6 +118,8 @@ class SettingsManager(
         .getString("tts_voice_overrides", null)
         ?.let(::parseVoiceOverrides)
         ?: defaults.ttsVoiceOverrides
+    val ttsReadUrlsAndHashtags =
+      prefs.getBoolean("tts_read_urls_and_hashtags", defaults.ttsReadUrlsAndHashtags)
     val clearWebTranslatorDataOnClose =
       prefs.getBoolean(
         "clear_web_translator_data_on_close",
@@ -160,6 +162,7 @@ class SettingsManager(
       ttsPlaybackSpeed = ttsPlaybackSpeed,
       ttsPlaybackSpeedOverrides = ttsPlaybackSpeedOverrides,
       ttsVoiceOverrides = ttsVoiceOverrides,
+      ttsReadUrlsAndHashtags = ttsReadUrlsAndHashtags,
       tapToTranslateEnabled = tapToTranslateEnabled,
       clearWebTranslatorDataOnClose = clearWebTranslatorDataOnClose,
       translatePdfImages = translatePdfImages,
@@ -249,6 +252,10 @@ class SettingsManager(
         putString("tts_voice_overrides", serializeVoiceOverrides(newSettings.ttsVoiceOverrides))
         modifiedSettings.add("tts_voice_overrides")
         TranslatorTtsEngine.notifyVoiceDataChanged(appContext)
+      }
+      if (newSettings.ttsReadUrlsAndHashtags != currentSettings.ttsReadUrlsAndHashtags) {
+        putBoolean("tts_read_urls_and_hashtags", newSettings.ttsReadUrlsAndHashtags)
+        modifiedSettings.add("tts_read_urls_and_hashtags")
       }
       if (newSettings.tapToTranslateEnabled != currentSettings.tapToTranslateEnabled) {
         putBoolean("tap_to_translate_enabled", newSettings.tapToTranslateEnabled)
