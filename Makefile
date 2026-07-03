@@ -2,6 +2,7 @@
 
 lint:
 	git grep -w println app/src/main/ && echo "Found println" && exit 1 || true
+	python3 scripts/check_extra_translations.py
 	./gradlew ktlintCheck
 lint-fix:
 	./gradlew ktlintFormat
