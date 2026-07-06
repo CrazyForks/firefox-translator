@@ -880,7 +880,7 @@ private fun TopLanguagePills(
       ) {
         Icon(
           painter = painterResource(id = R.drawable.compare),
-          contentDescription = "Reverse translation direction",
+          contentDescription = stringResource(R.string.a11y_reverse_translation_direction),
         )
       }
     }
@@ -928,7 +928,7 @@ private fun BottomControls(
     ) {
       Icon(
         painter = painterResource(if (torchOn) R.drawable.flash_on else R.drawable.flash_off),
-        contentDescription = if (torchOn) "Torch on" else "Torch off",
+        contentDescription = if (torchOn) stringResource(R.string.a11y_torch_on) else stringResource(R.string.a11y_torch_off),
         tint = if (hasFlashUnit) Color.White else Color.White.copy(alpha = 0.3f),
       )
     }
@@ -948,7 +948,14 @@ private fun BottomControls(
     IconButton(onClick = onLiveOverlayToggle) {
       Icon(
         painter = painterResource(R.drawable.auto_awesome),
-        contentDescription = if (liveOverlayOn) "Live overlay on" else "Live overlay off",
+        contentDescription =
+          if (liveOverlayOn) {
+            stringResource(
+              R.string.a11y_live_overlay_on,
+            )
+          } else {
+            stringResource(R.string.a11y_live_overlay_off)
+          },
         tint =
           when {
             !liveOverlayAvailable -> Color.White.copy(alpha = 0.25f)

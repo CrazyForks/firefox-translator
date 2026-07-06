@@ -43,6 +43,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import dev.davidv.translator.R
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 class StyledTextFieldFocusController {
@@ -84,7 +85,7 @@ fun StyledTextField(
     AndroidView(
       factory = { context ->
         EditText(context).apply {
-          this.contentDescription = "Primary input"
+          this.contentDescription = context.getString(R.string.a11y_primary_input)
           this.layoutParams =
             ViewGroup.LayoutParams(
               ViewGroup.LayoutParams.MATCH_PARENT,

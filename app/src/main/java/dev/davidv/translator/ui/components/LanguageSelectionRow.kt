@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.LangAvailability
@@ -117,7 +118,7 @@ fun LanguageSwapButton(
   IconButton(onClick = onClick, enabled = enabled) {
     Icon(
       painterResource(id = R.drawable.compare),
-      contentDescription = "Reverse translation direction",
+      contentDescription = stringResource(R.string.a11y_reverse_translation_direction),
     )
   }
 }

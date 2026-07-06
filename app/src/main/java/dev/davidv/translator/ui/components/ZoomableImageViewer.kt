@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -144,7 +145,14 @@ fun ZoomableImageViewer(
       ) {
         Image(
           bitmap = displayed.asImageBitmap(),
-          contentDescription = if (showOriginal) "Zoomable original image" else "Zoomable translated image",
+          contentDescription =
+            if (showOriginal) {
+              stringResource(
+                R.string.a11y_zoomable_original_image,
+              )
+            } else {
+              stringResource(R.string.a11y_zoomable_translated_image)
+            },
           modifier = Modifier.fillMaxSize(),
         )
 
@@ -167,7 +175,14 @@ fun ZoomableImageViewer(
         ) {
           Icon(
             painterResource(id = R.drawable.flip),
-            contentDescription = if (showOriginal) "Show translated image" else "Show original image",
+            contentDescription =
+              if (showOriginal) {
+                stringResource(
+                  R.string.a11y_show_translated_image,
+                )
+              } else {
+                stringResource(R.string.a11y_show_original_image)
+              },
             tint =
               if (showOriginal) {
                 MaterialTheme.colorScheme.primary
@@ -183,7 +198,7 @@ fun ZoomableImageViewer(
         ) {
           Icon(
             painterResource(id = R.drawable.share),
-            contentDescription = "Share image",
+            contentDescription = stringResource(R.string.a11y_share_image),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
           )
         }
@@ -199,7 +214,7 @@ fun ZoomableImageViewer(
       ) {
         Icon(
           painterResource(id = R.drawable.arrow_back),
-          contentDescription = "Close full screen view",
+          contentDescription = stringResource(R.string.a11y_close_fullscreen),
           tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
         )
       }

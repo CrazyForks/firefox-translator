@@ -74,7 +74,7 @@ fun NoLanguagesScreen(
           IconButton(onClick = onSettings) {
             Icon(
               painterResource(id = R.drawable.settings),
-              contentDescription = "Settings",
+              contentDescription = stringResource(R.string.a11y_settings),
             )
           }
         },

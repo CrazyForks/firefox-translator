@@ -252,7 +252,7 @@ private fun VoicePickerDialog(
           ) {
             Icon(
               painter = painterResource(id = R.drawable.cancel),
-              contentDescription = "Close",
+              contentDescription = stringResource(R.string.a11y_close),
               modifier = Modifier.size(18.dp),
             )
           }
@@ -558,7 +558,7 @@ private fun FavoriteButton(
   ) {
     Icon(
       painter = painterResource(id = if (isFavorite) R.drawable.star_filled else R.drawable.star),
-      contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+      contentDescription = if (isFavorite) stringResource(R.string.a11y_favorite_remove) else stringResource(R.string.a11y_favorite_add),
       tint = if (isFavorite) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
       modifier = Modifier.size(18.dp),
     )
@@ -1002,7 +1002,7 @@ private fun LanguageAssetCard(
       ) {
         Icon(
           painter = painterResource(id = if (expanded) R.drawable.expandless else R.drawable.expandmore),
-          contentDescription = if (expanded) "Collapse" else "Expand",
+          contentDescription = if (expanded) stringResource(R.string.a11y_collapse) else stringResource(R.string.a11y_expand),
           modifier = Modifier.size(18.dp),
         )
       }
@@ -1227,7 +1227,7 @@ private fun FeaturePresenceIndicators(row: LanguageAssetRow) {
     if (row.dictionaryVisible) {
       Icon(
         painter = painterResource(id = R.drawable.dictionary),
-        contentDescription = "Dictionary Status",
+        contentDescription = stringResource(R.string.a11y_dictionary_status),
         tint =
           if (row.dictionaryInstalled) {
             installedTint
@@ -1241,7 +1241,7 @@ private fun FeaturePresenceIndicators(row: LanguageAssetRow) {
     if (row.ttsVisible) {
       Icon(
         painter = painterResource(id = R.drawable.volume_up),
-        contentDescription = "Text-to-speech Status",
+        contentDescription = stringResource(R.string.a11y_tts_status),
         tint =
           if (row.ttsInstalled) {
             installedTint
@@ -1269,7 +1269,7 @@ private fun AggregateActionButton(
     ProgressIconButton(
       downloadState = downloadState,
       onClick = onCancel,
-      contentDescription = "Cancel Download",
+      contentDescription = stringResource(R.string.a11y_cancel_download),
     )
     return
   }
@@ -1290,9 +1290,9 @@ private fun AggregateActionButton(
         ),
       contentDescription =
         when {
-          isInstalled -> "Delete"
-          downloadState?.isCancelled == true || downloadState?.error != null -> "Retry Download"
-          else -> "Download"
+          isInstalled -> stringResource(R.string.a11y_delete)
+          downloadState?.isCancelled == true || downloadState?.error != null -> stringResource(R.string.a11y_retry_download)
+          else -> stringResource(R.string.a11y_download)
         },
       modifier = Modifier.size(18.dp),
     )
@@ -1314,7 +1314,7 @@ private fun FeatureActionButton(
     ProgressIconButton(
       downloadState = downloadState,
       onClick = onCancel,
-      contentDescription = "Cancel Download",
+      contentDescription = stringResource(R.string.a11y_cancel_download),
     )
     return
   }
@@ -1339,8 +1339,8 @@ private fun FeatureActionButton(
       contentDescription =
         when {
           isInstalled -> installedDescription
-          downloadState?.isCancelled == true || downloadState?.error != null -> "Retry Download"
-          else -> "Download Feature"
+          downloadState?.isCancelled == true || downloadState?.error != null -> stringResource(R.string.a11y_retry_download)
+          else -> stringResource(R.string.a11y_download_feature)
         },
       modifier = Modifier.size(18.dp),
     )

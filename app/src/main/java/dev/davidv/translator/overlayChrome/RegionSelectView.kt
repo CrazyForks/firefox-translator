@@ -64,9 +64,11 @@ class RegionSelectView(
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER
       }
-    controls.addView(controlPill(R.drawable.cancel, "Cancel") { onCancel() })
-    controls.addView(controlPill(R.drawable.delete, "Reset to full screen") { onReset() })
-    controls.addView(controlPill(R.drawable.check_plain, "Confirm region") { onConfirm(canvas.normalized()) })
+    controls.addView(controlPill(R.drawable.cancel, context.getString(R.string.a11y_cancel)) { onCancel() })
+    controls.addView(controlPill(R.drawable.delete, context.getString(R.string.a11y_region_reset)) { onReset() })
+    controls.addView(
+      controlPill(R.drawable.check_plain, context.getString(R.string.a11y_region_confirm)) { onConfirm(canvas.normalized()) },
+    )
     addView(
       controls,
       LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {

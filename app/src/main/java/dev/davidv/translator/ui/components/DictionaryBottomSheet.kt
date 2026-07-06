@@ -200,13 +200,14 @@ fun DictionaryEntry(
   onDictionaryLookup: (String) -> Unit = {},
   onBackPressed: () -> Unit = {},
 ) {
+  val dictionaryEntryDescription = stringResource(R.string.a11y_dictionary_entry)
   Column(
     modifier =
       Modifier
         .fillMaxWidth()
         .padding(vertical = 16.dp, horizontal = 8.dp)
         .verticalScroll(rememberScrollState())
-        .semantics { contentDescription = "Dictionary Entry" }
+        .semantics { contentDescription = dictionaryEntryDescription }
         .testTag("DictionaryEntry"),
   ) {
     Box(
@@ -224,7 +225,7 @@ fun DictionaryEntry(
         ) {
           Icon(
             painterResource(id = R.drawable.arrow_back),
-            contentDescription = "Back",
+            contentDescription = stringResource(R.string.a11y_back),
             tint = MaterialTheme.colorScheme.onSurface,
           )
         }

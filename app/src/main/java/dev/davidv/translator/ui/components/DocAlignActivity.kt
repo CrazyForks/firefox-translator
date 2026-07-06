@@ -312,7 +312,7 @@ private fun DocAlignScreen(
       IconButton(onClick = { helpVisible = true }) {
         Icon(
           painter = painterResource(id = R.drawable.help_outline),
-          contentDescription = "Help",
+          contentDescription = stringResource(R.string.a11y_help),
           tint = Color.White,
         )
       }
@@ -347,14 +347,14 @@ private fun DocAlignScreen(
       IconButton(onClick = { rotate90Clockwise() }) {
         Icon(
           painter = painterResource(id = R.drawable.rotate_right),
-          contentDescription = "Rotate 90 degrees",
+          contentDescription = stringResource(R.string.a11y_rotate_90),
           tint = Color.White,
         )
       }
       IconButton(onClick = onSwitchToRect) {
         Icon(
           painter = painterResource(id = R.drawable.activity_zone),
-          contentDescription = "Switch to rectangular crop",
+          contentDescription = stringResource(R.string.a11y_switch_rectangular_crop),
           tint = Color.White,
         )
       }

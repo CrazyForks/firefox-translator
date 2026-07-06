@@ -113,7 +113,7 @@ fun HowToUseScreen(onBack: () -> Unit) {
           IconButton(onClick = onBack) {
             Icon(
               painter = painterResource(id = R.drawable.arrow_back),
-              contentDescription = "Back",
+              contentDescription = stringResource(R.string.a11y_back),
             )
           }
         },

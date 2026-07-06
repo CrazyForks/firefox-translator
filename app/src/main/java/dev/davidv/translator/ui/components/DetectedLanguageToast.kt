@@ -60,6 +60,7 @@ fun DetectedLanguageToast(
   downloadStates: Map<Language, DownloadState> = emptyMap(),
 ) {
   val isLanguageAvailable = languageState.availabilityFor(detectedLanguage)?.translatorFiles == true
+  val toastDescription = stringResource(R.string.a11y_detected_language_toast)
 
   Row(
     modifier =
@@ -68,7 +69,7 @@ fun DetectedLanguageToast(
         .clip(RoundedCornerShape(12.dp))
         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         .padding(horizontal = 16.dp, vertical = 12.dp)
-        .semantics { contentDescription = "Detected language toast" },
+        .semantics { contentDescription = toastDescription },
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically,
   ) {
@@ -98,7 +99,7 @@ fun DetectedLanguageToast(
     if (isLanguageAvailable) {
       Icon(
         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-        contentDescription = "Switch to detected language",
+        contentDescription = stringResource(R.string.a11y_switch_detected_language),
         tint = MaterialTheme.colorScheme.onSurface,
         modifier =
           Modifier

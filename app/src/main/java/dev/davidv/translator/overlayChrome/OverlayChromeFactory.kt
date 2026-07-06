@@ -86,7 +86,7 @@ object OverlayChromeFactory {
           setColorFilter(Color.WHITE)
           setPadding(iconPad, iconPad, iconPad, iconPad)
           setOnClickListener { onTranslateScreenClick() }
-          contentDescription = "Translate screen live"
+          contentDescription = context.getString(R.string.a11y_translate_screen_live)
         }
       val screenPill = makePill(context, dpToPx, screenBtn)
       toolbar.addView(
@@ -181,7 +181,7 @@ object OverlayChromeFactory {
           setColorFilter(Color.WHITE)
           setPadding(iconPad, iconPad, iconPad, iconPad)
           setOnClickListener { onRefreshClick() }
-          contentDescription = "Refresh"
+          contentDescription = context.getString(R.string.a11y_refresh)
         }
       val refreshPill = makePill(context, dpToPx, refreshBtn)
       rightActions.addView(
@@ -199,7 +199,7 @@ object OverlayChromeFactory {
           setColorFilter(Color.WHITE)
           setPadding(iconPad, iconPad, iconPad, iconPad)
           setOnClickListener { onRegionClick() }
-          contentDescription = "Set translation area"
+          contentDescription = context.getString(R.string.a11y_set_translation_area)
         }
       val regionPill = makePill(context, dpToPx, regionBtn)
       rightActions.addView(
@@ -218,7 +218,7 @@ object OverlayChromeFactory {
           setColorFilter(Color.WHITE)
           setPadding(iconPad, iconPad, iconPad, iconPad)
           setOnClickListener { onFlipOriginal() }
-          contentDescription = "Show original"
+          contentDescription = context.getString(R.string.a11y_show_original)
         }
       flipIcon = flipBtn
       val flipPill = makePill(context, dpToPx, flipBtn)
@@ -238,7 +238,7 @@ object OverlayChromeFactory {
           setColorFilter(Color.WHITE)
           setPadding(iconPad, iconPad, iconPad, iconPad)
           setOnClickListener { onPauseClick() }
-          contentDescription = "Pause or resume"
+          contentDescription = context.getString(R.string.a11y_pause_resume)
         }
       pauseIcon = pauseBtn
       val pausePill = makePill(context, dpToPx, pauseBtn)

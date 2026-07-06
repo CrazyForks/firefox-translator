@@ -41,8 +41,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import dev.davidv.translator.R
 import kotlin.math.roundToInt
 
 /**
@@ -103,7 +105,14 @@ fun ImageDisplaySection(
     ) {
       Image(
         bitmap = shown.asImageBitmap(),
-        contentDescription = if (showOriginal) "Original image" else "Translated image",
+        contentDescription =
+          if (showOriginal) {
+            stringResource(
+              R.string.a11y_original_image,
+            )
+          } else {
+            stringResource(R.string.a11y_translated_image)
+          },
         contentScale = ContentScale.Fit,
         modifier = Modifier.fillMaxSize(),
       )

@@ -34,6 +34,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.DownloadState
@@ -79,7 +80,7 @@ fun LanguageDownloadButton(
       ) {
         Icon(
           painterResource(id = R.drawable.cancel),
-          contentDescription = "Cancel Download",
+          contentDescription = stringResource(R.string.a11y_cancel_download),
         )
       }
     }
@@ -94,7 +95,7 @@ fun LanguageDownloadButton(
     ) {
       Icon(
         painterResource(id = R.drawable.delete),
-        contentDescription = "Delete Language",
+        contentDescription = stringResource(R.string.a11y_delete_language),
         tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.5f),
       )
     }
@@ -111,13 +112,13 @@ fun LanguageDownloadButton(
         downloadState?.isCancelled == true || downloadState?.error != null -> {
           Icon(
             painterResource(id = R.drawable.refresh),
-            contentDescription = "Retry Download",
+            contentDescription = stringResource(R.string.a11y_retry_download),
           )
         }
         else -> {
           Icon(
             painterResource(id = R.drawable.add),
-            contentDescription = "Download",
+            contentDescription = stringResource(R.string.a11y_download),
           )
         }
       }

@@ -45,6 +45,7 @@ PPOCR_V6_FILENAMES = {
     "indic_keys.txt",
     "ink_bold_int8.mnn",
     "ink_bold_line_int8.mnn",
+    "ink_color_int8.mnn",
 }
 
 # v6 recognizer upgrades per script slug: (model, keys). The unified v6
@@ -66,7 +67,7 @@ PPOCR_V6_NATIVE_RECOGNIZER_FILENAMES = {
 # Per-strip ink model, optional at runtime. Lowest→highest priority like the detector above, so
 # existing installs are offered the newer file as an upgrade. The *_line_* model adds a 3rd
 # channel (rule); the channel count is self-describing, so older app builds read it as matte+bold.
-PPOCR_INK_FILENAMES = ["ink_bold_int8.mnn", "ink_bold_line_int8.mnn"]
+PPOCR_INK_FILENAMES = ["ink_bold_int8.mnn", "ink_bold_line_int8.mnn", "ink_color_int8.mnn"]
 PPOCR_SCRIPT_CLASSIFIER_FILENAME = "PULC_int8.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x1_0_fp32.mnn"
 PPOCR_TEXTLINE_ORIENTATION_FILENAME = "textline_ori_x0_25_wq8.mnn"

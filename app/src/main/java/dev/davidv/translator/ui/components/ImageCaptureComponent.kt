@@ -409,7 +409,7 @@ fun ImageSourceBottomSheet(
             }
           Icon(
             painter = painterResource(id = R.drawable.videocam),
-            contentDescription = "Translate screen live",
+            contentDescription = stringResource(R.string.a11y_translate_screen_live),
             modifier =
               Modifier
                 .size(48.dp)
@@ -431,7 +431,7 @@ fun ImageSourceBottomSheet(
         ) {
           Icon(
             painter = painterResource(id = R.drawable.draft),
-            contentDescription = "Document",
+            contentDescription = stringResource(R.string.a11y_source_document),
             modifier =
               Modifier
                 .size(48.dp)
@@ -454,7 +454,7 @@ fun ImageSourceBottomSheet(
           ) {
             Icon(
               painter = painterResource(id = R.drawable.gallery),
-              contentDescription = "Photos",
+              contentDescription = stringResource(R.string.a11y_source_photos),
               modifier =
                 Modifier
                   .size(48.dp)
@@ -476,7 +476,7 @@ fun ImageSourceBottomSheet(
           ) {
             Icon(
               painter = painterResource(id = R.drawable.gallery),
-              contentDescription = "Gallery",
+              contentDescription = stringResource(R.string.a11y_source_gallery),
               modifier =
                 Modifier
                   .size(48.dp)
@@ -498,7 +498,7 @@ fun ImageSourceBottomSheet(
         ) {
           Icon(
             painter = painterResource(id = R.drawable.camera),
-            contentDescription = "Camera",
+            contentDescription = stringResource(R.string.a11y_source_camera),
             modifier =
               Modifier
                 .size(48.dp)

@@ -160,7 +160,7 @@ class AppCropActivity : UCropActivity() {
           true,
         )
         setBackgroundResource(outValue.resourceId)
-        contentDescription = "Detect document corners"
+        contentDescription = getString(dev.davidv.translator.R.string.a11y_detect_document_corners)
         setOnClickListener {
           setResult(RESULT_SWITCH_TO_DOC_ALIGN, Intent())
           finish()
@@ -368,8 +368,8 @@ class AppCropActivity : UCropActivity() {
         )
     }
 
-    bottomBar.addView(makeButton("Cancel") { finish() })
-    bottomBar.addView(makeButton("Crop") { cropAndSaveImage() })
+    bottomBar.addView(makeButton(getString(dev.davidv.translator.R.string.common_cancel)) { finish() })
+    bottomBar.addView(makeButton(getString(dev.davidv.translator.R.string.image_crop_action)) { cropAndSaveImage() })
 
     photobox.addView(bottomBar)
 
