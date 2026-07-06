@@ -60,7 +60,15 @@ fun DetectedLanguageToast(
   downloadStates: Map<Language, DownloadState> = emptyMap(),
 ) {
   val isLanguageAvailable = languageState.availabilityFor(detectedLanguage)?.translatorFiles == true
+  val isDownloading = downloadStates[detectedLanguage]?.isDownloading == true
   val toastDescription = stringResource(R.string.a11y_detected_language_toast)
+
+  val onToastClick: () -> Unit =
+    when {
+      isLanguageAvailable -> onSwitchClick
+      isDownloading -> ({ onEvent(LanguageEvent.Cancel(detectedLanguage)) })
+      else -> ({ onEvent(LanguageEvent.Download(detectedLanguage)) })
+    }
 
   Row(
     modifier =
@@ -68,6 +76,7 @@ fun DetectedLanguageToast(
         .fillMaxWidth()
         .clip(RoundedCornerShape(12.dp))
         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        .clickable(onClick = onToastClick)
         .padding(horizontal = 16.dp, vertical = 12.dp)
         .semantics { contentDescription = toastDescription },
     horizontalArrangement = Arrangement.SpaceBetween,
@@ -101,10 +110,7 @@ fun DetectedLanguageToast(
         imageVector = Icons.AutoMirrored.Filled.ArrowForward,
         contentDescription = stringResource(R.string.a11y_switch_detected_language),
         tint = MaterialTheme.colorScheme.onSurface,
-        modifier =
-          Modifier
-            .clickable { onSwitchClick() }
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
       )
     } else {
       LanguageDownloadButton(
