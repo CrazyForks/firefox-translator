@@ -997,6 +997,29 @@ impl CatalogHandle {
             .map_err(CatalogError::from)
     }
 
+    fn translate_text_with_alternatives(
+        &self,
+        from_code: String,
+        to_code: String,
+        text: String,
+    ) -> Result<translator::TranslationWithAlternatives, CatalogError> {
+        self.session
+            .translate_text_with_alternatives(&from_code, &to_code, &text)
+            .map_err(CatalogError::from)
+    }
+
+    fn steer(
+        &self,
+        from_code: String,
+        to_code: String,
+        source: String,
+        forced_prefix: String,
+    ) -> Result<translator::TranslationWithAlternatives, CatalogError> {
+        self.session
+            .steer(&from_code, &to_code, &source, &forced_prefix)
+            .map_err(CatalogError::from)
+    }
+
     fn translate_mixed_texts(
         &self,
         inputs: Vec<String>,

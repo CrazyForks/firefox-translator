@@ -832,7 +832,7 @@ fun SettingsScreen(
                 painterResource(
                   id = if (advancedExpanded) R.drawable.expandless else R.drawable.expandmore,
                 ),
-              contentDescription = if (advancedExpanded) "Collapse" else "Expand",
+              contentDescription = if (advancedExpanded) stringResource(R.string.a11y_collapse) else stringResource(R.string.a11y_expand),
               tint = MaterialTheme.colorScheme.primary,
             )
           }
@@ -931,6 +931,32 @@ fun SettingsScreen(
                 checked = settings.enableOutputTransliteration,
                 onCheckedChange = { checked ->
                   onSettingsChange(settings.copy(enableOutputTransliteration = checked))
+                },
+              )
+            }
+
+            // Underline words with alternatives
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                Text(
+                  text = stringResource(R.string.settings_underline_alternatives),
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = stringResource(R.string.settings_underline_alternatives_desc),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              Switch(
+                checked = settings.showAlternativeUnderlines,
+                onCheckedChange = { checked ->
+                  onSettingsChange(settings.copy(showAlternativeUnderlines = checked))
                 },
               )
             }
@@ -1253,7 +1279,7 @@ private fun SupportActionButton(
       ) {
         Icon(
           painter = painterResource(id = R.drawable.cancel),
-          contentDescription = "Cancel Download",
+          contentDescription = stringResource(R.string.a11y_cancel_download),
         )
       }
     }
@@ -1276,9 +1302,9 @@ private fun SupportActionButton(
         ),
       contentDescription =
         when {
-          installed -> "Delete"
-          downloadState.isCancelled || downloadState.error != null -> "Retry Download"
-          else -> "Download"
+          installed -> stringResource(R.string.a11y_delete)
+          downloadState.isCancelled || downloadState.error != null -> stringResource(R.string.a11y_retry_download)
+          else -> stringResource(R.string.a11y_download)
         },
     )
   }

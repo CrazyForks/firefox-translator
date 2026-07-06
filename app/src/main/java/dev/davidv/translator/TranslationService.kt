@@ -96,15 +96,16 @@ class TranslationService(
       val catalog =
         filePathManager.loadCatalog()
           ?: return@withContext TranslationResult.Error("Catalog unavailable")
-      val result =
+      val withAlternatives =
         try {
-          catalog.translateText(from, to, text)
+          catalog.translateTextWithAlternatives(from, to, text)
         } catch (e: CatalogException.MissingAsset) {
           return@withContext TranslationResult.Error("Language pair ${from.code} -> ${to.code} not installed")
         } catch (e: CatalogException.Other) {
           Log.e("TranslationService", "Translation failed", e)
           return@withContext TranslationResult.Error("Translation failed: ${e.message}")
         }
+      val result = withAlternatives.translatedText
 
       val transliterated =
         if (settingsManager.settings.value.enableOutputTransliteration) {
@@ -112,7 +113,45 @@ class TranslationService(
         } else {
           null
         }
-      TranslationResult.Success(TranslatedText(result, transliterated))
+      TranslationResult.Success(
+        TranslatedText(result, transliterated, source = text, alternatives = withAlternatives.alternatives),
+      )
+    }
+
+  /**
+   * Re-translate [source] forcing [forcedPrefix] as the start of the output
+   * (the confirmed target text up to and including a user-picked word), then
+   * free-run the rest. Returns the steered translation with fresh alternatives.
+   */
+  suspend fun steer(
+    from: Language,
+    to: Language,
+    source: String,
+    forcedPrefix: String,
+  ): TranslationResult =
+    withContext(Dispatchers.IO) {
+      val catalog =
+        filePathManager.loadCatalog()
+          ?: return@withContext TranslationResult.Error("Catalog unavailable")
+      val steered =
+        try {
+          catalog.steer(from, to, source, forcedPrefix)
+        } catch (e: CatalogException.MissingAsset) {
+          return@withContext TranslationResult.Error("Language pair ${from.code} -> ${to.code} not installed")
+        } catch (e: CatalogException.Other) {
+          Log.e("TranslationService", "Steer failed", e)
+          return@withContext TranslationResult.Error("Steer failed: ${e.message}")
+        }
+      val result = steered.translatedText
+      val transliterated =
+        if (settingsManager.settings.value.enableOutputTransliteration) {
+          transliterate(result, to)
+        } else {
+          null
+        }
+      TranslationResult.Success(
+        TranslatedText(result, transliterated, source = source, alternatives = steered.alternatives),
+      )
     }
 
   /**

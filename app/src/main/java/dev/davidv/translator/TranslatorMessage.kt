@@ -73,6 +73,15 @@ sealed class TranslatorMessage {
     val language: Language,
   ) : TranslatorMessage()
 
+  /**
+   * Re-translate the current output forcing [forcedPrefix] as the start of the
+   * translation — used when the user picks a word alternative. The source and
+   * languages come from current state.
+   */
+  data class Steer(
+    val forcedPrefix: String,
+  ) : TranslatorMessage()
+
   data object PopDictionary : TranslatorMessage()
 
   data object ClearDictionaryStack : TranslatorMessage()

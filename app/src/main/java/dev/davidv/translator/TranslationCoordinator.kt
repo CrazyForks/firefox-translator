@@ -77,6 +77,20 @@ class TranslationCoordinator(
     return result
   }
 
+  suspend fun steer(
+    from: Language,
+    to: Language,
+    source: String,
+    forcedPrefix: String,
+  ): TranslationResult {
+    _isTranslating.value = true
+    return try {
+      translationService.steer(from, to, source, forcedPrefix)
+    } finally {
+      _isTranslating.value = false
+    }
+  }
+
   /** Abort the in-flight document translation (fast, mid-batch). */
   fun cancelOngoingWork() = translationService.cancelOngoingWork()
 

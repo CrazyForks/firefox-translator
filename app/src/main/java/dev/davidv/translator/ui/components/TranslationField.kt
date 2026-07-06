@@ -74,6 +74,9 @@ fun TranslationField(
   text: TranslatedText?,
   textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
   onDictionaryLookup: (String) -> Unit = {},
+  onAlternatives: ((Int, Int) -> Unit)? = null,
+  hasAlternatives: ((Int, Int) -> Boolean)? = null,
+  underlineRanges: List<IntRange> = emptyList(),
   canSpeak: Boolean = false,
   isAudioPlaying: Boolean = false,
   isAudioLoading: Boolean = false,
@@ -87,20 +90,21 @@ fun TranslationField(
   val context = LocalContext.current
 
   val actionModeCallback =
-    remember(onDictionaryLookup) {
-      DictionaryActionModeCallback(context, onDictionaryLookup)
+    remember(onDictionaryLookup, onAlternatives, hasAlternatives) {
+      DictionaryActionModeCallback(context, onDictionaryLookup, onAlternatives, hasAlternatives)
     }
 
   val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
   val fontSize = textStyle.fontSize.value
   val smallerFontSize = fontSize * 0.7f
+  val translationOutputDescription = stringResource(R.string.a11y_translation_output)
 
   Box(
     modifier =
       Modifier
         .fillMaxSize()
         .semantics {
-          contentDescription = "Translation output"
+          contentDescription = translationOutputDescription
           this.text = AnnotatedString(text?.translated ?: "")
         },
   ) {
@@ -121,15 +125,16 @@ fun TranslationField(
         AndroidView(
           modifier = Modifier.fillMaxWidth(),
           factory = { context ->
-            TextView(context).apply {
+            DottedUnderlineTextView(context).apply {
               this.tag = "output_textview_tag"
-              this.contentDescription = "Output textview"
+              this.contentDescription = context.getString(R.string.a11y_output_textview)
               this.text = text?.translated ?: ""
               this.textSize = fontSize
               this.setTextColor(textColor)
               this.setTextIsSelectable(true)
               this.customSelectionActionModeCallback = actionModeCallback
               this.customInsertionActionModeCallback = actionModeCallback
+              this.underlineRanges = underlineRanges
               actionModeCallback.setTextView(this)
             }
           },
@@ -137,6 +142,7 @@ fun TranslationField(
             textView.text = text?.translated ?: ""
             textView.textSize = fontSize
             textView.customSelectionActionModeCallback = actionModeCallback
+            textView.underlineRanges = underlineRanges
             actionModeCallback.setTextView(textView)
           },
         )
@@ -178,7 +184,7 @@ fun TranslationField(
         ) {
           Icon(
             painterResource(id = R.drawable.copy),
-            contentDescription = "Copy translation",
+            contentDescription = stringResource(R.string.a11y_copy_translation),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
           )
         }
@@ -193,7 +199,14 @@ fun TranslationField(
             onSpeak = onSpeak,
             onSpeechPlaybackSpeedChange = onSpeechPlaybackSpeedChange,
             onVoiceSelected = onVoiceSelected,
-            contentDescription = if (isAudioPlaying) "Stop audio" else "Speak translation",
+            contentDescription =
+              if (isAudioPlaying) {
+                stringResource(
+                  R.string.a11y_stop_audio,
+                )
+              } else {
+                stringResource(R.string.a11y_speak_translation)
+              },
             modifier = Modifier.padding(top = 6.dp),
           )
         }

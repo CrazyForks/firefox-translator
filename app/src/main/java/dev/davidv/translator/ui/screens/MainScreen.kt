@@ -91,10 +91,12 @@ import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
+import dev.davidv.translator.WordAlternatives
 import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.browser.BrowserActivity
 import dev.davidv.translator.isSupportedDocumentUrl
 import dev.davidv.translator.isWebUrl
+import dev.davidv.translator.ui.components.AlternativesDialog
 import dev.davidv.translator.ui.components.DetectedLanguageSection
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.DictionaryBottomSheet
@@ -144,6 +146,7 @@ fun MainScreen(
   isOutputAudioLoading: Boolean = false,
   // Action requests
   onMessage: (TranslatorMessage) -> Unit,
+  onSteerPreview: suspend (String) -> String? = { null },
   canSwapLanguages: Boolean = true,
   onStopAudio: () -> Unit = {},
   // System integration
@@ -169,6 +172,7 @@ fun MainScreen(
 ) {
   var showFullScreenImage by remember { mutableStateOf(false) }
   var showImageSourceSheet by remember { mutableStateOf(false) }
+  var alternativesTarget by remember { mutableStateOf<WordAlternatives?>(null) }
   // Flip the main image between the translation and the original (resets on a new image).
   var showOriginal by remember(displayImage) { mutableStateOf(false) }
   val isImageProcessing = isOcrInProgress.collectAsState().value || isTranslating.collectAsState().value
@@ -179,6 +183,7 @@ fun MainScreen(
     launchMode == LaunchMode.ReadonlyModal && settings.onlyShowOutputOnReadonlyModal
   val detectedInstalled =
     detectedLanguage?.takeIf { languageState.availabilityFor(it)?.translatorFiles == true }
+  val mainScreenDescription = stringResource(R.string.a11y_main_screen)
 
   // Handle back button when dictionary is open
   BackHandler(enabled = dictionaryWord != null) {
@@ -186,7 +191,7 @@ fun MainScreen(
   }
 
   Scaffold(
-    modifier = Modifier.semantics { contentDescription = "Main screen" },
+    modifier = Modifier.semantics { contentDescription = mainScreenDescription },
     floatingActionButton = {
       when (launchMode) {
         LaunchMode.Normal -> {
@@ -197,7 +202,7 @@ fun MainScreen(
           ) {
             Icon(
               painterResource(id = R.drawable.attach_file_add),
-              contentDescription = "Translate image or file",
+              contentDescription = stringResource(R.string.a11y_translate_image_or_file),
             )
           }
         }
@@ -216,7 +221,7 @@ fun MainScreen(
             ) {
               Icon(
                 painterResource(id = R.drawable.check),
-                contentDescription = "Replace text",
+                contentDescription = stringResource(R.string.a11y_replace_text),
                 modifier = Modifier.size(20.dp),
               )
             }
@@ -307,7 +312,14 @@ fun MainScreen(
                   if (originalImage != null) {
                     ActionPillButton(
                       iconRes = R.drawable.flip,
-                      contentDescription = if (showOriginal) "Show translated image" else "Show original image",
+                      contentDescription =
+                        if (showOriginal) {
+                          stringResource(
+                            R.string.a11y_show_translated_image,
+                          )
+                        } else {
+                          stringResource(R.string.a11y_show_original_image)
+                        },
                       showBackdrop = true,
                       onClick = { showOriginal = !showOriginal },
                     )
@@ -327,9 +339,7 @@ fun MainScreen(
                 modifier =
                   Modifier
                     .fillMaxWidth()
-                    .let { m ->
-                      if (displayImage == null) m.weight(1f, fill = true) else m.height(parentHeight * 0.5f)
-                    },
+                    .weight(1f, fill = true),
               ) {
                 Box(
                   modifier =
@@ -350,11 +360,11 @@ fun MainScreen(
                     onDictionaryLookup = { word ->
                       onMessage(TranslatorMessage.DictionaryLookup(word, from))
                     },
-                    placeholder = if (displayImage == null) stringResource(R.string.main_input_placeholder) else null,
+                    placeholder = stringResource(R.string.main_input_placeholder),
                     modifier =
                       Modifier
                         .fillMaxWidth()
-                        .padding(end = if (displayImage == null) 24.dp else 0.dp),
+                        .padding(end = 24.dp),
                     textStyle =
                       MaterialTheme.typography.bodyLarge.copy(
                         fontSize = (MaterialTheme.typography.bodyLarge.fontSize * settings.fontFactor),
@@ -362,38 +372,43 @@ fun MainScreen(
                       ),
                     focusController = inputFocusController,
                   )
-                  if (displayImage == null) {
-                    Column(
-                      modifier = Modifier.align(Alignment.TopEnd),
-                      horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                      if (input.isNotEmpty()) {
-                        ClearInput(onMessage)
-                      } else {
-                        PasteButton(onMessage)
-                      }
-                      SpeechInputButton(input, from, onMessage, modifier = Modifier.padding(top = 6.dp))
-                      val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isInputAudioPlaying && !isInputAudioLoading
-                      if (input.isNotBlank() && languageState.availabilityFor(from)?.ttsFiles == true && !isOtherAudioActive) {
-                        SpeechPlaybackButton(
-                          isAudioPlaying = isInputAudioPlaying,
-                          isAudioLoading = isInputAudioLoading,
-                          speechPlaybackSpeed = sourceTtsPlaybackSpeed,
-                          selectedVoiceName = selectedSourceTtsVoiceName,
-                          availableVoices = availableSourceTtsVoices,
-                          onSpeak = {
-                            if (isInputAudioPlaying || isInputAudioLoading) {
-                              onStopAudio()
-                            } else {
-                              onSpeakInput(input, from)
-                            }
+                  Column(
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                  ) {
+                    if (input.isNotEmpty()) {
+                      ClearInput(onMessage)
+                    } else {
+                      PasteButton(onMessage)
+                    }
+                    SpeechInputButton(input, from, onMessage, modifier = Modifier.padding(top = 6.dp))
+                    val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isInputAudioPlaying && !isInputAudioLoading
+                    if (input.isNotBlank() && languageState.availabilityFor(from)?.ttsFiles == true && !isOtherAudioActive) {
+                      SpeechPlaybackButton(
+                        isAudioPlaying = isInputAudioPlaying,
+                        isAudioLoading = isInputAudioLoading,
+                        speechPlaybackSpeed = sourceTtsPlaybackSpeed,
+                        selectedVoiceName = selectedSourceTtsVoiceName,
+                        availableVoices = availableSourceTtsVoices,
+                        onSpeak = {
+                          if (isInputAudioPlaying || isInputAudioLoading) {
+                            onStopAudio()
+                          } else {
+                            onSpeakInput(input, from)
+                          }
+                        },
+                        onSpeechPlaybackSpeedChange = onSourceTtsPlaybackSpeedChange,
+                        onVoiceSelected = onSourceTtsVoiceSelected,
+                        contentDescription =
+                          if (isInputAudioPlaying) {
+                            stringResource(
+                              R.string.a11y_stop_audio,
+                            )
+                          } else {
+                            stringResource(R.string.a11y_speak_input)
                           },
-                          onSpeechPlaybackSpeedChange = onSourceTtsPlaybackSpeedChange,
-                          onVoiceSelected = onSourceTtsVoiceSelected,
-                          contentDescription = if (isInputAudioPlaying) "Stop audio" else "Speak input",
-                          modifier = Modifier.padding(top = 6.dp),
-                        )
-                      }
+                        modifier = Modifier.padding(top = 6.dp),
+                      )
                     }
                   }
                 }
@@ -491,6 +506,35 @@ fun MainScreen(
                   onDictionaryLookup = {
                     onMessage(TranslatorMessage.DictionaryLookup(it, to))
                   },
+                  onAlternatives =
+                    if (output?.alternatives?.isNotEmpty() == true) {
+                      { start, end ->
+                        alternativesTarget =
+                          output?.alternatives?.firstOrNull {
+                            start < it.tgtEnd.toInt() && end > it.tgtBegin.toInt()
+                          }
+                      }
+                    } else {
+                      null
+                    },
+                  hasAlternatives =
+                    if (output?.alternatives?.isNotEmpty() == true) {
+                      { start, end ->
+                        output?.alternatives?.any {
+                          start < it.tgtEnd.toInt() && end > it.tgtBegin.toInt()
+                        } == true
+                      }
+                    } else {
+                      null
+                    },
+                  underlineRanges =
+                    if (settings.showAlternativeUnderlines) {
+                      output?.alternatives?.map {
+                        it.tgtBegin.toInt() until it.tgtEnd.toInt()
+                      } ?: emptyList()
+                    } else {
+                      emptyList()
+                    },
                   canSpeak = languageState.availabilityFor(to)?.ttsFiles == true && !isOtherAudioActive,
                   isAudioPlaying = isOutputAudioPlaying,
                   isAudioLoading = isOutputAudioLoading,
@@ -542,6 +586,22 @@ fun MainScreen(
     )
   }
 
+  alternativesTarget?.let { target ->
+    val fullText = output?.translated.orEmpty()
+    AlternativesDialog(
+      target = target,
+      fullText = fullText,
+      steerPreview = onSteerPreview,
+      onPick = { option ->
+        val begin = target.tgtBegin.toInt().coerceIn(0, fullText.length)
+        val prefix = fullText.substring(0, begin) + option.text
+        onMessage(TranslatorMessage.Steer(prefix))
+        alternativesTarget = null
+      },
+      onDismiss = { alternativesTarget = null },
+    )
+  }
+
   if (dictionaryWord != null && dictionaryLookupLanguage != null) {
     DictionaryBottomSheet(
       dictionaryWord = dictionaryWord,
@@ -564,7 +624,7 @@ fun MainScreen(
 fun ShareImage(onMessage: (TranslatorMessage) -> Unit) {
   ActionPillButton(
     iconRes = R.drawable.share,
-    contentDescription = "Share image",
+    contentDescription = stringResource(R.string.a11y_share_image),
     showBackdrop = true,
     onClick = { onMessage(TranslatorMessage.ShareTranslatedImage) },
   )
@@ -596,7 +656,7 @@ fun ClearInput(
 ) {
   ActionPillButton(
     iconRes = R.drawable.cancel,
-    contentDescription = "Clear input",
+    contentDescription = stringResource(R.string.a11y_clear_input),
     showBackdrop = showBackdrop,
     onClick = { onMessage(TranslatorMessage.ClearInput) },
   )
@@ -611,7 +671,7 @@ fun PasteButton(
 
   ActionPillButton(
     iconRes = R.drawable.paste,
-    contentDescription = "Paste",
+    contentDescription = stringResource(R.string.a11y_paste),
     showBackdrop = showBackdrop,
     onClick = {
       val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -670,7 +730,7 @@ fun SpeechInputButton(
 
   ActionPillButton(
     iconRes = R.drawable.mic,
-    contentDescription = "Voice input",
+    contentDescription = stringResource(R.string.a11y_voice_input),
     modifier = modifier,
     onClick = {
       val intent =

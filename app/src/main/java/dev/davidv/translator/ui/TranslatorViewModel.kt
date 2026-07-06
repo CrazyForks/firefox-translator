@@ -455,6 +455,19 @@ class TranslatorViewModel(
         handleDictionaryLookup(message.str, message.language)
       }
 
+      is TranslatorMessage.Steer -> {
+        val fromLang = _from.value ?: return
+        val toLang = _to.value ?: return
+        val src = _output.value?.source
+        if (src.isNullOrBlank()) return
+        viewModelScope.launch {
+          when (val r = translationCoordinator.steer(fromLang, toLang, src, message.forcedPrefix)) {
+            is TranslationResult.Success -> _output.value = r.result
+            is TranslationResult.Error -> Log.e("Steer", r.message)
+          }
+        }
+      }
+
       is TranslatorMessage.SpeakTranslatedText -> {
         viewModelScope.launch {
           _uiEvents.emit(UiEvent.AudioLoadingStarted)
@@ -586,6 +599,21 @@ class TranslatorViewModel(
         val fromLang = _from.value ?: return@launch
         translateWithLanguages(fromLang, toLang)
       }
+  }
+
+  /**
+   * Run a steer without committing it, for previewing what an alternative would
+   * produce. Returns the fully re-decoded translation (not a spliced tail).
+   */
+  suspend fun steerPreview(forcedPrefix: String): String? {
+    val fromLang = _from.value ?: return null
+    val toLang = _to.value ?: return null
+    val src = _output.value?.source
+    if (src.isNullOrBlank()) return null
+    return when (val r = translationCoordinator.steer(fromLang, toLang, src, forcedPrefix)) {
+      is TranslationResult.Success -> r.result.translated
+      is TranslationResult.Error -> null
+    }
   }
 
   fun retranslateIfNeeded() {

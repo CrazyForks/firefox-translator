@@ -30,6 +30,11 @@ import dev.davidv.translator.isWebUrl
 class DictionaryActionModeCallback(
   private val context: Context,
   private val onDictionaryLookup: (String) -> Unit,
+  // When set, an "Alternatives" item is offered — but only for selections that
+  // actually have alternatives (per [hasAlternatives]). Clicking reports the
+  // selection's char range so the caller can open the matching word's options.
+  private val onAlternatives: ((Int, Int) -> Unit)? = null,
+  private val hasAlternatives: ((Int, Int) -> Boolean)? = null,
 ) : ActionMode.Callback2() {
   private var currentTextView: TextView? = null
 
@@ -74,13 +79,29 @@ class DictionaryActionModeCallback(
     val hasDictionary = menu.findItem(DICTIONARY_ID) != null
     val hasTranslateUrl = menu.findItem(TRANSLATE_URL_ID) != null
 
+    val hasAlternativesItem = menu.findItem(ALTERNATIVES_ID) != null
+    val offerAlternatives = onAlternatives != null && selectionHasAlternatives()
     if (selectionIsUrl) {
       if (hasDictionary) menu.removeItem(DICTIONARY_ID)
+      if (hasAlternativesItem) menu.removeItem(ALTERNATIVES_ID)
       if (!hasTranslateUrl) menu.add(0, TRANSLATE_URL_ID, 0, "Translate URL")
     } else {
       if (hasTranslateUrl) menu.removeItem(TRANSLATE_URL_ID)
       if (!hasDictionary) menu.add(0, DICTIONARY_ID, 0, "Dictionary")
+      if (offerAlternatives && !hasAlternativesItem) {
+        menu.add(0, ALTERNATIVES_ID, 1, "Alternatives")
+      } else if (!offerAlternatives && hasAlternativesItem) {
+        menu.removeItem(ALTERNATIVES_ID)
+      }
     }
+  }
+
+  private fun selectionHasAlternatives(): Boolean {
+    val tv = currentTextView ?: return false
+    val check = hasAlternatives ?: return false
+    val start = tv.selectionStart
+    val end = tv.selectionEnd
+    return start in 0 until end && check(start, end)
   }
 
   private fun isSelectionUrl(): Boolean = selectedText()?.let { isWebUrl(it) } ?: false
@@ -103,6 +124,18 @@ class DictionaryActionModeCallback(
         val selected = selectedText().orEmpty()
         if (selected.isNotBlank()) {
           onDictionaryLookup(selected)
+        }
+        mode?.finish()
+        true
+      }
+
+      ALTERNATIVES_ID -> {
+        val tv = currentTextView
+        val cb = onAlternatives
+        if (tv != null && cb != null) {
+          val start = tv.selectionStart
+          val end = tv.selectionEnd
+          if (start in 0 until end) cb(start, end)
         }
         mode?.finish()
         true
@@ -131,5 +164,6 @@ class DictionaryActionModeCallback(
   companion object {
     private const val DICTIONARY_ID = 12345
     private const val TRANSLATE_URL_ID = 12346
+    private const val ALTERNATIVES_ID = 12347
   }
 }

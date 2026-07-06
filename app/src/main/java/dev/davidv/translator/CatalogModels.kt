@@ -249,6 +249,19 @@ class LanguageCatalog private constructor(
     text: String,
   ): String = handle.translateText(from.code, to.code, text)
 
+  fun translateTextWithAlternatives(
+    from: Language,
+    to: Language,
+    text: String,
+  ): TranslationWithAlternatives = handle.translateTextWithAlternatives(from.code, to.code, text)
+
+  fun steer(
+    from: Language,
+    to: Language,
+    source: String,
+    forcedPrefix: String,
+  ): TranslationWithAlternatives = handle.steer(from.code, to.code, source, forcedPrefix)
+
   fun translateMixedTexts(
     inputs: List<String>,
     forcedSourceLanguage: Language?,

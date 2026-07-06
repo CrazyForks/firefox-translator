@@ -237,7 +237,7 @@ private fun DocumentTranslationDialog(
           IconButton(onClick = onDismiss) {
             Icon(
               painter = painterResource(R.drawable.cancel),
-              contentDescription = "Close",
+              contentDescription = stringResource(R.string.a11y_close),
             )
           }
         }
@@ -765,6 +765,7 @@ fun TranslatorApp(
                 isOutputAudioPlaying = activeSpeechTarget == SpeechTarget.OUTPUT && isAudioPlaying,
                 isOutputAudioLoading = activeSpeechTarget == SpeechTarget.OUTPUT && isAudioLoading,
                 onMessage = viewModel::handleMessage,
+                onSteerPreview = viewModel::steerPreview,
                 canSwapLanguages = viewModel.languageStateManager.canSwapLanguages(currentFrom, currentTo),
                 onStopAudio = {
                   isAudioLoading = false

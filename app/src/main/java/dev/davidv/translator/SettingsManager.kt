@@ -77,6 +77,7 @@ class SettingsManager(
     val maxImageSize = prefs.getInt("max_image_size", defaults.maxImageSize).coerceIn(600, 2000)
     val disableCLD = prefs.getBoolean("disable_cld", defaults.disableCLD)
     val enableOutputTransliteration = prefs.getBoolean("enable_output_transliteration", defaults.enableOutputTransliteration)
+    val showAlternativeUnderlines = prefs.getBoolean("show_alternative_underlines", defaults.showAlternativeUnderlines)
     val useExternalStorage = prefs.getBoolean("use_external_storage", defaults.useExternalStorage)
     val fontFactor = prefs.getFloat("font_factor", defaults.fontFactor)
     val showTransliterationOnInput = prefs.getBoolean("show_transliteration_on_input", defaults.showTransliterationOnInput)
@@ -169,6 +170,7 @@ class SettingsManager(
       liveCameraOverlayEnabled = liveCameraOverlayEnabled,
       registerAsBrowser = registerAsBrowser,
       assistantAction = assistantAction,
+      showAlternativeUnderlines = showAlternativeUnderlines,
     )
   }
 
@@ -281,6 +283,10 @@ class SettingsManager(
       if (newSettings.assistantAction != currentSettings.assistantAction) {
         putString("assistant_action", newSettings.assistantAction.name)
         modifiedSettings.add("assistant_action")
+      }
+      if (newSettings.showAlternativeUnderlines != currentSettings.showAlternativeUnderlines) {
+        putBoolean("show_alternative_underlines", newSettings.showAlternativeUnderlines)
+        modifiedSettings.add("show_alternative_underlines")
       }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")
