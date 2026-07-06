@@ -842,7 +842,7 @@ private fun TopLanguagePills(
     }
   val toLanguages =
     languageState.allLanguages().filter { x ->
-      x != from && x != to && (languageState.availabilityFor(x)?.hasFromEnglish == true || x.isEnglish)
+      (isAutoSource || x != from) && x != to && (languageState.availabilityFor(x)?.hasFromEnglish == true || x.isEnglish)
     }
   val pillShape = RoundedCornerShape(50)
   val pillBackground = Color.Black.copy(alpha = 0.5f)

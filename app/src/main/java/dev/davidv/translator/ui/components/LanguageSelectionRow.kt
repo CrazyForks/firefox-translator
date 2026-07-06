@@ -65,7 +65,7 @@ fun LanguageSelectionRow(
       }
     val toLanguages =
       languageState.allLanguages().filter { x ->
-        x != from && x != to && (languageState.availabilityFor(x)?.hasFromEnglish == true || x.isEnglish)
+        (isAutoSource || x != from) && x != to && (languageState.availabilityFor(x)?.hasFromEnglish == true || x.isEnglish)
       }
 
     LanguageSelector(
