@@ -77,6 +77,11 @@ fun TranslationField(
   onAlternatives: ((Int, Int) -> Unit)? = null,
   hasAlternatives: ((Int, Int) -> Boolean)? = null,
   underlineRanges: List<IntRange> = emptyList(),
+  highlightRange: IntRange? = null,
+  tapMode: OutputTapMode = OutputTapMode.None,
+  onToggleAlternativesMode: (() -> Unit)? = null,
+  onToggleDictionaryMode: (() -> Unit)? = null,
+  onWordTap: ((Int) -> Unit)? = null,
   canSpeak: Boolean = false,
   isAudioPlaying: Boolean = false,
   isAudioLoading: Boolean = false,
@@ -95,6 +100,7 @@ fun TranslationField(
     }
 
   val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
+  val highlightColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f).toArgb()
   val fontSize = textStyle.fontSize.value
   val smallerFontSize = fontSize * 0.7f
   val translationOutputDescription = stringResource(R.string.a11y_translation_output)
@@ -135,14 +141,24 @@ fun TranslationField(
               this.customSelectionActionModeCallback = actionModeCallback
               this.customInsertionActionModeCallback = actionModeCallback
               this.underlineRanges = underlineRanges
+              this.wordHighlightColor = highlightColor
+              this.highlightRange = highlightRange
+              this.wordTapListener = onWordTap
+              this.wordTapMode = tapMode != OutputTapMode.None
               actionModeCallback.setTextView(this)
             }
           },
           update = { textView ->
             textView.text = text?.translated ?: ""
             textView.textSize = fontSize
+            textView.wordTapListener = onWordTap
+            // Toggle selection off/on before re-applying the selection callback,
+            // since leaving the mode re-enables selection.
+            textView.wordTapMode = tapMode != OutputTapMode.None
             textView.customSelectionActionModeCallback = actionModeCallback
             textView.underlineRanges = underlineRanges
+            textView.wordHighlightColor = highlightColor
+            textView.highlightRange = highlightRange
             actionModeCallback.setTextView(textView)
           },
         )
@@ -187,6 +203,56 @@ fun TranslationField(
             contentDescription = stringResource(R.string.a11y_copy_translation),
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
           )
+        }
+
+        if (onToggleAlternativesMode != null) {
+          IconButton(
+            onClick = onToggleAlternativesMode,
+            modifier = Modifier.padding(top = 6.dp).size(24.dp),
+          ) {
+            Icon(
+              painterResource(id = R.drawable.list),
+              contentDescription =
+                stringResource(
+                  if (tapMode == OutputTapMode.Alternatives) {
+                    R.string.a11y_alternatives_mode_on
+                  } else {
+                    R.string.a11y_alternatives_mode_off
+                  },
+                ),
+              tint =
+                if (tapMode == OutputTapMode.Alternatives) {
+                  MaterialTheme.colorScheme.primary
+                } else {
+                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                },
+            )
+          }
+        }
+
+        if (onToggleDictionaryMode != null) {
+          IconButton(
+            onClick = onToggleDictionaryMode,
+            modifier = Modifier.padding(top = 6.dp).size(24.dp),
+          ) {
+            Icon(
+              painterResource(id = R.drawable.dictionary_book),
+              contentDescription =
+                stringResource(
+                  if (tapMode == OutputTapMode.Dictionary) {
+                    R.string.a11y_dictionary_mode_on
+                  } else {
+                    R.string.a11y_dictionary_mode_off
+                  },
+                ),
+              tint =
+                if (tapMode == OutputTapMode.Dictionary) {
+                  MaterialTheme.colorScheme.primary
+                } else {
+                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                },
+            )
+          }
         }
 
         if (canSpeak || isAudioLoading || isAudioPlaying) {

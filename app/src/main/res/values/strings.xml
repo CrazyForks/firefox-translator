@@ -58,8 +58,6 @@
     <string name="settings_disable_autodetect">Disable automatic language detection</string>
     <string name="settings_translit_output">Show transliteration for translated text</string>
     <string name="settings_translit_input">Show transliteration for original text</string>
-    <string name="settings_underline_alternatives">Underline alternatives</string>
-    <string name="settings_underline_alternatives_desc">Dotted underline under translated words that have alternatives</string>
     <string name="settings_translit_japanese_spaces">Add spaces for Japanese transliteration</string>
     <string name="settings_translate_pdf_images">Translate images in PDFs</string>
     <string name="settings_camera_live_default">Translate camera live by default</string>
@@ -224,7 +222,9 @@
     <string name="howto_docs_title">Translate documents and images</string>
     <string name="howto_docs_body">Open the Documents tab to translate images or EPUB, PDF, and TXT files.</string>
     <string name="howto_dict_title">Dictionary lookup</string>
-    <string name="howto_dict_body">Long-press any word in a translation to see its definition. Data sourced from Wiktionary.</string>
+    <string name="howto_dict_body">Long-press any word — in the text you type or its translation — to see its definition. Or tap the dictionary button, then tap words one after another to look them up. Data sourced from Wiktionary.</string>
+    <string name="howto_alt_title">Choose alternative words</string>
+    <string name="howto_alt_body">Tap the alternatives button, then tap an underlined word in the translation to see other wordings and pick one. The rest of the sentence re-translates to match.</string>
     <string name="howto_voice_title">Change voice or speed</string>
     <string name="howto_voice_body">Long-press the play button to pick a different voice or adjust playback speed.</string>
 
@@ -262,6 +262,14 @@
     <string name="a11y_translation_output">Translation output</string>
     <string name="a11y_output_textview">Output textview</string>
     <string name="a11y_copy_translation">Copy translation</string>
+    <string name="a11y_alternatives_mode_on">Exit alternatives mode</string>
+    <string name="a11y_alternatives_mode_off">Alternatives mode: tap a word to see other translations</string>
+    <string name="a11y_close_alternatives">Close alternatives</string>
+    <string name="alt_custom_entry">Type your own…</string>
+    <string name="alt_custom_label">Your word</string>
+    <string name="alt_custom_preview_label">Preview</string>
+    <string name="a11y_dictionary_mode_on">Exit dictionary mode</string>
+    <string name="a11y_dictionary_mode_off">Dictionary mode: tap a word to look it up</string>
     <string name="a11y_source_document">Document</string>
     <string name="a11y_source_photos">Photos</string>
     <string name="a11y_source_gallery">Gallery</string>

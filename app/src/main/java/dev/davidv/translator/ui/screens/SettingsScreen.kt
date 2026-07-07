@@ -935,32 +935,6 @@ fun SettingsScreen(
               )
             }
 
-            // Underline words with alternatives
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                Text(
-                  text = stringResource(R.string.settings_underline_alternatives),
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                  text = stringResource(R.string.settings_underline_alternatives_desc),
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-              }
-              Switch(
-                checked = settings.showAlternativeUnderlines,
-                onCheckedChange = { checked ->
-                  onSettingsChange(settings.copy(showAlternativeUnderlines = checked))
-                },
-              )
-            }
-
             // Show Transliteration on Input Toggle
             Row(
               modifier = Modifier.fillMaxWidth(),

@@ -68,6 +68,8 @@ fun StyledTextField(
   placeholder: String? = null,
   textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
   focusController: StyledTextFieldFocusController? = null,
+  wordTapMode: Boolean = false,
+  onWordTap: ((Int) -> Unit)? = null,
 ) {
   val context = LocalContext.current
   val lifecycleOwner = LocalLifecycleOwner.current
@@ -84,7 +86,7 @@ fun StyledTextField(
   Box(modifier = modifier) {
     AndroidView(
       factory = { context ->
-        EditText(context).apply {
+        TapWordEditText(context).apply {
           this.contentDescription = context.getString(R.string.a11y_primary_input)
           this.layoutParams =
             ViewGroup.LayoutParams(
@@ -103,6 +105,8 @@ fun StyledTextField(
           this.setTextIsSelectable(true)
           this.customSelectionActionModeCallback = actionModeCallback
           this.customInsertionActionModeCallback = actionModeCallback
+          this.wordTapListener = onWordTap
+          this.wordTapMode = wordTapMode
           this.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
           this.background = null
           this.setOnTouchListener { v, event ->
@@ -154,8 +158,11 @@ fun StyledTextField(
         editText.hint = placeholder
         editText.isEnabled = true
         editText.isFocusable = true
-        editText.isFocusableInTouchMode = true
         editText.customSelectionActionModeCallback = actionModeCallback
+        editText.wordTapListener = onWordTap
+        // The setter owns isFocusableInTouchMode / cursor visibility, so leave
+        // those to it rather than forcing them back on every recomposition.
+        editText.wordTapMode = wordTapMode
         focusController?.editText = editText
         actionModeCallback.setTextView(editText)
       },

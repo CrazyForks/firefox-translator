@@ -56,6 +56,4 @@ data class AppSettings(
   val liveCameraOverlayEnabled: Boolean = true,
   val registerAsBrowser: Boolean = true,
   val assistantAction: AssistantAction = AssistantAction.STILL_IMAGE,
-  // Dotted underline under translated words that have alternatives.
-  val showAlternativeUnderlines: Boolean = false,
 )

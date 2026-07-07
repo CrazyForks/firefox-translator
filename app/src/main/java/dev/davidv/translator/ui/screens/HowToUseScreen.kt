@@ -94,6 +94,11 @@ private val sections =
             bodyRes = R.string.howto_dict_body,
           ),
           Tip(
+            iconRes = R.drawable.list,
+            titleRes = R.string.howto_alt_title,
+            bodyRes = R.string.howto_alt_body,
+          ),
+          Tip(
             iconRes = R.drawable.volume_up,
             titleRes = R.string.howto_voice_title,
             bodyRes = R.string.howto_voice_body,

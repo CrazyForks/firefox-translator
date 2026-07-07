@@ -56,6 +56,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -91,12 +92,12 @@ import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
-import dev.davidv.translator.WordAlternatives
 import dev.davidv.translator.WordWithTaggedEntries
 import dev.davidv.translator.browser.BrowserActivity
 import dev.davidv.translator.isSupportedDocumentUrl
 import dev.davidv.translator.isWebUrl
-import dev.davidv.translator.ui.components.AlternativesDialog
+import dev.davidv.translator.ui.components.AlternativesDrawer
+import dev.davidv.translator.ui.components.AlternativesTarget
 import dev.davidv.translator.ui.components.DetectedLanguageSection
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.DictionaryBottomSheet
@@ -105,6 +106,7 @@ import dev.davidv.translator.ui.components.ImageDisplaySection
 import dev.davidv.translator.ui.components.ImageWordSelection
 import dev.davidv.translator.ui.components.LanguageEvent
 import dev.davidv.translator.ui.components.LanguageSelectionRow
+import dev.davidv.translator.ui.components.OutputTapMode
 import dev.davidv.translator.ui.components.SpeechPlaybackButton
 import dev.davidv.translator.ui.components.StyledTextField
 import dev.davidv.translator.ui.components.StyledTextFieldFocusController
@@ -115,6 +117,31 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+
+// The char range of the whole word around a tap offset (an insertion index, so
+// it may land just past a word or on a space — step back onto the preceding
+// letter in that case). Null when the tap isn't on a word.
+private fun wordRangeAt(
+  text: String,
+  offset: Int,
+): IntRange? {
+  val n = text.length
+  if (n == 0) return null
+  var i = offset.coerceIn(0, n)
+  if (i >= n || !text[i].isLetterOrDigit()) {
+    if (i > 0 && text[i - 1].isLetterOrDigit()) i-- else return null
+  }
+  var start = i
+  while (start > 0 && text[start - 1].isLetterOrDigit()) start--
+  var end = i + 1
+  while (end < n && text[end].isLetterOrDigit()) end++
+  return start until end
+}
+
+private fun wordAt(
+  text: String,
+  offset: Int,
+): String? = wordRangeAt(text, offset)?.let { text.substring(it.first, it.last + 1) }
 
 @Composable
 fun MainScreen(
@@ -172,7 +199,29 @@ fun MainScreen(
 ) {
   var showFullScreenImage by remember { mutableStateOf(false) }
   var showImageSourceSheet by remember { mutableStateOf(false) }
-  var alternativesTarget by remember { mutableStateOf<WordAlternatives?>(null) }
+  var alternativesTarget by remember { mutableStateOf<AlternativesTarget?>(null) }
+  var outputTapMode by remember { mutableStateOf(OutputTapMode.None) }
+  var inputDictMode by remember { mutableStateOf(false) }
+  val hasAnyAlternatives = output?.alternatives?.isNotEmpty() == true
+  val hasSourceDictionary = languageState.availabilityFor(from)?.dictionaryFiles == true
+  val hasTargetDictionary = languageState.availabilityFor(to)?.dictionaryFiles == true
+  val canInputDict = hasSourceDictionary && input.isNotBlank()
+  // A mode whose toggle is no longer offered would strand as an invisible tap
+  // handler, so drop it when its backing data goes away.
+  LaunchedEffect(hasAnyAlternatives) {
+    if (!hasAnyAlternatives && outputTapMode == OutputTapMode.Alternatives) {
+      outputTapMode = OutputTapMode.None
+      alternativesTarget = null
+    }
+  }
+  LaunchedEffect(hasTargetDictionary) {
+    if (!hasTargetDictionary && outputTapMode == OutputTapMode.Dictionary) {
+      outputTapMode = OutputTapMode.None
+    }
+  }
+  LaunchedEffect(canInputDict) {
+    if (!canInputDict) inputDictMode = false
+  }
   // Flip the main image between the translation and the original (resets on a new image).
   var showOriginal by remember(displayImage) { mutableStateOf(false) }
   val isImageProcessing = isOcrInProgress.collectAsState().value || isTranslating.collectAsState().value
@@ -350,6 +399,7 @@ fun MainScreen(
                       .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        enabled = !inputDictMode,
                       ) { inputFocusController.focus() },
                 ) {
                   StyledTextField(
@@ -359,6 +409,13 @@ fun MainScreen(
                     },
                     onDictionaryLookup = { word ->
                       onMessage(TranslatorMessage.DictionaryLookup(word, from))
+                    },
+                    wordTapMode = inputDictMode,
+                    onWordTap = { offset ->
+                      val word = wordAt(input, offset)
+                      if (!word.isNullOrBlank()) {
+                        onMessage(TranslatorMessage.DictionaryLookup(word, from))
+                      }
                     },
                     placeholder = stringResource(R.string.main_input_placeholder),
                     modifier =
@@ -380,6 +437,30 @@ fun MainScreen(
                       ClearInput(onMessage)
                     } else {
                       PasteButton(onMessage)
+                    }
+                    if (canInputDict) {
+                      IconButton(
+                        onClick = { inputDictMode = !inputDictMode },
+                        modifier = Modifier.padding(top = 6.dp).size(24.dp),
+                      ) {
+                        Icon(
+                          painterResource(id = R.drawable.dictionary_book),
+                          contentDescription =
+                            stringResource(
+                              if (inputDictMode) {
+                                R.string.a11y_dictionary_mode_on
+                              } else {
+                                R.string.a11y_dictionary_mode_off
+                              },
+                            ),
+                          tint =
+                            if (inputDictMode) {
+                              MaterialTheme.colorScheme.primary
+                            } else {
+                              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            },
+                        )
+                      }
                     }
                     SpeechInputButton(input, from, onMessage, modifier = Modifier.padding(top = 6.dp))
                     val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isInputAudioPlaying && !isInputAudioLoading
@@ -509,10 +590,12 @@ fun MainScreen(
                   onAlternatives =
                     if (output?.alternatives?.isNotEmpty() == true) {
                       { start, end ->
-                        alternativesTarget =
+                        val wa =
                           output?.alternatives?.firstOrNull {
                             start < it.tgtEnd.toInt() && end > it.tgtBegin.toInt()
                           }
+                        alternativesTarget =
+                          wa?.let { AlternativesTarget(it.tgtBegin.toInt(), it.tgtEnd.toInt(), it.options) }
                       }
                     } else {
                       null
@@ -527,14 +610,69 @@ fun MainScreen(
                     } else {
                       null
                     },
-                  underlineRanges =
-                    if (settings.showAlternativeUnderlines) {
-                      output?.alternatives?.map {
-                        it.tgtBegin.toInt() until it.tgtEnd.toInt()
-                      } ?: emptyList()
+                  highlightRange =
+                    alternativesTarget?.let { it.wordBegin until it.wordEnd },
+                  tapMode = outputTapMode,
+                  onToggleAlternativesMode =
+                    if (hasAnyAlternatives) {
+                      {
+                        outputTapMode =
+                          if (outputTapMode == OutputTapMode.Alternatives) {
+                            OutputTapMode.None
+                          } else {
+                            OutputTapMode.Alternatives
+                          }
+                        alternativesTarget = null
+                      }
                     } else {
-                      emptyList()
+                      null
                     },
+                  onToggleDictionaryMode =
+                    if (hasTargetDictionary) {
+                      {
+                        outputTapMode =
+                          if (outputTapMode == OutputTapMode.Dictionary) {
+                            OutputTapMode.None
+                          } else {
+                            OutputTapMode.Dictionary
+                          }
+                        alternativesTarget = null
+                      }
+                    } else {
+                      null
+                    },
+                  onWordTap = { offset ->
+                    when (outputTapMode) {
+                      OutputTapMode.Alternatives -> {
+                        val text = output?.translated
+                        val wa =
+                          output?.alternatives?.firstOrNull {
+                            offset >= it.tgtBegin.toInt() && offset < it.tgtEnd.toInt()
+                          }
+                        alternativesTarget =
+                          when {
+                            wa != null ->
+                              AlternativesTarget(wa.tgtBegin.toInt(), wa.tgtEnd.toInt(), wa.options)
+
+                            text != null ->
+                              wordRangeAt(text, offset)?.let {
+                                AlternativesTarget(it.first, it.last + 1, emptyList())
+                              }
+
+                            else -> null
+                          }
+                      }
+
+                      OutputTapMode.Dictionary -> {
+                        val word = output?.translated?.let { wordAt(it, offset) }
+                        if (!word.isNullOrBlank()) {
+                          onMessage(TranslatorMessage.DictionaryLookup(word, to))
+                        }
+                      }
+
+                      OutputTapMode.None -> {}
+                    }
+                  },
                   canSpeak = languageState.availabilityFor(to)?.ttsFiles == true && !isOtherAudioActive,
                   isAudioPlaying = isOutputAudioPlaying,
                   isAudioLoading = isOutputAudioLoading,
@@ -587,14 +725,11 @@ fun MainScreen(
   }
 
   alternativesTarget?.let { target ->
-    val fullText = output?.translated.orEmpty()
-    AlternativesDialog(
+    AlternativesDrawer(
       target = target,
-      fullText = fullText,
+      fullText = output?.translated.orEmpty(),
       steerPreview = onSteerPreview,
-      onPick = { option ->
-        val begin = target.tgtBegin.toInt().coerceIn(0, fullText.length)
-        val prefix = fullText.substring(0, begin) + option.text
+      onCommit = { prefix ->
         onMessage(TranslatorMessage.Steer(prefix))
         alternativesTarget = null
       },
