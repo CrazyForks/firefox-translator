@@ -24,8 +24,8 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -137,7 +137,7 @@ fun ZoomableImageViewer(
           Modifier
             .fillMaxSize()
             .clip(RectangleShape)
-            .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
+            .absoluteOffset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
             .graphicsLayer(
               scaleX = scale,
               scaleY = scale,

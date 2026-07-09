@@ -23,9 +23,9 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -99,7 +99,7 @@ fun ImageDisplaySection(
           .align(Alignment.TopCenter)
           .size(dispW, dispH)
           .clip(RectangleShape)
-          .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
+          .absoluteOffset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
           .graphicsLayer(scaleX = scale, scaleY = scale)
           .transformable(transformState),
     ) {
