@@ -18,10 +18,12 @@
 package dev.davidv.translator.ui.components
 
 import android.app.Activity
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.speech.RecognizerIntent
+import android.view.ViewTreeObserver
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,12 +38,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -120,6 +127,46 @@ fun pasteFromClipboard(
       putExtra(BrowserActivity.EXTRA_URL, trimmed)
     }
   context.startActivity(browserIntent)
+}
+
+// Tracks whether the clipboard currently holds pasteable text, so a paste
+// button can be hidden when there's nothing to paste. Only reads the clip
+// description (MIME types), never the content, so it never trips the
+// Android 12+ clipboard-access toast.
+@Composable
+fun rememberClipboardHasText(): Boolean {
+  val context = LocalContext.current
+  val view = LocalView.current
+  val clipboardManager = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
+  var hasText by remember { mutableStateOf(clipboardManager.clipboardHasText()) }
+
+  DisposableEffect(clipboardManager, view) {
+    val refresh = { hasText = clipboardManager.clipboardHasText() }
+    val clipListener = ClipboardManager.OnPrimaryClipChangedListener { refresh() }
+    clipboardManager.addPrimaryClipChangedListener(clipListener)
+    // Clipboard reads are blocked until the window regains focus (Android 10+),
+    // and a copy done in another app while we were backgrounded doesn't deliver
+    // a clip-changed event. Re-read on focus gain, when access is permitted.
+    val focusListener =
+      ViewTreeObserver.OnWindowFocusChangeListener { hasFocus ->
+        if (hasFocus) {
+          refresh()
+        }
+      }
+    view.viewTreeObserver.addOnWindowFocusChangeListener(focusListener)
+    onDispose {
+      clipboardManager.removePrimaryClipChangedListener(clipListener)
+      view.viewTreeObserver.removeOnWindowFocusChangeListener(focusListener)
+    }
+  }
+  return hasText
+}
+
+private fun ClipboardManager.clipboardHasText(): Boolean {
+  if (!hasPrimaryClip()) return false
+  val description = primaryClipDescription ?: return false
+  return description.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
+    description.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML)
 }
 
 @Composable

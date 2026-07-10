@@ -121,7 +121,7 @@ fun InputSection(
           contentDescription = stringResource(R.string.a11y_clear_input),
           onClick = { onMessage(TranslatorMessage.ClearInput) },
         )
-      } else {
+      } else if (rememberClipboardHasText()) {
         ToolIconButton(
           iconRes = R.drawable.paste,
           contentDescription = stringResource(R.string.a11y_paste),
