@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.DownloadState
+import dev.davidv.translator.FromLangChange
 import dev.davidv.translator.LangAvailability
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityEntry
@@ -51,7 +52,7 @@ fun DetectedLanguageSection(
     detectedLanguage = detectedLanguage,
     languageState = languageState,
     onSwitchClick = {
-      onMessage(TranslatorMessage.FromLang(detectedLanguage))
+      onMessage(TranslatorMessage.FromLang(detectedLanguage, FromLangChange.MovePreviousToTarget))
     },
     modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
     downloadStates = downloadStates,

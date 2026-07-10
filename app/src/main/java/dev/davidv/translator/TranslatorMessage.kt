@@ -19,6 +19,11 @@ package dev.davidv.translator
 
 import android.net.Uri
 
+enum class FromLangChange {
+  KeepTarget,
+  MovePreviousToTarget,
+}
+
 sealed class TranslatorMessage {
   data class TextInput(
     val text: String,
@@ -26,6 +31,7 @@ sealed class TranslatorMessage {
 
   data class FromLang(
     val language: Language,
+    val change: FromLangChange = FromLangChange.KeepTarget,
   ) : TranslatorMessage()
 
   data class ToLang(

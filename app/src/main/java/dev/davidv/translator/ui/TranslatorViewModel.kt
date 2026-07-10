@@ -30,6 +30,7 @@ import dev.davidv.translator.DocumentTranslationServiceState
 import dev.davidv.translator.DownloadService
 import dev.davidv.translator.FileEvent
 import dev.davidv.translator.FilePathManager
+import dev.davidv.translator.FromLangChange
 import dev.davidv.translator.InputType
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageMetadataManager
@@ -359,11 +360,10 @@ class TranslatorViewModel(
       is TranslatorMessage.FromLang -> {
         _isAutoSource.value = false
         val newFrom = message.language
-        if (newFrom == _to.value) {
-          val newTarget = pickAlternateTarget(newFrom)
-          if (newTarget != null) {
-            _to.value = newTarget
-          }
+        val carriedTarget = previousSourceAsTarget(newFrom, message.change)
+        when {
+          carriedTarget != null -> _to.value = carriedTarget
+          newFrom == _to.value -> pickAlternateTarget(newFrom)?.let { _to.value = it }
         }
         _from.value = newFrom
         _output.value = null
@@ -924,6 +924,17 @@ class TranslatorViewModel(
     // Recycle bitmaps
     _displayImage.value?.let { if (!it.isRecycled) it.recycle() }
     originalImage.value?.let { if (!it.isRecycled) it.recycle() }
+  }
+
+  private fun previousSourceAsTarget(
+    newFrom: Language,
+    change: FromLangChange,
+  ): Language? {
+    if (change != FromLangChange.MovePreviousToTarget) return null
+    val oldFrom = _from.value ?: return null
+    if (oldFrom == newFrom) return null
+    if (!languageStateManager.canTranslate(newFrom, oldFrom)) return null
+    return oldFrom
   }
 
   private fun pickAlternateTarget(newFrom: Language): Language? {
