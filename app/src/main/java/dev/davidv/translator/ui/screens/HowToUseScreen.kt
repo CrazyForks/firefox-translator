@@ -93,7 +93,7 @@ private val sections =
             bodyRes = R.string.howto_dict_body,
           ),
           Tip(
-            iconRes = R.drawable.list,
+            iconRes = R.drawable.alt_route,
             titleRes = R.string.howto_alt_title,
             bodyRes = R.string.howto_alt_body,
           ),
