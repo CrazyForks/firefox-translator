@@ -74,6 +74,7 @@ fun TranslationField(
   text: TranslatedText?,
   modifier: Modifier = Modifier,
   label: String = "",
+  header: (@Composable () -> Unit)? = null,
   textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
   onDictionaryLookup: (String) -> Unit = {},
   onAlternatives: ((Int, Int) -> Unit)? = null,
@@ -83,8 +84,11 @@ fun TranslationField(
   tapMode: OutputTapMode = OutputTapMode.None,
   onToggleAlternativesMode: (() -> Unit)? = null,
   onToggleDictionaryMode: (() -> Unit)? = null,
+  dictionaryAvailable: Boolean = false,
+  onDictionaryUnavailable: () -> Unit = {},
+  speakerAvailable: Boolean = false,
+  onSpeakerUnavailable: () -> Unit = {},
   onWordTap: ((Int) -> Unit)? = null,
-  canSpeak: Boolean = false,
   isAudioPlaying: Boolean = false,
   isAudioLoading: Boolean = false,
   speechPlaybackSpeed: Float = 1.0f,
@@ -109,6 +113,7 @@ fun TranslationField(
 
   TranslationCard(
     label = label,
+    labelContent = header,
     modifier =
       modifier
         .semantics {
@@ -117,7 +122,7 @@ fun TranslationField(
         },
     tools = {
       if (text?.translated?.isNotEmpty() == true) {
-        if (canSpeak || isAudioLoading || isAudioPlaying) {
+        if (speakerAvailable) {
           SpeechPlaybackButton(
             isAudioPlaying = isAudioPlaying,
             isAudioLoading = isAudioLoading,
@@ -134,6 +139,50 @@ fun TranslationField(
                 stringResource(R.string.a11y_speak_translation)
               },
           )
+        } else {
+          ToolIconButton(
+            iconRes = R.drawable.volume_up,
+            contentDescription = stringResource(R.string.a11y_speak_translation),
+            available = false,
+            onClick = onSpeakerUnavailable,
+          )
+        }
+
+        ToolIconButton(
+          iconRes = R.drawable.alt_route,
+          contentDescription =
+            stringResource(
+              if (tapMode == OutputTapMode.Alternatives) {
+                R.string.a11y_alternatives_mode_on
+              } else {
+                R.string.a11y_alternatives_mode_off
+              },
+            ),
+          active = tapMode == OutputTapMode.Alternatives,
+          onClick = onToggleAlternativesMode ?: {},
+        )
+
+        if (dictionaryAvailable) {
+          ToolIconButton(
+            iconRes = R.drawable.dictionary_book,
+            contentDescription =
+              stringResource(
+                if (tapMode == OutputTapMode.Dictionary) {
+                  R.string.a11y_dictionary_mode_on
+                } else {
+                  R.string.a11y_dictionary_mode_off
+                },
+              ),
+            active = tapMode == OutputTapMode.Dictionary,
+            onClick = onToggleDictionaryMode ?: {},
+          )
+        } else {
+          ToolIconButton(
+            iconRes = R.drawable.dictionary_book,
+            contentDescription = stringResource(R.string.a11y_dictionary_mode_off),
+            available = false,
+            onClick = onDictionaryUnavailable,
+          )
         }
 
         ToolIconButton(
@@ -146,38 +195,6 @@ fun TranslationField(
             clipboard.setPrimaryClip(clip)
           },
         )
-
-        if (onToggleAlternativesMode != null) {
-          ToolIconButton(
-            iconRes = R.drawable.alt_route,
-            contentDescription =
-              stringResource(
-                if (tapMode == OutputTapMode.Alternatives) {
-                  R.string.a11y_alternatives_mode_on
-                } else {
-                  R.string.a11y_alternatives_mode_off
-                },
-              ),
-            active = tapMode == OutputTapMode.Alternatives,
-            onClick = onToggleAlternativesMode,
-          )
-        }
-
-        if (onToggleDictionaryMode != null) {
-          ToolIconButton(
-            iconRes = R.drawable.dictionary_book,
-            contentDescription =
-              stringResource(
-                if (tapMode == OutputTapMode.Dictionary) {
-                  R.string.a11y_dictionary_mode_on
-                } else {
-                  R.string.a11y_dictionary_mode_off
-                },
-              ),
-            active = tapMode == OutputTapMode.Dictionary,
-            onClick = onToggleDictionaryMode,
-          )
-        }
       }
     },
     body = {

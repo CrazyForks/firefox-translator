@@ -38,6 +38,14 @@ sealed class TranslatorMessage {
     val language: Language,
   ) : TranslatorMessage()
 
+  data class AddTab(
+    val language: Language,
+  ) : TranslatorMessage()
+
+  data class RemoveTab(
+    val language: Language,
+  ) : TranslatorMessage()
+
   data class SetImageUri(
     val uri: Uri,
     val deleteAfterLoad: Boolean = false,

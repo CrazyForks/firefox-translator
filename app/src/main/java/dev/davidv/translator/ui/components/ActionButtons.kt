@@ -225,12 +225,15 @@ fun ToolIconButton(
   modifier: Modifier = Modifier,
   active: Boolean = false,
   enabled: Boolean = true,
+  // Renders greyed-out like a disabled button but stays clickable, so the tap
+  // can explain why the feature is unavailable (e.g. a toast).
+  available: Boolean = true,
 ) {
   val background =
     if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent
   val tint =
     when {
-      !enabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+      !enabled || !available -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
       active -> MaterialTheme.colorScheme.primary
       else -> MaterialTheme.colorScheme.onSurfaceVariant
     }

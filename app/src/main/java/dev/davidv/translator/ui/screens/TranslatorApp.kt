@@ -394,6 +394,7 @@ fun TranslatorApp(
   val output by viewModel.output.collectAsState()
   val from by viewModel.from.collectAsState()
   val to by viewModel.to.collectAsState()
+  val targetTabs by viewModel.targets.collectAsState()
   val displayImage by viewModel.displayImage.collectAsState()
   val originalImage by viewModel.originalImage.collectAsState()
   val imageWordSelection by viewModel.imageWordSelection.collectAsState()
@@ -747,6 +748,7 @@ fun TranslatorApp(
                 output = output,
                 from = currentFrom,
                 to = currentTo,
+                targetTabs = targetTabs?.tabs ?: listOf(currentTo),
                 detectedLanguage = currentDetectedLanguage,
                 displayImage = displayImage,
                 originalImage = originalImage,

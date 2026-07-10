@@ -57,6 +57,11 @@
     <string name="settings_external_storage">Use external storage</string>
     <string name="settings_disable_autodetect">Disable automatic language detection</string>
     <string name="settings_experimental_screen_translate">Screen translate (experimental)</string>
+    <string name="settings_multi_target">Multiple target languages</string>
+    <string name="a11y_add_target_language">Add target language</string>
+    <string name="a11y_remove_target_language">Remove target language</string>
+    <string name="feature_unavailable_tts">Text-to-speech is not available, download it from the manage languages page</string>
+    <string name="feature_unavailable_dictionary">Dictionary is not available, download it from the manage languages page</string>
     <string name="settings_translit_output">Show transliteration for translated text</string>
     <string name="settings_translit_input">Show transliteration for original text</string>
     <string name="settings_translit_japanese_spaces">Add spaces for Japanese transliteration</string>

@@ -47,6 +47,7 @@ fun TranslationCard(
   modifier: Modifier = Modifier,
   tools: @Composable RowScope.() -> Unit,
   footer: (@Composable () -> Unit)? = null,
+  labelContent: (@Composable () -> Unit)? = null,
   body: @Composable () -> Unit,
 ) {
   AppCard(modifier = modifier) {
@@ -60,16 +61,22 @@ fun TranslationCard(
         modifier = Modifier.fillMaxWidth().heightIn(min = 40.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
-        Text(
-          text = label.uppercase(),
-          style = MaterialTheme.typography.labelMedium,
-          fontWeight = FontWeight.SemiBold,
-          letterSpacing = 0.8.sp,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-          modifier = Modifier.weight(1f).padding(end = 8.dp),
-        )
+        if (labelContent != null) {
+          Box(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+            labelContent()
+          }
+        } else {
+          Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            letterSpacing = 0.8.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(end = 8.dp),
+          )
+        }
         Row(
           horizontalArrangement = Arrangement.spacedBy(2.dp),
           verticalAlignment = Alignment.CenterVertically,

@@ -133,6 +133,8 @@ class SettingsManager(
       prefs.getBoolean("live_camera_overlay_enabled", defaults.liveCameraOverlayEnabled)
     val registerAsBrowser =
       prefs.getBoolean("register_as_browser", defaults.registerAsBrowser)
+    val multiTargetEnabled =
+      prefs.getBoolean("multi_target_enabled", defaults.multiTargetEnabled)
     val assistantActionName = prefs.getString("assistant_action", null)
     val assistantAction =
       if (assistantActionName != null) {
@@ -172,6 +174,7 @@ class SettingsManager(
       liveCameraOverlayEnabled = liveCameraOverlayEnabled,
       registerAsBrowser = registerAsBrowser,
       assistantAction = assistantAction,
+      multiTargetEnabled = multiTargetEnabled,
     )
   }
 
@@ -288,6 +291,10 @@ class SettingsManager(
       if (newSettings.assistantAction != currentSettings.assistantAction) {
         putString("assistant_action", newSettings.assistantAction.name)
         modifiedSettings.add("assistant_action")
+      }
+      if (newSettings.multiTargetEnabled != currentSettings.multiTargetEnabled) {
+        putBoolean("multi_target_enabled", newSettings.multiTargetEnabled)
+        modifiedSettings.add("multi_target_enabled")
       }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")

@@ -57,4 +57,5 @@ data class AppSettings(
   val liveCameraOverlayEnabled: Boolean = true,
   val registerAsBrowser: Boolean = true,
   val assistantAction: AssistantAction = AssistantAction.STILL_IMAGE,
+  val multiTargetEnabled: Boolean = false,
 )

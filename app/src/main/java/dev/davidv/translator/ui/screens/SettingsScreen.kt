@@ -903,6 +903,27 @@ fun SettingsScreen(
               )
             }
 
+            // Multiple target languages (tabbed output)
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text(
+                text = stringResource(R.string.settings_multi_target),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+              )
+
+              Switch(
+                checked = settings.multiTargetEnabled,
+                onCheckedChange = { checked ->
+                  onSettingsChange(settings.copy(multiTargetEnabled = checked))
+                },
+              )
+            }
+
             // Show Transliteration for Output Toggle
             Row(
               modifier = Modifier.fillMaxWidth(),

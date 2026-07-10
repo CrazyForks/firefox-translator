@@ -20,6 +20,7 @@ package dev.davidv.translator.ui.screens
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -94,6 +95,7 @@ import dev.davidv.translator.ui.components.LanguageSelectionRow
 import dev.davidv.translator.ui.components.OutputTapMode
 import dev.davidv.translator.ui.components.ShareImage
 import dev.davidv.translator.ui.components.StyledTextFieldFocusController
+import dev.davidv.translator.ui.components.TargetTabsHeader
 import dev.davidv.translator.ui.components.TranslationField
 import dev.davidv.translator.ui.components.ZoomableImageViewer
 import dev.davidv.translator.ui.components.rememberImageSourceActions
@@ -116,6 +118,7 @@ fun MainScreen(
   output: TranslatedText?,
   from: Language,
   to: Language,
+  targetTabs: List<Language> = listOf(to),
   detectedLanguage: Language?,
   displayImage: Bitmap?,
   originalImage: Bitmap?,
@@ -419,11 +422,30 @@ fun MainScreen(
                       if (displayImage == null) m.weight(1f, fill = true) else m.height(parentHeight * 0.5f)
                     },
               ) {
-                val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isOutputAudioPlaying && !isOutputAudioLoading
                 TranslationField(
                   text = output,
                   modifier = Modifier.fillMaxSize(),
                   label = to.localizedName(),
+                  header =
+                    if (settings.multiTargetEnabled) {
+                      {
+                        TargetTabsHeader(
+                          tabs = targetTabs,
+                          active = to,
+                          candidates =
+                            languageState.allLanguages().filter { x ->
+                              x != from && x !in targetTabs &&
+                                (languageState.availabilityFor(x)?.hasFromEnglish == true || x.isEnglish)
+                            },
+                          showAdd = true,
+                          onSwitch = { onMessage(TranslatorMessage.ToLang(it)) },
+                          onAdd = { onMessage(TranslatorMessage.AddTab(it)) },
+                          onRemove = { onMessage(TranslatorMessage.RemoveTab(it)) },
+                        )
+                      }
+                    } else {
+                      null
+                    },
                   textStyle =
                     MaterialTheme.typography.bodyLarge.copy(
                       fontSize = (MaterialTheme.typography.bodyLarge.fontSize * settings.fontFactor),
@@ -458,34 +480,36 @@ fun MainScreen(
                   highlightRange =
                     alternativesTarget?.let { it.wordBegin until it.wordEnd },
                   tapMode = outputTapMode,
-                  onToggleAlternativesMode =
-                    if (hasAnyAlternatives) {
-                      {
-                        outputTapMode =
-                          if (outputTapMode == OutputTapMode.Alternatives) {
-                            OutputTapMode.None
-                          } else {
-                            OutputTapMode.Alternatives
-                          }
-                        alternativesTarget = null
+                  onToggleAlternativesMode = {
+                    outputTapMode =
+                      if (outputTapMode == OutputTapMode.Alternatives) {
+                        OutputTapMode.None
+                      } else {
+                        OutputTapMode.Alternatives
                       }
-                    } else {
-                      null
-                    },
-                  onToggleDictionaryMode =
-                    if (hasTargetDictionary) {
-                      {
-                        outputTapMode =
-                          if (outputTapMode == OutputTapMode.Dictionary) {
-                            OutputTapMode.None
-                          } else {
-                            OutputTapMode.Dictionary
-                          }
-                        alternativesTarget = null
+                    alternativesTarget = null
+                  },
+                  onToggleDictionaryMode = {
+                    outputTapMode =
+                      if (outputTapMode == OutputTapMode.Dictionary) {
+                        OutputTapMode.None
+                      } else {
+                        OutputTapMode.Dictionary
                       }
-                    } else {
-                      null
-                    },
+                    alternativesTarget = null
+                  },
+                  dictionaryAvailable = hasTargetDictionary,
+                  onDictionaryUnavailable = {
+                    Toast
+                      .makeText(context, context.getString(R.string.feature_unavailable_dictionary), Toast.LENGTH_SHORT)
+                      .show()
+                  },
+                  speakerAvailable = languageState.availabilityFor(to)?.ttsFiles == true,
+                  onSpeakerUnavailable = {
+                    Toast
+                      .makeText(context, context.getString(R.string.feature_unavailable_tts), Toast.LENGTH_SHORT)
+                      .show()
+                  },
                   onWordTap = { offset ->
                     when (outputTapMode) {
                       OutputTapMode.Alternatives -> {
@@ -518,7 +542,6 @@ fun MainScreen(
                       OutputTapMode.None -> {}
                     }
                   },
-                  canSpeak = languageState.availabilityFor(to)?.ttsFiles == true && !isOtherAudioActive,
                   isAudioPlaying = isOutputAudioPlaying,
                   isAudioLoading = isOutputAudioLoading,
                   speechPlaybackSpeed = targetTtsPlaybackSpeed,
