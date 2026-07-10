@@ -109,6 +109,7 @@ fun StyledTextField(
           this.wordTapMode = wordTapMode
           this.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
           this.background = null
+          this.setPadding(0, 0, 0, 0)
           this.setOnTouchListener { v, event ->
             if (v.canScrollVertically(1) || v.canScrollVertically(-1)) {
               v.parent?.requestDisallowInterceptTouchEvent(true)
