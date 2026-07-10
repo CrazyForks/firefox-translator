@@ -29,23 +29,6 @@ class LanguageDetector(
 
   private fun languageForCode(code: String?): Language? = code?.let(languageByCode)
 
-  suspend fun detectLanguage(
-    text: String,
-    fromLang: Language?,
-  ): Language? =
-    withContext(Dispatchers.IO) {
-      if (text.isBlank()) {
-        return@withContext null
-      }
-
-      val detected = nativeLanguageRuntime.detectLanguage(text, fromLang?.code) ?: return@withContext null
-      if (detected.isReliable) {
-        languageForCode(detected.language)
-      } else {
-        null
-      }
-    }
-
   suspend fun detectLanguageRobust(
     text: String,
     hint: Language?,

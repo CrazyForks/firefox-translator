@@ -609,7 +609,12 @@ class TranslatorViewModel(
           if (_input.value.isBlank()) {
             _currentDetectedLanguage.value = null
           } else {
-            val detected = translationCoordinator.detectLanguage(_input.value, _from.value)
+            val detected =
+              translationCoordinator.detectLanguageRobust(
+                _input.value,
+                _from.value,
+                languageStateManager.languageState.value.allLanguages(),
+              )
             if (detected != null) {
               _currentDetectedLanguage.value = detected
             }
@@ -858,7 +863,7 @@ class TranslatorViewModel(
     val settings = settingsManager.settings.value
     _currentDetectedLanguage.value =
       if (!settings.disableCLD) {
-        translationCoordinator.detectLanguage(initialText, _from.value)
+        translationCoordinator.detectLanguageRobust(initialText, _from.value, languageState.allLanguages())
       } else {
         null
       }

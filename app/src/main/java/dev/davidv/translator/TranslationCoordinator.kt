@@ -129,11 +129,6 @@ class TranslationCoordinator(
     }
   }
 
-  suspend fun detectLanguage(
-    text: String,
-    hint: Language?,
-  ): Language? = languageDetector.detectLanguage(text, hint)
-
   suspend fun detectLanguageRobust(
     text: String,
     hint: Language?,
