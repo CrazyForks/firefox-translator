@@ -129,17 +129,17 @@
     <string name="background_mode_white_on_black">White on Black</string>
     <string name="background_mode_black_on_white">Black on White</string>
     <string name="background_mode_auto_detect">Original Image Colors</string>
-    
+
     <!-- tts / speech errors -->
     <string name="tts_nothing_to_speak">Nothing to speak</string>
     <string name="tts_catalog_unavailable">Catalog unavailable</string>
     <string name="tts_no_voice">No voice installed for %1$s</string>
     <string name="tts_synthesis_failed">Speech synthesis failed for %1$s</string>
     <string name="tts_sample_fallback">This is a text-to-speech sample from Offline Translator.</string>
-    
+
     <!-- translation -->
     <string name="translation_error">Translation error: %1$s</string>
-    
+
     <!-- download errors -->
     <string name="download_failed_core">%1$s download failed</string>
     <string name="download_failed_ocr">%1$s text recognition download failed</string>
@@ -152,7 +152,7 @@
     <string name="download_catalog_save_failed">Failed to save catalog</string>
     <string name="download_unknown_error">Unknown error</string>
     <string name="download_catalog_failed">Failed to download catalog: %1$s</string>
-    
+
     <!-- assistant overlay status -->
     <string name="assistant_invoke_prompt">Invoke this assistant on top of text to translate it</string>
     <string name="assistant_collecting_context">Collecting screen context…</string>
@@ -164,7 +164,7 @@
     <string name="assistant_ocr_failed">Text recognition failed</string>
     <string name="ocr_models_missing">Text recognition models are missing. Open Manage languages in the app to repair.</string>
     <string name="assistant_set_source_live">Set a default source language in Settings to use live screen translation.</string>
-    
+
     <!-- migration gate -->
     <string name="migration_updating_speech_models">Updating speech models</string>
     <string name="migration_accept_convert">Accept and convert</string>
@@ -175,7 +175,7 @@
       <item quantity="one">You have %1$d text-to-speech model to convert to a new format. It will take approximately %2$d seconds. You will save %3$.0f MB of disk space.</item>
       <item quantity="other">You have %1$d text-to-speech models to convert to a new format. It will take approximately %2$d seconds. You will save %3$.0f MB of disk space.</item>
     </plurals>
-    
+
     <!-- document translation notification + progress -->
     <string name="doc_notif_translating">Translating file</string>
     <string name="doc_notif_translated">Translated file</string>
@@ -191,19 +191,19 @@
     <string name="doc_progress_saving">Saving translated file</string>
     <string name="doc_translation_failed">Document translation failed</string>
     <string name="doc_url_unsupported">Download the document and open it with the app instead</string>
-    
+
     <!-- document configure sheet -->
     <string name="document_wrap_columns">Wrap at %1$d columns</string>
     <string name="document_translate_pdf_images">Translate images in PDF</string>
     <string name="layout_preserve">Preserve line breaks</string>
     <string name="layout_reflow">Reflow into paragraphs</string>
     <string name="layout_reflow_wrap">Reflow and wrap</string>
-    
+
     <!-- common (additional) -->
     <string name="common_open">Open</string>
     <string name="common_close">Close</string>
     <string name="common_save">Save</string>
-    
+
     <!-- translator app -->
     <string name="translator_percent" translatable="false">%1$d%%</string>
     <string name="translator_translated_file">Translated file: %1$s</string>
@@ -211,7 +211,7 @@
     <string name="translator_document_save_failed">Failed to save document</string>
     <string name="translator_audio_playback_failed">Audio playback failed: %1$s</string>
     <string name="translator_no_app_to_open">No app found to open this file</string>
-    
+
     <!-- document alignment -->
     <string name="docalign_decode_failed">Unable to decode image.</string>
     <string name="docalign_detecting">Detecting corners…</string>
@@ -223,14 +223,14 @@
     <string name="howto_share_title">Share to translate</string>
     <string name="howto_share_body">Share text, links, or images from any app to translate them.</string>
     <string name="howto_copy_title">Translate without leaving other apps</string>
-    <string name="howto_copy_body">Select text anywhere, then tap \"Translate\" in the copy toolbar to see the translation in a compact popup.</string>
+    <string name="howto_copy_body">Select text on any app, then tap \"Translate\" in the copy toolbar to see the translation in a compact popup.</string>
     <string name="howto_section_in_app">Inside the app</string>
     <string name="howto_docs_title">Translate documents and images</string>
     <string name="howto_docs_body">Open the Documents tab to translate images or EPUB, PDF, and TXT files.</string>
     <string name="howto_dict_title">Dictionary lookup</string>
-    <string name="howto_dict_body">Long-press any word — in the text you type or its translation — to see its definition. Or tap the dictionary button, then tap words one after another to look them up. Data sourced from Wiktionary.</string>
+    <string name="howto_dict_body">Long-press any word, then hit \"Dictionary\" to see its definition. Alternatively, tap the dictionary button, then tap any word. Data sourced from Wiktionary.</string>
     <string name="howto_alt_title">Choose alternative words</string>
-    <string name="howto_alt_body">Tap the alternatives button, then tap an underlined word in the translation to see other wordings and pick one. The rest of the sentence re-translates to match.</string>
+    <string name="howto_alt_body">Tap the alternatives button, then tap on any word to replace it. The model may provide some alternatives, otherwise, you can fill in your own. The rest of the sentence re-translates to match.</string>
     <string name="howto_voice_title">Change voice or speed</string>
     <string name="howto_voice_body">Long-press the play button to pick a different voice or adjust playback speed.</string>
 
