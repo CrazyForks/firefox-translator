@@ -348,8 +348,10 @@ class TranslatorViewModel(
         }
         val settings = settingsManager.settings.value
         val fromLang = _from.value
-        if (settings.showTransliterationOnInput && fromLang != null) {
+        if (settings.showTransliterationOnInput && fromLang != null && message.text.isNotBlank()) {
           _inputTransliterated.value = translationCoordinator.transliterate(message.text, fromLang)
+        } else {
+          _inputTransliterated.value = null
         }
         triggerTranslation()
       }
@@ -423,6 +425,7 @@ class TranslatorViewModel(
         _displayImage.value = null
         _output.value = null
         _input.value = ""
+        _inputTransliterated.value = null
         _inputType.value = InputType.TEXT
         _originalImage.value = null
         ocrCache = null

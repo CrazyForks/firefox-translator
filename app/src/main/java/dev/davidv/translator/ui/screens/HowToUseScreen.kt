@@ -29,8 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.R
+import dev.davidv.translator.ui.components.AppCard
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 private data class Tip(
@@ -111,6 +110,7 @@ private val sections =
 @Composable
 fun HowToUseScreen(onBack: () -> Unit) {
   Scaffold(
+    containerColor = MaterialTheme.colorScheme.surfaceContainer,
     topBar = {
       TopAppBar(
         title = { Text(stringResource(R.string.howto_title)) },
@@ -142,12 +142,8 @@ fun HowToUseScreen(onBack: () -> Unit) {
           color = MaterialTheme.colorScheme.primary,
           modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
         )
-        Card(
+        AppCard(
           modifier = Modifier.fillMaxWidth().testTag("export-section:" + stringResource(section.titleRes)),
-          colors =
-            CardDefaults.cardColors(
-              containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            ),
         ) {
           Column(
             modifier = Modifier.padding(vertical = 8.dp),

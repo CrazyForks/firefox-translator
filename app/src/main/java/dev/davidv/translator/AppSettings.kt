@@ -38,6 +38,7 @@ data class AppSettings(
   val minConfidence: Int = 75,
   val maxImageSize: Int = 1400,
   val disableCLD: Boolean = false,
+  val experimentalScreenTranslate: Boolean = false,
   val enableOutputTransliteration: Boolean = true,
   val useExternalStorage: Boolean = false,
   val fontFactor: Float = 1.0f,

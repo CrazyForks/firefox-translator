@@ -28,34 +28,14 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import com.yalantis.ucrop.UCrop
 import dev.davidv.translator.R
@@ -131,17 +111,23 @@ private fun shouldStartInDocAlign(
   return catalog?.supportInstalledByKind("doc_detect") == true
 }
 
+// The image/document entry points a caller can trigger (from the input source
+// row). Camera is navigation and stays with the caller; these are the ones that
+// need the crop + import plumbing that lives here.
+class ImageSourceActions(
+  val pickPhotos: () -> Unit,
+  val pickDocs: () -> Unit,
+  val startScreen: () -> Unit,
+)
+
 @Composable
-fun ImageCaptureHandler(
+fun rememberImageSourceActions(
   onMessage: (TranslatorMessage) -> Unit,
-  showImageSourceSheet: Boolean,
-  onDismissImageSourceSheet: () -> Unit,
-  onCameraClick: () -> Unit,
   from: dev.davidv.translator.Language,
   to: dev.davidv.translator.Language,
   isAutoSource: Boolean,
   pendingSharedImage: SharedFlow<Uri>? = null,
-) {
+): ImageSourceActions {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
   val pendingImport = remember { mutableStateOf<PendingImageImport?>(null) }
@@ -323,195 +309,27 @@ fun ImageCaptureHandler(
       }
     }
 
-  // Image source selection bottom sheet
-  if (showImageSourceSheet) {
-    ImageSourceBottomSheet(
-      onDismiss = onDismissImageSourceSheet,
-      screenLiveEnabled = !isAutoSource,
-      onScreenLiveClick = {
-        if (isAutoSource) {
-          Toast.makeText(context, context.getString(R.string.screen_translate_needs_source), Toast.LENGTH_LONG).show()
-        } else {
-          onDismissImageSourceSheet()
-          context.startActivity(
-            dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(
-              context,
-              sourceCode = from.code,
-              targetCode = to.code,
-              isAutoSource = false,
-            ),
-          )
-        }
-      },
-      onCameraClick = {
-        onDismissImageSourceSheet()
-        onCameraClick()
-      },
-      onMediaPickerClick = {
-        onDismissImageSourceSheet()
+  return ImageSourceActions(
+    pickPhotos = {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-      },
-      onGalleryClick = {
-        onDismissImageSourceSheet()
+      } else {
         val galleryIntent = Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI)
         pickFromGallery.launch(galleryIntent)
-      },
-      onFilePickerClick = {
-        onDismissImageSourceSheet()
-        pickFromFiles.launch(filePickerMimeTypes)
-      },
-    )
-  }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ImageSourceBottomSheet(
-  onDismiss: () -> Unit,
-  screenLiveEnabled: Boolean,
-  onScreenLiveClick: () -> Unit,
-  onCameraClick: () -> Unit,
-  onMediaPickerClick: () -> Unit,
-  onGalleryClick: () -> Unit,
-  onFilePickerClick: () -> Unit,
-) {
-  val bottomSheetState = rememberModalBottomSheetState()
-
-  ModalBottomSheet(
-    onDismissRequest = onDismiss,
-    sheetState = bottomSheetState,
-    dragHandle = { BottomSheetDefaults.DragHandle() },
-  ) {
-    Column(
-      modifier =
-        Modifier
-          .fillMaxWidth()
-          .padding(16.dp)
-          .padding(bottom = 16.dp)
-          .testTag("export-section:Image source"),
-      horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-      ) {
-        // Live screen translate (leftmost). Disabled when the source is auto —
-        // live can't run the per-frame script classifier.
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.clickable { onScreenLiveClick() },
-        ) {
-          val screenTint =
-            if (screenLiveEnabled) {
-              MaterialTheme.colorScheme.onSurface
-            } else {
-              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-            }
-          Icon(
-            painter = painterResource(id = R.drawable.videocam),
-            contentDescription = stringResource(R.string.a11y_translate_screen_live),
-            modifier =
-              Modifier
-                .size(48.dp)
-                .padding(bottom = 8.dp),
-            tint = screenTint,
-          )
-          Text(
-            text = stringResource(R.string.image_source_screen),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = screenTint,
-          )
-        }
-
-        // File picker
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.clickable { onFilePickerClick() },
-        ) {
-          Icon(
-            painter = painterResource(id = R.drawable.draft),
-            contentDescription = stringResource(R.string.a11y_source_document),
-            modifier =
-              Modifier
-                .size(48.dp)
-                .padding(bottom = 8.dp),
-            tint = MaterialTheme.colorScheme.onSurface,
-          )
-          Text(
-            text = stringResource(R.string.image_source_document),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-          )
-        }
-
-        // Conditional: Photos (Android 13+) or Gallery (older versions)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-          // Modern Photos picker for Android 13+
-          Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable { onMediaPickerClick() },
-          ) {
-            Icon(
-              painter = painterResource(id = R.drawable.gallery),
-              contentDescription = stringResource(R.string.a11y_source_photos),
-              modifier =
-                Modifier
-                  .size(48.dp)
-                  .padding(bottom = 8.dp),
-              tint = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-              text = stringResource(R.string.image_source_photos),
-              style = MaterialTheme.typography.bodyMedium,
-              textAlign = TextAlign.Center,
-            )
-          }
-        }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-          // Traditional Gallery for older Android versions
-          Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.clickable { onGalleryClick() },
-          ) {
-            Icon(
-              painter = painterResource(id = R.drawable.gallery),
-              contentDescription = stringResource(R.string.a11y_source_gallery),
-              modifier =
-                Modifier
-                  .size(48.dp)
-                  .padding(bottom = 8.dp),
-              tint = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-              text = stringResource(R.string.image_source_gallery),
-              style = MaterialTheme.typography.bodyMedium,
-              textAlign = TextAlign.Center,
-            )
-          }
-        }
-
-        // Camera (rightmost — live camera surface)
-        Column(
-          horizontalAlignment = Alignment.CenterHorizontally,
-          modifier = Modifier.clickable { onCameraClick() },
-        ) {
-          Icon(
-            painter = painterResource(id = R.drawable.camera),
-            contentDescription = stringResource(R.string.a11y_source_camera),
-            modifier =
-              Modifier
-                .size(48.dp)
-                .padding(bottom = 8.dp),
-            tint = MaterialTheme.colorScheme.onSurface,
-          )
-          Text(
-            text = stringResource(R.string.image_source_camera),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-          )
-        }
       }
-    }
-  }
+    },
+    pickDocs = {
+      pickFromFiles.launch(filePickerMimeTypes)
+    },
+    startScreen = {
+      context.startActivity(
+        dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity.intent(
+          context,
+          sourceCode = from.code,
+          targetCode = to.code,
+          isAutoSource = false,
+        ),
+      )
+    },
+  )
 }

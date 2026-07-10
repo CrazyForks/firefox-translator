@@ -56,6 +56,7 @@
     <string name="settings_catalog_url">Catalog URL</string>
     <string name="settings_external_storage">Use external storage</string>
     <string name="settings_disable_autodetect">Disable automatic language detection</string>
+    <string name="settings_experimental_screen_translate">Screen translate (experimental)</string>
     <string name="settings_translit_output">Show transliteration for translated text</string>
     <string name="settings_translit_input">Show transliteration for original text</string>
     <string name="settings_translit_japanese_spaces">Add spaces for Japanese transliteration</string>

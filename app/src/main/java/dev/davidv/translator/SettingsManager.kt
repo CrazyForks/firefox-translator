@@ -76,6 +76,8 @@ class SettingsManager(
     val minConfidence = prefs.getInt("min_confidence", defaults.minConfidence)
     val maxImageSize = prefs.getInt("max_image_size", defaults.maxImageSize).coerceIn(600, 2000)
     val disableCLD = prefs.getBoolean("disable_cld", defaults.disableCLD)
+    val experimentalScreenTranslate =
+      prefs.getBoolean("experimental_screen_translate", defaults.experimentalScreenTranslate)
     val enableOutputTransliteration = prefs.getBoolean("enable_output_transliteration", defaults.enableOutputTransliteration)
     val useExternalStorage = prefs.getBoolean("use_external_storage", defaults.useExternalStorage)
     val fontFactor = prefs.getFloat("font_factor", defaults.fontFactor)
@@ -151,6 +153,7 @@ class SettingsManager(
       minConfidence = minConfidence,
       maxImageSize = maxImageSize,
       disableCLD = disableCLD,
+      experimentalScreenTranslate = experimentalScreenTranslate,
       enableOutputTransliteration = enableOutputTransliteration,
       useExternalStorage = useExternalStorage,
       fontFactor = fontFactor,
@@ -207,6 +210,10 @@ class SettingsManager(
       if (newSettings.disableCLD != currentSettings.disableCLD) {
         putBoolean("disable_cld", newSettings.disableCLD)
         modifiedSettings.add("disable_cld")
+      }
+      if (newSettings.experimentalScreenTranslate != currentSettings.experimentalScreenTranslate) {
+        putBoolean("experimental_screen_translate", newSettings.experimentalScreenTranslate)
+        modifiedSettings.add("experimental_screen_translate")
       }
       if (newSettings.enableOutputTransliteration != currentSettings.enableOutputTransliteration) {
         putBoolean("enable_output_transliteration", newSettings.enableOutputTransliteration)

@@ -41,7 +41,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -72,6 +72,8 @@ import dev.davidv.translator.ui.theme.TranslatorTheme
 @Composable
 fun TranslationField(
   text: TranslatedText?,
+  modifier: Modifier = Modifier,
+  label: String = "",
   textStyle: TextStyle = MaterialTheme.typography.bodyLarge,
   onDictionaryLookup: (String) -> Unit = {},
   onAlternatives: ((Int, Int) -> Unit)? = null,
@@ -105,27 +107,84 @@ fun TranslationField(
   val smallerFontSize = fontSize * 0.7f
   val translationOutputDescription = stringResource(R.string.a11y_translation_output)
 
-  Box(
+  TranslationCard(
+    label = label,
     modifier =
-      Modifier
-        .fillMaxSize()
+      modifier
         .semantics {
           contentDescription = translationOutputDescription
           this.text = AnnotatedString(text?.translated ?: "")
         },
-  ) {
-    Box(
-      modifier =
-        Modifier
-          .fillMaxSize()
-          // Leave space for trailing action buttons.
-          .padding(end = 32.dp),
-      contentAlignment = Alignment.TopStart,
-    ) {
+    tools = {
+      if (text?.translated?.isNotEmpty() == true) {
+        if (canSpeak || isAudioLoading || isAudioPlaying) {
+          SpeechPlaybackButton(
+            isAudioPlaying = isAudioPlaying,
+            isAudioLoading = isAudioLoading,
+            speechPlaybackSpeed = speechPlaybackSpeed,
+            selectedVoiceName = selectedVoiceName,
+            availableVoices = availableVoices,
+            onSpeak = onSpeak,
+            onSpeechPlaybackSpeedChange = onSpeechPlaybackSpeedChange,
+            onVoiceSelected = onVoiceSelected,
+            contentDescription =
+              if (isAudioPlaying) {
+                stringResource(R.string.a11y_stop_audio)
+              } else {
+                stringResource(R.string.a11y_speak_translation)
+              },
+          )
+        }
+
+        ToolIconButton(
+          iconRes = R.drawable.copy,
+          contentDescription = stringResource(R.string.a11y_copy_translation),
+          onClick = {
+            val clipboard =
+              context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("Translation", text.translated)
+            clipboard.setPrimaryClip(clip)
+          },
+        )
+
+        if (onToggleAlternativesMode != null) {
+          ToolIconButton(
+            iconRes = R.drawable.alt_route,
+            contentDescription =
+              stringResource(
+                if (tapMode == OutputTapMode.Alternatives) {
+                  R.string.a11y_alternatives_mode_on
+                } else {
+                  R.string.a11y_alternatives_mode_off
+                },
+              ),
+            active = tapMode == OutputTapMode.Alternatives,
+            onClick = onToggleAlternativesMode,
+          )
+        }
+
+        if (onToggleDictionaryMode != null) {
+          ToolIconButton(
+            iconRes = R.drawable.dictionary_book,
+            contentDescription =
+              stringResource(
+                if (tapMode == OutputTapMode.Dictionary) {
+                  R.string.a11y_dictionary_mode_on
+                } else {
+                  R.string.a11y_dictionary_mode_off
+                },
+              ),
+            active = tapMode == OutputTapMode.Dictionary,
+            onClick = onToggleDictionaryMode,
+          )
+        }
+      }
+    },
+    body = {
       Column(
         modifier =
           Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .verticalScroll(rememberScrollState()),
       ) {
         AndroidView(
@@ -181,104 +240,8 @@ fun TranslationField(
           )
         }
       }
-    }
-
-    if (text?.translated?.isNotEmpty() == true) {
-      Column(
-        modifier =
-          Modifier
-            .align(Alignment.TopEnd),
-      ) {
-        IconButton(
-          onClick = {
-            val clipboard =
-              context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val clip = ClipData.newPlainText("Translation", text.translated)
-            clipboard.setPrimaryClip(clip)
-          },
-          modifier = Modifier.size(24.dp),
-        ) {
-          Icon(
-            painterResource(id = R.drawable.copy),
-            contentDescription = stringResource(R.string.a11y_copy_translation),
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-          )
-        }
-
-        if (onToggleAlternativesMode != null) {
-          IconButton(
-            onClick = onToggleAlternativesMode,
-            modifier = Modifier.padding(top = 6.dp).size(24.dp),
-          ) {
-            Icon(
-              painterResource(id = R.drawable.list),
-              contentDescription =
-                stringResource(
-                  if (tapMode == OutputTapMode.Alternatives) {
-                    R.string.a11y_alternatives_mode_on
-                  } else {
-                    R.string.a11y_alternatives_mode_off
-                  },
-                ),
-              tint =
-                if (tapMode == OutputTapMode.Alternatives) {
-                  MaterialTheme.colorScheme.primary
-                } else {
-                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                },
-            )
-          }
-        }
-
-        if (onToggleDictionaryMode != null) {
-          IconButton(
-            onClick = onToggleDictionaryMode,
-            modifier = Modifier.padding(top = 6.dp).size(24.dp),
-          ) {
-            Icon(
-              painterResource(id = R.drawable.dictionary_book),
-              contentDescription =
-                stringResource(
-                  if (tapMode == OutputTapMode.Dictionary) {
-                    R.string.a11y_dictionary_mode_on
-                  } else {
-                    R.string.a11y_dictionary_mode_off
-                  },
-                ),
-              tint =
-                if (tapMode == OutputTapMode.Dictionary) {
-                  MaterialTheme.colorScheme.primary
-                } else {
-                  MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                },
-            )
-          }
-        }
-
-        if (canSpeak || isAudioLoading || isAudioPlaying) {
-          SpeechPlaybackButton(
-            isAudioPlaying = isAudioPlaying,
-            isAudioLoading = isAudioLoading,
-            speechPlaybackSpeed = speechPlaybackSpeed,
-            selectedVoiceName = selectedVoiceName,
-            availableVoices = availableVoices,
-            onSpeak = onSpeak,
-            onSpeechPlaybackSpeedChange = onSpeechPlaybackSpeedChange,
-            onVoiceSelected = onVoiceSelected,
-            contentDescription =
-              if (isAudioPlaying) {
-                stringResource(
-                  R.string.a11y_stop_audio,
-                )
-              } else {
-                stringResource(R.string.a11y_speak_translation)
-              },
-            modifier = Modifier.padding(top = 6.dp),
-          )
-        }
-      }
-    }
-  }
+    },
+  )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -296,18 +259,27 @@ fun SpeechPlaybackButton(
   modifier: Modifier = Modifier,
 ) {
   var showSpeechOptions by remember { mutableStateOf(false) }
+  val active = isAudioPlaying || isAudioLoading
+  val tint =
+    if (active) {
+      MaterialTheme.colorScheme.primary
+    } else {
+      MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
   Box(
     modifier =
       modifier
-        .size(24.dp),
+        .size(40.dp),
   ) {
     Box(
       modifier =
         Modifier
           .matchParentSize()
-          .clip(RoundedCornerShape(8.dp))
-          .combinedClickable(
+          .clip(RoundedCornerShape(12.dp))
+          .background(
+            if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent,
+          ).combinedClickable(
             onClick = onSpeak,
             onLongClick = {
               showSpeechOptions = true
@@ -319,15 +291,16 @@ fun SpeechPlaybackButton(
     ) {
       if (isAudioLoading && !isAudioPlaying) {
         CircularProgressIndicator(
-          modifier = Modifier.size(18.dp),
+          modifier = Modifier.size(20.dp),
           strokeWidth = 2.dp,
-          color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+          color = tint,
         )
       } else {
         Icon(
           painter = painterResource(id = if (isAudioPlaying) R.drawable.stop else R.drawable.volume_up),
           contentDescription = null,
-          tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+          tint = tint,
+          modifier = Modifier.size(24.dp),
         )
       }
     }

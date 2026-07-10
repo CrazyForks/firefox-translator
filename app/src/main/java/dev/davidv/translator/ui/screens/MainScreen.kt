@@ -17,22 +17,11 @@
 
 package dev.davidv.translator.ui.screens
 
-import android.app.Activity
-import android.content.ClipboardManager
-import android.content.Context
-import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.speech.RecognizerIntent
 import android.util.Log
-import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -45,13 +34,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -66,7 +52,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -76,7 +61,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import dev.davidv.translator.AppSettings
@@ -93,55 +77,33 @@ import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.WordWithTaggedEntries
-import dev.davidv.translator.browser.BrowserActivity
-import dev.davidv.translator.isSupportedDocumentUrl
-import dev.davidv.translator.isWebUrl
+import dev.davidv.translator.localizedName
+import dev.davidv.translator.ui.components.ActionPillButton
 import dev.davidv.translator.ui.components.AlternativesDrawer
 import dev.davidv.translator.ui.components.AlternativesTarget
+import dev.davidv.translator.ui.components.ClearInput
 import dev.davidv.translator.ui.components.DetectedLanguageSection
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.DictionaryBottomSheet
-import dev.davidv.translator.ui.components.ImageCaptureHandler
 import dev.davidv.translator.ui.components.ImageDisplaySection
 import dev.davidv.translator.ui.components.ImageWordSelection
+import dev.davidv.translator.ui.components.InputSection
+import dev.davidv.translator.ui.components.JapaneseOcrModeToggle
 import dev.davidv.translator.ui.components.LanguageEvent
 import dev.davidv.translator.ui.components.LanguageSelectionRow
 import dev.davidv.translator.ui.components.OutputTapMode
-import dev.davidv.translator.ui.components.SpeechPlaybackButton
-import dev.davidv.translator.ui.components.StyledTextField
+import dev.davidv.translator.ui.components.ShareImage
 import dev.davidv.translator.ui.components.StyledTextFieldFocusController
 import dev.davidv.translator.ui.components.TranslationField
 import dev.davidv.translator.ui.components.ZoomableImageViewer
+import dev.davidv.translator.ui.components.rememberImageSourceActions
+import dev.davidv.translator.ui.components.wordAt
+import dev.davidv.translator.ui.components.wordRangeAt
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-
-// The char range of the whole word around a tap offset (an insertion index, so
-// it may land just past a word or on a space — step back onto the preceding
-// letter in that case). Null when the tap isn't on a word.
-private fun wordRangeAt(
-  text: String,
-  offset: Int,
-): IntRange? {
-  val n = text.length
-  if (n == 0) return null
-  var i = offset.coerceIn(0, n)
-  if (i >= n || !text[i].isLetterOrDigit()) {
-    if (i > 0 && text[i - 1].isLetterOrDigit()) i-- else return null
-  }
-  var start = i
-  while (start > 0 && text[start - 1].isLetterOrDigit()) start--
-  var end = i + 1
-  while (end < n && text[end].isLetterOrDigit()) end++
-  return start until end
-}
-
-private fun wordAt(
-  text: String,
-  offset: Int,
-): String? = wordRangeAt(text, offset)?.let { text.substring(it.first, it.last + 1) }
 
 @Composable
 fun MainScreen(
@@ -198,7 +160,6 @@ fun MainScreen(
   isAutoSource: Boolean = false,
 ) {
   var showFullScreenImage by remember { mutableStateOf(false) }
-  var showImageSourceSheet by remember { mutableStateOf(false) }
   var alternativesTarget by remember { mutableStateOf<AlternativesTarget?>(null) }
   var outputTapMode by remember { mutableStateOf(OutputTapMode.None) }
   var inputDictMode by remember { mutableStateOf(false) }
@@ -226,6 +187,14 @@ fun MainScreen(
   var showOriginal by remember(displayImage) { mutableStateOf(false) }
   val isImageProcessing = isOcrInProgress.collectAsState().value || isTranslating.collectAsState().value
   val inputFocusController = remember { StyledTextFieldFocusController() }
+  val sourceActions =
+    rememberImageSourceActions(
+      onMessage = onMessage,
+      from = from,
+      to = to,
+      isAutoSource = isAutoSource,
+      pendingSharedImage = pendingSharedImage,
+    )
   val extraTopPadding = if (launchMode == LaunchMode.Normal) 0.dp else 8.dp
   val context = LocalContext.current
   val showOnlyOutputInReadonlyModal =
@@ -241,19 +210,10 @@ fun MainScreen(
 
   Scaffold(
     modifier = Modifier.semantics { contentDescription = mainScreenDescription },
+    containerColor = MaterialTheme.colorScheme.surfaceContainer,
     floatingActionButton = {
       when (launchMode) {
         LaunchMode.Normal -> {
-          FloatingActionButton(
-            onClick = {
-              showImageSourceSheet = true
-            },
-          ) {
-            Icon(
-              painterResource(id = R.drawable.attach_file_add),
-              contentDescription = stringResource(R.string.a11y_translate_image_or_file),
-            )
-          }
         }
 
         LaunchMode.ReadonlyModal -> {
@@ -291,7 +251,8 @@ fun MainScreen(
         modifier =
           Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
       ) {
         Box(modifier = Modifier.testTag("export-section:Language selection")) {
           LanguageSelectionRow(
@@ -333,6 +294,29 @@ fun MainScreen(
           Column(
             modifier = Modifier.fillMaxWidth(),
           ) {
+            // The detected-language prompt is an input modifier, so it lives at
+            // the bottom of the input card; in image mode (no input card) it
+            // sits directly under the image instead.
+            val detectedLanguageSection: @Composable () -> Unit = {
+              Box(modifier = Modifier.testTag("export-section:Detected language")) {
+                DetectedLanguageSection(
+                  detectedLanguage = detectedLanguage,
+                  from = from,
+                  languageState = languageState,
+                  onMessage = onMessage,
+                  downloadStates = downloadStates,
+                  isAutoSource = isAutoSource,
+                  onEvent = { event ->
+                    when (event) {
+                      is LanguageEvent.Download -> DownloadService.startDownload(context, event.language)
+                      is LanguageEvent.Cancel -> DownloadService.cancelDownload(context, event.language)
+                      else -> Log.e("MainScreen", "Got unexpected event: $event")
+                    }
+                  },
+                )
+              }
+            }
+
             if (displayImage != null) {
               Box(modifier = Modifier.fillMaxWidth()) {
                 ImageDisplaySection(
@@ -380,188 +364,47 @@ fun MainScreen(
                   )
                 }
               }
+              detectedLanguageSection()
             }
 
             if (!showOnlyOutputInReadonlyModal && displayImage == null) {
-              val showTranslit = settings.showTransliterationOnInput && inputTransliteration != null
-              Column(
-                modifier =
-                  Modifier
-                    .fillMaxWidth()
-                    .weight(1f, fill = true),
-              ) {
-                Box(
-                  modifier =
-                    Modifier
-                      .fillMaxWidth()
-                      .weight(3f, fill = true)
-                      .testTag("export-section:Input")
-                      .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        enabled = !inputDictMode,
-                      ) { inputFocusController.focus() },
-                ) {
-                  StyledTextField(
-                    text = input,
-                    onValueChange = { newInput ->
-                      onMessage(TranslatorMessage.TextInput(newInput))
-                    },
-                    onDictionaryLookup = { word ->
-                      onMessage(TranslatorMessage.DictionaryLookup(word, from))
-                    },
-                    wordTapMode = inputDictMode,
-                    onWordTap = { offset ->
-                      val word = wordAt(input, offset)
-                      if (!word.isNullOrBlank()) {
-                        onMessage(TranslatorMessage.DictionaryLookup(word, from))
-                      }
-                    },
-                    placeholder = stringResource(R.string.main_input_placeholder),
-                    modifier =
-                      Modifier
-                        .fillMaxWidth()
-                        .padding(end = 24.dp),
-                    textStyle =
-                      MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = (MaterialTheme.typography.bodyLarge.fontSize * settings.fontFactor),
-                        lineHeight = (MaterialTheme.typography.bodyLarge.lineHeight * settings.fontFactor),
-                      ),
-                    focusController = inputFocusController,
-                  )
-                  Column(
-                    modifier = Modifier.align(Alignment.TopEnd),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                  ) {
-                    if (input.isNotEmpty()) {
-                      ClearInput(onMessage)
-                    } else {
-                      PasteButton(onMessage)
-                    }
-                    if (canInputDict) {
-                      IconButton(
-                        onClick = { inputDictMode = !inputDictMode },
-                        modifier = Modifier.padding(top = 6.dp).size(24.dp),
-                      ) {
-                        Icon(
-                          painterResource(id = R.drawable.dictionary_book),
-                          contentDescription =
-                            stringResource(
-                              if (inputDictMode) {
-                                R.string.a11y_dictionary_mode_on
-                              } else {
-                                R.string.a11y_dictionary_mode_off
-                              },
-                            ),
-                          tint =
-                            if (inputDictMode) {
-                              MaterialTheme.colorScheme.primary
-                            } else {
-                              MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            },
-                        )
-                      }
-                    }
-                    SpeechInputButton(input, from, onMessage, modifier = Modifier.padding(top = 6.dp))
-                    val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isInputAudioPlaying && !isInputAudioLoading
-                    if (input.isNotBlank() && languageState.availabilityFor(from)?.ttsFiles == true && !isOtherAudioActive) {
-                      SpeechPlaybackButton(
-                        isAudioPlaying = isInputAudioPlaying,
-                        isAudioLoading = isInputAudioLoading,
-                        speechPlaybackSpeed = sourceTtsPlaybackSpeed,
-                        selectedVoiceName = selectedSourceTtsVoiceName,
-                        availableVoices = availableSourceTtsVoices,
-                        onSpeak = {
-                          if (isInputAudioPlaying || isInputAudioLoading) {
-                            onStopAudio()
-                          } else {
-                            onSpeakInput(input, from)
-                          }
-                        },
-                        onSpeechPlaybackSpeedChange = onSourceTtsPlaybackSpeedChange,
-                        onVoiceSelected = onSourceTtsVoiceSelected,
-                        contentDescription =
-                          if (isInputAudioPlaying) {
-                            stringResource(
-                              R.string.a11y_stop_audio,
-                            )
-                          } else {
-                            stringResource(R.string.a11y_speak_input)
-                          },
-                        modifier = Modifier.padding(top = 6.dp),
-                      )
-                    }
-                  }
-                }
-                if (showTranslit) {
-                  val textStyle = MaterialTheme.typography.bodyLarge
-                  val fontSize = textStyle.fontSize.value
-                  val smallerFontSize = fontSize * 0.7f
-                  val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-                  Box(
-                    modifier =
-                      Modifier
-                        .fillMaxWidth()
-                        .weight(1f, fill = true)
-                        .clickable { inputFocusController.focus() },
-                  ) {
-                    AndroidView(
-                      factory = { context ->
-                        TextView(context).apply {
-                          this.text = inputTransliteration
-                          this.textSize = smallerFontSize
-                          this.setTextColor(textColor)
-                          this.movementMethod =
-                            android.text.method.ScrollingMovementMethod
-                              .getInstance()
-                          this.isClickable = false
-                          this.isLongClickable = false
-                          this.isFocusable = false
-                        }
-                      },
-                      update = { textView ->
-                        textView.text = inputTransliteration
-                        textView.textSize = smallerFontSize
-                      },
-                      modifier = Modifier.fillMaxWidth(),
-                    )
-                  }
-                }
-              }
-            }
-
-            Box(modifier = Modifier.testTag("export-section:Detected language")) {
-              DetectedLanguageSection(
-                detectedLanguage = detectedLanguage,
+              val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isInputAudioPlaying && !isInputAudioLoading
+              val canSpeakInput =
+                input.isNotBlank() && languageState.availabilityFor(from)?.ttsFiles == true && !isOtherAudioActive
+              InputSection(
+                input = input,
+                inputTransliteration = inputTransliteration,
                 from = from,
-                languageState = languageState,
                 onMessage = onMessage,
-                downloadStates = downloadStates,
+                focusController = inputFocusController,
+                fontFactor = settings.fontFactor,
+                showTransliteration = settings.showTransliterationOnInput,
+                canInputDict = canInputDict,
+                inputDictMode = inputDictMode,
+                onToggleInputDict = { inputDictMode = !inputDictMode },
+                canSpeakInput = canSpeakInput,
+                isInputAudioPlaying = isInputAudioPlaying,
+                isInputAudioLoading = isInputAudioLoading,
+                sourceTtsPlaybackSpeed = sourceTtsPlaybackSpeed,
+                selectedSourceTtsVoiceName = selectedSourceTtsVoiceName,
+                availableSourceTtsVoices = availableSourceTtsVoices,
+                onSourceTtsPlaybackSpeedChange = onSourceTtsPlaybackSpeedChange,
+                onSourceTtsVoiceSelected = onSourceTtsVoiceSelected,
+                onSpeakInput = onSpeakInput,
+                onStopAudio = onStopAudio,
+                showSourceRow = launchMode == LaunchMode.Normal,
+                sourceActions = sourceActions,
+                onCameraClick = onLiveCamera,
+                screenTranslateEnabled = settings.experimentalScreenTranslate,
                 isAutoSource = isAutoSource,
-                onEvent = { event ->
-                  when (event) {
-                    is LanguageEvent.Download -> DownloadService.startDownload(context, event.language)
-                    is LanguageEvent.Cancel -> DownloadService.cancelDownload(context, event.language)
-                    else -> Log.e("MainScreen", "Got unexpected event: $event")
-                  }
-                },
-              )
-            }
-
-            if (!showOnlyOutputInReadonlyModal && displayImage == null) {
-              Box(
+                detectedSection = detectedLanguageSection,
                 modifier =
                   Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center,
-              ) {
-                HorizontalDivider(
-                  modifier = Modifier.fillMaxWidth(0.5f),
-                  thickness = 1.dp,
-                  color = MaterialTheme.colorScheme.outlineVariant,
-                )
-              }
+                    .weight(1f, fill = true)
+                    .padding(bottom = 12.dp)
+                    .testTag("export-section:Input"),
+              )
             }
 
             // With an image the translation is shown in the image itself, so hide the output text
@@ -579,6 +422,8 @@ fun MainScreen(
                 val isOtherAudioActive = (isAudioPlaying || isAudioLoading) && !isOutputAudioPlaying && !isOutputAudioLoading
                 TranslationField(
                   text = output,
+                  modifier = Modifier.fillMaxSize(),
+                  label = to.localizedName(),
                   textStyle =
                     MaterialTheme.typography.bodyLarge.copy(
                       fontSize = (MaterialTheme.typography.bodyLarge.fontSize * settings.fontFactor),
@@ -699,18 +544,6 @@ fun MainScreen(
     }
   }
 
-  // Image capture handling
-  ImageCaptureHandler(
-    onMessage = onMessage,
-    showImageSourceSheet = showImageSourceSheet,
-    onDismissImageSourceSheet = { showImageSourceSheet = false },
-    onCameraClick = onLiveCamera,
-    from = from,
-    to = to,
-    isAutoSource = isAutoSource,
-    pendingSharedImage = pendingSharedImage,
-  )
-
   // Full screen image viewer
   if (showFullScreenImage && displayImage != null && originalImage != null) {
     ZoomableImageViewer(
@@ -752,168 +585,6 @@ fun MainScreen(
         onMessage(TranslatorMessage.PopDictionary)
       },
     )
-  }
-}
-
-@Composable
-fun ShareImage(onMessage: (TranslatorMessage) -> Unit) {
-  ActionPillButton(
-    iconRes = R.drawable.share,
-    contentDescription = stringResource(R.string.a11y_share_image),
-    showBackdrop = true,
-    onClick = { onMessage(TranslatorMessage.ShareTranslatedImage) },
-  )
-}
-
-@Composable
-fun JapaneseOcrModeToggle(
-  readingOrder: ReadingOrder?,
-  onMessage: (TranslatorMessage) -> Unit,
-) {
-  val (iconRes, description) =
-    when (readingOrder) {
-      null -> R.drawable.text_rotation_auto to "Japanese OCR auto mode"
-      ReadingOrder.TOP_TO_BOTTOM_RIGHT_TO_LEFT -> R.drawable.text_rotate_vertical to "Japanese OCR vertical mode"
-      ReadingOrder.LEFT_TO_RIGHT -> R.drawable.text_rotation_none to "Japanese OCR horizontal mode"
-    }
-  ActionPillButton(
-    iconRes = iconRes,
-    contentDescription = description,
-    showBackdrop = true,
-    onClick = { onMessage(TranslatorMessage.ToggleJapaneseOcrMode) },
-  )
-}
-
-@Composable
-fun ClearInput(
-  onMessage: (TranslatorMessage) -> Unit,
-  showBackdrop: Boolean = false,
-) {
-  ActionPillButton(
-    iconRes = R.drawable.cancel,
-    contentDescription = stringResource(R.string.a11y_clear_input),
-    showBackdrop = showBackdrop,
-    onClick = { onMessage(TranslatorMessage.ClearInput) },
-  )
-}
-
-@Composable
-fun PasteButton(
-  onMessage: (TranslatorMessage) -> Unit,
-  showBackdrop: Boolean = false,
-) {
-  val context = LocalContext.current
-
-  ActionPillButton(
-    iconRes = R.drawable.paste,
-    contentDescription = stringResource(R.string.a11y_paste),
-    showBackdrop = showBackdrop,
-    onClick = {
-      val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-      val clipData = clipboardManager.primaryClip
-      if (clipData != null && clipData.itemCount > 0) {
-        val text = clipData.getItemAt(0).text?.toString() ?: ""
-        val trimmed = text.trim()
-        if (isWebUrl(trimmed)) {
-          if (isSupportedDocumentUrl(trimmed)) {
-            Toast.makeText(context, context.getString(R.string.doc_url_unsupported), Toast.LENGTH_LONG).show()
-          } else {
-            val browserIntent =
-              Intent(context, BrowserActivity::class.java).apply {
-                putExtra(BrowserActivity.EXTRA_URL, trimmed)
-              }
-            context.startActivity(browserIntent)
-          }
-        } else {
-          onMessage(TranslatorMessage.TextInput(text))
-        }
-      }
-    },
-  )
-}
-
-@Composable
-fun SpeechInputButton(
-  input: String,
-  from: Language,
-  onMessage: (TranslatorMessage) -> Unit,
-  modifier: Modifier = Modifier,
-) {
-  val context = LocalContext.current
-  val isAvailable =
-    remember {
-      Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).resolveActivity(context.packageManager) != null
-    }
-  if (!isAvailable) {
-    return
-  }
-
-  val launcher =
-    rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-      if (result.resultCode != Activity.RESULT_OK) {
-        return@rememberLauncherForActivityResult
-      }
-      val spoken =
-        result.data
-          ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-          ?.firstOrNull()
-      if (!spoken.isNullOrBlank()) {
-        val appended = if (input.isBlank()) spoken else "${input.trimEnd()} $spoken"
-        onMessage(TranslatorMessage.TextInput(appended))
-      }
-    }
-
-  ActionPillButton(
-    iconRes = R.drawable.mic,
-    contentDescription = stringResource(R.string.a11y_voice_input),
-    modifier = modifier,
-    onClick = {
-      val intent =
-        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-          putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-          putExtra(RecognizerIntent.EXTRA_LANGUAGE, from.code)
-        }
-      launcher.launch(intent)
-    },
-  )
-}
-
-@Composable
-private fun ActionPillButton(
-  iconRes: Int,
-  contentDescription: String,
-  showBackdrop: Boolean = false,
-  modifier: Modifier = Modifier,
-  onClick: () -> Unit,
-) {
-  if (showBackdrop) {
-    Surface(
-      modifier = modifier,
-      shape = CircleShape,
-      color = Color(0xCC303030),
-    ) {
-      IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(36.dp),
-      ) {
-        Icon(
-          painterResource(id = iconRes),
-          contentDescription = contentDescription,
-          tint = Color.White,
-        )
-      }
-    }
-  } else {
-    IconButton(
-      onClick = onClick,
-      modifier = modifier.size(36.dp),
-    ) {
-      Icon(
-        painterResource(id = iconRes),
-        contentDescription = contentDescription,
-        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-      )
-    }
   }
 }
 

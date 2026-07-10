@@ -42,8 +42,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -87,6 +85,7 @@ import dev.davidv.translator.TapToTranslateNotification
 import dev.davidv.translator.labelRes
 import dev.davidv.translator.languageNameComparator
 import dev.davidv.translator.localizedName
+import dev.davidv.translator.ui.components.AppCard
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -197,6 +196,7 @@ fun SettingsScreen(
       }
     }
   Scaffold(
+    containerColor = MaterialTheme.colorScheme.surfaceContainer,
     topBar = {
       TopAppBar(
         title = { Text(stringResource(R.string.settings_title)) },
@@ -213,12 +213,8 @@ fun SettingsScreen(
       verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
       // Languages Section
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Languages"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -253,12 +249,8 @@ fun SettingsScreen(
       }
 
       // General Settings Section
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:General"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -374,12 +366,8 @@ fun SettingsScreen(
       }
 
       // Web Translator Section
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Web Translator"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -429,12 +417,8 @@ fun SettingsScreen(
       }
 
       // Text to Speech Section
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Text to speech"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -467,12 +451,8 @@ fun SettingsScreen(
         }
       }
 
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Popup"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -574,12 +554,8 @@ fun SettingsScreen(
         }
       }
 
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Screen translation"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -704,12 +680,8 @@ fun SettingsScreen(
         }
       }
 
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Images"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -801,12 +773,8 @@ fun SettingsScreen(
 
       // Advanced Settings Section
       var advancedExpanded by remember { mutableStateOf(false) }
-      Card(
+      AppCard(
         modifier = Modifier.fillMaxWidth().testTag("export-section:Advanced"),
-        colors =
-          CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-          ),
       ) {
         Column(
           modifier = Modifier.padding(16.dp),
@@ -910,6 +878,27 @@ fun SettingsScreen(
                 checked = settings.disableCLD,
                 onCheckedChange = { checked ->
                   onSettingsChange(settings.copy(disableCLD = checked))
+                },
+              )
+            }
+
+            // Experimental screen-translate entry in the input source row
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Text(
+                text = stringResource(R.string.settings_experimental_screen_translate),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+              )
+
+              Switch(
+                checked = settings.experimentalScreenTranslate,
+                onCheckedChange = { checked ->
+                  onSettingsChange(settings.copy(experimentalScreenTranslate = checked))
                 },
               )
             }
@@ -1111,12 +1100,8 @@ private fun AboutCard(
       }.getOrNull() ?: "unknown"
     }
 
-  Card(
+  AppCard(
     modifier = Modifier.fillMaxWidth().testTag("export-section:About"),
-    colors =
-      CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-      ),
   ) {
     Column(modifier = Modifier.padding(vertical = 16.dp)) {
       Text(
