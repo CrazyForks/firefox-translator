@@ -218,7 +218,6 @@
     <string name="detected_translate_from">ترجم مِن</string>
     <string name="detected_missing_language">لغة مفقودة</string>
     <string name="langmgr_ocr_upgrade_available">يتوفر نموذج مُحسَّن للكشف عن النص.</string>
-    <string name="settings_underline_alternatives">بدائل التسطير</string>
     <string name="image_crop_action">قص</string>
     <string name="a11y_cancel">ألغِ</string>
     <string name="a11y_region_reset">صفّر إلى وضع ملء الشاشة</string>
