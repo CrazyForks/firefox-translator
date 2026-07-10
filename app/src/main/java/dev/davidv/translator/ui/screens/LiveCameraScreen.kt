@@ -19,6 +19,8 @@ package dev.davidv.translator.ui.screens
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
@@ -187,6 +189,14 @@ fun LiveCameraScreen(
   }
 
   BackHandler { onClose() }
+
+  DisposableEffect(Unit) {
+    val activity = context as? Activity
+    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    onDispose {
+      activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+  }
 
   Box(
     modifier =
