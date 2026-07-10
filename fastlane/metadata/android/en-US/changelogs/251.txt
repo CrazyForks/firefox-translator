@@ -1,0 +1,8 @@
+- Restyle UI
+- Implement feature to manually fine tune the output of the translator
+- Fix camera in landscape mode
+- Fix gesture handling in RTL locales
+- Fix target language availability when source is Auto
+- Implement a 'repair files' notice under 'Manage languages' if any file is missing
+- Fix camera not working after lock screen or minimizing app
+- Do not register app as speech input
