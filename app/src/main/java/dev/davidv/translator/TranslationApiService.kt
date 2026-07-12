@@ -47,6 +47,7 @@ class TranslationApiService : Service() {
     private const val TAG = "TranslationApiService"
     private const val ACTION_START = "dev.davidv.translator.action.START_TRANSLATION_API"
     private const val ACTION_STOP = "dev.davidv.translator.action.STOP_TRANSLATION_API"
+    private const val ACTION_DISABLE = "dev.davidv.translator.action.DISABLE_TRANSLATION_API"
     private const val EXTRA_PORT = "port"
     private const val EXTRA_BIND_MODE = "bind_mode"
     private const val CHANNEL_ID = "translation_api"
@@ -84,6 +85,19 @@ class TranslationApiService : Service() {
   ): Int {
     if (intent?.action == ACTION_STOP) {
       shutdown()
+      return START_NOT_STICKY
+    }
+    if (intent?.action == ACTION_DISABLE) {
+      // The notification's "Disable" flips the setting off (keeping the settings
+      // switch and the service in sync), which cascades into stop() via
+      // applyHttpServerState; only stop directly if it was already off.
+      val settingsManager = (application as TranslatorApplication).settingsManager
+      val settings = settingsManager.settings.value
+      if (settings.httpServerEnabled) {
+        settingsManager.updateSettings(settings.copy(httpServerEnabled = false))
+      } else {
+        shutdown()
+      }
       return START_NOT_STICKY
     }
     if (intent?.action != ACTION_START) return START_NOT_STICKY
@@ -173,10 +187,10 @@ class TranslationApiService : Service() {
       }
     val openPendingIntent =
       PendingIntent.getActivity(this, 0, openIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    val stopIntent =
-      Intent(this, TranslationApiService::class.java).apply { action = ACTION_STOP }
-    val stopPendingIntent =
-      PendingIntent.getService(this, 1, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    val disableIntent =
+      Intent(this, TranslationApiService::class.java).apply { action = ACTION_DISABLE }
+    val disablePendingIntent =
+      PendingIntent.getService(this, 1, disableIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.drawable.ic_translate_button)
@@ -187,7 +201,7 @@ class TranslationApiService : Service() {
       .setCategory(NotificationCompat.CATEGORY_SERVICE)
       .setOngoing(true)
       .setOnlyAlertOnce(true)
-      .addAction(0, getString(R.string.http_server_notif_stop), stopPendingIntent)
+      .addAction(0, getString(R.string.http_server_notif_disable), disablePendingIntent)
       .build()
   }
 
