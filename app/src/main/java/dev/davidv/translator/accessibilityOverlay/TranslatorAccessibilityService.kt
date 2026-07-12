@@ -12,7 +12,6 @@ import android.util.Log
 import android.view.Display
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
-import android.widget.Toast
 import dev.davidv.translator.FilePathManager
 import dev.davidv.translator.ImageProcessor
 import dev.davidv.translator.Language
@@ -26,8 +25,10 @@ import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.SpeechService
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
-import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
 import dev.davidv.translator.screenTranslate.ScreenTranslateService
+import dev.davidv.translator.ui.components.DetectedRegions
+import dev.davidv.translator.ui.components.ImageWordSelection
+import dev.davidv.translator.ui.components.SelectionSurfaceState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -44,14 +45,21 @@ class TranslatorAccessibilityService : AccessibilityService() {
   var isAutoSource: Boolean = true
   private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
+  private data class TranslatedScreen(
+    val original: Bitmap,
+    val translated: Bitmap,
+    val words: ImageWordSelection,
+    val region: Rect,
+  )
+
+  private var selectMode = false
+  private var lastResult: TranslatedScreen? = null
+  private val surfaceState = SelectionSurfaceState()
+
   private lateinit var settingsManager: SettingsManager
   private lateinit var imageProcessor: ImageProcessor
   private lateinit var translationCoordinator: TranslationCoordinator
   private var ocrReadingOrder: ReadingOrder? = null
-  var lastOriginalText: String = ""
-    private set
-  var lastTranslatedText: String = ""
-    private set
   private lateinit var overlayTextTranslationHelper: OverlayTextTranslationHelper
   lateinit var langStateManager: LanguageStateManager
     private set
@@ -138,13 +146,18 @@ class TranslatorAccessibilityService : AccessibilityService() {
     ui.showFloatingButton()
   }
 
+  // Scroll/click events from other packages mean the screen content actually changed, so the
+  // stored capture is stale. The touch watcher's clear is visual-only (a touch-down on our own
+  // toolbar also triggers it) and must not invalidate `lastResult` — select mode reuses it.
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-    if (event == null || !ui.hasTranslationOverlays()) return
-    if (event.packageName == packageName) return
+    if (event == null || event.packageName == packageName) return
     when (event.eventType) {
       AccessibilityEvent.TYPE_VIEW_SCROLLED,
       AccessibilityEvent.TYPE_VIEW_CLICKED,
-      -> ui.removeTranslationOverlays()
+      -> {
+        lastResult = null
+        ui.removeTranslationOverlays()
+      }
     }
   }
 
@@ -172,10 +185,7 @@ class TranslatorAccessibilityService : AccessibilityService() {
   fun activate() {
     if (active) return
     active = true
-    serviceInfo =
-      serviceInfo.apply {
-        eventTypes = AccessibilityEvent.TYPE_VIEW_SCROLLED or AccessibilityEvent.TYPE_VIEW_CLICKED
-      }
+    serviceInfo = serviceInfo.apply { eventTypes = liveEventTypes() }
     langStateManager.refreshLanguageAvailability()
     ui.removeFloatingButton()
     ui.removeTranslationOverlays()
@@ -190,7 +200,11 @@ class TranslatorAccessibilityService : AccessibilityService() {
 
   fun deactivate() {
     active = false
+    selectMode = false
     serviceInfo = serviceInfo.apply { eventTypes = 0 }
+    ui.removeSelectSurface()
+    surfaceState.clear()
+    lastResult = null
     ui.removeBorderWave()
     ui.removeToolbar()
     ui.removeTranslationOverlays()
@@ -198,25 +212,46 @@ class TranslatorAccessibilityService : AccessibilityService() {
     ui.restoreFloatingButton()
   }
 
-  fun startScreenTranslate() {
-    // Live screen translate needs a fixed source language (no script classifier
-    // per-frame) — gate it off in auto mode and tell the user to pick one.
-    if (isAutoSource || forcedSourceLanguage == null) {
-      Toast.makeText(this, getString(R.string.screen_translate_needs_source), Toast.LENGTH_LONG).show()
+  fun toggleSelectMode() {
+    if (selectMode) {
+      exitSelectMode()
       return
     }
-    val targetCode =
-      (
-        forcedTargetLanguage
-          ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
-      )?.code
-    val sourceCode = forcedSourceLanguage?.code
-    runCatching {
-      startActivity(
-        ScreenCaptureRequestActivity.intent(this, sourceCode, targetCode, isAutoSource),
-      )
-    }.onFailure { Log.w(tag, "failed to launch screen-translate consent", it) }
-    deactivate()
+    selectMode = true
+    serviceInfo = serviceInfo.apply { eventTypes = 0 }
+    ui.setSelectModeUi(true)
+    val res = lastResult
+    if (res != null) {
+      ui.removeTranslationOverlays()
+      surfaceState.showResult(res.translated, res.original, res.words)
+      ui.showSelectSurface(surfaceState, res.region) { onSelectSurfaceDismissed() }
+    } else {
+      handleFullScreenOcr()
+    }
+  }
+
+  // The live overlay goes up before the frozen dialog comes down: later-added windows stack on
+  // top, so the swap happens under an always-covered region instead of flashing the app through.
+  private fun exitSelectMode() {
+    selectMode = false
+    if (active) {
+      serviceInfo = serviceInfo.apply { eventTypes = liveEventTypes() }
+      lastResult?.let { ui.showBitmapOverlay(it.translated, it.region) }
+    }
+    ui.removeSelectSurface()
+    surfaceState.clear()
+    ui.setSelectModeUi(false)
+  }
+
+  private fun liveEventTypes(): Int = AccessibilityEvent.TYPE_VIEW_SCROLLED or AccessibilityEvent.TYPE_VIEW_CLICKED
+
+  private fun onSelectSurfaceDismissed() {
+    if (selectMode) exitSelectMode()
+  }
+
+  fun toggleFlipOriginal() {
+    if (!selectMode) return
+    ui.setFlipActive(surfaceState.toggleShowOriginal())
   }
 
   fun swapLanguages() {
@@ -277,6 +312,17 @@ class TranslatorAccessibilityService : AccessibilityService() {
 
   fun handleFullScreenOcr() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+
+    // In select mode the frozen surface covers the screen, so a fresh screenshot would capture
+    // ourselves — retranslate the stored capture instead (language/reading-order changes).
+    val res = lastResult
+    if (selectMode && ui.hasSelectSurface() && res != null) {
+      surfaceState.showProcessing(res.original)
+      serviceScope.launch {
+        translateRegionBitmap(res.original, res.region)
+      }
+      return
+    }
     ui.removeTranslationOverlays()
 
     val sourceLang = ocrSourceLanguage()
@@ -326,7 +372,8 @@ class TranslatorAccessibilityService : AccessibilityService() {
           val croppedBitmap = Bitmap.createBitmap(fullBitmap, cropLeft, cropTop, cropWidth, cropHeight)
           fullBitmap.recycle()
 
-          ui.showCenteredLoading()
+          surfaceState.regions.value = null
+          ui.showScanOverlay(surfaceState, region)
           serviceScope.launch {
             translateRegionBitmap(croppedBitmap, region)
           }
@@ -358,16 +405,36 @@ class TranslatorAccessibilityService : AccessibilityService() {
           readingOrder = currentReadingOrderFor(sourceLang),
           isAutoSource = isAutoSource,
           onOcrUnavailable = { ocrUnavailable = true },
+          onDetectedRegions = { boxes, w, h ->
+            surfaceState.regions.value = DetectedRegions(w, h, boxes)
+          },
         )
       }
 
     ui.removeTranslationOverlays()
-    if (result != null) {
-      lastOriginalText = result.extractedText
-      lastTranslatedText = result.translatedText
+    if (result == null) {
+      if (selectMode) surfaceState.processing.value = false
+      if (ocrUnavailable) {
+        ui.showOverlayMessage(getString(R.string.ocr_models_missing))
+      }
+      return
+    }
+
+    val words =
+      ImageWordSelection(
+        imageWidth = result.metadata.width.toInt(),
+        imageHeight = result.metadata.height.toInt(),
+        sourceWords = result.metadata.sourceWords,
+        translatedWords = result.translatedWords,
+      )
+    lastResult = TranslatedScreen(original = bitmap, translated = result.correctedBitmap, words = words, region = region)
+    if (selectMode) {
+      surfaceState.showResult(result.correctedBitmap, bitmap, words)
+      if (!ui.hasSelectSurface()) {
+        ui.showSelectSurface(surfaceState, region) { onSelectSurfaceDismissed() }
+      }
+    } else {
       ui.showBitmapOverlay(result.correctedBitmap, region)
-    } else if (ocrUnavailable) {
-      ui.showOverlayMessage(getString(R.string.ocr_models_missing))
     }
   }
 

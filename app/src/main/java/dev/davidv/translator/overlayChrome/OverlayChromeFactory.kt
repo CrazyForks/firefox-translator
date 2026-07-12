@@ -25,9 +25,14 @@ data class LanguageToolbarViews(
   val readingOrderIcon: ImageView? = null,
   val pauseIcon: ImageView? = null,
   val flipIcon: ImageView? = null,
+  val flipButton: View? = null,
+  val refreshButton: View? = null,
+  val selectIcon: ImageView? = null,
 )
 
 object OverlayChromeFactory {
+  val ACTIVE_ICON_TINT: Int = Color.parseColor("#8AB4F8")
+
   fun formatSourceLabel(
     forcedSourceLanguage: Language?,
     isAutoSource: Boolean,
@@ -45,7 +50,7 @@ object OverlayChromeFactory {
     forcedTargetLanguage: Language?,
     defaultTargetLanguage: Language,
     onClose: () -> Unit,
-    onTranslateScreenClick: (() -> Unit)? = null,
+    onSelectModeClick: (() -> Unit)? = null,
     onSourceClick: () -> Unit,
     onSwap: () -> Unit,
     onTargetClick: () -> Unit,
@@ -78,19 +83,21 @@ object OverlayChromeFactory {
       },
     )
 
-    val hasTranslateScreen = onTranslateScreenClick != null
-    onTranslateScreenClick?.let {
-      val screenBtn =
+    val hasSelectMode = onSelectModeClick != null
+    var selectIcon: ImageView? = null
+    onSelectModeClick?.let {
+      val selectBtn =
         ImageView(context).apply {
-          setImageResource(R.drawable.videocam)
+          setImageResource(R.drawable.text_select_start)
           setColorFilter(Color.WHITE)
           setPadding(iconPad, iconPad, iconPad, iconPad)
-          setOnClickListener { onTranslateScreenClick() }
-          contentDescription = context.getString(R.string.a11y_translate_screen_live)
+          setOnClickListener { onSelectModeClick() }
+          contentDescription = context.getString(R.string.a11y_select_text)
         }
-      val screenPill = makePill(context, dpToPx, screenBtn)
+      selectIcon = selectBtn
+      val selectPill = makePill(context, dpToPx, selectBtn)
       toolbar.addView(
-        screenPill,
+        selectPill,
         FrameLayout.LayoutParams(btnSize, btnSize).apply {
           gravity = Gravity.START or Gravity.CENTER_VERTICAL
           leftMargin = btnSize + dpToPx(6)
@@ -119,7 +126,7 @@ object OverlayChromeFactory {
             pill,
             FrameLayout.LayoutParams(btnSize, btnSize).apply {
               gravity = Gravity.START or Gravity.CENTER_VERTICAL
-              leftMargin = (btnSize + dpToPx(6)) * (if (hasTranslateScreen) 2 else 1)
+              leftMargin = (btnSize + dpToPx(6)) * (if (hasSelectMode) 2 else 1)
             },
           )
         }
@@ -174,6 +181,7 @@ object OverlayChromeFactory {
         gravity = Gravity.CENTER_VERTICAL
       }
 
+    var refreshButton: View? = null
     onRefreshClick?.let {
       val refreshBtn =
         ImageView(context).apply {
@@ -184,6 +192,7 @@ object OverlayChromeFactory {
           contentDescription = context.getString(R.string.a11y_refresh)
         }
       val refreshPill = makePill(context, dpToPx, refreshBtn)
+      refreshButton = refreshPill
       rightActions.addView(
         refreshPill,
         LinearLayout.LayoutParams(btnSize, btnSize).apply {
@@ -211,6 +220,7 @@ object OverlayChromeFactory {
     }
 
     var flipIcon: ImageView? = null
+    var flipButton: View? = null
     onFlipOriginal?.let {
       val flipBtn =
         ImageView(context).apply {
@@ -222,6 +232,7 @@ object OverlayChromeFactory {
         }
       flipIcon = flipBtn
       val flipPill = makePill(context, dpToPx, flipBtn)
+      flipButton = flipPill
       rightActions.addView(
         flipPill,
         LinearLayout.LayoutParams(btnSize, btnSize).apply {
@@ -273,6 +284,9 @@ object OverlayChromeFactory {
       readingOrderIcon = readingOrderIcon,
       pauseIcon = pauseIcon,
       flipIcon = flipIcon,
+      flipButton = flipButton,
+      refreshButton = refreshButton,
+      selectIcon = selectIcon,
     )
   }
 

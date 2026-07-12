@@ -1,5 +1,6 @@
 package dev.davidv.translator.accessibilityOverlay
 
+import android.app.Dialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -13,10 +14,10 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.FrameLayout
 import android.widget.ImageView
-import android.widget.ProgressBar
 import android.widget.TextView
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import dev.davidv.translator.Language
 import dev.davidv.translator.MainActivity
 import dev.davidv.translator.ReadingOrder
@@ -27,6 +28,10 @@ import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayInsets
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
+import dev.davidv.translator.ui.components.ScanAnimationOverlay
+import dev.davidv.translator.ui.components.SelectionSurface
+import dev.davidv.translator.ui.components.SelectionSurfaceState
+import dev.davidv.translator.ui.components.WindowComposeHost
 
 class OverlayUI(
   private val service: TranslatorAccessibilityService,
@@ -40,9 +45,16 @@ class OverlayUI(
   private var targetLabelView: TextView? = null
   private var readingOrderButtonView: View? = null
   private var readingOrderIconView: ImageView? = null
+  private var selectIconView: ImageView? = null
+  private var refreshButtonView: View? = null
+  private var flipButtonView: View? = null
+  private var flipIconView: ImageView? = null
   private val translationOverlays = mutableListOf<View>()
   private var touchWatcher: View? = null
   private var borderView: BorderWaveView? = null
+  private var selectDialog: Dialog? = null
+  private var selectHost: WindowComposeHost? = null
+  private var scanHost: WindowComposeHost? = null
 
   private val menuManager =
     OverlayMenuManager(
@@ -134,6 +146,7 @@ class OverlayUI(
         forcedTargetLanguage = forcedTargetLanguage,
         defaultTargetLanguage = service.langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: return,
         onClose = { service.deactivate() },
+        onSelectModeClick = { service.toggleSelectMode() },
         onSourceClick = { service.showLanguagePicker(true) },
         onSwap = { service.swapLanguages() },
         onTargetClick = { service.showLanguagePicker(false) },
@@ -141,7 +154,7 @@ class OverlayUI(
         readingOrder = readingOrder,
         onReadingOrderClick = { service.toggleJapaneseOcrMode() },
         onRefreshClick = { service.handleFullScreenOcr() },
-        onTranslateScreenClick = { service.startScreenTranslate() },
+        onFlipOriginal = { service.toggleFlipOriginal() },
         onMenuClick = { service.showDotsMenu() },
         isAutoSource = isAutoSource,
       )
@@ -150,6 +163,11 @@ class OverlayUI(
     targetLabelView = toolbarViews.targetLabel
     readingOrderButtonView = toolbarViews.readingOrderButton
     readingOrderIconView = toolbarViews.readingOrderIcon
+    selectIconView = toolbarViews.selectIcon
+    refreshButtonView = toolbarViews.refreshButton
+    flipButtonView = toolbarViews.flipButton
+    flipIconView = toolbarViews.flipIcon
+    flipButtonView?.visibility = View.GONE
 
     val params =
       WindowManager.LayoutParams(
@@ -176,7 +194,23 @@ class OverlayUI(
       targetLabelView = null
       readingOrderButtonView = null
       readingOrderIconView = null
+      selectIconView = null
+      refreshButtonView = null
+      flipButtonView = null
+      flipIconView = null
     }
+  }
+
+  /** Swap the mode-dependent toolbar slot: refresh drives the live screen, flip the frozen one. */
+  fun setSelectModeUi(active: Boolean) {
+    selectIconView?.setColorFilter(if (active) OverlayChromeFactory.ACTIVE_ICON_TINT else Color.WHITE)
+    refreshButtonView?.visibility = if (active) View.GONE else View.VISIBLE
+    flipButtonView?.visibility = if (active) View.VISIBLE else View.GONE
+    if (!active) flipIconView?.setColorFilter(Color.WHITE)
+  }
+
+  fun setFlipActive(active: Boolean) {
+    flipIconView?.setColorFilter(if (active) OverlayChromeFactory.ACTIVE_ICON_TINT else Color.WHITE)
   }
 
   fun updateToolbarState(
@@ -199,12 +233,6 @@ class OverlayUI(
   fun showDotsMenu() {
     menuManager.showDotsMenu(
       listOf(
-        "Copy original text" to {
-          copyToClipboard("Original text", service.lastOriginalText)
-        },
-        "Copy translated text" to {
-          copyToClipboard("Translated text", service.lastTranslatedText)
-        },
         "Open App" to {
           service.deactivate()
           val intent = Intent(service, MainActivity::class.java)
@@ -217,19 +245,6 @@ class OverlayUI(
         },
       ),
     )
-  }
-
-  private fun copyToClipboard(
-    label: String,
-    text: String,
-  ) {
-    if (text.isBlank()) {
-      showOverlayMessage("Nothing to copy yet")
-      return
-    }
-    val clipboard = service.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label, text))
-    showOverlayMessage("Copied $label")
   }
 
   fun showLanguagePicker(
@@ -275,6 +290,60 @@ class OverlayUI(
     ensureTouchWatcher()
   }
 
+  /**
+   * The frozen select-text surface: one touchable window over the translated region hosting the
+   * same Compose selection stack as the assistant. A Dialog rather than a raw WindowManager view
+   * because the word-selection action bar needs `startActionMode(TYPE_FLOATING)`, which only a
+   * DecorView provides; NOT_TOUCH_MODAL keeps the toolbar's own window clickable, and the back key
+   * cancels the dialog (the service then exits select mode via `onDismiss`).
+   */
+  fun showSelectSurface(
+    state: SelectionSurfaceState,
+    region: Rect,
+    onDismiss: () -> Unit,
+  ) {
+    if (selectDialog != null) return
+    val dialog = Dialog(service, android.R.style.Theme_Material_NoActionBar)
+    val host = WindowComposeHost(service)
+    host.setContent { SelectionSurface(state) }
+    dialog.setContentView(host.view)
+    dialog.setCanceledOnTouchOutside(false)
+    dialog.window?.apply {
+      setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY)
+      addFlags(
+        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+      )
+      clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+      setWindowAnimations(0)
+      setGravity(Gravity.TOP or Gravity.START)
+      attributes =
+        attributes.apply {
+          x = region.left
+          y = region.top
+          width = region.width()
+          height = region.height()
+        }
+      decorView.setPadding(0, 0, 0, 0)
+      host.installOn(decorView)
+    }
+    dialog.setOnCancelListener { onDismiss() }
+    dialog.show()
+    selectDialog = dialog
+    selectHost = host
+  }
+
+  fun removeSelectSurface() {
+    val dialog = selectDialog ?: return
+    selectDialog = null
+    dialog.setOnCancelListener(null)
+    dialog.dismiss()
+    selectHost?.dispose()
+    selectHost = null
+  }
+
+  fun hasSelectSurface(): Boolean = selectDialog != null
+
   /** A 1×1 watcher window: WATCH_OUTSIDE_TOUCH fires ACTION_OUTSIDE on the *down* of
    *  any touch anywhere on screen, and NOT_TOUCH_MODAL lets that same touch reach the
    *  app — so a tap or swipe both clear the result instantly and pass straight through. */
@@ -283,7 +352,10 @@ class OverlayUI(
     if (touchWatcher != null) return
     val watcher = View(service)
     watcher.setOnTouchListener { _, event ->
-      if (event.action == MotionEvent.ACTION_OUTSIDE) {
+      // The system zeroes ACTION_OUTSIDE coordinates unless the touched window belongs to our
+      // own UID: real coordinates mean the touch landed on our chrome (toolbar, menus, their
+      // dismiss layer), which can't change the screen underneath — keep the overlays up.
+      if (event.action == MotionEvent.ACTION_OUTSIDE && event.rawX == 0f && event.rawY == 0f) {
         removeTranslationOverlays()
       }
       false
@@ -315,33 +387,46 @@ class OverlayUI(
     touchWatcher = null
   }
 
-  fun showCenteredLoading() {
-    val container = FrameLayout(service)
-    val bg = GradientDrawable()
-    bg.setColor(Color.parseColor("#CC303030"))
-    bg.cornerRadius = dpToPx(16).toFloat()
-    container.background = bg
-
-    val size = dpToPx(48)
-    val progress = ProgressBar(service)
-    val lp = FrameLayout.LayoutParams(size, size)
-    lp.gravity = Gravity.CENTER
-    val pad = dpToPx(16)
-    container.setPadding(pad, pad, pad, pad)
-    container.addView(progress, lp)
-
+  /** The detect-pass progress animation, drawn over the live screen itself: a transparent
+   *  non-touchable window whose scan pills appear once the detector reports regions. */
+  fun showScanOverlay(
+    state: SelectionSurfaceState,
+    region: Rect,
+  ) {
+    if (scanHost != null) return
+    val host = WindowComposeHost(service)
+    host.setContent {
+      state.regions.value?.let {
+        ScanAnimationOverlay(regions = it, modifier = Modifier.fillMaxSize())
+      }
+    }
     val params =
       WindowManager.LayoutParams(
-        WindowManager.LayoutParams.WRAP_CONTENT,
-        WindowManager.LayoutParams.WRAP_CONTENT,
+        region.width(),
+        region.height(),
         WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+          WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT,
       )
-    params.gravity = Gravity.CENTER
+    params.gravity = Gravity.TOP or Gravity.START
+    params.x = region.left
+    params.y = region.top
+    params.windowAnimations = 0
+    windowManager.addView(host.view, params)
+    scanHost = host
+  }
 
-    windowManager.addView(container, params)
-    translationOverlays.add(container)
+  private fun removeScanOverlay() {
+    scanHost?.let {
+      try {
+        windowManager.removeView(it.view)
+      } catch (_: Exception) {
+      }
+      it.dispose()
+    }
+    scanHost = null
   }
 
   fun showOverlayMessage(message: String) {
@@ -376,8 +461,6 @@ class OverlayUI(
     }, 3000)
   }
 
-  fun hasTranslationOverlays(): Boolean = translationOverlays.isNotEmpty()
-
   fun hasToolbar(): Boolean = toolbarView != null
 
   fun removeTranslationOverlays() {
@@ -388,6 +471,7 @@ class OverlayUI(
       }
     }
     translationOverlays.clear()
+    removeScanOverlay()
     removeTouchWatcher()
   }
 

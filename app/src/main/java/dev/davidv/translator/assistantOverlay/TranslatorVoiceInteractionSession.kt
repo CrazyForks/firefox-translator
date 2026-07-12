@@ -16,7 +16,6 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
-import androidx.compose.runtime.mutableStateOf
 import androidx.core.view.WindowInsetsCompat
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageStateManager
@@ -30,9 +29,10 @@ import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
 import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
-import dev.davidv.translator.ui.components.AssistantResultView
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.ImageWordSelection
+import dev.davidv.translator.ui.components.SelectionSurface
+import dev.davidv.translator.ui.components.SelectionSurfaceState
 import dev.davidv.translator.ui.components.WindowComposeHost
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +69,7 @@ class TranslatorVoiceInteractionSession(
   private var readingOrderButtonView: View? = null
   private var readingOrderIconView: ImageView? = null
   private var flipIconView: ImageView? = null
+  private var flipButtonView: View? = null
   private var menuManager: OverlayMenuManager? = null
   private var cutoutTopInset = 0
 
@@ -95,13 +96,8 @@ class TranslatorVoiceInteractionSession(
 
   // The interactive image surface, hosted in a ComposeView over the screenshot backdrop: it shows
   // the screenshot with the scan animation while OCR runs, then the translated image with the
-  // word-selection overlay. `assistantDisplay == null` keeps the layer hidden/pass-through.
-  private val assistantDisplay = mutableStateOf<Bitmap?>(null)
-  private val assistantOriginal = mutableStateOf<Bitmap?>(null)
-  private val assistantSelection = mutableStateOf<ImageWordSelection?>(null)
-  private val assistantProcessing = mutableStateOf(false)
-  private val assistantRegions = mutableStateOf<DetectedRegions?>(null)
-  private val assistantShowOriginal = mutableStateOf(false)
+  // word-selection overlay. An empty state keeps the layer hidden/pass-through.
+  private val surfaceState = SelectionSurfaceState()
   private var resultHost: WindowComposeHost? = null
 
   override fun onCreate() {
@@ -203,16 +199,7 @@ class TranslatorVoiceInteractionSession(
       WindowComposeHost(context).apply {
         view.visibility = View.GONE
         setContent {
-          assistantDisplay.value?.let { display ->
-            AssistantResultView(
-              display = display,
-              original = assistantOriginal.value,
-              selection = assistantSelection.value,
-              isProcessing = assistantProcessing.value,
-              detectedRegions = assistantRegions.value,
-              showOriginal = assistantShowOriginal.value,
-            )
-          }
+          SelectionSurface(surfaceState)
         }
       }
     rootView.addView(
@@ -325,14 +312,10 @@ class TranslatorVoiceInteractionSession(
 
   /** Drop the interactive image layer and recycle the flip's original-image copy. */
   private fun clearResultOverlay() {
-    assistantOriginal.value?.recycle()
-    assistantDisplay.value = null
-    assistantOriginal.value = null
-    assistantSelection.value = null
-    assistantRegions.value = null
-    assistantProcessing.value = false
-    assistantShowOriginal.value = false
+    surfaceState.original.value?.recycle()
+    surfaceState.clear()
     setFlipButtonVisible(false)
+    flipIconView?.setColorFilter(Color.WHITE)
     resultHost?.view?.visibility = View.GONE
   }
 
@@ -391,12 +374,7 @@ class TranslatorVoiceInteractionSession(
     // by the pipeline, so it stays alive until the next clear.
     clearResultOverlay()
     processing = true
-    assistantOriginal.value = workingBitmap
-    assistantSelection.value = null
-    assistantRegions.value = null
-    assistantShowOriginal.value = false
-    assistantProcessing.value = true
-    assistantDisplay.value = workingBitmap
+    surfaceState.showProcessing(workingBitmap)
     resultHost?.view?.visibility = View.VISIBLE
 
     translationJob =
@@ -413,7 +391,7 @@ class TranslatorVoiceInteractionSession(
               isAutoSource = isAutoSource,
               onOcrUnavailable = { ocrUnavailable = true },
               onDetectedRegions = { boxes, w, h ->
-                assistantRegions.value = DetectedRegions(w, h, boxes)
+                surfaceState.regions.value = DetectedRegions(w, h, boxes)
               },
             )
           }
@@ -437,10 +415,7 @@ class TranslatorVoiceInteractionSession(
             sourceWords = result.metadata.sourceWords,
             translatedWords = result.translatedWords,
           )
-        assistantProcessing.value = false
-        assistantRegions.value = null
-        assistantSelection.value = selection
-        assistantDisplay.value = display
+        surfaceState.showResult(display, workingBitmap, selection)
         setFlipButtonVisible(true)
         resultHost?.view?.visibility = View.VISIBLE
         updateBackdrop()
@@ -449,14 +424,13 @@ class TranslatorVoiceInteractionSession(
   }
 
   private fun setFlipButtonVisible(visible: Boolean) {
-    flipIconView?.visibility = if (visible) View.VISIBLE else View.GONE
+    flipButtonView?.visibility = if (visible) View.VISIBLE else View.GONE
   }
 
   private fun toggleAssistantOriginal() {
-    if (assistantDisplay.value == null) return
-    val show = !assistantShowOriginal.value
-    assistantShowOriginal.value = show
-    flipIconView?.setColorFilter(if (show) Color.parseColor("#8AB4F8") else Color.WHITE)
+    if (surfaceState.display.value == null) return
+    val show = surfaceState.toggleShowOriginal()
+    flipIconView?.setColorFilter(if (show) OverlayChromeFactory.ACTIVE_ICON_TINT else Color.WHITE)
   }
 
   @Suppress("DEPRECATION")
@@ -564,7 +538,6 @@ class TranslatorVoiceInteractionSession(
         forcedTargetLanguage = forcedTargetLanguage,
         defaultTargetLanguage = langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode) ?: langStateManager.languageByCode("en")!!,
         onClose = { hide() },
-        onTranslateScreenClick = { startScreenTranslate() },
         onSourceClick = { showLanguagePicker(true) },
         onSwap = { swapLanguages() },
         onTargetClick = { showLanguagePicker(false) },
@@ -580,7 +553,8 @@ class TranslatorVoiceInteractionSession(
     readingOrderButtonView = toolbarViews.readingOrderButton
     readingOrderIconView = toolbarViews.readingOrderIcon
     flipIconView = toolbarViews.flipIcon
-    flipIconView?.visibility = View.GONE
+    flipButtonView = toolbarViews.flipButton
+    flipButtonView?.visibility = View.GONE
     return toolbarViews.root
   }
 
@@ -602,38 +576,6 @@ class TranslatorVoiceInteractionSession(
         ScreenCaptureRequestActivity.intent(context, sourceCode, settings.defaultTargetLanguageCode, isAutoSource = false),
       )
     }.onFailure { Log.w(tag, "failed to launch live screen translate", it) }
-    hide()
-  }
-
-  /** Hand off to the live MediaProjection screen-translate experience from the
-   *  still overlay's go-live button: launch the consent flow (overlay grant +
-   *  capture token), which starts [ScreenCaptureRequestActivity]'s service, then
-   *  dismiss this session so the frozen screenshot is removed and the real screen
-   *  shows through for capture. */
-  private fun startScreenTranslate() {
-    // Live screen translate needs a fixed source language — gate it off in auto
-    // mode and tell the user to pick one. A Toast doesn't surface from the
-    // assistant's window, so use the overlay's own status line.
-    if (isAutoSource || forcedSourceLanguage == null) {
-      showStatus(context.getString(R.string.screen_translate_needs_source), autoHideAfterMs = 3000)
-      return
-    }
-    val targetCode =
-      (
-        forcedTargetLanguage
-          ?: langStateManager.languageByCode(settingsManager.settings.value.defaultTargetLanguageCode)
-      )?.code
-    val sourceCode = forcedSourceLanguage?.code
-    runCatching {
-      context.startActivity(
-        ScreenCaptureRequestActivity.intent(
-          context,
-          sourceCode,
-          targetCode,
-          isAutoSource,
-        ),
-      )
-    }.onFailure { Log.w(tag, "failed to launch screen-translate consent", it) }
     hide()
   }
 

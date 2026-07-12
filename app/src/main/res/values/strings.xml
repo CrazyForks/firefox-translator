@@ -251,6 +251,7 @@
     <string name="a11y_region_confirm">Confirm region</string>
     <string name="a11y_translate_screen_live">Translate screen live</string>
     <string name="a11y_refresh">Refresh</string>
+    <string name="a11y_select_text">Select text</string>
     <string name="a11y_set_translation_area">Set translation area</string>
     <string name="a11y_show_original">Show original</string>
     <string name="a11y_pause_resume">Pause or resume</string>
