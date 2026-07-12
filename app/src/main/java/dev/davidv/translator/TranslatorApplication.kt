@@ -112,6 +112,10 @@ class TranslatorApplication : Application() {
       TapToTranslateNotification.show(this)
     }
 
+    if (settingsManager.settings.value.httpServerEnabled) {
+      settingsManager.applyHttpServerState(settingsManager.settings.value)
+    }
+
     settingsManager.applyBrowserAliasState(settingsManager.settings.value.registerAsBrowser)
   }
 

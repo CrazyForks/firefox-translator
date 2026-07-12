@@ -314,4 +314,16 @@
     <string name="a11y_translated_image">Translated image</string>
     <string name="a11y_zoomable_original_image">Zoomable original image</string>
     <string name="a11y_zoomable_translated_image">Zoomable translated image</string>
+    <string name="settings_http_server">Enable LibreTranslate compatible HTTP server</string>
+    <string name="settings_http_server_desc">Allows other apps to programmatically request translations</string>
+    <string name="settings_http_server_port">Port</string>
+    <string name="settings_http_server_bind">Bind on</string>
+    <string name="settings_http_server_bind_localhost">localhost</string>
+    <string name="settings_http_server_bind_all">all interfaces</string>
+    <string name="http_server_notif_channel_name">Translation API</string>
+    <string name="http_server_notif_channel_desc">Shown while the LibreTranslate compatible server is running</string>
+    <string name="http_server_notif_running">Translation API</string>
+    <string name="http_server_notif_text">Listening on %1$s:%2$d</string>
+    <string name="http_server_notif_error">Failed to start on port %1$d</string>
+    <string name="http_server_notif_stop">Stop</string>
 </resources>

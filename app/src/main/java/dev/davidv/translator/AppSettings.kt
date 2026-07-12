@@ -30,6 +30,13 @@ enum class AssistantAction(
   LIVE_SCREEN(R.string.assistant_action_live_screen),
 }
 
+enum class HttpServerBindMode(
+  @StringRes val labelRes: Int,
+) {
+  LOCALHOST(R.string.settings_http_server_bind_localhost),
+  ALL_INTERFACES(R.string.settings_http_server_bind_all),
+}
+
 data class AppSettings(
   val defaultTargetLanguageCode: String = "en",
   val defaultSourceLanguageCode: String? = null,
@@ -58,4 +65,7 @@ data class AppSettings(
   val registerAsBrowser: Boolean = true,
   val assistantAction: AssistantAction = AssistantAction.STILL_IMAGE,
   val multiTargetEnabled: Boolean = false,
+  val httpServerEnabled: Boolean = false,
+  val httpServerPort: Int = 5000,
+  val httpServerBindMode: HttpServerBindMode = HttpServerBindMode.LOCALHOST,
 )

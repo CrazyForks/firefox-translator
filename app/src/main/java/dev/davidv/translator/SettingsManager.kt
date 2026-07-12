@@ -135,6 +135,19 @@ class SettingsManager(
       prefs.getBoolean("register_as_browser", defaults.registerAsBrowser)
     val multiTargetEnabled =
       prefs.getBoolean("multi_target_enabled", defaults.multiTargetEnabled)
+    val httpServerEnabled = prefs.getBoolean("http_server_enabled", defaults.httpServerEnabled)
+    val httpServerPort = prefs.getInt("http_server_port", defaults.httpServerPort).coerceIn(1, 65535)
+    val httpServerBindModeName = prefs.getString("http_server_bind_mode", null)
+    val httpServerBindMode =
+      if (httpServerBindModeName != null) {
+        try {
+          HttpServerBindMode.valueOf(httpServerBindModeName)
+        } catch (_: IllegalArgumentException) {
+          defaults.httpServerBindMode
+        }
+      } else {
+        defaults.httpServerBindMode
+      }
     val assistantActionName = prefs.getString("assistant_action", null)
     val assistantAction =
       if (assistantActionName != null) {
@@ -175,6 +188,9 @@ class SettingsManager(
       registerAsBrowser = registerAsBrowser,
       assistantAction = assistantAction,
       multiTargetEnabled = multiTargetEnabled,
+      httpServerEnabled = httpServerEnabled,
+      httpServerPort = httpServerPort,
+      httpServerBindMode = httpServerBindMode,
     )
   }
 
@@ -296,12 +312,39 @@ class SettingsManager(
         putBoolean("multi_target_enabled", newSettings.multiTargetEnabled)
         modifiedSettings.add("multi_target_enabled")
       }
+      if (newSettings.httpServerEnabled != currentSettings.httpServerEnabled) {
+        putBoolean("http_server_enabled", newSettings.httpServerEnabled)
+        modifiedSettings.add("http_server_enabled")
+      }
+      if (newSettings.httpServerPort != currentSettings.httpServerPort) {
+        putInt("http_server_port", newSettings.httpServerPort)
+        modifiedSettings.add("http_server_port")
+      }
+      if (newSettings.httpServerBindMode != currentSettings.httpServerBindMode) {
+        putString("http_server_bind_mode", newSettings.httpServerBindMode.name)
+        modifiedSettings.add("http_server_bind_mode")
+      }
       remove("translation_models_base_url_v3")
       remove("tesseract_models_base_url")
       remove("dictionary_base_url")
       apply()
     }
     _settings.value = newSettings
+
+    val serverConfigChanged =
+      newSettings.httpServerPort != currentSettings.httpServerPort ||
+        newSettings.httpServerBindMode != currentSettings.httpServerBindMode
+    if (newSettings.httpServerEnabled != currentSettings.httpServerEnabled || serverConfigChanged) {
+      applyHttpServerState(newSettings)
+    }
+  }
+
+  fun applyHttpServerState(settings: AppSettings) {
+    if (settings.httpServerEnabled) {
+      TranslationApiService.start(appContext, settings.httpServerPort, settings.httpServerBindMode)
+    } else {
+      TranslationApiService.stop(appContext)
+    }
   }
 
   fun applyBrowserAliasState(enabled: Boolean) {

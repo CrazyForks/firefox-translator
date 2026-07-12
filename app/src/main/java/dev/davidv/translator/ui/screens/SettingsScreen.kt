@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,12 +70,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.davidv.translator.AppSettings
 import dev.davidv.translator.BackgroundMode
 import dev.davidv.translator.DownloadService
 import dev.davidv.translator.DownloadState
+import dev.davidv.translator.HttpServerBindMode
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageCatalog
 import dev.davidv.translator.LanguageMetadataManager
@@ -139,6 +142,83 @@ private fun LanguageDropdown(
             expanded = false
           },
         )
+      }
+    }
+  }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HttpServerCard(
+  settings: AppSettings,
+  onSettingsChange: (AppSettings) -> Unit,
+) {
+  AppCard(
+    modifier = Modifier.fillMaxWidth().testTag("export-section:HttpServer"),
+  ) {
+    Column(
+      modifier = Modifier.padding(16.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      // Commit the port after a pause so per-keystroke edits don't rebind the
+      // running server (and briefly try to bind partial numbers like "5").
+      var portText by remember(settings.httpServerPort) { mutableStateOf(settings.httpServerPort.toString()) }
+      LaunchedEffect(portText) {
+        delay(500)
+        portText.toIntOrNull()?.takeIf { it in 1..65535 }?.let { port ->
+          if (port != settings.httpServerPort) onSettingsChange(settings.copy(httpServerPort = port))
+        }
+      }
+
+      Text(
+        text = stringResource(R.string.settings_http_server_port),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+      OutlinedTextField(
+        value = portText,
+        onValueChange = { input -> portText = input.filter { it.isDigit() }.take(5) },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+      )
+
+      Text(
+        text = stringResource(R.string.settings_http_server_bind),
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+      )
+      var bindExpanded by remember { mutableStateOf(false) }
+      ExposedDropdownMenuBox(
+        expanded = bindExpanded,
+        onExpandedChange = { bindExpanded = it },
+        modifier = Modifier.fillMaxWidth(),
+      ) {
+        OutlinedTextField(
+          value = stringResource(settings.httpServerBindMode.labelRes),
+          onValueChange = {},
+          readOnly = true,
+          trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = bindExpanded) },
+          modifier =
+            Modifier
+              .menuAnchor()
+              .fillMaxWidth(),
+          colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+        )
+        ExposedDropdownMenu(
+          expanded = bindExpanded,
+          onDismissRequest = { bindExpanded = false },
+        ) {
+          HttpServerBindMode.entries.forEach { mode ->
+            DropdownMenuItem(
+              text = { Text(stringResource(mode.labelRes)) },
+              onClick = {
+                onSettingsChange(settings.copy(httpServerBindMode = mode))
+                bindExpanded = false
+              },
+            )
+          }
+        }
       }
     }
   }
@@ -1050,8 +1130,37 @@ fun SettingsScreen(
                 },
               )
             }
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                Text(
+                  text = stringResource(R.string.settings_http_server),
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = stringResource(R.string.settings_http_server_desc),
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              Switch(
+                checked = settings.httpServerEnabled,
+                onCheckedChange = { checked ->
+                  onSettingsChange(settings.copy(httpServerEnabled = checked))
+                },
+              )
+            }
           }
         }
+      }
+
+      if (settings.httpServerEnabled) {
+        HttpServerCard(settings = settings, onSettingsChange = onSettingsChange)
       }
 
       AboutCard(
