@@ -5105,6 +5105,60 @@
           }
         }
       }
+    ],
+    "en-tl": [
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "en",
+        "targetLanguage": "tl",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/en-tl/opusmt_distill_20260712/exported/lex.50.50.entl.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/en-tl/opusmt_distill_20260712/exported/model.entl.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561635,
+            "uncompressedHash": "bbd5f3b711fd1e508d2aa0c1e040c53c9870b69065d4406802b845dbe489a7e9"
+          },
+          "vocab": {
+            "path": "models/en-tl/opusmt_distill_20260712/exported/vocab.entl.spm.gz"
+          }
+        },
+        "metrics": {
+          "flores200-plus": {
+            "chrf": 57.92,
+            "bleu": 32.46
+          }
+        }
+      }
+    ],
+    "tl-en": [
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "tl",
+        "targetLanguage": "en",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/tl-en/opusmt_distill_20260712/exported/lex.50.50.tlen.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/tl-en/opusmt_distill_20260712/exported/model.tlen.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561635,
+            "uncompressedHash": "3852a8e37a6b2a10ae14223cd64fefaf2f424dbd5975adf88b6d1a0b08d1f0c5"
+          },
+          "vocab": {
+            "path": "models/tl-en/opusmt_distill_20260712/exported/vocab.tlen.spm.gz"
+          }
+        },
+        "metrics": {
+          "flores200-plus": {
+            "chrf": 60.39,
+            "bleu": 35.98
+          }
+        }
+      }
     ]
   }
 }

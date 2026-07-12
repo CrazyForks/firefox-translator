@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1783273036,
+  "generatedAt": 1783860118,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1783273036,
+    "languageIndexUpdatedAt": 1783860118,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1781816467,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -404,6 +404,7 @@
           "translate-en-ta",
           "translate-en-te",
           "translate-en-th",
+          "translate-en-tl",
           "translate-en-tr",
           "translate-en-uk",
           "translate-en-vi",
@@ -448,6 +449,7 @@
           "translate-ta-en",
           "translate-te-en",
           "translate-th-en",
+          "translate-tl-en",
           "translate-tr-en",
           "translate-uk-en",
           "translate-ur-en",
@@ -1723,6 +1725,23 @@
           }
         },
         "sampleText": "รุ้งกินน้ำเป็นปรากฏการณ์ทางอุตุนิยมวิทยาที่เกิดจากการสะท้อน การหักเห และการกระจายตัวของแสงในหยดน้ำ ทำให้เกิดสเปกตรัมของแสงปรากฏบนท้องฟ้า"
+      }
+    },
+    "tl": {
+      "meta": {
+        "code": "tl",
+        "name": "Tagalog",
+        "shortName": "Tagalog",
+        "script": "Latn"
+      },
+      "assets": {
+        "translate": [
+          "translate-en-tl",
+          "translate-tl-en"
+        ],
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
       }
     },
     "tr": {
@@ -4645,6 +4664,33 @@
       ],
       "dependsOn": []
     },
+    "translate-en-tl": {
+      "feature": "translation",
+      "from": "en",
+      "to": "tl",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.entl.intgemm.alphas.bin",
+          "sizeBytes": 25170505,
+          "installPath": "bin/model.entl.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/opusmt_distill_20260712/exported/model.entl.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.entl.spm",
+          "sizeBytes": 387511,
+          "installPath": "bin/vocab.entl.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/opusmt_distill_20260712/exported/vocab.entl.spm.gz"
+        },
+        {
+          "name": "lex.50.50.entl.s2t.bin",
+          "sizeBytes": 1003287,
+          "installPath": "bin/lex.50.50.entl.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/opusmt_distill_20260712/exported/lex.50.50.entl.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
     "translate-en-tr": {
       "feature": "translation",
       "from": "en",
@@ -5841,6 +5887,33 @@
           "sizeBytes": 2239323,
           "installPath": "bin/lex.50.50.then.s2t.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/th-en/new-opuscleaner-en-th_aIiNAAZbRny4ODcYGOMlEA/exported/lex.50.50.then.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
+    "translate-tl-en": {
+      "feature": "translation",
+      "from": "tl",
+      "to": "en",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.tlen.intgemm.alphas.bin",
+          "sizeBytes": 25712267,
+          "installPath": "bin/model.tlen.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/tl-en/opusmt_distill_20260712/exported/model.tlen.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.tlen.spm",
+          "sizeBytes": 387511,
+          "installPath": "bin/vocab.tlen.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/tl-en/opusmt_distill_20260712/exported/vocab.tlen.spm.gz"
+        },
+        {
+          "name": "lex.50.50.tlen.s2t.bin",
+          "sizeBytes": 1053566,
+          "installPath": "bin/lex.50.50.tlen.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/tl-en/opusmt_distill_20260712/exported/lex.50.50.tlen.s2t.bin.gz"
         }
       ],
       "dependsOn": []

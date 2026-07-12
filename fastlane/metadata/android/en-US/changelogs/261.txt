@@ -1,0 +1,6 @@
+- Fix keyboard overlapping UI
+- Fix "Back" arrow direction in RTL
+- Improve language detection
+- Add Libretranslate-compatible HTTP API (disabled by default, enable under Advanced)
+- Make MMS voices utter symbols (< > ! .. etc)
+- Add Tagalog language
