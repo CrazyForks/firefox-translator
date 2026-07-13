@@ -117,7 +117,7 @@ fun InputSection(
       }
       if (input.isNotEmpty()) {
         ToolIconButton(
-          iconRes = R.drawable.delete,
+          iconRes = R.drawable.cancel,
           contentDescription = stringResource(R.string.a11y_clear_input),
           onClick = { onMessage(TranslatorMessage.ClearInput) },
         )
