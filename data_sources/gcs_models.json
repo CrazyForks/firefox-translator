@@ -5141,21 +5141,21 @@
         "targetLanguage": "en",
         "files": {
           "lexicalShortlist": {
-            "path": "models/tl-en/opusmt_distill_20260712/exported/lex.50.50.tlen.s2t.bin.gz"
+            "path": "models/tl-en/opusmt_distill_20260713/exported/lex.50.50.tlen.s2t.bin.gz"
           },
           "model": {
-            "path": "models/tl-en/opusmt_distill_20260712/exported/model.tlen.intgemm.alphas.bin.gz",
+            "path": "models/tl-en/opusmt_distill_20260713/exported/model.tlen.intgemm.alphas.bin.gz",
             "uncompressedSize": 31561635,
-            "uncompressedHash": "3852a8e37a6b2a10ae14223cd64fefaf2f424dbd5975adf88b6d1a0b08d1f0c5"
+            "uncompressedHash": "7ab05a400b0b65e676e044cf995457933f231bbca6e7193ddf28125f332ff539"
           },
           "vocab": {
-            "path": "models/tl-en/opusmt_distill_20260712/exported/vocab.tlen.spm.gz"
+            "path": "models/tl-en/opusmt_distill_20260713/exported/vocab.tlen.spm.gz"
           }
         },
         "metrics": {
           "flores200-plus": {
-            "chrf": 60.39,
-            "bleu": 35.98
+            "chrf": 60.70,
+            "bleu": 36.41
           }
         }
       }

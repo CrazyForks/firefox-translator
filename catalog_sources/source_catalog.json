@@ -1,12 +1,12 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1783860118,
+  "generatedAt": 1783930624,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1783860118,
+    "languageIndexUpdatedAt": 1783930624,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1781816467,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -6637,27 +6637,27 @@
       "files": [
         {
           "name": "model.tlen.intgemm.alphas.bin",
-          "sizeBytes": 25712267,
+          "sizeBytes": 24582686,
           "installPath": "bin/model.tlen.intgemm.alphas.bin",
-          "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/tl-en/opusmt_distill_20260712/exported/model.tlen.intgemm.alphas.bin.gz",
-          "sourcePath": "models/tl-en/opusmt_distill_20260712/exported/model.tlen.intgemm.alphas.bin.gz",
-          "mirrorPath": "translation/1/models/tl-en/opusmt_distill_20260712/exported/model.tlen.intgemm.alphas.bin.gz"
+          "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/tl-en/opusmt_distill_20260713/exported/model.tlen.intgemm.alphas.bin.gz",
+          "sourcePath": "models/tl-en/opusmt_distill_20260713/exported/model.tlen.intgemm.alphas.bin.gz",
+          "mirrorPath": "translation/1/models/tl-en/opusmt_distill_20260713/exported/model.tlen.intgemm.alphas.bin.gz"
         },
         {
           "name": "vocab.tlen.spm",
           "sizeBytes": 387511,
           "installPath": "bin/vocab.tlen.spm",
-          "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/tl-en/opusmt_distill_20260712/exported/vocab.tlen.spm.gz",
-          "sourcePath": "models/tl-en/opusmt_distill_20260712/exported/vocab.tlen.spm.gz",
-          "mirrorPath": "translation/1/models/tl-en/opusmt_distill_20260712/exported/vocab.tlen.spm.gz"
+          "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/tl-en/opusmt_distill_20260713/exported/vocab.tlen.spm.gz",
+          "sourcePath": "models/tl-en/opusmt_distill_20260713/exported/vocab.tlen.spm.gz",
+          "mirrorPath": "translation/1/models/tl-en/opusmt_distill_20260713/exported/vocab.tlen.spm.gz"
         },
         {
           "name": "lex.50.50.tlen.s2t.bin",
-          "sizeBytes": 1053566,
+          "sizeBytes": 1281937,
           "installPath": "bin/lex.50.50.tlen.s2t.bin",
-          "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/tl-en/opusmt_distill_20260712/exported/lex.50.50.tlen.s2t.bin.gz",
-          "sourcePath": "models/tl-en/opusmt_distill_20260712/exported/lex.50.50.tlen.s2t.bin.gz",
-          "mirrorPath": "translation/1/models/tl-en/opusmt_distill_20260712/exported/lex.50.50.tlen.s2t.bin.gz"
+          "url": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/models/tl-en/opusmt_distill_20260713/exported/lex.50.50.tlen.s2t.bin.gz",
+          "sourcePath": "models/tl-en/opusmt_distill_20260713/exported/lex.50.50.tlen.s2t.bin.gz",
+          "mirrorPath": "translation/1/models/tl-en/opusmt_distill_20260713/exported/lex.50.50.tlen.s2t.bin.gz"
         }
       ],
       "dependsOn": []

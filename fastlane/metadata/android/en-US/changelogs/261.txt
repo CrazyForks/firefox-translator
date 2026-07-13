@@ -4,3 +4,4 @@
 - Add Libretranslate-compatible HTTP API (disabled by default, enable under Advanced)
 - Make MMS voices utter symbols (< > ! .. etc)
 - Add Tagalog language
+- Improve "floating button" UI, allow it to copy text
