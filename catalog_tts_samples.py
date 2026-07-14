@@ -48,6 +48,7 @@ TTS_SAMPLES = {
     "sq": "Ylberi është një fenomen meteorologjik i shkaktuar nga pasqyrimi, përthyerja dhe shpërndarja e dritës në pikat e ujit, duke bërë që në qiell të shfaqet një spektër drite.",
     "sr": "Дуга је метеоролошка појава настала одбијањем, преламањем и расипањем светлости у капљицама воде, због чега се на небу појављује спектар светлости.",
     "sv": "En regnbåge är ett meteorologiskt fenomen som orsakas av ljusets reflektion, brytning och spridning i vattendroppar, vilket gör att ett spektrum av ljus syns på himlen.",
+    "sw": "Upinde wa mvua ni tukio la hali ya hewa ambalo husababishwa na uakisi, kuvunjika na kuenea kwa mwanga katika matone ya maji na kusababisha wigo wa mwanga unaoonekana angani.",
     "ta": "வானவில் என்பது நீர்த்துளிகளில் ஒளியின் பிரதிபலிப்பு, ஒளிவிலக்கம் மற்றும் சிதறல் காரணமாக உருவாகும் ஒரு வானிலை நிகழ்வு; இதன் விளைவாக வானில் ஒளியின் நிறவரிசை தோன்றுகிறது.",
     "te": "ఇంద్రధనుస్సు ఒక వాతావరణ సంబంధిత సంఘటన; ఇది నీటి బిందువులలో కాంతి ప్రతిబింబం, అపవర్తనం మరియు విక్షేపణం వల్ల ఏర్పడి ఆకాశంలో కాంతి వర్ణక్రమం కనిపిస్తుంది.",
     "th": "รุ้งกินน้ำเป็นปรากฏการณ์ทางอุตุนิยมวิทยาที่เกิดจากการสะท้อน การหักเห และการกระจายตัวของแสงในหยดน้ำ ทำให้เกิดสเปกตรัมของแสงปรากฏบนท้องฟ้า",

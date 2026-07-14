@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1783930624,
+  "generatedAt": 1784014990,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1783930624,
+    "languageIndexUpdatedAt": 1784014990,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1781816467,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -401,6 +401,7 @@
           "translate-en-sq",
           "translate-en-sr",
           "translate-en-sv",
+          "translate-en-sw",
           "translate-en-ta",
           "translate-en-te",
           "translate-en-th",
@@ -446,6 +447,7 @@
           "translate-sq-en",
           "translate-sr-en",
           "translate-sv-en",
+          "translate-sw-en",
           "translate-ta-en",
           "translate-te-en",
           "translate-th-en",
@@ -1633,6 +1635,35 @@
           }
         },
         "sampleText": "En regnbåge är ett meteorologiskt fenomen som orsakas av ljusets reflektion, brytning och spridning i vattendroppar, vilket gör att ett spektrum av ljus syns på himlen."
+      }
+    },
+    "sw": {
+      "meta": {
+        "code": "sw",
+        "name": "Swahili",
+        "shortName": "Swahili",
+        "script": "Latn"
+      },
+      "assets": {
+        "translate": [
+          "translate-en-sw",
+          "translate-sw-en"
+        ],
+        "ocr": {
+          "ppocr": "ocr-ppocr-latin"
+        }
+      },
+      "tts": {
+        "defaultRegion": "CD",
+        "regions": {
+          "CD": {
+            "displayName": "Democratic Republic of the Congo",
+            "voices": [
+              "tts-piper-sw-cd-lanfrica-medium"
+            ]
+          }
+        },
+        "sampleText": "Upinde wa mvua ni tukio la hali ya hewa ambalo husababishwa na uakisi, kuvunjika na kuenea kwa mwanga katika matone ya maji na kusababisha wigo wa mwanga unaoonekana angani."
       }
     },
     "ta": {
@@ -4583,6 +4614,33 @@
       ],
       "dependsOn": []
     },
+    "translate-en-sw": {
+      "feature": "translation",
+      "from": "en",
+      "to": "sw",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.ensw.intgemm.alphas.bin",
+          "sizeBytes": 25744545,
+          "installPath": "bin/model.ensw.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-sw/nllb_distill_20260714/exported/model.ensw.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.ensw.spm",
+          "sizeBytes": 391114,
+          "installPath": "bin/vocab.ensw.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-sw/nllb_distill_20260714/exported/vocab.ensw.spm.gz"
+        },
+        {
+          "name": "lex.50.50.ensw.s2t.bin",
+          "sizeBytes": 1034657,
+          "installPath": "bin/lex.50.50.ensw.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-sw/nllb_distill_20260714/exported/lex.50.50.ensw.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
     "translate-en-ta": {
       "feature": "translation",
       "from": "en",
@@ -5810,6 +5868,33 @@
       ],
       "dependsOn": []
     },
+    "translate-sw-en": {
+      "feature": "translation",
+      "from": "sw",
+      "to": "en",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.swen.intgemm.alphas.bin",
+          "sizeBytes": 24613843,
+          "installPath": "bin/model.swen.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/sw-en/nllb_distill_20260714/exported/model.swen.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.swen.spm",
+          "sizeBytes": 391114,
+          "installPath": "bin/vocab.swen.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/sw-en/nllb_distill_20260714/exported/vocab.swen.spm.gz"
+        },
+        {
+          "name": "lex.50.50.swen.s2t.bin",
+          "sizeBytes": 1217351,
+          "installPath": "bin/lex.50.50.swen.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/sw-en/nllb_distill_20260714/exported/lex.50.50.swen.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
     "translate-ta-en": {
       "feature": "translation",
       "from": "ta",
@@ -6608,6 +6693,21 @@
           "sizeBytes": 47836,
           "installPath": "bin/espeak-ng-data/sv_dict",
           "url": "https://offline-translator.davidv.dev/tts/1/espeak-ng-data/sv_dict"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-core-v1"
+      ]
+    },
+    "tts-espeak-dict-sw": {
+      "feature": "support",
+      "kind": "tts-espeak-dict",
+      "files": [
+        {
+          "name": "sw_dict",
+          "sizeBytes": 47804,
+          "installPath": "bin/espeak-ng-data/sw_dict",
+          "url": "https://offline-translator.davidv.dev/tts/1/espeak-ng-data/sw_dict"
         }
       ],
       "dependsOn": [
@@ -9824,6 +9924,34 @@
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sv/lisa_medium.opus"
     },
+    "tts-piper-sw-cd-lanfrica-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "language": "sw",
+      "locale": "sw_CD",
+      "region": "CD",
+      "voice": "lanfrica",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "sw_CD-lanfrica-medium.mnn",
+          "sizeBytes": 16864428,
+          "installPath": "bin/piper/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.mnn"
+        },
+        {
+          "name": "sw_CD-lanfrica-medium.onnx.json",
+          "sizeBytes": 4905,
+          "installPath": "bin/piper/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx.json",
+          "url": "https://offline-translator.davidv.dev/tts/1/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-sw"
+      ]
+    },
     "tts-mms-ta-in-standard-mms": {
       "feature": "tts",
       "engine": "mms",
@@ -11669,6 +11797,14 @@
       "quantBits": 8,
       "onnxBytes": 63511038,
       "mnnBytes": 16974228,
+      "feature": "tts"
+    },
+    {
+      "onnx": "bin/piper/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.onnx",
+      "mnn": "bin/piper/sw/sw_CD/lanfrica/medium/sw_CD-lanfrica-medium.mnn",
+      "quantBits": 8,
+      "onnxBytes": 63201294,
+      "mnnBytes": 16864428,
       "feature": "tts"
     },
     {

@@ -5154,8 +5154,62 @@
         },
         "metrics": {
           "flores200-plus": {
-            "chrf": 60.70,
+            "chrf": 60.7,
             "bleu": 36.41
+          }
+        }
+      }
+    ],
+    "sw-en": [
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "sw",
+        "targetLanguage": "en",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/sw-en/nllb_distill_20260714/exported/lex.50.50.swen.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/sw-en/nllb_distill_20260714/exported/model.swen.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561635,
+            "uncompressedHash": "71d1b9333aa298363ba705d663c0ee9d161b067e0c4594c4fc18955ab5aa6005"
+          },
+          "vocab": {
+            "path": "models/sw-en/nllb_distill_20260714/exported/vocab.swen.spm.gz"
+          }
+        },
+        "metrics": {
+          "flores200-plus": {
+            "chrf": 58.0,
+            "bleu": 35.16
+          }
+        }
+      }
+    ],
+    "en-sw": [
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "en",
+        "targetLanguage": "sw",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/en-sw/nllb_distill_20260714/exported/lex.50.50.ensw.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/en-sw/nllb_distill_20260714/exported/model.ensw.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561635,
+            "uncompressedHash": "f1efcc76ea64696d452e428666bb87fd988356a8405de3af0a045a824ce32310"
+          },
+          "vocab": {
+            "path": "models/en-sw/nllb_distill_20260714/exported/vocab.ensw.spm.gz"
+          }
+        },
+        "metrics": {
+          "flores200-plus": {
+            "chrf": 59.74,
+            "bleu": 34.02
           }
         }
       }
