@@ -78,7 +78,9 @@ https://github.com/user-attachments/assets/bf774a4f-3d58-49b7-b4e2-cb30eb395b39
 - Slovak
 - Slovenian
 - Spanish
+- Swahili
 - Swedish
+- Tagalog
 - Tamil
 - Telugu
 - Thai
