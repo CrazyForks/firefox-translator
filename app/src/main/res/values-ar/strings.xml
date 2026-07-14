@@ -306,5 +306,4 @@
     <string name="http_server_notif_running">API الترجمة</string>
     <string name="http_server_notif_text">يسمع على %1$s: %2$d</string>
     <string name="http_server_notif_error">فشل التشغيل على المنفذ %1$d</string>
-    <string name="http_server_notif_stop">أوقِف</string>
 </resources>
