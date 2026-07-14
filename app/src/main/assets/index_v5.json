@@ -1,12 +1,12 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1784014990,
+  "generatedAt": 1784034298,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784014990,
+    "languageIndexUpdatedAt": 1784034298,
     "dictionaryIndexVersion": 1,
-    "dictionaryIndexUpdatedAt": 1781816467,
+    "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
     "gcsModelsGenerated": "2026-06-18T01:48:57Z",
     "piperVoiceCount": 158
@@ -1649,6 +1649,7 @@
           "translate-en-sw",
           "translate-sw-en"
         ],
+        "dictionary": "dict-sw",
         "ocr": {
           "ppocr": "ocr-ppocr-latin"
         }
@@ -1770,6 +1771,7 @@
           "translate-en-tl",
           "translate-tl-en"
         ],
+        "dictionary": "dict-tl",
         "ocr": {
           "ppocr": "ocr-ppocr-latin"
         }
@@ -2934,6 +2936,27 @@
         "wordCount": 286313
       }
     },
+    "dict-sw": {
+      "feature": "dictionary",
+      "dictionaryCode": "sw",
+      "languages": [
+        "sw"
+      ],
+      "files": [
+        {
+          "name": "sw.dict",
+          "sizeBytes": 257620,
+          "installPath": "dictionaries/sw.dict",
+          "url": "https://offline-translator.davidv.dev/dictionaries/1/sw.dict"
+        }
+      ],
+      "dependsOn": [],
+      "metadata": {
+        "date": 1784028791,
+        "type": "english",
+        "wordCount": 15954
+      }
+    },
     "dict-ta": {
       "feature": "dictionary",
       "dictionaryCode": "ta",
@@ -2995,6 +3018,27 @@
         "date": 1774864382,
         "type": "bilingual",
         "wordCount": 34786
+      }
+    },
+    "dict-tl": {
+      "feature": "dictionary",
+      "dictionaryCode": "tl",
+      "languages": [
+        "tl"
+      ],
+      "files": [
+        {
+          "name": "tl.dict",
+          "sizeBytes": 944566,
+          "installPath": "dictionaries/tl.dict",
+          "url": "https://offline-translator.davidv.dev/dictionaries/1/tl.dict"
+        }
+      ],
+      "dependsOn": [],
+      "metadata": {
+        "date": 1784028791,
+        "type": "english",
+        "wordCount": 26137
       }
     },
     "dict-tr": {

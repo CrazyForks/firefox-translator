@@ -91,6 +91,13 @@
       "type": "english",
       "word_count": 11645
     },
+    "eu": {
+      "date": 1781815948,
+      "filename": "eu.dict",
+      "size": 216917,
+      "type": "english",
+      "word_count": 9599
+    },
     "fa": {
       "date": 1758204389,
       "filename": "fa.dict",
@@ -111,6 +118,13 @@
       "size": 31812323,
       "type": "bilingual",
       "word_count": 1891044
+    },
+    "gl": {
+      "date": 1781815948,
+      "filename": "gl.dict",
+      "size": 1290562,
+      "type": "english",
+      "word_count": 198673
     },
     "gu": {
       "date": 1758204389,
@@ -210,6 +224,13 @@
       "type": "english",
       "word_count": 10022
     },
+    "mr": {
+      "date": 1781815948,
+      "filename": "mr.dict",
+      "size": 117924,
+      "type": "english",
+      "word_count": 4164
+    },
     "ms": {
       "date": 1758204389,
       "filename": "ms.dict",
@@ -301,6 +322,13 @@
       "type": "english",
       "word_count": 286313
     },
+    "sw": {
+      "date": 1784028791,
+      "filename": "sw.dict",
+      "size": 257620,
+      "type": "english",
+      "word_count": 15954
+    },
     "ta": {
       "date": 1758204389,
       "filename": "ta.dict",
@@ -322,6 +350,13 @@
       "type": "bilingual",
       "word_count": 34786
     },
+    "tl": {
+      "date": 1784028791,
+      "filename": "tl.dict",
+      "size": 944566,
+      "type": "english",
+      "word_count": 26137
+    },
     "tr": {
       "date": 1758204389,
       "filename": "tr.dict",
@@ -336,6 +371,13 @@
       "type": "english",
       "word_count": 47095
     },
+    "ur": {
+      "date": 1781815948,
+      "filename": "ur.dict",
+      "size": 225606,
+      "type": "english",
+      "word_count": 7069
+    },
     "vi": {
       "date": 1774864382,
       "filename": "vi.dict",
@@ -349,36 +391,8 @@
       "size": 10139921,
       "type": "bilingual",
       "word_count": 435742
-    },
-    "eu": {
-      "date": 1781815948,
-      "filename": "eu.dict",
-      "size": 216917,
-      "type": "english",
-      "word_count": 9599
-    },
-    "gl": {
-      "date": 1781815948,
-      "filename": "gl.dict",
-      "size": 1290562,
-      "type": "english",
-      "word_count": 198673
-    },
-    "mr": {
-      "date": 1781815948,
-      "filename": "mr.dict",
-      "size": 117924,
-      "type": "english",
-      "word_count": 4164
-    },
-    "ur": {
-      "date": 1781815948,
-      "filename": "ur.dict",
-      "size": 225606,
-      "type": "english",
-      "word_count": 7069
     }
   },
-  "updated_at": 1781816467,
+  "updated_at": 1784028791,
   "version": 1
 }

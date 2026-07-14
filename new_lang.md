@@ -1,3 +1,5 @@
+## Voices
+
 To add new voices to existing languages:
 
 1. Add an `EXTRA_TTS_VOICES` entry in `catalog_tts.py`
@@ -22,3 +24,16 @@ To add new voices to existing languages:
      --output bucket/samples.html
    ```
 7. Sync bucket to remote
+
+## Dictionaries
+
+Dictionaries come from `tarkka`. A `dict-<code>` pack is only emitted for a language that already exists in the catalog, so add the language first if it's new.
+
+1. Copy the new `.dict` files into the local bucket (`bucket/dictionaries/1/`, matching the `installPath`)
+2. Copy tarkka's `index.json` as `data_sources/dictionary_index.json`
+3. Regenerate catalogs:
+   ```
+   python3 generate_index.py --mode internal
+   python3 generate_index.py --mode public --base-url https://offline-translator.davidv.dev
+   ```
+4. Sync bucket to remote
