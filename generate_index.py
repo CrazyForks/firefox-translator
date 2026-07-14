@@ -154,13 +154,31 @@ def build_internal_catalog(args: argparse.Namespace) -> dict:
     )
 
 
+# Mirror of `sanitize_filename` in translator-rs `bucket_samples`: the sample
+# files are written with each component sanitized (non-alphanumerics collapsed to
+# `_`), so the lookup path must sanitize the same way or a voice like
+# "Mandarin (Traditional)" never resolves to its `Mandarin_Traditional` file.
+def sanitize_sample_component(value: str) -> str:
+    out = []
+    last_was_sep = False
+    for ch in value:
+        if ch.isalnum() or ch in "_-.":
+            out.append(ch)
+            last_was_sep = False
+        elif not last_was_sep:
+            out.append("_")
+            last_was_sep = True
+    return "".join(out).strip("_")
+
+
 def tts_sample_mirror_path(pack: dict) -> str | None:
     voice = pack.get("voice")
     language = pack.get("language")
     quality = pack.get("quality")
     if not voice or not language:
         return None
-    stem = f"{voice}_{quality}" if quality else voice
+    voice = sanitize_sample_component(voice)
+    stem = f"{voice}_{sanitize_sample_component(quality)}" if quality else voice
     return f"samples_ogg/{language}/{stem}.opus"
 
 

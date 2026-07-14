@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1784034298,
+  "generatedAt": 1784035644,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784034298,
+    "languageIndexUpdatedAt": 1784035644,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1775,6 +1775,18 @@
         "ocr": {
           "ppocr": "ocr-ppocr-latin"
         }
+      },
+      "tts": {
+        "defaultRegion": "PH",
+        "regions": {
+          "PH": {
+            "displayName": "Philippines",
+            "voices": [
+              "tts-mms-tl-ph-standard-mms"
+            ]
+          }
+        },
+        "sampleText": "Ang bahaghari ay isang penomenong meteorolohiko na dulot ng pagsalamin, pagbaluktot, at pagkalat ng liwanag sa mga patak ng tubig, na nagreresulta sa isang spektrum ng liwanag na lumilitaw sa langit."
       }
     },
     "tr": {
@@ -9994,7 +10006,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-sw"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/sw/lanfrica_medium.opus"
     },
     "tts-mms-ta-in-standard-mms": {
       "feature": "tts",
@@ -10136,6 +10149,33 @@
       ],
       "dependsOn": [],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/th/standard_medium.opus"
+    },
+    "tts-mms-tl-ph-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "tl",
+      "locale": "tl_PH",
+      "region": "PH",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.mnn",
+          "sizeBytes": 29593188,
+          "installPath": "bin/mms/tl/tl_PH/standard/medium/model.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/tl/tl_PH/standard/medium/model.mnn"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 337,
+          "installPath": "bin/mms/tl/tl_PH/standard/medium/tokens.txt",
+          "url": "https://offline-translator.davidv.dev/tts/1/tl/tl_PH/standard/medium/tokens.txt"
+        }
+      ],
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/tl/standard_medium.opus"
     },
     "tts-piper-tr-tr-dfki-medium": {
       "feature": "tts",
@@ -10479,7 +10519,8 @@
       ],
       "dependsOn": [
         "tts-espeak-dict-cmn"
-      ]
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/zh_hant/Mandarin_Traditional_medium.opus"
     },
     "support-doc_detect-v1": {
       "feature": "support",
@@ -11889,6 +11930,14 @@
       "quantBits": 8,
       "onnxBytes": 114042296,
       "mnnBytes": 29614692,
+      "feature": "tts"
+    },
+    {
+      "onnx": "bin/mms/tl/tl_PH/standard/medium/model.onnx",
+      "mnn": "bin/mms/tl/tl_PH/standard/medium/model.mnn",
+      "quantBits": 8,
+      "onnxBytes": 114020792,
+      "mnnBytes": 29593188,
       "feature": "tts"
     },
     {

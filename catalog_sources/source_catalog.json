@@ -1,12 +1,12 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1784034298,
+  "generatedAt": 1784035644,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784034298,
+    "languageIndexUpdatedAt": 1784035644,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1777,6 +1777,18 @@
         "ocr": {
           "ppocr": "ocr-ppocr-latin"
         }
+      },
+      "tts": {
+        "defaultRegion": "PH",
+        "regions": {
+          "PH": {
+            "displayName": "Philippines",
+            "voices": [
+              "tts-mms-tl-ph-standard-mms"
+            ]
+          }
+        },
+        "sampleText": "Ang bahaghari ay isang penomenong meteorolohiko na dulot ng pagsalamin, pagbaluktot, at pagkalat ng liwanag sa mga patak ng tubig, na nagreresulta sa isang spektrum ng liwanag na lumilitaw sa langit."
       }
     },
     "tr": {
@@ -11140,6 +11152,34 @@
           "installPath": "bin/mms/th/th_TH/standard/medium/tokens.txt",
           "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tha/tokens.txt",
           "mirrorPath": "tts/1/th/th_TH/standard/medium/tokens.txt"
+        }
+      ],
+      "dependsOn": []
+    },
+    "tts-mms-tl-ph-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "tl",
+      "locale": "tl_PH",
+      "region": "PH",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.onnx",
+          "sizeBytes": 114020792,
+          "installPath": "bin/mms/tl/tl_PH/standard/medium/model.onnx",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tgl/model.onnx",
+          "mirrorPath": "tts/1/tl/tl_PH/standard/medium/model.onnx"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 337,
+          "installPath": "bin/mms/tl/tl_PH/standard/medium/tokens.txt",
+          "url": "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main/tgl/tokens.txt",
+          "mirrorPath": "tts/1/tl/tl_PH/standard/medium/tokens.txt"
         }
       ],
       "dependsOn": []
