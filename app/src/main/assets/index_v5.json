@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1784035644,
+  "generatedAt": 1784481176,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784035644,
+    "languageIndexUpdatedAt": 1784481176,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -407,6 +407,7 @@
           "translate-en-th",
           "translate-en-tl",
           "translate-en-tr",
+          "translate-en-ug",
           "translate-en-uk",
           "translate-en-vi",
           "translate-en-zh",
@@ -453,6 +454,7 @@
           "translate-th-en",
           "translate-tl-en",
           "translate-tr-en",
+          "translate-ug-en",
           "translate-uk-en",
           "translate-ur-en",
           "translate-vi-en",
@@ -1817,6 +1819,23 @@
           }
         },
         "sampleText": "Gökkuşağı, ışığın su damlacıklarında yansıması, kırılması ve dağılması sonucu oluşan meteorolojik bir olaydır ve bunun sonucunda gökyüzünde bir ışık tayfı görünür."
+      }
+    },
+    "ug": {
+      "meta": {
+        "code": "ug",
+        "name": "Uyghur",
+        "shortName": "Uyghur",
+        "script": "Arab"
+      },
+      "assets": {
+        "translate": [
+          "translate-en-ug",
+          "translate-ug-en"
+        ],
+        "ocr": {
+          "ppocr": "ocr-ppocr-arabic"
+        }
       }
     },
     "uk": {
@@ -4832,6 +4851,33 @@
       ],
       "dependsOn": []
     },
+    "translate-en-ug": {
+      "feature": "translation",
+      "from": "en",
+      "to": "ug",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.enug.intgemm.alphas.bin",
+          "sizeBytes": 24223157,
+          "installPath": "bin/model.enug.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-ug/hymt2_distill_20260719/exported/model.enug.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.enug.spm",
+          "sizeBytes": 406290,
+          "installPath": "bin/vocab.enug.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-ug/hymt2_distill_20260719/exported/vocab.enug.spm.gz"
+        },
+        {
+          "name": "lex.50.50.enug.s2t.bin",
+          "sizeBytes": 990376,
+          "installPath": "bin/lex.50.50.enug.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-ug/hymt2_distill_20260719/exported/lex.50.50.enug.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
     "translate-en-uk": {
       "feature": "translation",
       "from": "en",
@@ -6082,6 +6128,33 @@
           "sizeBytes": 2470683,
           "installPath": "bin/lex.50.50.tren.s2t.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/tr-en/statmt_xxxxxxxxRxSxxxxxxxxxxA/exported/lex.50.50.tren.s2t.bin.gz"
+        }
+      ],
+      "dependsOn": []
+    },
+    "translate-ug-en": {
+      "feature": "translation",
+      "from": "ug",
+      "to": "en",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.ugen.intgemm.alphas.bin",
+          "sizeBytes": 23536190,
+          "installPath": "bin/model.ugen.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ug-en/hymt2_distill_20260718/exported/model.ugen.intgemm.alphas.bin.gz"
+        },
+        {
+          "name": "vocab.ugen.spm",
+          "sizeBytes": 406295,
+          "installPath": "bin/vocab.ugen.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ug-en/hymt2_distill_20260718/exported/vocab.ugen.spm.gz"
+        },
+        {
+          "name": "lex.50.50.ugen.s2t.bin",
+          "sizeBytes": 1702175,
+          "installPath": "bin/lex.50.50.ugen.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ug-en/hymt2_distill_20260718/exported/lex.50.50.ugen.s2t.bin.gz"
         }
       ],
       "dependsOn": []

@@ -39,6 +39,11 @@ def parse_args() -> argparse.Namespace:
         help="Path to the upstream GCS models.json snapshot for --mode internal.",
     )
     parser.add_argument(
+        "--custom-models",
+        default=str(SCRIPT_DIR / "data_sources/custom_models.json"),
+        help="Path to home-trained model pairs merged onto the upstream snapshot in --mode internal.",
+    )
+    parser.add_argument(
         "--dictionary-index",
         default=str(SCRIPT_DIR / "data_sources/dictionary_index.json"),
         help="Path to the dictionary index snapshot for --mode internal.",
@@ -132,6 +137,11 @@ def is_deprecated_kokoro_onnx_pack(pack: dict) -> bool:
 
 def build_internal_catalog(args: argparse.Namespace) -> dict:
     models_manifest = catalog_base.load_json(Path(args.gcs_models))
+    custom_models = catalog_base.load_json(Path(args.custom_models))["models"]
+    collisions = set(custom_models) & set(models_manifest["models"])
+    if collisions:
+        raise SystemExit(f"custom models collide with upstream snapshot: {', '.join(sorted(collisions))}")
+    models_manifest["models"].update(custom_models)
     dictionary_index = catalog_base.load_json(Path(args.dictionary_index))
     voices = catalog_tts.load_json(args.voices)
 
