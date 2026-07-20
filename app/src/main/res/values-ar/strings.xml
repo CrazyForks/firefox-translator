@@ -308,4 +308,5 @@
     <string name="http_server_notif_error">فشل التشغيل على المنفذ %1$d</string>
     <string name="a11y_select_text">حدّد نصًا</string>
     <string name="http_server_notif_disable">عطِّل</string>
+    <string name="a11y_resize_split">أعد تحجيم مناطق الإدخال والإخراج</string>
 </resources>
