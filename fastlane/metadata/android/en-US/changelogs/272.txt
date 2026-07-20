@@ -1,0 +1,5 @@
+- Respect newline on input
+- Add Uyghur language
+- Fix input text scroll when typing
+- Allow resizing the input / output boxes
+- Fix Malayalam transliteration

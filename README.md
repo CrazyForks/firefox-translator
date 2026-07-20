@@ -87,6 +87,7 @@ https://github.com/user-attachments/assets/bf774a4f-3d58-49b7-b4e2-cb30eb395b39
 - Turkish
 - Ukrainian
 - Urdu
+- Uyghur
 - Vietnamese
 
 ## Tech
