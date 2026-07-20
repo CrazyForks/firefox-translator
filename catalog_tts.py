@@ -835,6 +835,37 @@ EXTRA_TTS_VOICES = {
         },
         "aliases": [],
     },
+    # Self-hosted: willwade has no uig export, so this is exported from the
+    # facebook/mms-tts-uig-script_arabic torch checkpoint by
+    # translator-rs/scripts/export_mms_onnx.py and converted to int8 MNN. The
+    # runtime is MNN-only, so no .onnx is published and no migration applies.
+    "ug_CN-standard-mms": {
+        "engine": "mms",
+        "key": "ug_CN-standard-mms",
+        "name": "standard",
+        "language": {
+            "code": "ug_CN",
+            "family": "ug",
+            "region": "CN",
+            "name_native": "ئۇيغۇرچە",
+            "name_english": "Uyghur",
+            "country_english": "China",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "ug/model.mnn": {
+                "size_bytes": 29736804,
+                "url": f"{TTS_BASE_URL}/1/ug/ug_CN/standard/medium/model.mnn",
+            },
+            "ug/tokens.txt": {
+                "size_bytes": 227,
+                "url": f"{TTS_BASE_URL}/1/ug/ug_CN/standard/medium/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
 }
 
 # The other HiTZ Galician voices share sabela's cotovia VITS_U2W frontend

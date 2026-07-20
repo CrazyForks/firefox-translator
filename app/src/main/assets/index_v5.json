@@ -1,10 +1,10 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1784481176,
+  "generatedAt": 1784538672,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784481176,
+    "languageIndexUpdatedAt": 1784538672,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1836,6 +1836,18 @@
         "ocr": {
           "ppocr": "ocr-ppocr-arabic"
         }
+      },
+      "tts": {
+        "defaultRegion": "CN",
+        "regions": {
+          "CN": {
+            "displayName": "China",
+            "voices": [
+              "tts-mms-ug-cn-standard-mms"
+            ]
+          }
+        },
+        "sampleText": "ھەسەن-ھۈسەن سۇ تامچىلىرىدا نۇرنىڭ قايتىشى، سۇنۇشى ۋە تارقىلىشى نەتىجىسىدە ھاسىل بولىدىغان مېتېئورولوگىيىلىك ھادىسە بولۇپ، ئۇنىڭ تەسىرىدە ئاسماندا نۇر سپېكتىرى پەيدا بولىدۇ."
       }
     },
     "uk": {
@@ -10278,6 +10290,33 @@
         "tts-espeak-dict-tr"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/tr/dfki_medium.opus"
+    },
+    "tts-mms-ug-cn-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "ug",
+      "locale": "ug_CN",
+      "region": "CN",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.mnn",
+          "sizeBytes": 29736804,
+          "installPath": "bin/mms/ug/ug_CN/standard/medium/model.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/ug/ug_CN/standard/medium/model.mnn"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 227,
+          "installPath": "bin/mms/ug/ug_CN/standard/medium/tokens.txt",
+          "url": "https://offline-translator.davidv.dev/tts/1/ug/ug_CN/standard/medium/tokens.txt"
+        }
+      ],
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ug/standard_medium.opus"
     },
     "tts-piper-uk-ua-ukrainian-tts-medium": {
       "feature": "tts",

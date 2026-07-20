@@ -1,12 +1,12 @@
 {
   "formatVersion": 4,
-  "generatedAt": 1784481176,
+  "generatedAt": 1784538672,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784481176,
+    "languageIndexUpdatedAt": 1784538672,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1838,6 +1838,18 @@
         "ocr": {
           "ppocr": "ocr-ppocr-arabic"
         }
+      },
+      "tts": {
+        "defaultRegion": "CN",
+        "regions": {
+          "CN": {
+            "displayName": "China",
+            "voices": [
+              "tts-mms-ug-cn-standard-mms"
+            ]
+          }
+        },
+        "sampleText": "ھەسەن-ھۈسەن سۇ تامچىلىرىدا نۇرنىڭ قايتىشى، سۇنۇشى ۋە تارقىلىشى نەتىجىسىدە ھاسىل بولىدىغان مېتېئورولوگىيىلىك ھادىسە بولۇپ، ئۇنىڭ تەسىرىدە ئاسماندا نۇر سپېكتىرى پەيدا بولىدۇ."
       }
     },
     "uk": {
@@ -11298,6 +11310,34 @@
       "dependsOn": [
         "tts-espeak-dict-tr"
       ]
+    },
+    "tts-mms-ug-cn-standard-mms": {
+      "feature": "tts",
+      "engine": "mms",
+      "language": "ug",
+      "locale": "ug_CN",
+      "region": "CN",
+      "voice": "standard",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "model.mnn",
+          "sizeBytes": 29736804,
+          "installPath": "bin/mms/ug/ug_CN/standard/medium/model.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/ug/ug_CN/standard/medium/model.mnn",
+          "mirrorPath": "tts/1/ug/ug_CN/standard/medium/model.mnn"
+        },
+        {
+          "name": "tokens.txt",
+          "sizeBytes": 227,
+          "installPath": "bin/mms/ug/ug_CN/standard/medium/tokens.txt",
+          "url": "https://offline-translator.davidv.dev/tts/1/ug/ug_CN/standard/medium/tokens.txt",
+          "mirrorPath": "tts/1/ug/ug_CN/standard/medium/tokens.txt"
+        }
+      ],
+      "dependsOn": []
     },
     "tts-piper-uk-ua-ukrainian-tts-medium": {
       "feature": "tts",

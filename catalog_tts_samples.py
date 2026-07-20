@@ -54,6 +54,7 @@ TTS_SAMPLES = {
     "th": "รุ้งกินน้ำเป็นปรากฏการณ์ทางอุตุนิยมวิทยาที่เกิดจากการสะท้อน การหักเห และการกระจายตัวของแสงในหยดน้ำ ทำให้เกิดสเปกตรัมของแสงปรากฏบนท้องฟ้า",
     "tl": "Ang bahaghari ay isang penomenong meteorolohiko na dulot ng pagsalamin, pagbaluktot, at pagkalat ng liwanag sa mga patak ng tubig, na nagreresulta sa isang spektrum ng liwanag na lumilitaw sa langit.",
     "tr": "Gökkuşağı, ışığın su damlacıklarında yansıması, kırılması ve dağılması sonucu oluşan meteorolojik bir olaydır ve bunun sonucunda gökyüzünde bir ışık tayfı görünür.",
+    "ug": "ھەسەن-ھۈسەن سۇ تامچىلىرىدا نۇرنىڭ قايتىشى، سۇنۇشى ۋە تارقىلىشى نەتىجىسىدە ھاسىل بولىدىغان مېتېئورولوگىيىلىك ھادىسە بولۇپ، ئۇنىڭ تەسىرىدە ئاسماندا نۇر سپېكتىرى پەيدا بولىدۇ.",
     "uk": "Веселка — це метеорологічне явище, спричинене відбиттям, заломленням і розсіюванням світла у краплях води, внаслідок чого в небі з'являється спектр світла.",
     "ur": "قوسِ قزح ایک موسمیاتی مظہر ہے جو پانی کے قطروں میں روشنی کے انعکاس، انعطاف اور انتشار کی وجہ سے پیدا ہوتا ہے، جس کے نتیجے میں آسمان پر روشنی کا طیف نمودار ہوتا ہے۔",
     "vi": "Cầu vồng là một hiện tượng khí tượng do sự phản xạ, khúc xạ và tán sắc của ánh sáng trong các giọt nước, tạo ra một quang phổ ánh sáng xuất hiện trên bầu trời.",
