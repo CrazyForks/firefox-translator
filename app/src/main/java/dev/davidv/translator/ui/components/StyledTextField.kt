@@ -26,16 +26,21 @@ import android.view.MotionEvent
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toComposeRect
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.TextStyle
@@ -45,6 +50,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import dev.davidv.translator.R
 import dev.davidv.translator.ui.theme.TranslatorTheme
+import kotlinx.coroutines.launch
 
 class StyledTextFieldFocusController {
   internal var editText: EditText? = null
@@ -59,6 +65,7 @@ class StyledTextFieldFocusController {
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StyledTextField(
   text: String,
@@ -82,8 +89,10 @@ fun StyledTextField(
   val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
   val hintColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
   val fontSize = textStyle.fontSize.value
+  val bringIntoViewRequester = remember { BringIntoViewRequester() }
+  val scope = rememberCoroutineScope()
 
-  Box(modifier = modifier) {
+  Box(modifier = modifier.bringIntoViewRequester(bringIntoViewRequester)) {
     AndroidView(
       factory = { context ->
         TapWordEditText(context).apply {
@@ -107,6 +116,9 @@ fun StyledTextField(
           this.customInsertionActionModeCallback = actionModeCallback
           this.wordTapListener = onWordTap
           this.wordTapMode = wordTapMode
+          this.cursorRectListener = { rect ->
+            scope.launch { bringIntoViewRequester.bringIntoView(rect.toComposeRect()) }
+          }
           this.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
           this.background = null
           this.setPadding(0, 0, 0, 0)

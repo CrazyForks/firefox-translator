@@ -17,12 +17,18 @@
 
 package dev.davidv.translator
 
+import uniffi.bindings.AvailableLanguage
 import uniffi.bindings.detectLanguageRobustCodeRecord
 
 internal class NativeLanguageRuntime {
   fun detectLanguageRobustCode(
     text: String,
     hintCode: String?,
-    availableLanguageCodes: Array<String>,
-  ): String? = detectLanguageRobustCodeRecord(text, hintCode, availableLanguageCodes.toList())
+    availableLanguages: List<Language>,
+  ): String? =
+    detectLanguageRobustCodeRecord(
+      text,
+      hintCode,
+      availableLanguages.map { AvailableLanguage(it.code, it.script) },
+    )
 }

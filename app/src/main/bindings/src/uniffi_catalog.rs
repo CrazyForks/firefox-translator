@@ -458,10 +458,16 @@ fn document_extension(path: &str) -> String {
         .to_ascii_lowercase()
 }
 
-fn map_available_language_codes(codes: Vec<String>) -> Vec<translator::LanguageCode> {
+/// Pair each code with the script the catalog records for it. The catalog is
+/// the only source for a language's writing system, so a code it does not know
+/// is dropped rather than guessed at.
+fn map_available_language_codes(
+    session: &TranslatorSession,
+    codes: Vec<String>,
+) -> Vec<translator::api::ScriptedLanguage> {
     codes
         .into_iter()
-        .map(translator::LanguageCode::from)
+        .filter_map(|code| session.scripted_language(&translator::LanguageCode::from(code)))
         .collect()
 }
 
@@ -502,7 +508,12 @@ fn translate_document_path_impl(
     on_progress(DocumentProgressEvent::Preparing);
     check_cancelled()?;
     let extension = document_extension(&input_path);
-    let available = map_available_language_codes(available_language_codes);
+    let available = map_available_language_codes(session, available_language_codes);
+    let target = session
+        .scripted_language(&translator::LanguageCode::from(target_code.clone()))
+        .ok_or_else(|| CatalogError::Other {
+            reason: format!("target language {target_code} is not in the catalog"),
+        })?;
     let input_bytes = fs::read(&input_path).map_err(|error| CatalogError::Other {
         reason: format!("failed to read document: {error}"),
     })?;
@@ -636,7 +647,7 @@ fn translate_document_path_impl(
                     session,
                     &input_bytes,
                     forced_source_code.as_deref(),
-                    &target_code,
+                    &target,
                     &available,
                     report_text,
                 );
@@ -716,7 +727,7 @@ fn translate_document_path_impl(
                                 &xobject_output.bytes,
                                 session,
                                 src,
-                                &target_code,
+                                &target,
                                 &crate::android_font_provider::AndroidFontProvider,
                                 &raster_pages,
                                 &is_cancelled,

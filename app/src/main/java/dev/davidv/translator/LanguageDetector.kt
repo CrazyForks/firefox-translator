@@ -40,7 +40,7 @@ class LanguageDetector(
         nativeLanguageRuntime.detectLanguageRobustCode(
           text,
           hint?.code,
-          availableLanguages.map { it.code }.toTypedArray(),
+          availableLanguages,
         ),
       )
     }

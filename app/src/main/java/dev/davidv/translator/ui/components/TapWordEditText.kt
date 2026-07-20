@@ -18,6 +18,7 @@
 package dev.davidv.translator.ui.components
 
 import android.content.Context
+import android.graphics.Rect
 import android.util.AttributeSet
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -37,6 +38,16 @@ class TapWordEditText
     attrs: AttributeSet? = null,
   ) : EditText(context, attrs) {
     var wordTapListener: ((Int) -> Unit)? = null
+
+    /**
+     * Reports the caret line's bounds, in this view's own coordinates, whenever the
+     * caret moves. The view is measured [ViewGroup.LayoutParams.WRAP_CONTENT] inside a
+     * Compose scroll container, so it never scrolls itself and its native
+     * bringPointIntoView never fires — the container has to do the scrolling instead.
+     */
+    var cursorRectListener: ((Rect) -> Unit)? = null
+
+    private var cursorRectPending = false
 
     var wordTapMode: Boolean = false
       set(value) {
@@ -66,6 +77,45 @@ class TapWordEditText
           }
         },
       )
+
+    override fun onSelectionChanged(
+      selStart: Int,
+      selEnd: Int,
+    ) {
+      super.onSelectionChanged(selStart, selEnd)
+      cursorRectPending = true
+      if (!isLayoutRequested) {
+        emitCursorRect()
+      }
+    }
+
+    override fun onLayout(
+      changed: Boolean,
+      left: Int,
+      top: Int,
+      right: Int,
+      bottom: Int,
+    ) {
+      super.onLayout(changed, left, top, right, bottom)
+      if (cursorRectPending) {
+        emitCursorRect()
+      }
+    }
+
+    private fun emitCursorRect() {
+      val listener = cursorRectListener ?: return
+      val l = layout ?: return
+      cursorRectPending = false
+      val line = l.getLineForOffset(selectionEnd)
+      listener(
+        Rect(
+          0,
+          totalPaddingTop + l.getLineTop(line),
+          width,
+          totalPaddingTop + l.getLineBottom(line),
+        ),
+      )
+    }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
       if (wordTapMode) {

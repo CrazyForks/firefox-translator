@@ -9,16 +9,31 @@ pub fn detect_language_record(
     detect_language(&text, hint.as_ref())
 }
 
+/// A detection candidate and the writing system the catalog records for it.
+/// The script travels with the code because this entry point is free-standing
+/// and has no catalog to resolve one against.
+#[derive(uniffi::Record)]
+pub struct AvailableLanguage {
+    pub code: String,
+    pub script: String,
+}
+
 #[uniffi::export]
 pub fn detect_language_robust_code_record(
     text: String,
     hint: Option<String>,
-    available_language_codes: Vec<String>,
+    available_languages: Vec<AvailableLanguage>,
 ) -> Option<String> {
     let hint = hint.map(translator::LanguageCode::from);
-    let available = available_language_codes
+    let available = available_languages
         .into_iter()
-        .map(translator::LanguageCode::from)
+        .map(|language| translator::api::ScriptedLanguage {
+            code: translator::LanguageCode::from(language.code),
+            // Matches how the catalog itself degrades a script it cannot name:
+            // Other, never a guess at Latin.
+            script: translator::script::Script::from_iso15924(&language.script)
+                .unwrap_or(translator::script::Script::Other),
+        })
         .collect::<Vec<_>>();
     detect_language_robust_code(&text, hint.as_ref(), &available).map(|code| code.code)
 }
