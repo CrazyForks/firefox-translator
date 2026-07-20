@@ -114,7 +114,7 @@ fun LanguageSelectionRow(
     Spacer(modifier = Modifier.weight(1f))
 
     if (onSettings != null) {
-      IconButton(onClick = onSettings) {
+      IconButton(onClick = onSettings, modifier = Modifier.size(36.dp)) {
         Icon(
           painterResource(id = drawable.second),
           contentDescription = drawable.first,

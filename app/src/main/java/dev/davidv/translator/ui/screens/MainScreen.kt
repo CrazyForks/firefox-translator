@@ -45,15 +45,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -93,6 +97,7 @@ import dev.davidv.translator.ui.components.LanguageEvent
 import dev.davidv.translator.ui.components.LanguageSelectionRow
 import dev.davidv.translator.ui.components.OutputTapMode
 import dev.davidv.translator.ui.components.ShareImage
+import dev.davidv.translator.ui.components.SplitHandle
 import dev.davidv.translator.ui.components.StyledTextFieldFocusController
 import dev.davidv.translator.ui.components.TargetTabsHeader
 import dev.davidv.translator.ui.components.TranslationField
@@ -105,6 +110,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.roundToInt
 
 @Composable
 fun MainScreen(
@@ -291,6 +297,10 @@ fun MainScreen(
               .weight(1f),
         ) {
           val parentHeight = maxHeight
+          val parentHeightPx = with(LocalDensity.current) { parentHeight.toPx() }
+          // Only ever read from measure/drag lambdas: reading it during composition
+          // would recompose both cards (and the interop EditText) on every drag frame.
+          val splitFraction = rememberSaveable { mutableFloatStateOf(0.5f) }
 
           Column(
             modifier = Modifier.fillMaxWidth(),
@@ -402,9 +412,22 @@ fun MainScreen(
                 modifier =
                   Modifier
                     .fillMaxWidth()
-                    .weight(1f, fill = true)
-                    .padding(bottom = 12.dp)
+                    .layout { measurable, constraints ->
+                      val height =
+                        (constraints.maxHeight * splitFraction.floatValue).roundToInt()
+                      val placeable =
+                        measurable.measure(
+                          constraints.copy(minHeight = height, maxHeight = height),
+                        )
+                      layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                    }
                     .testTag("export-section:Input"),
+              )
+              SplitHandle(
+                onDrag = { delta ->
+                  splitFraction.floatValue =
+                    (splitFraction.floatValue + delta / parentHeightPx).coerceIn(0.25f, 0.75f)
+                },
               )
             }
 
@@ -417,7 +440,11 @@ fun MainScreen(
                     .fillMaxWidth()
                     .testTag("export-section:Output")
                     .let { m ->
-                      if (displayImage == null) m.weight(1f, fill = true) else m.height(parentHeight * 0.5f)
+                      if (displayImage == null) {
+                        m.weight(1f, fill = true)
+                      } else {
+                        m.height(parentHeight * 0.5f)
+                      }
                     },
               ) {
                 TranslationField(
