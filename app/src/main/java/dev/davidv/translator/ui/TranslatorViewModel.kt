@@ -684,6 +684,8 @@ class TranslatorViewModel(
     }
   }
 
+  private fun isAutoSourceActive() = _isAutoSource.value && !settingsManager.settings.value.disableCLD
+
   private suspend fun runImageTranslation(
     bitmap: Bitmap,
     fromLang: Language,
@@ -719,7 +721,7 @@ class TranslatorViewModel(
           bitmap,
           onMessage = onMessage,
           readingOrder = readingOrder,
-          isAutoSource = _isAutoSource.value,
+          isAutoSource = isAutoSourceActive(),
           onMissingDetectedLanguage = { detected ->
             _currentDetectedLanguage.value = detected
           },

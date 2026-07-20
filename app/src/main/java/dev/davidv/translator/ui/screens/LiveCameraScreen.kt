@@ -164,6 +164,7 @@ fun LiveCameraScreen(
   languageState: LanguageAvailabilityState,
   languageMetadata: Map<Language, LanguageMetadata>,
   onMessage: (TranslatorMessage) -> Unit,
+  showAutoOption: Boolean,
   liveOverlayDefaultEnabled: Boolean,
   catalog: dev.davidv.translator.LanguageCatalog?,
   onClose: () -> Unit,
@@ -215,6 +216,7 @@ fun LiveCameraScreen(
           languageState = languageState,
           languageMetadata = languageMetadata,
           onMessage = onMessage,
+          showAutoOption = showAutoOption,
           liveOverlayDefaultEnabled = liveOverlayDefaultEnabled,
           catalog = catalog,
           onClose = onClose,
@@ -282,6 +284,7 @@ private fun CameraSurface(
   languageState: LanguageAvailabilityState,
   languageMetadata: Map<Language, LanguageMetadata>,
   onMessage: (TranslatorMessage) -> Unit,
+  showAutoOption: Boolean,
   liveOverlayDefaultEnabled: Boolean,
   catalog: dev.davidv.translator.LanguageCatalog?,
   onClose: () -> Unit,
@@ -771,6 +774,7 @@ private fun CameraSurface(
       languageState = languageState,
       languageMetadata = languageMetadata,
       onMessage = onMessage,
+      showAutoOption = showAutoOption,
       modifier =
         Modifier
           .fillMaxWidth()
@@ -845,6 +849,7 @@ private fun TopLanguagePills(
   languageState: LanguageAvailabilityState,
   languageMetadata: Map<Language, LanguageMetadata>,
   onMessage: (TranslatorMessage) -> Unit,
+  showAutoOption: Boolean,
   modifier: Modifier = Modifier,
 ) {
   val fromLanguages =
@@ -877,7 +882,7 @@ private fun TopLanguagePills(
         languageMetadata = languageMetadata,
         onLanguageSelected = { onMessage(TranslatorMessage.FromLang(it)) },
         isAutoSource = isAutoSource,
-        showAutoOption = true,
+        showAutoOption = showAutoOption,
         onAutoSelected = { onMessage(TranslatorMessage.EnableAutoSource) },
         textColor = Color.White,
         marquee = false,

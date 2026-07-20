@@ -939,6 +939,7 @@ fun TranslatorApp(
                 languageState = languageState,
                 languageMetadata = languageMetadata,
                 onMessage = viewModel::handleMessage,
+                showAutoOption = !settings.disableCLD,
                 liveOverlayDefaultEnabled = settings.liveCameraOverlayEnabled,
                 catalog = liveCatalog,
                 onClose = {
