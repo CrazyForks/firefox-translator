@@ -57,6 +57,7 @@ class LibreTranslateHttpServer(
 
   override fun serve(session: IHTTPSession): Response {
     if (session.method == Method.OPTIONS) return cors(newFixedLengthResponse(Response.Status.OK, MIME_JSON, "{}"))
+    declareJsonUtf8(session)
     return try {
       val response =
         when {
@@ -72,6 +73,20 @@ class LibreTranslateHttpServer(
       Log.e(TAG, "serve failed", e)
       cors(error(Response.Status.INTERNAL_ERROR, e.message ?: "internal error"))
     }
+  }
+
+  // application/json is always UTF-8 (RFC 8259) and carries no charset parameter,
+  // so clients like fetch and requests send it bare — but NanoHTTPD's ContentType
+  // falls back to US-ASCII when no charset is present, turning every non-ASCII
+  // character in the body into U+FFFD before parseBody hands it over. Declaring
+  // the charset up front is what NanoHTTPD's own tryUTF8() does internally;
+  // getHeaders() is the live map, so this reaches parseBody.
+  private fun declareJsonUtf8(session: IHTTPSession) {
+    val headers = session.headers
+    val contentType = headers["content-type"] ?: return
+    if (!contentType.startsWith(MIME_JSON, ignoreCase = true)) return
+    if (contentType.contains("charset", ignoreCase = true)) return
+    headers["content-type"] = "$contentType; charset=utf-8"
   }
 
   private fun handleTranslate(session: IHTTPSession): Response {
