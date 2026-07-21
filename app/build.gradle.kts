@@ -10,6 +10,16 @@ plugins {
 val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86" to 3, "x86_64" to 4)
 val defaultDevAbis = listOf("arm64-v8a", "x86_64")
 
+// The HTTP server serves this page, so the browser talks to the same origin it
+// loaded from; a copy keeps translate-web/ the single source without checking a
+// duplicate into assets.
+val copyWebUi =
+  tasks.register<Copy>("copyWebUi") {
+    from(rootProject.file("translate-web")) { include("translator.html") }
+    rename("translator.html", "index.html")
+    into(layout.buildDirectory.dir("generated/assets/web-ui"))
+  }
+
 android {
   namespace = "dev.davidv.translator"
   compileSdk = 34
@@ -20,6 +30,7 @@ android {
     getByName("main") {
       aidl.srcDir("src/main/aidl")
       java.srcDir(layout.buildDirectory.dir("generated/source/uniffi/kotlin"))
+      assets.srcDir(copyWebUi)
     }
     getByName("androidTest") {
       assets {
@@ -406,6 +417,7 @@ tasks.named("preBuild") {
   dependsOn(bindingsTasks)
   dependsOn(converterTasks)
   dependsOn(generateUniffiBindings)
+  dependsOn(copyWebUi)
 }
 
 dependencies {

@@ -160,6 +160,13 @@ private fun HttpServerCard(
       modifier = Modifier.padding(16.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+      Text(
+        text = stringResource(R.string.settings_http_server_title),
+        style = MaterialTheme.typography.headlineSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(bottom = 8.dp),
+      )
+
       // Commit the port after a pause so per-keystroke edits don't rebind the
       // running server (and briefly try to bind partial numbers like "5").
       var portText by remember(settings.httpServerPort) { mutableStateOf(settings.httpServerPort.toString()) }

@@ -53,15 +53,6 @@
     font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   main { max-width: 780px; margin: 0 auto; }
-  h1 { font-size: 1.4rem; margin: 0 0 1.25rem; }
-  fieldset {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1rem;
-    margin: 0 0 1.25rem;
-    background: var(--panel);
-  }
-  legend { padding: 0 .4rem; font-weight: 600; font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   label { display: block; font-size: .8rem; color: var(--muted); margin-bottom: .3rem; }
   input, select, textarea, button {
     font: inherit;
@@ -89,18 +80,9 @@
   .status.err { color: var(--err); }
   .status.busy { color: var(--muted); }
   .hint { font-size: .8rem; color: var(--muted); margin: .5rem 0 0; }
-  #server-summary {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    margin: 0 0 1.25rem;
-    font-size: .85rem;
-    color: var(--muted);
-  }
-  #server-summary[hidden] { display: none; }
-  #server-summary .dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--ok); }
-  #server-address { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
-  button.small { padding: .2rem .5rem; font-size: .8rem; }
+  .languages { margin-bottom: 1.25rem; }
+  #load-status { margin-top: 0; }
+  #load-status:empty { display: none; }
   .tabs { display: flex; gap: .4rem; margin-bottom: 1rem; }
   .tabs button { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
   .tabs button[aria-selected="true"] { background: var(--accent); color: #fff; border-color: transparent; }
@@ -137,43 +119,21 @@
 </head>
 <body>
 <main>
-  <fieldset id="server-panel">
-    <legend>Server</legend>
-    <div class="row">
-      <div style="flex: 3 1 12rem">
-        <label for="host">Phone IP address</label>
-        <input id="host" type="text" inputmode="decimal" placeholder="192.168.1.42" autocomplete="off">
-      </div>
-      <div style="flex: 1 1 5rem">
-        <label for="port">Port</label>
-        <input id="port" type="number" min="1" max="65535" value="5000">
-      </div>
-      <button id="connect">Connect</button>
-    </div>
-    <p id="server-status" class="status"></p>
-  </fieldset>
-
-  <p id="server-summary" hidden>
-    <span class="dot"></span><span id="server-address"></span>
-    <button id="server-change" class="secondary small">Change</button>
-  </p>
+  <p id="load-status" class="status busy">Loading…</p>
 
   <div id="app" hidden>
-  <fieldset>
-    <legend>Languages</legend>
-    <div class="row">
-      <div>
-        <label for="source">From</label>
-        <select id="source" disabled></select>
-      </div>
-      <button id="swap" class="secondary swap" title="Swap languages" disabled>⇄</button>
-      <div>
-        <label for="target">To</label>
-        <select id="target" disabled></select>
-      </div>
+  <div class="row languages">
+    <div>
+      <label for="source">From</label>
+      <select id="source"></select>
     </div>
-    <p id="lang-hint" class="hint"></p>
-  </fieldset>
+    <button id="swap" class="secondary swap" title="Swap languages">⇄</button>
+    <div>
+      <label for="target">To</label>
+      <select id="target"></select>
+    </div>
+  </div>
+  <p id="lang-hint" class="hint"></p>
 
   <div class="tabs" role="tablist">
     <button role="tab" data-mode="text" aria-selected="true">Text</button>
@@ -217,7 +177,6 @@
   <section class="pane" data-pane="document" hidden>
     <label for="doc-file">Document (pdf, odt, epub, txt)</label>
     <input id="doc-file" type="file" accept=".pdf,.odt,.epub,.txt">
-    <p class="hint">Documents need an explicit source language — auto-detect is only supported for images.</p>
     <p><button id="doc-go" disabled>Translate document</button></p>
     <p id="doc-status" class="status"></p>
     <div id="doc-result" class="result"></div>
@@ -229,11 +188,8 @@
 "use strict";
 
 const AUTO = "auto";
-const STORAGE_KEY = "translate-web.server";
 
 // ---- pure helpers -------------------------------------------------------
-
-const baseUrl = (host, port) => `http://${host}:${port}`;
 
 // The server rejects a target that the source has no model for, so the target
 // list is whatever `targets` the chosen source advertises. Under auto-detect the
@@ -273,14 +229,7 @@ const state = {
 
 const $ = (id) => document.getElementById(id);
 const els = {
-  host: $("host"),
-  port: $("port"),
-  connect: $("connect"),
-  serverStatus: $("server-status"),
-  serverPanel: $("server-panel"),
-  serverSummary: $("server-summary"),
-  serverAddress: $("server-address"),
-  serverChange: $("server-change"),
+  loadStatus: $("load-status"),
   app: $("app"),
   source: $("source"),
   target: $("target"),
@@ -309,59 +258,30 @@ function setStatus(el, message, kind) {
 
 // ---- server I/O ---------------------------------------------------------
 
-function currentBase() {
-  const host = els.host.value.trim();
-  const port = els.port.value.trim();
-  if (!host || !port) return null;
-  return baseUrl(host, port);
-}
-
-// A rejected fetch carries no detail beyond "Failed to fetch", so name the
-// causes the user can actually act on.
-const UNREACHABLE = "Could not reach the phone — check the IP and port, that the API server is on, and that it is bound to the local network rather than localhost";
-
+// This page is served by the translation server itself, so every endpoint is a
+// relative path on the origin it loaded from — there is no address to configure
+// and nothing to reach that could be down without the page failing to load.
 async function request(path, init) {
-  const base = currentBase();
-  if (!base) throw new Error("Set the phone's IP address and port first");
-  const response = await fetch(base + path, init).catch(() => {
-    throw new Error(UNREACHABLE);
-  });
+  const response = await fetch(path, init);
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw new Error(errorText(payload, `HTTP ${response.status}`));
   if (payload === null) throw new Error("server returned a non-JSON response");
   return payload;
 }
 
-// The rest of the UI only appears once /languages has answered, so every control
-// below is backed by a server that is known to be reachable.
-async function connect() {
-  setStatus(els.serverStatus, "Connecting…", "busy");
-  els.connect.disabled = true;
-  els.app.hidden = true;
+// The UI appears once /languages has answered, so every control below is backed
+// by a catalog that is known to have loaded.
+async function load() {
   try {
     const languages = parseLanguages(await request("/languages"));
-    if (languages.length === 0) throw new Error("Connected, but no translation models are installed on the phone");
+    if (languages.length === 0) throw new Error("No translation models are installed on the phone");
     state.languages = languages;
     populateLanguages();
-    setStatus(els.serverStatus, "", null);
+    setStatus(els.loadStatus, "", null);
     els.app.hidden = false;
-    els.serverAddress.textContent = `${els.host.value.trim()}:${els.port.value.trim()}`;
-    showServerForm(false);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ host: els.host.value.trim(), port: els.port.value.trim() }));
   } catch (e) {
-    state.languages = [];
-    populateLanguages();
-    setStatus(els.serverStatus, e.message, "err");
-    showServerForm(true);
-  } finally {
-    els.connect.disabled = false;
+    setStatus(els.loadStatus, e.message, "err");
   }
-}
-
-// Connected, the address is just a status line; the form folds back out to retarget.
-function showServerForm(visible) {
-  els.serverPanel.hidden = !visible;
-  els.serverSummary.hidden = visible;
 }
 
 // ---- language pickers ---------------------------------------------------
@@ -376,7 +296,6 @@ function option(value, label) {
 function populateLanguages() {
   const previousSource = els.source.value;
   const previousTarget = els.target.value;
-  const ready = state.languages.length > 0;
 
   els.source.replaceChildren();
   if (state.mode !== "document") els.source.append(option(AUTO, "Auto detect"));
@@ -386,10 +305,6 @@ function populateLanguages() {
     : els.source.options[0]?.value ?? "";
 
   populateTargets(previousTarget);
-
-  els.source.disabled = !ready;
-  els.target.disabled = !ready;
-  els.swap.disabled = !ready;
   updateActions();
 }
 
@@ -399,12 +314,7 @@ function populateTargets(preferred) {
   for (const lang of options) els.target.append(option(lang.code, lang.name));
   if (options.some((l) => l.code === preferred)) els.target.value = preferred;
 
-  els.langHint.textContent =
-    state.languages.length === 0
-      ? "Connect to the phone to load its installed languages."
-      : options.length === 0
-        ? "This source language has no translation targets installed."
-        : "";
+  els.langHint.textContent = options.length === 0 ? "This source language has no translation targets installed." : "";
 }
 
 function updateActions() {
@@ -493,7 +403,7 @@ async function translateDocument() {
   body.append("target", els.target.value);
 
   els.docResult.replaceChildren();
-  setStatus(els.docStatus, "Uploading and translating — this can take a while…", "busy");
+  setStatus(els.docStatus, "Translating", "busy");
   try {
     const payload = await request("/translate_file", { method: "POST", body });
     const url = payload.translatedFileUrl;
@@ -578,11 +488,6 @@ function selectMode(mode) {
   populateLanguages();
 }
 
-els.connect.addEventListener("click", connect);
-els.serverChange.addEventListener("click", () => {
-  showServerForm(true);
-  els.host.focus();
-});
 els.source.addEventListener("change", () => {
   populateTargets(els.target.value);
   updateActions();
@@ -634,14 +539,7 @@ els.docGo.addEventListener("click", () => {
 placeholder(els.imageOriginal, "No image selected");
 placeholder(els.imageTranslated, "…");
 
-const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-if (saved) {
-  els.host.value = saved.host ?? "";
-  els.port.value = saved.port ?? "5000";
-  connect();
-} else {
-  populateLanguages();
-}
+load();
 </script>
 </body>
 </html>

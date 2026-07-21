@@ -322,6 +322,7 @@
     <string name="settings_http_server_bind">Bind on</string>
     <string name="settings_http_server_bind_localhost">localhost</string>
     <string name="settings_http_server_bind_all">all interfaces</string>
+    <string name="settings_http_server_title">API Server</string>
     <string name="http_server_notif_channel_name">Translation API</string>
     <string name="http_server_notif_channel_desc">Shown while the LibreTranslate compatible server is running</string>
     <string name="http_server_notif_running">Translation API</string>

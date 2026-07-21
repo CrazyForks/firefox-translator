@@ -66,6 +66,7 @@ class LibreTranslateHttpServer(
           session.method == Method.POST && session.uri == "/detect" -> handleDetect(session)
           session.method == Method.GET && session.uri == "/languages" -> handleLanguages()
           session.method == Method.GET && session.uri.startsWith("/download/") -> handleDownload(session.uri.removePrefix("/download/"))
+          session.method == Method.GET && (session.uri == "/" || session.uri == "/index.html") -> handleWebUi()
           else -> error(Response.Status.NOT_FOUND, "Not found")
         }
       cors(response)
@@ -289,6 +290,17 @@ class LibreTranslateHttpServer(
     )
   }
 
+  // Serving the page from the server itself makes the browser's origin match the
+  // API's, which sidesteps the mixed-content block an https-hosted copy hits.
+  private fun handleWebUi(): Response {
+    val html = app.assets.open(WEB_UI_ASSET).use { it.readBytes().toString(Charsets.UTF_8) }
+    return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", html).apply {
+      // The page ships inside the APK, so an app update changes it under a URL
+      // that never changes; without this a browser keeps serving the old one.
+      addHeader("Cache-Control", "no-store")
+    }
+  }
+
   private fun handleDownload(id: String): Response {
     val entry = FileTranslationStore.get(id) ?: return error(Response.Status.NOT_FOUND, "file not found")
     if (!entry.file.exists()) return error(Response.Status.NOT_FOUND, "file expired")
@@ -391,6 +403,7 @@ class LibreTranslateHttpServer(
   companion object {
     private const val TAG = "LibreTranslateServer"
     private const val MIME_JSON = "application/json"
+    private const val WEB_UI_ASSET = "index.html"
     private const val MIN_OVERLAY_FONT_SIZE_PX = 8.0f
 
     // The native robust detector returns a single best language code without a
