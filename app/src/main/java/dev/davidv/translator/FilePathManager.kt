@@ -56,7 +56,7 @@ class FilePathManager(
 
   fun getDictionaryFile(language: Language): File = File(getDictionariesDir(), "${language.dictionaryCode}.dict")
 
-  fun getCatalogFile(): File = File(baseDir, "index_v5.json")
+  fun getCatalogFile(): File = File(baseDir, "index_v6.json")
 
   fun getMucabFile(): File = File(getDataDir(), "mucab.bin")
 
@@ -131,16 +131,20 @@ class FilePathManager(
   }
 
   private fun openCatalog(baseDirPath: String): LanguageCatalog? {
-    File(baseDir, "index_v3.json").delete()
-    // index_v4.json is the pre-MNN-migration catalog; the disk copy is stale once
-    // we move to index_v5.json. The remote v4 stays served for old app versions.
-    File(baseDir, "index_v4.json").delete()
+    // Older catalog formats served under earlier filenames stay served for old
+    // app versions, but their on-disk copies are stale once this build moves to
+    // a newer one. Delete every superseded index_v*.json, keeping only the one
+    // this build reads.
+    val currentCatalogName = getCatalogFile().name
+    baseDir
+      .listFiles { file -> file.name.matches(Regex("index_v\\d+\\.json")) && file.name != currentCatalogName }
+      ?.forEach { it.delete() }
     // The kokoro ONNX engine is gone (dropped from v5, unloadable under MNN). Its
     // 92 MB core blob is no longer in any pack, so reclaim it directly here.
     File(baseDir, "bin/kokoro/kokoro-v1.0.int8.onnx").delete()
     val bundledJson =
       try {
-        context.assets.open("index_v5.json").bufferedReader().readText()
+        context.assets.open("index_v6.json").bufferedReader().readText()
       } catch (e: Exception) {
         Log.e("FilePathManager", "Error reading bundled catalog index", e)
         null

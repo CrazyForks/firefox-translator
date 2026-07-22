@@ -104,6 +104,8 @@ def publish_adblock_pack(published: dict, bucket_dir: Path, base_url: str) -> No
                 "deleteAfterExtract": True,
                 "installMarkerPath": ADBLOCK_INSTALL_MARKER_PATH,
                 "installMarkerVersion": ADBLOCK_VERSION,
+                "role": "filterList",
+                "priority": 0,
             },
         ],
         "dependsOn": [],

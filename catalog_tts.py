@@ -9,6 +9,43 @@ from zipfile import ZIP_DEFLATED, ZipFile
 from catalog_tts_samples import TTS_SAMPLES
 
 
+def tts_file_role(filename: str) -> str:
+    if filename.endswith(".onnx.json"):
+        return "sidecar"
+    if filename.endswith(".mnn.weight"):
+        return "modelWeight"
+    if filename.endswith(".onnx") or filename.endswith(".mnn"):
+        return "model"
+    if filename == "config.json":
+        return "config"
+    if filename.endswith("tokens.txt"):
+        return "tokens"
+    if filename == "language_ids.json":
+        return "languageIds"
+    if filename == "speaker_ids.json":
+        return "speakerIds"
+    if filename.endswith(".bin"):
+        return "voices"
+    if filename.endswith("lexicon.txt.zst") or filename.endswith("lexicon.txt"):
+        return "lexicon"
+    if filename.endswith("rule.fst"):
+        return "ruleFst"
+    raise ValueError(f"unknown TTS file role for {filename!r}")
+
+
+# The auxiliary file role each engine's loader consumes alongside the model.
+AUX_ROLE_BY_ENGINE = {
+    "piper": "sidecar",
+    "mimic3": "sidecar",
+    "mms": "tokens",
+    "coqui_vits": "config",
+    "sherpa_vits": "config",
+    "cotovia_vits": "lexicon",
+    "kokoro": "voices",
+    "kokoro_mnn": "voices",
+}
+
+
 PIPER_BASE_URL = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 KOKORO_BASE_URL = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
 MMS_BASE_URL = "https://huggingface.co/willwade/mms-tts-multilingual-models-onnx/resolve/main"
@@ -1045,6 +1082,8 @@ def build_espeak_support_packs(
                 "deleteAfterExtract": True,
                 "installMarkerPath": "bin/espeak-ng-data/.install-info.json",
                 "installMarkerVersion": tts_version,
+                "role": "espeakCore",
+                "priority": 0,
             }
         ],
         "dependsOn": [],
@@ -1060,6 +1099,8 @@ def build_espeak_support_packs(
                     "sizeBytes": 0,
                     "installPath": f"bin/espeak-ng-data/{dict_code}_dict",
                     "url": f"{tts_base_url.rstrip('/')}/{tts_version}/espeak-ng-data/{dict_code}_dict",
+                    "role": "espeakDict",
+                    "priority": 0,
                 }
             ],
             "dependsOn": [core_pack_id],
@@ -1080,6 +1121,8 @@ def build_shared_tts_support_packs(catalog: dict, voices: dict) -> None:
                     "sizeBytes": file_info["size_bytes"],
                     "installPath": f"bin/kokoro/{filename}",
                     "url": file_info["url"],
+                    "role": tts_file_role(filename),
+                    "priority": 0,
                 }
                 for filename, file_info in KOKORO_VOICES_FILES.items()
             ],
@@ -1096,6 +1139,8 @@ def build_shared_tts_support_packs(catalog: dict, voices: dict) -> None:
                     "sizeBytes": file_info["size_bytes"],
                     "installPath": f"bin/kokoro/{filename}",
                     "url": file_info["url"],
+                    "role": tts_file_role(filename),
+                    "priority": 0,
                 }
                 for filename, file_info in KOKORO_SHARED_FILES.items()
             ],
@@ -1112,6 +1157,8 @@ def build_shared_tts_support_packs(catalog: dict, voices: dict) -> None:
                     "sizeBytes": file_info["size_bytes"],
                     "installPath": f"bin/kokoro_mnn/{filename}",
                     "url": file_info["url"],
+                    "role": tts_file_role(filename),
+                    "priority": 0,
                 }
                 for filename, file_info in KOKORO_MNN_SHARED_FILES.items()
             ],
@@ -1133,6 +1180,8 @@ def build_cotovia_lexicon_packs(catalog: dict, voices: dict) -> None:
                     "sizeBytes": lexicon["size_bytes"],
                     "installPath": lexicon["install_path"],
                     "url": lexicon["url"],
+                    "role": tts_file_role(lexicon["name"]),
+                    "priority": 0,
                 }
             ],
             "dependsOn": [],
@@ -1212,6 +1261,8 @@ def merge_tts(
                             filename=filename,
                         ),
                         "url": file_info.get("url") or f"{piper_base_url.rstrip('/')}/{source_path}",
+                        "role": tts_file_role(filename),
+                        "priority": 0,
                     }
                 )
 
@@ -1231,6 +1282,7 @@ def merge_tts(
             pack = {
                 "feature": "tts",
                 "engine": engine,
+                "auxRole": AUX_ROLE_BY_ENGINE[engine],
                 "language": app_language,
                 "locale": locale_code,
                 "region": region,

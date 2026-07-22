@@ -20,6 +20,8 @@ def add_doc_detect_pack(catalog: dict) -> None:
                 "installPath": DOC_DETECT_INSTALL_PATH,
                 "url": DOC_DETECT_URL,
                 "sourcePath": DOC_DETECT_FILENAME,
+                "role": "model",
+                "priority": 0,
             },
         ],
         "dependsOn": [],

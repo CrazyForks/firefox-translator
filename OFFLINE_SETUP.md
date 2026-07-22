@@ -12,7 +12,7 @@ You **must** have both translation directions (lang &harr; English) or the langu
 
 ## The easy way: `download_offline.py`
 
-`download_offline.py` reads the served catalog (`index_v5.json`) and pulls the prebuilt files straight from the CDN into the exact layout the app expects:
+`download_offline.py` reads the served catalog (`index_v6.json`) and pulls the prebuilt files straight from the CDN into the exact layout the app expects:
 
 ```
 ./download_offline.py de fr sr zh --all --output dev.davidv.translator
@@ -50,7 +50,7 @@ dev.davidv.translator/
 
 ## How to get the files by hand
 
-Every file's download URL and its install path are listed in the served catalog at `https://offline-translator.davidv.dev/index_v5.json` (also bundled at `app/src/main/assets/index_v5.json`). For each pack, `files[].url` is where to download from and `files[].installPath` is where it goes under `dev.davidv.translator/`.
+Every file's download URL and its install path are listed in the served catalog at `https://offline-translator.davidv.dev/index_v6.json` (also bundled at `app/src/main/assets/index_v6.json`). For each pack, `files[].url` is where to download from and `files[].installPath` is where it goes under `dev.davidv.translator/`.
 
 Notes:
 

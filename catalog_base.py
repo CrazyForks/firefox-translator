@@ -15,6 +15,8 @@ def make_file(
     size_bytes: int,
     install_path: str,
     url: str,
+    role: str,
+    priority: int = 0,
     source_path: str | None = None,
 ) -> dict:
     payload = {
@@ -22,6 +24,8 @@ def make_file(
         "sizeBytes": size_bytes,
         "installPath": install_path,
         "url": url,
+        "role": role,
+        "priority": priority,
     }
     if source_path is not None:
         payload["sourcePath"] = source_path
@@ -84,6 +88,31 @@ def add_language_asset_ref(language_entry: dict, feature: str, ref) -> None:
     assets[feature] = ref
 
 
+def translation_pack_files(direction: dict, translation_base_url: str) -> list[dict]:
+    def entry(file_info: dict, role: str) -> dict:
+        return make_file(
+            name=file_info["name"],
+            size_bytes=int(file_info["sizeBytes"]),
+            install_path=f"bin/{file_info['name']}",
+            url=f"{translation_base_url}/{file_info['path']}",
+            role=role,
+            source_path=file_info["path"],
+        )
+
+    files = [
+        entry(direction["model"], "model"),
+        entry(direction["lex"], "lex"),
+    ]
+    src_vocab = direction["srcVocab"]
+    tgt_vocab = direction["tgtVocab"]
+    if src_vocab["name"] == tgt_vocab["name"]:
+        files.append(entry(src_vocab, "vocab"))
+    else:
+        files.append(entry(src_vocab, "srcVocab"))
+        files.append(entry(tgt_vocab, "tgtVocab"))
+    return dedupe_files_by_install_path(files)
+
+
 def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
     translation_base_url = language_index["translationModelsBaseUrl"].rstrip("/")
     dictionary_base_url = language_index["dictionaryBaseUrl"].rstrip("/")
@@ -119,21 +148,7 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
                 "from": from_code,
                 "to": to_code,
                 "experimental": bool(direction["experimental"]),
-                "files": dedupe_files_by_install_path([
-                    make_file(
-                        name=file_info["name"],
-                        size_bytes=int(file_info["sizeBytes"]),
-                        install_path=f"bin/{file_info['name']}",
-                        url=f"{translation_base_url}/{file_info['path']}",
-                        source_path=file_info["path"],
-                    )
-                    for file_info in (
-                        direction["model"],
-                        direction["srcVocab"],
-                        direction["tgtVocab"],
-                        direction["lex"],
-                    )
-                ]),
+                "files": translation_pack_files(direction, translation_base_url),
                 "dependsOn": [],
             }
             add_language_asset_ref(language_entry, "translate", pack_id)
@@ -142,16 +157,18 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
 
         for extra_file in lang.get("extraFiles", []):
             support_pack_id = make_support_pack_id(code, extra_file)
+            kind = "mucab" if extra_file == "mucab.bin" else "file"
             packs[support_pack_id] = {
                 "feature": "support",
                 "language": code,
-                "kind": "mucab" if extra_file == "mucab.bin" else "file",
+                "kind": kind,
                 "files": [
                     make_file(
                         name=extra_file,
                         size_bytes=0,
                         install_path=f"bin/{extra_file}",
                         url=f"{dictionary_base_url}/extra/{extra_file}",
+                        role=kind,
                         source_path=f"extra/{extra_file}",
                     )
                 ],
@@ -175,6 +192,7 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
                     size_bytes=int(dict_info["size"]),
                     install_path=f"dictionaries/{dict_info['filename']}",
                     url=f"{dictionary_base_url}/{dictionary_version}/{dict_info['filename']}",
+                    role="dictionary",
                     source_path=f"{dictionary_version}/{dict_info['filename']}",
                 )
             ],
@@ -192,7 +210,7 @@ def convert_v1_to_v2(language_index: dict, dictionary_index: dict) -> dict:
     validate_manifest(languages_v2, packs)
 
     return {
-        "formatVersion": 4,
+        "formatVersion": 6,
         "generatedAt": int(time.time()),
         "translationModelsBaseUrl": translation_base_url,
         "dictionaryBaseUrl": dictionary_base_url,

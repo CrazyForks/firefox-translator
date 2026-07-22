@@ -55,6 +55,8 @@ def add_adblock_packs(catalog: dict) -> None:
                     "sizeBytes": 0,
                     "installPath": f"adblock/{info['filename']}",
                     "url": info["url"],
+                    "role": "filterList",
+                    "priority": 0,
                 }
             ],
             "dependsOn": [],
