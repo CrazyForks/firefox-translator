@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import dev.davidv.translator.DownloadState
 import dev.davidv.translator.Language
 import dev.davidv.translator.R
+import dev.davidv.translator.Script
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 @Composable
@@ -153,7 +154,7 @@ private fun previewLanguage(
   code = code,
   displayName = name,
   shortDisplayName = name,
-  script = "Latn",
+  script = Script.LATIN,
   dictionaryCode = code,
 )
 

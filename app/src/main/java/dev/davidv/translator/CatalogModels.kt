@@ -510,13 +510,19 @@ class LanguageCatalog private constructor(
     packId: String? = null,
     readUrlsAndHashtags: Boolean = false,
   ): List<SpeechChunkPlan> =
-    handle.planSpeechChunks(languageCode, text, packId, readUrlsAndHashtags).map { chunk ->
-      SpeechChunkPlan(
-        content = chunk.content,
-        isPhonemes = chunk.isPhonemes,
-        pauseAfterMs = chunk.pauseAfterMs,
-      )
-    }
+    handle
+      .planSpeechChunks(
+        languageCode,
+        text,
+        packId,
+        if (readUrlsAndHashtags) UrlsAndHashtags.READ else UrlsAndHashtags.SKIP,
+      ).map { chunk ->
+        SpeechChunkPlan(
+          content = chunk.content,
+          isPhonemes = chunk.isPhonemes,
+          pauseAfterMs = chunk.pauseAfterMs,
+        )
+      }
 
   @Throws(CatalogException::class)
   fun synthesizeSpeechPcm(

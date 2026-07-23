@@ -3,6 +3,8 @@ package dev.davidv.translator
 import androidx.annotation.StringRes
 
 typealias ReadingOrder = uniffi.translator_core.ReadingOrder
+typealias Script = uniffi.translator_core.Script
+typealias UrlsAndHashtags = uniffi.translator_core.UrlsAndHashtags
 typealias NothingReason = uniffi.translator_translate.NothingReason
 typealias BackgroundMode = uniffi.translator_core.BackgroundMode
 typealias PreparedImageOverlay = uniffi.translator_core.PreparedImageOverlay

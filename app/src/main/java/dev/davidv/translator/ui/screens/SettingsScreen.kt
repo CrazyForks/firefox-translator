@@ -84,6 +84,7 @@ import dev.davidv.translator.LanguageMetadataManager
 import dev.davidv.translator.PermissionHelper
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadonlyModalOutputAlignment
+import dev.davidv.translator.Script
 import dev.davidv.translator.TapToTranslateNotification
 import dev.davidv.translator.labelRes
 import dev.davidv.translator.languageNameComparator
@@ -1459,7 +1460,7 @@ private fun previewLanguage(
   code = code,
   displayName = name,
   shortDisplayName = name,
-  script = "Latn",
+  script = Script.LATIN,
   dictionaryCode = code,
 )
 

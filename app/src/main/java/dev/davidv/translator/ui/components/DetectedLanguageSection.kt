@@ -31,6 +31,7 @@ import dev.davidv.translator.LangAvailability
 import dev.davidv.translator.Language
 import dev.davidv.translator.LanguageAvailabilityEntry
 import dev.davidv.translator.LanguageAvailabilityState
+import dev.davidv.translator.Script
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
@@ -74,7 +75,7 @@ private fun previewLanguage(
   code = code,
   displayName = name,
   shortDisplayName = name,
-  script = "Latn",
+  script = Script.LATIN,
   dictionaryCode = code,
 )
 

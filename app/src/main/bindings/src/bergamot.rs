@@ -15,7 +15,7 @@ pub fn detect_language_record(
 #[derive(uniffi::Record)]
 pub struct AvailableLanguage {
     pub code: String,
-    pub script: String,
+    pub script: translator::script::Script,
 }
 
 #[uniffi::export]
@@ -29,10 +29,7 @@ pub fn detect_language_robust_code_record(
         .into_iter()
         .map(|language| translator::api::ScriptedLanguage {
             code: translator::LanguageCode::from(language.code),
-            // Matches how the catalog itself degrades a script it cannot name:
-            // Other, never a guess at Latin.
-            script: translator::script::Script::from_iso15924(&language.script)
-                .unwrap_or(translator::script::Script::Other),
+            script: language.script,
         })
         .collect::<Vec<_>>();
     detect_language_robust_code(&text, hint.as_ref(), &available).map(|code| code.code)

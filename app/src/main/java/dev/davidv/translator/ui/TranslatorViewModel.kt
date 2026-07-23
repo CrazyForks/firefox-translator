@@ -41,6 +41,7 @@ import dev.davidv.translator.PdfPhaseProgress
 import dev.davidv.translator.PreparedImageOverlay
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
+import dev.davidv.translator.Script
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.SpeechError
 import dev.davidv.translator.SpeechSynthesisResult
@@ -129,7 +130,7 @@ class TranslatorViewModel(
     val plan: PreparedImageOverlay,
     val imageRef: Bitmap,
     val sourceCode: String,
-    val sourceScript: String,
+    val sourceScript: Script,
     val readingOrder: ReadingOrder?,
     // Owns the source pixels rust-side so a language switch re-renders without re-OCR or any
     // image copy across the FFI. Null for images translated via the legacy copying path.

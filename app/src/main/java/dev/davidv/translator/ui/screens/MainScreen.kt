@@ -78,6 +78,7 @@ import dev.davidv.translator.LanguageMetadata
 import dev.davidv.translator.LaunchMode
 import dev.davidv.translator.R
 import dev.davidv.translator.ReadingOrder
+import dev.davidv.translator.Script
 import dev.davidv.translator.TranslatedText
 import dev.davidv.translator.TranslatorMessage
 import dev.davidv.translator.WordWithTaggedEntries
@@ -668,7 +669,7 @@ private fun previewLanguage(
   code = code,
   displayName = name,
   shortDisplayName = name,
-  script = "Latn",
+  script = Script.LATIN,
   dictionaryCode = code,
 )
 

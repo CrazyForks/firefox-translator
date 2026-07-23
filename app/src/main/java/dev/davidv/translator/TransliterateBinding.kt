@@ -6,8 +6,8 @@ class TransliterateBinding {
   fun transliterate(
     text: String,
     languageCode: String,
-    sourceScript: String,
-    targetScript: String = "Latn",
+    sourceScript: Script,
+    targetScript: Script = Script.LATIN,
     japaneseDictPath: String? = null,
     japaneseSpaced: Boolean = true,
   ): String? =

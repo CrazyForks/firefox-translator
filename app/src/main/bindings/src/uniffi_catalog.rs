@@ -1284,24 +1284,19 @@ impl CatalogHandle {
         language_code: String,
         text: String,
         pack_id: Option<String>,
-        read_urls_and_hashtags: bool,
+        urls_and_hashtags: translator::UrlsAndHashtags,
     ) -> Vec<translator::SpeechChunk> {
         #[cfg(feature = "tts")]
         {
             return self
                 .session
-                .plan_speech_chunks(
-                    &language_code,
-                    &text,
-                    pack_id.as_deref(),
-                    read_urls_and_hashtags,
-                )
+                .plan_speech_chunks(&language_code, &text, pack_id.as_deref(), urls_and_hashtags)
                 .unwrap_or_default();
         }
 
         #[cfg(not(feature = "tts"))]
         {
-            let _ = (language_code, text, pack_id, read_urls_and_hashtags);
+            let _ = (language_code, text, pack_id, urls_and_hashtags);
             Vec::new()
         }
     }
