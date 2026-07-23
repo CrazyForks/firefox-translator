@@ -309,4 +309,7 @@
     <string name="a11y_select_text">حدّد نصًا</string>
     <string name="http_server_notif_disable">عطِّل</string>
     <string name="a11y_resize_split">أعد تحجيم مناطق الإدخال والإخراج</string>
+    <string name="langmgr_translation_upgrade_available">تتوفّر ترجمة مُحسّنة لـ: %1$s</string>
+    <string name="download_failed_translation_batch">فشل تنزيل تحديث الترجمة</string>
+    <string name="settings_http_server_title">خادم API</string>
 </resources>
