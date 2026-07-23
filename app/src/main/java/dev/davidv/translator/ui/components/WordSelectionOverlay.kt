@@ -51,15 +51,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import dev.davidv.translator.Point
 import dev.davidv.translator.R
-import uniffi.translator_core.OrientedRect
+import uniffi.bindings.selectionNearestWord
+import uniffi.bindings.selectionResolve
+import uniffi.bindings.selectionWordAt
+import uniffi.bindings.selectionWordAxis
 import uniffi.translator_core.PositionedWord
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
 
 /**
  * Per-word selection data for one translated image, in the image-pixel space of the displayed
@@ -73,137 +73,12 @@ data class ImageWordSelection(
   val translatedWords: List<PositionedWord>,
 )
 
-private fun isCjkChar(c: Char): Boolean {
-  val cp = c.code
-  return cp in 0x4E00..0x9FFF ||
-    cp in 0x3400..0x4DBF ||
-    cp in 0x3040..0x30FF ||
-    cp in 0xAC00..0xD7AF ||
-    cp in 0xF900..0xFAFF
-}
-
-/** Join word texts: no separator for CJK-dominant runs, spaces otherwise. */
-private fun joinSelected(texts: List<String>): String {
-  val nonWs = texts.sumOf { t -> t.count { !it.isWhitespace() } }
-  val cjk = texts.sumOf { t -> t.count { isCjkChar(it) } }
-  val sep = if (nonWs > 0 && cjk * 2 >= nonWs) "" else " "
-  return texts.joinToString(sep).trim()
-}
-
-/** Position along the cross-reading axis (perpendicular to the text), where lines advance. */
-private fun crossPos(w: PositionedWord): Float = -w.bounds.cx * sin(w.bounds.angleRadians) + w.bounds.cy * cos(w.bounds.angleRadians)
-
-/** Cross-axis position of an oriented rect (used to order/space merged line pills). */
-private fun crossOf(rect: OrientedRect): Float = -rect.cx * sin(rect.angleRadians) + rect.cy * cos(rect.angleRadians)
-
-/** Reading-axis position of an oriented rect (the direction text flows along it). */
-private fun readOf(rect: OrientedRect): Float = rect.cx * cos(rect.angleRadians) + rect.cy * sin(rect.angleRadians)
-
-/** True when two consecutive lines sit far enough apart (a paragraph gap) to be different blocks. */
-private fun isBlockBreak(
-  prev: List<PositionedWord>,
-  cur: List<PositionedWord>,
-): Boolean {
-  val h = max(prev.maxOf { it.bounds.height }, cur.maxOf { it.bounds.height })
-  return abs(crossPos(cur[0]) - crossPos(prev[0])) > 1.5f * h
-}
-
-/**
- * The copy/share text for a selection: words grouped into lines (`lineIndex`), lines merged into
- * blocks by their cross-axis gap, each block joined (CJK-aware), and blocks separated by newlines.
- */
-private fun buildSelectionText(selected: List<PositionedWord>): String {
-  if (selected.isEmpty()) return ""
-  val lines = mutableListOf<MutableList<PositionedWord>>()
-  for (w in selected) {
-    val last = lines.lastOrNull()
-    if (last != null && last[0].lineIndex == w.lineIndex) last.add(w) else lines.add(mutableListOf(w))
-  }
-  val blocks = mutableListOf<MutableList<PositionedWord>>()
-  for ((i, line) in lines.withIndex()) {
-    if (i == 0 || isBlockBreak(lines[i - 1], line)) blocks.add(line.toMutableList()) else blocks.last().addAll(line)
-  }
-  return blocks.joinToString("\n") { block -> joinSelected(block.map { it.text }) }.trim()
-}
-
-/** Whether a word reads horizontally (angle near 0/π) rather than vertically (near π/2). */
-private fun isHorizontal(angleRadians: Float): Boolean {
-  val pi = PI.toFloat()
-  val a = ((angleRadians % pi) + pi) % pi
-  return a < pi / 4f || a > 3f * pi / 4f
-}
-
-/** Index of the nearest word's transformed centre to `point`, optionally restricted to a direction. */
-private fun nearestWord(
-  words: List<PositionedWord>,
+/** Local-space distance from a point to an image-space position, for handle grabbing. */
+private fun distanceTo(
   point: Offset,
+  target: Point,
   t: FitTransform,
-  horizontal: Boolean?,
-): Int? {
-  var best = -1
-  var bestDist = Float.MAX_VALUE
-  words.forEachIndexed { i, w ->
-    if (horizontal != null && isHorizontal(w.bounds.angleRadians) != horizontal) return@forEachIndexed
-    val dx = t.mapX(w.bounds.cx) - point.x
-    val dy = t.mapY(w.bounds.cy) - point.y
-    val d = dx * dx + dy * dy
-    if (d < bestDist) {
-      bestDist = d
-      best = i
-    }
-  }
-  return best.takeIf { it >= 0 }
-}
-
-/** Words in `start..end`, keeping only the start word's writing direction. */
-private fun selectedWords(
-  words: List<PositionedWord>,
-  start: Int,
-  end: Int,
-): List<PositionedWord> {
-  val horizontal = isHorizontal(words[start].bounds.angleRadians)
-  return (start..end).filter { isHorizontal(words[it].bounds.angleRadians) == horizontal }.map { words[it] }
-}
-
-/** Merge consecutive words on one line into a single oriented pill spanning them. */
-private fun mergeAlongLine(words: List<PositionedWord>): OrientedRect {
-  val a = words[0].bounds.angleRadians
-  val cosA = cos(a)
-  val sinA = sin(a)
-  var uMin = Float.MAX_VALUE
-  var uMax = -Float.MAX_VALUE
-  var height = 0f
-  for (w in words) {
-    val u = w.bounds.cx * cosA + w.bounds.cy * sinA
-    if (u - w.bounds.width / 2f < uMin) uMin = u - w.bounds.width / 2f
-    if (u + w.bounds.width / 2f > uMax) uMax = u + w.bounds.width / 2f
-    if (w.bounds.height > height) height = w.bounds.height
-  }
-  val uMid = (uMin + uMax) / 2f
-  val ref = words[0].bounds
-  val d = uMid - (ref.cx * cosA + ref.cy * sinA)
-  return OrientedRect(
-    cx = ref.cx + d * cosA,
-    cy = ref.cy + d * sinA,
-    width = uMax - uMin,
-    height = height,
-    angleRadians = a,
-  )
-}
-
-/** Bottom corner at the leading (`leading=true`) or trailing end of a word, in image coords. */
-private fun handlePoint(
-  rect: OrientedRect,
-  leading: Boolean,
-): Offset {
-  val c = cos(rect.angleRadians)
-  val s = sin(rect.angleRadians)
-  val sign = if (leading) -1f else 1f
-  val hw = sign * rect.width / 2f
-  val hh = rect.height / 2f
-  // reading axis (c, s); perpendicular-down (image y points down) is (-s, c).
-  return Offset(rect.cx + hw * c - hh * s, rect.cy + hw * s + hh * c)
-}
+): Float = (point - Offset(t.mapX(target.x), t.mapY(target.y))).getDistance()
 
 private fun copyToClipboard(
   context: Context,
@@ -326,10 +201,15 @@ fun WordSelectionOverlay(
   val scaleState = rememberUpdatedState(scale)
 
   val hasSelection = selStart != null && selEnd != null
-  val selectedText =
-    rememberUpdatedState(
-      if (hasSelection) buildSelectionText(selectedWords(words, selStart!!, selEnd!!)) else "",
-    )
+  // Pills, handles, bounds and copy text all come from translator-rs in one call, so this overlay
+  // and the Qt one cannot disagree about what a drag selected.
+  val selection =
+    remember(words, selStart, selEnd) {
+      val s = selStart
+      val e = selEnd
+      if (s != null && e != null) selectionResolve(words, s.toUInt(), e.toUInt()) else null
+    }
+  val selectedText = rememberUpdatedState(selection?.text ?: "")
   val rectState = rememberUpdatedState(contentRect)
 
   // Drive the floating action bar: present while there's a selection and no active drag.
@@ -373,20 +253,11 @@ fun WordSelectionOverlay(
             val e = selEnd ?: return
             val coords = layoutCoords ?: return
             val t = transform()
-            var l = Float.MAX_VALUE
-            var top = Float.MAX_VALUE
-            var r = -Float.MAX_VALUE
-            var b = -Float.MAX_VALUE
-            for (w in selectedWords(words, s, e)) {
-              val topY = t.mapY(w.bounds.cy) - (w.bounds.height / 2f) * t.scale
-              top = min(top, topY)
-              for (leading in listOf(true, false)) {
-                val p = handlePoint(w.bounds, leading)
-                l = min(l, t.mapX(p.x))
-                r = max(r, t.mapX(p.x))
-                b = max(b, t.mapY(p.y))
-              }
-            }
+            val box = selectionResolve(words, s.toUInt(), e.toUInt())?.bounds ?: return
+            val l = t.mapX(box.left.toFloat())
+            val top = t.mapY(box.top.toFloat())
+            val r = t.mapX(box.right.toFloat())
+            val b = t.mapY(box.bottom.toFloat())
             // Map the local bounds through the container's zoom/pan to root-view coords.
             val topLeft = coords.localToRoot(Offset(l, top))
             val bottomRight = coords.localToRoot(Offset(r, b))
@@ -415,17 +286,7 @@ fun WordSelectionOverlay(
           // Word whose oriented box (slightly padded) contains the touched point, or null.
           fun wordAt(pos: Offset): Int? {
             val t = transform()
-            val ix = t.unmapX(pos.x)
-            val iy = t.unmapY(pos.y)
-            return words.indices.firstOrNull { i ->
-              val b = words[i].bounds
-              val dx = ix - b.cx
-              val dy = iy - b.cy
-              val c = cos(b.angleRadians)
-              val s = sin(b.angleRadians)
-              val pad = b.height * 0.25f
-              abs(dx * c + dy * s) <= b.width / 2f + pad && abs(-dx * s + dy * c) <= b.height / 2f + pad
-            }
+            return selectionWordAt(words, t.unmapX(pos.x), t.unmapY(pos.y))?.toInt()
           }
 
           awaitEachGesture {
@@ -435,15 +296,12 @@ fun WordSelectionOverlay(
             val handleRadius = 28.dp.toPx() / scaleState.value
             val s0 = selStart
             val e0 = selEnd
+            val view = if (s0 != null && e0 != null) selectionResolve(words, s0.toUInt(), e0.toUInt()) else null
             val handleMode =
-              if (s0 != null && e0 != null) {
-                val startP = handlePoint(words[s0].bounds, leading = true)
-                val endP = handlePoint(words[e0].bounds, leading = false)
-                val startView = Offset(t.mapX(startP.x), t.mapY(startP.y))
-                val endView = Offset(t.mapX(endP.x), t.mapY(endP.y))
+              if (view != null) {
                 when {
-                  (down.position - startView).getDistance() < handleRadius -> DragMode.START
-                  (down.position - endView).getDistance() < handleRadius -> DragMode.END
+                  distanceTo(down.position, view.startHandle, t) < handleRadius -> DragMode.START
+                  distanceTo(down.position, view.endHandle, t) < handleRadius -> DragMode.END
                   else -> null
                 }
               } else {
@@ -460,10 +318,16 @@ fun WordSelectionOverlay(
                 change.consume()
                 dragging = true
                 val fixed = if (handleMode == DragMode.START) e0!! else s0!!
-                val dir = isHorizontal(words[fixed].bounds.angleRadians)
-                nearestWord(words, change.position, transform(), dir)?.let { nw ->
-                  selStart = min(fixed, nw)
-                  selEnd = max(fixed, nw)
+                val tt = transform()
+                val axis = selectionWordAxis(words, fixed.toUInt())
+                selectionNearestWord(
+                  words,
+                  tt.unmapX(change.position.x),
+                  tt.unmapY(change.position.y),
+                  axis,
+                )?.let { nw ->
+                  selStart = min(fixed, nw.toInt())
+                  selEnd = max(fixed, nw.toInt())
                 }
                 recomputeRect()
                 showMagnifier(change.position)
@@ -490,32 +354,10 @@ fun WordSelectionOverlay(
           }
         },
   ) {
-    val s = selStart ?: return@Canvas
-    val e = selEnd ?: return@Canvas
+    val view = selection ?: return@Canvas
     val t = fitTransform(size.width, size.height, imageWidth, imageHeight)
-    // One merged pill per line. Cap each pill's height to the cross-axis gap to its nearest
-    // neighbour so tightly-spaced lines meet halfway instead of overlapping — but only count
-    // neighbours that overlap along the reading axis (i.e. the same column), so a parallel column
-    // sitting at the same height doesn't shrink it.
-    val pills =
-      selectedWords(words, s, e)
-        .groupBy { it.lineIndex }
-        .values
-        .map { mergeAlongLine(it) }
-    pills.forEachIndexed { i, pill ->
-      val cross = crossOf(pill)
-      val read0 = readOf(pill) - pill.width / 2f
-      val read1 = readOf(pill) + pill.width / 2f
-      var gap = Float.MAX_VALUE
-      pills.forEachIndexed { j, other ->
-        if (j != i) {
-          val o0 = readOf(other) - other.width / 2f
-          val o1 = readOf(other) + other.width / 2f
-          if (read0 < o1 && o0 < read1) gap = min(gap, abs(cross - crossOf(other)))
-        }
-      }
-      drawOrientedPill(pill.copy(height = min(pill.height, gap)), t, Color(0x553B82F6))
-    }
+    // Pills arrive merged per line and already clamped against neighbouring lines.
+    view.pills.forEach { pill -> drawOrientedPill(pill, t, Color(0x553B82F6)) }
     // End handles: pin markers whose tip sits at the line bottom, hanging below it. The opening
     // pin points up-right (toward the selection), the closing pin up-left. The drawable's tip is
     // at its bottom-centre, so anchor and rotate about that. Divide by zoom so the pin stays a
@@ -523,7 +365,7 @@ fun WordSelectionOverlay(
     val handleSize = 26.dp.toPx() / scale
 
     fun drawHandle(
-      p: Offset,
+      p: Point,
       degrees: Float,
     ) {
       withTransform({
@@ -533,7 +375,7 @@ fun WordSelectionOverlay(
         with(handlePainter) { draw(Size(handleSize, handleSize)) }
       }
     }
-    drawHandle(handlePoint(words[s].bounds, leading = true), -135f)
-    drawHandle(handlePoint(words[e].bounds, leading = false), 135f)
+    drawHandle(view.startHandle, -135f)
+    drawHandle(view.endHandle, 135f)
   }
 }

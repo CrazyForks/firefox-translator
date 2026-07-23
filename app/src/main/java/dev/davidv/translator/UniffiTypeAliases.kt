@@ -4,6 +4,9 @@ import androidx.annotation.StringRes
 
 typealias ReadingOrder = uniffi.translator_core.ReadingOrder
 typealias Script = uniffi.translator_core.Script
+typealias SelectionView = uniffi.translator_core.SelectionView
+typealias WritingAxis = uniffi.translator_core.WritingAxis
+typealias Point = uniffi.translator_core.Point
 typealias UrlsAndHashtags = uniffi.translator_core.UrlsAndHashtags
 typealias NothingReason = uniffi.translator_translate.NothingReason
 typealias BackgroundMode = uniffi.translator_core.BackgroundMode
