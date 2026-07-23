@@ -61,6 +61,7 @@
         "releaseStatus": "Release",
         "sourceLanguage": "en",
         "targetLanguage": "tl",
+        "priority": 1,
         "files": {
           "lexicalShortlist": {
             "path": "models/en-tl/opusmt_distill_20260712/exported/lex.50.50.entl.s2t.bin.gz"
@@ -78,6 +79,32 @@
           "flores200-plus": {
             "chrf": 57.92,
             "bleu": 32.46
+          }
+        }
+      },
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "en",
+        "targetLanguage": "tl",
+        "priority": 2,
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/en-tl/hymt2_distill_20260722/exported/lex.50.50.entl.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/en-tl/hymt2_distill_20260722/exported/model.entl.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561697,
+            "uncompressedHash": "6655a272120edd76e3abafd27b6e74b3c1d756936cce0a2ad3e457d700eb7aa5"
+          },
+          "vocab": {
+            "path": "models/en-tl/hymt2_distill_20260722/exported/vocab.entl.spm.gz"
+          }
+        },
+        "metrics": {
+          "flores200-plus": {
+            "chrf": 60.41,
+            "bleu": 36.93
           }
         }
       }

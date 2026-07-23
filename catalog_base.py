@@ -88,28 +88,47 @@ def add_language_asset_ref(language_entry: dict, feature: str, ref) -> None:
     assets[feature] = ref
 
 
+# p1 keeps the legacy flat `bin/<name>` so models already installed at that path
+# still resolve; p2+ upgrade variants share the same file names (same pack infix)
+# so they MUST live in a distinct dir or they collide with the flat p1 file. They
+# are namespaced by `<pair>/<version>` from the source path. The runtime loads
+# whichever file the planner resolves per role (highest priority present), so the
+# split path is invisible to it — no on-startup migration needed.
+def translation_install_path(name: str, source_path: str, priority: int) -> str:
+    if priority < 2:
+        return f"bin/{name}"
+    parts = source_path.split("/")  # models/<pair>/<version>/exported/<file>
+    if len(parts) < 4:
+        return f"bin/{name}"
+    return f"bin/{parts[1]}/{parts[2]}/{name}"
+
+
 def translation_pack_files(direction: dict, translation_base_url: str) -> list[dict]:
-    def entry(file_info: dict, role: str) -> dict:
+    def entry(file_info: dict, role: str, priority: int) -> dict:
         return make_file(
             name=file_info["name"],
             size_bytes=int(file_info["sizeBytes"]),
-            install_path=f"bin/{file_info['name']}",
+            install_path=translation_install_path(
+                file_info["name"], file_info["path"], priority
+            ),
             url=f"{translation_base_url}/{file_info['path']}",
             role=role,
+            priority=priority,
             source_path=file_info["path"],
         )
 
-    files = [
-        entry(direction["model"], "model"),
-        entry(direction["lex"], "lex"),
-    ]
-    src_vocab = direction["srcVocab"]
-    tgt_vocab = direction["tgtVocab"]
-    if src_vocab["name"] == tgt_vocab["name"]:
-        files.append(entry(src_vocab, "vocab"))
-    else:
-        files.append(entry(src_vocab, "srcVocab"))
-        files.append(entry(tgt_vocab, "tgtVocab"))
+    files = []
+    for variant in direction["variants"]:
+        priority = variant["priority"]
+        files.append(entry(variant["model"], "model", priority))
+        files.append(entry(variant["lex"], "lex", priority))
+        src_vocab = variant["srcVocab"]
+        tgt_vocab = variant["tgtVocab"]
+        if src_vocab["name"] == tgt_vocab["name"]:
+            files.append(entry(src_vocab, "vocab", priority))
+        else:
+            files.append(entry(src_vocab, "srcVocab", priority))
+            files.append(entry(tgt_vocab, "tgtVocab", priority))
     return dedupe_files_by_install_path(files)
 
 

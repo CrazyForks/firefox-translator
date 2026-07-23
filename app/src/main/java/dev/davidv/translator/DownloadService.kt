@@ -207,6 +207,19 @@ class DownloadService : Service() {
       context.startService(intent)
     }
 
+    fun startTranslationUpgrades(
+      context: Context,
+      languages: List<Language>,
+    ) {
+      val languageCodes = ArrayList(languages.map { it.code })
+      val intent =
+        Intent(context, DownloadService::class.java).apply {
+          action = "START_TRANSLATION_UPGRADES"
+          putStringArrayListExtra("language_codes", languageCodes)
+        }
+      context.startService(intent)
+    }
+
     fun startDictDownload(
       context: Context,
       language: Language,
@@ -335,6 +348,13 @@ class DownloadService : Service() {
         val catalog = getCatalog() ?: return START_NOT_STICKY
         val languages = languageCodes.mapNotNull(catalog::languageByCode)
         startOcrEngineUpgrades(languages, engine)
+      }
+
+      "START_TRANSLATION_UPGRADES" -> {
+        val languageCodes = intent.getStringArrayListExtra("language_codes").orEmpty()
+        val catalog = getCatalog() ?: return START_NOT_STICKY
+        val languages = languageCodes.mapNotNull(catalog::languageByCode)
+        startTranslationUpgrades(languages)
       }
 
       "START_DICT_DOWNLOAD" -> {
@@ -498,7 +518,7 @@ class DownloadService : Service() {
     languages: List<Language>,
     engine: String,
   ) {
-    startOcrEngineBatch(languages) { catalog, codes ->
+    startLanguageBatch(languages, R.string.download_failed_ocr_batch) { catalog, codes ->
       catalog.planOcrEngineDownloads(codes, engine)
     }
   }
@@ -507,8 +527,9 @@ class DownloadService : Service() {
     languages: List<Language>,
     engine: String,
   ) {
-    startOcrEngineBatch(
+    startLanguageBatch(
       languages,
+      R.string.download_failed_ocr_batch,
       onSuccess = {
         getCatalog()?.let { catalog ->
           filePathManager.applyDeletePlan(catalog.planDeleteSupersededFiles())
@@ -519,8 +540,23 @@ class DownloadService : Service() {
     }
   }
 
-  private fun startOcrEngineBatch(
+  private fun startTranslationUpgrades(languages: List<Language>) {
+    startLanguageBatch(
+      languages,
+      R.string.download_failed_translation_batch,
+      onSuccess = {
+        getCatalog()?.let { catalog ->
+          filePathManager.applyDeletePlan(catalog.planDeleteSupersededFiles())
+        }
+      },
+    ) { catalog, codes ->
+      catalog.planTranslationUpgrades(codes)
+    }
+  }
+
+  private fun startLanguageBatch(
     languages: List<Language>,
+    failureMessageRes: Int,
     onSuccess: suspend () -> Unit = {},
     planProvider: (LanguageCatalog, List<String>) -> DownloadPlan,
   ) {
@@ -581,21 +617,21 @@ class DownloadService : Service() {
           if (success) {
             filePathManager.reloadCatalog()
             onSuccess()
-            Log.i("DownloadService", "OCR engine batch download complete")
+            Log.i("DownloadService", "Language batch download complete")
             activeLanguages.forEach { language ->
               _downloadEvents.emit(DownloadEvent.NewTranslationAvailable(language))
             }
           } else {
-            _downloadEvents.emit(DownloadEvent.DownloadError(getString(R.string.download_failed_ocr_batch)))
+            _downloadEvents.emit(DownloadEvent.DownloadError(getString(failureMessageRes)))
           }
         } catch (e: Exception) {
-          Log.e("DownloadService", "OCR engine batch download failed", e)
+          Log.e("DownloadService", "Language batch download failed", e)
           activeLanguages.forEach { language ->
             updateDownloadState(language) {
               it.copy(isDownloading = false, error = e.message)
             }
           }
-          _downloadEvents.emit(DownloadEvent.DownloadError("OCR batch download failed"))
+          _downloadEvents.emit(DownloadEvent.DownloadError(getString(failureMessageRes)))
         } finally {
           activeLanguages.forEach(downloadJobs::remove)
         }

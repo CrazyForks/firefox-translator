@@ -136,6 +136,15 @@ private data class PaddleUpgrade(
   }
 }
 
+private data class TranslationUpgrade(
+  val languages: List<Language>,
+  val totalBytes: Long,
+) {
+  companion object {
+    val EMPTY = TranslationUpgrade(emptyList(), 0L)
+  }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VoicePickerDialog(
@@ -704,6 +713,22 @@ fun LanguageAssetManagerScreen(
       }
     }
 
+  val translationUpgrade =
+    remember(catalog, rows, catalogRefreshToken) {
+      if (catalog == null) {
+        TranslationUpgrade.EMPTY
+      } else {
+        val codes = catalog.translationUpgradeLanguageCodes().toSet()
+        val languages = rows.map { it.language }.filter { it.code in codes }
+        val plan = catalog.planTranslationUpgrades(languages.map { it.code })
+        if (plan.tasks.isEmpty()) {
+          TranslationUpgrade.EMPTY
+        } else {
+          TranslationUpgrade(languages = languages, totalBytes = plan.totalSize.toLong())
+        }
+      }
+    }
+
   val sharedDictionaryUsersByLanguageCode =
     remember(rows) {
       rows
@@ -758,11 +783,25 @@ fun LanguageAssetManagerScreen(
       }
 
       if (ppocrModelUpgrade.languages.isNotEmpty()) {
-        OcrUpgradeCard(
+        UpgradeCard(
           text = stringResource(R.string.langmgr_ocr_upgrade_available),
           totalBytes = ppocrModelUpgrade.totalBytes,
           onDownload = {
             DownloadService.startOcrEngineUpgrades(context, ppocrModelUpgrade.languages, "ppocr")
+          },
+        )
+      }
+
+      if (translationUpgrade.languages.isNotEmpty()) {
+        UpgradeCard(
+          text =
+            stringResource(
+              R.string.langmgr_translation_upgrade_available,
+              translationUpgrade.languages.joinToString(", ") { it.displayName },
+            ),
+          totalBytes = translationUpgrade.totalBytes,
+          onDownload = {
+            DownloadService.startTranslationUpgrades(context, translationUpgrade.languages)
           },
         )
       }
@@ -1423,7 +1462,7 @@ private fun RepairCard(
 }
 
 @Composable
-private fun OcrUpgradeCard(
+private fun UpgradeCard(
   text: String,
   totalBytes: Long,
   onDownload: () -> Unit,

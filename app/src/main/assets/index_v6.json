@@ -1,10 +1,10 @@
 {
   "formatVersion": 6,
-  "generatedAt": 1784730432,
+  "generatedAt": 1784793315,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784730432,
+    "languageIndexUpdatedAt": 1784793315,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -5293,7 +5293,7 @@
           "installPath": "bin/model.entl.intgemm.alphas.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/opusmt_distill_20260712/exported/model.entl.intgemm.alphas.bin.gz",
           "role": "model",
-          "priority": 0
+          "priority": 1
         },
         {
           "name": "lex.50.50.entl.s2t.bin",
@@ -5301,7 +5301,7 @@
           "installPath": "bin/lex.50.50.entl.s2t.bin",
           "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/opusmt_distill_20260712/exported/lex.50.50.entl.s2t.bin.gz",
           "role": "lex",
-          "priority": 0
+          "priority": 1
         },
         {
           "name": "vocab.entl.spm",
@@ -5309,7 +5309,31 @@
           "installPath": "bin/vocab.entl.spm",
           "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/opusmt_distill_20260712/exported/vocab.entl.spm.gz",
           "role": "vocab",
-          "priority": 0
+          "priority": 1
+        },
+        {
+          "name": "model.entl.intgemm.alphas.bin",
+          "sizeBytes": 24206122,
+          "installPath": "bin/en-tl/hymt2_distill_20260722/model.entl.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/hymt2_distill_20260722/exported/model.entl.intgemm.alphas.bin.gz",
+          "role": "model",
+          "priority": 2
+        },
+        {
+          "name": "lex.50.50.entl.s2t.bin",
+          "sizeBytes": 926122,
+          "installPath": "bin/en-tl/hymt2_distill_20260722/lex.50.50.entl.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/hymt2_distill_20260722/exported/lex.50.50.entl.s2t.bin.gz",
+          "role": "lex",
+          "priority": 2
+        },
+        {
+          "name": "vocab.entl.spm",
+          "sizeBytes": 384909,
+          "installPath": "bin/en-tl/hymt2_distill_20260722/vocab.entl.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-tl/hymt2_distill_20260722/exported/vocab.entl.spm.gz",
+          "role": "vocab",
+          "priority": 2
         }
       ],
       "dependsOn": []

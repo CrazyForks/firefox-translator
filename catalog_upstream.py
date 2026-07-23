@@ -256,13 +256,46 @@ def select_best_entry(entries: list[dict]) -> dict:
     return max(entries, key=rank)
 
 
+def _entry_files(entry: dict) -> dict:
+    files = {}
+    for manifest_file_type, file_type in MANIFEST_FILE_TYPES.items():
+        file_info = entry["files"].get(manifest_file_type)
+        if file_info is None:
+            continue
+        path = file_info["path"]
+        files[file_type] = {
+            "name": strip_compression_suffix(path.rsplit("/", 1)[-1]),
+            "sizeBytes": 0,
+            "path": path,
+        }
+    return files
+
+
+def pair_variant_entries(entries: list[dict]) -> list[tuple[dict, int]]:
+    """(entry, priority) per shipped variant, lowest priority first.
+
+    A list carrying explicit `priority` is priority variants of ONE model size
+    (our home-trained packs — v1, v2, ...): keep them all, so the app installs
+    the highest and offers it as an upgrade over a lower one already on disk. A
+    list WITHOUT priority is architecture/release variants from upstream
+    (tiny/base/base-memory, Release/Nightly), where select_best_entry picks the
+    single best. We only make one size, so filtering custom models by best is
+    wrong — that would drop the upgrade path.
+    """
+    if any("priority" in entry for entry in entries):
+        ranked = sorted(entries, key=lambda entry: entry.get("priority", 0))
+        return [(entry, entry.get("priority", 0)) for entry in ranked]
+    return [(select_best_entry(entries), 0)]
+
+
 def build_pair_files(manifest: dict) -> dict[tuple[str, str], dict]:
     pair_files = {}
 
     for pair_key, entries in manifest["models"].items():
-        best_entry = select_best_entry(entries)
-        src = best_entry["sourceLanguage"]
-        tgt = best_entry["targetLanguage"]
+        variant_entries = pair_variant_entries(entries)
+        primary = variant_entries[-1][0]  # highest priority = the upgrade target
+        src = primary["sourceLanguage"]
+        tgt = primary["targetLanguage"]
 
         missing_languages = [code for code in (src, tgt) if code not in LANGUAGE_NAMES]
         if missing_languages:
@@ -273,25 +306,32 @@ def build_pair_files(manifest: dict) -> dict[tuple[str, str], dict]:
             )
             continue
 
-        files = {}
-        for manifest_file_type, file_type in MANIFEST_FILE_TYPES.items():
-            file_info = best_entry["files"].get(manifest_file_type)
-            if file_info is None:
-                continue
-
-            path = file_info["path"]
-            files[file_type] = {
-                "name": strip_compression_suffix(path.rsplit("/", 1)[-1]),
-                "sizeBytes": 0,
-                "path": path,
-            }
-
         pair_files[(src, tgt)] = {
-            "files": files,
-            "experimental": is_experimental_release(best_entry.get("releaseStatus")),
+            "variants": [
+                {"files": _entry_files(entry), "priority": priority}
+                for entry, priority in variant_entries
+            ],
+            "experimental": is_experimental_release(primary.get("releaseStatus")),
         }
 
     return pair_files
+
+
+def _variant_direction(files: dict, priority: int) -> dict | None:
+    model = files.get("model")
+    lex = files.get("lex")
+    vocab = files.get("vocab")
+    src_vocab = files.get("srcVocab", vocab)
+    tgt_vocab = files.get("tgtVocab", vocab)
+    if not all([model, lex, src_vocab, tgt_vocab]):
+        return None
+    return {
+        "model": model,
+        "srcVocab": src_vocab,
+        "tgtVocab": tgt_vocab,
+        "lex": lex,
+        "priority": priority,
+    }
 
 
 def build_language_data(pair_files: dict[tuple[str, str], dict]) -> tuple[dict, dict, set[str]]:
@@ -299,28 +339,19 @@ def build_language_data(pair_files: dict[tuple[str, str], dict]) -> tuple[dict, 
     to_english = {}
 
     for (src, tgt), pair in pair_files.items():
-        files = pair["files"]
-        if "model" not in files:
-            continue
         if src != "en" and tgt != "en":
             continue
 
-        model = files["model"]
-        lex = files.get("lex")
-        vocab = files.get("vocab")
-        src_vocab = files.get("srcVocab", vocab)
-        tgt_vocab = files.get("tgtVocab", vocab)
+        variants = []
+        for variant in pair["variants"]:
+            resolved = _variant_direction(variant["files"], variant["priority"])
+            if resolved is not None:
+                variants.append(resolved)
 
-        if not all([model, lex, src_vocab, tgt_vocab]):
+        if not variants:
             continue
 
-        entry = {
-            "model": model,
-            "srcVocab": src_vocab,
-            "tgtVocab": tgt_vocab,
-            "lex": lex,
-            "experimental": pair["experimental"],
-        }
+        entry = {"variants": variants, "experimental": pair["experimental"]}
 
         if src == "en":
             from_english[tgt] = entry
@@ -333,10 +364,7 @@ def build_language_data(pair_files: dict[tuple[str, str], dict]) -> tuple[dict, 
 
 def format_direction(entry: dict) -> dict:
     return {
-        "model": entry["model"],
-        "srcVocab": entry["srcVocab"],
-        "tgtVocab": entry["tgtVocab"],
-        "lex": entry["lex"],
+        "variants": entry["variants"],
         "experimental": entry["experimental"],
     }
 

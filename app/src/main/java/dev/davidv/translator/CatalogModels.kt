@@ -215,6 +215,10 @@ class LanguageCatalog private constructor(
     engine: String,
   ): DownloadPlan = handle.planOcrEngineUpgrades(languageCodes, engine)
 
+  fun planTranslationUpgrades(languageCodes: List<String>): DownloadPlan = handle.planTranslationUpgrades(languageCodes)
+
+  fun translationUpgradeLanguageCodes(): List<String> = handle.translationUpgradeLanguageCodes()
+
   fun planDeleteSupersededFiles(): DeletePlan = handle.planDeleteSupersededFiles()
 
   fun planRepair(): DownloadPlan = handle.planRepair()

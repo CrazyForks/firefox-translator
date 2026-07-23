@@ -931,6 +931,21 @@ impl CatalogHandle {
         translator::plan_ocr_engine_upgrades(&self.snapshot(), &language_codes, &engine)
     }
 
+    fn plan_translation_upgrades(&self, language_codes: Vec<String>) -> translator::DownloadPlan {
+        let language_codes = language_codes
+            .into_iter()
+            .map(translator::LanguageCode::from)
+            .collect::<Vec<_>>();
+        translator::plan_translation_upgrades(&self.snapshot(), &language_codes)
+    }
+
+    fn translation_upgrade_language_codes(&self) -> Vec<String> {
+        translator::translation_upgrade_language_codes(&self.snapshot())
+            .into_iter()
+            .map(|language_code| language_code.code)
+            .collect()
+    }
+
     fn plan_delete_superseded_files(&self) -> translator::DeletePlan {
         translator::plan_delete_superseded_files(&self.snapshot())
     }
