@@ -102,6 +102,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import kotlin.math.roundToInt
+import java.text.SimpleDateFormat
+import java.util.Date
 
 private fun defaultVoiceNameForLanguage(packs: List<uniffi.translator_core.InstalledTtsPack>): String? =
   packs.firstOrNull()?.voices?.firstOrNull()?.name
@@ -193,7 +195,11 @@ suspend fun saveImage(
     var uri: Uri? = null
     try {
       imagesFolder.mkdirs()
-      val file = File(imagesFolder, "shared_image.jpg")
+      val date = Date()
+      val sdf = SimpleDateFormat("yyyyMMdd-hhmmss")
+      val dateString = sdf.format(date)
+      val fileName = "shared_image-"+dateString+".jpg"
+      val file = File(imagesFolder, fileName)
 
       val stream = FileOutputStream(file)
       image.compress(Bitmap.CompressFormat.JPEG, 90, stream)
