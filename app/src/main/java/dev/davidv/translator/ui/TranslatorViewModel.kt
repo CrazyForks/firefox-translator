@@ -59,6 +59,7 @@ import dev.davidv.translator.sizeBytesForUri
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.ImageWordSelection
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -69,7 +70,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -94,9 +97,6 @@ class TranslatorViewModel(
   // UI state
   private val _input = MutableStateFlow(initialText)
   val input: StateFlow<String> = _input.asStateFlow()
-
-  private val _inputTransliterated = MutableStateFlow<String?>(null)
-  val inputTransliterated: StateFlow<String?> = _inputTransliterated.asStateFlow()
 
   private val _output = MutableStateFlow<TranslatedText?>(null)
   val output: StateFlow<TranslatedText?> = _output.asStateFlow()
@@ -144,6 +144,32 @@ class TranslatorViewModel(
 
   private val _inputType = MutableStateFlow(InputType.TEXT)
   val inputType: StateFlow<InputType> = _inputType.asStateFlow()
+
+  // japaneseSpaced is read by TranslationService itself; it is carried here only so
+  // toggling the setting invalidates the request and re-runs the transliteration.
+  private data class TransliterationRequest(
+    val text: String,
+    val from: Language,
+    val japaneseSpaced: Boolean,
+  )
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val inputTransliterated: StateFlow<String?> =
+    combine(_input, _from, _inputType, settingsManager.settings) { text, fromLang, inputType, settings ->
+      val enabled = settings.showTransliterationOnInput && inputType == InputType.TEXT
+      if (!enabled || fromLang == null || text.isBlank()) {
+        null
+      } else {
+        TransliterationRequest(text, fromLang, settings.addSpacesForJapaneseTransliteration)
+      }
+    }.distinctUntilChanged()
+      .mapLatest { request ->
+        if (request == null) {
+          null
+        } else {
+          withContext(Dispatchers.Default) { translationCoordinator.transliterate(request.text, request.from) }
+        }
+      }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
   private val _currentDetectedLanguage = MutableStateFlow<Language?>(null)
   val currentDetectedLanguage: StateFlow<Language?> = _currentDetectedLanguage.asStateFlow()
@@ -358,13 +384,6 @@ class TranslatorViewModel(
         if (message.text.isBlank()) {
           _currentDetectedLanguage.value = null
         }
-        val settings = settingsManager.settings.value
-        val fromLang = _from.value
-        if (settings.showTransliterationOnInput && fromLang != null && message.text.isNotBlank()) {
-          _inputTransliterated.value = translationCoordinator.transliterate(message.text, fromLang)
-        } else {
-          _inputTransliterated.value = null
-        }
         triggerTranslation()
       }
 
@@ -450,7 +469,6 @@ class TranslatorViewModel(
         _displayImage.value = null
         _output.value = null
         _input.value = ""
-        _inputTransliterated.value = null
         _inputType.value = InputType.TEXT
         _originalImage.value = null
         ocrCache = null
@@ -833,7 +851,6 @@ class TranslatorViewModel(
     ocrCache = null
     _output.value = null
     _input.value = ""
-    _inputTransliterated.value = null
     _inputType.value = InputType.FILE
     _currentDetectedLanguage.value = null
 
