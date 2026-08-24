@@ -494,6 +494,7 @@ class OverlayUI(
           WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         PixelFormat.TRANSLUCENT,
       )
+    params.spanFullDisplay()
     windowManager.addView(view, params)
     borderView = view
     view.startAnimation()

@@ -27,6 +27,7 @@ import dev.davidv.translator.ReadingOrder
 import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
+import dev.davidv.translator.overlayChrome.OverlayInsets
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
 import dev.davidv.translator.overlayChrome.spanFullDisplay
@@ -499,16 +500,7 @@ class TranslatorVoiceInteractionSession(
   private fun contentCrop(
     width: Int,
     height: Int,
-  ): Rect {
-    val left = contentInsets.left.coerceIn(0, width - 1)
-    val top = contentInsets.top.coerceIn(0, height - 1)
-    return Rect(
-      left,
-      top,
-      (width - contentInsets.right).coerceIn(left + 1, width),
-      (height - contentInsets.bottom).coerceIn(top + 1, height),
-    )
-  }
+  ): Rect = OverlayInsets.contentBounds(Rect(0, 0, width, height), contentInsets)
 
   private fun applyContentGeometry() {
     if (rootView.width == 0 || rootView.height == 0) return
