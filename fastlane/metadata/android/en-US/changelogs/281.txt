@@ -1,0 +1,6 @@
+- Make automatic language detection less pushy when uncertain
+- Local HTTP API: force UTF-8 for encoding
+- Fix transliteration not working immediately upon sharing text
+- Update app translations
+- Improve handling of Assistant / A11y overlay for landscape users
+- Include date and time on the filename when sharing a translated image from the app
