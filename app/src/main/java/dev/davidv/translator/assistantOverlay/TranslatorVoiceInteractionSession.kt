@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.provider.Settings
@@ -28,6 +29,7 @@ import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
+import dev.davidv.translator.overlayChrome.spanFullDisplay
 import dev.davidv.translator.screenTranslate.ScreenCaptureRequestActivity
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.ImageWordSelection
@@ -43,6 +45,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.graphics.Insets as ContentInsets
 
 class TranslatorVoiceInteractionSession(
   context: Context,
@@ -71,17 +74,7 @@ class TranslatorVoiceInteractionSession(
   private var flipIconView: ImageView? = null
   private var flipButtonView: View? = null
   private var menuManager: OverlayMenuManager? = null
-  private var cutoutTopInset = 0
-
-  private val systemBarTop: Int by lazy {
-    val id = context.resources.getIdentifier("status_bar_height", "dimen", "android")
-    if (id > 0) context.resources.getDimensionPixelSize(id) else 0
-  }
-
-  private val systemBarBottom: Int by lazy {
-    val id = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
-    if (id > 0) context.resources.getDimensionPixelSize(id) else 0
-  }
+  private var contentInsets = ContentInsets.NONE
 
   private var screenshotBitmap: Bitmap? = null
   private var croppedBitmap: Bitmap? = null
@@ -112,18 +105,17 @@ class TranslatorVoiceInteractionSession(
     // The screenshot backdrop replaces the whole screen, so the toolbar lives in
     // the status-bar strip — but it still has to clear a display cutout.
     rootView.setOnApplyWindowInsetsListener { _, insets ->
-      val safeTop =
+      val current =
         WindowInsetsCompat
           .toWindowInsetsCompat(insets, rootView)
-          .getInsets(WindowInsetsCompat.Type.displayCutout())
-          .top
-      if (safeTop != cutoutTopInset) {
-        cutoutTopInset = safeTop
-        (topBarView.layoutParams as FrameLayout.LayoutParams).topMargin = safeTop
-        topBarView.requestLayout()
+          .getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+      if (current != contentInsets) {
+        contentInsets = current
+        applyContentGeometry()
       }
       insets
     }
+    rootView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyContentGeometry() }
     menuManager =
       OverlayMenuManager(
         context,
@@ -148,8 +140,8 @@ class TranslatorVoiceInteractionSession(
                   FrameLayout.LayoutParams.WRAP_CONTENT,
                 ).apply {
                   gravity = Gravity.TOP or Gravity.END
-                  topMargin = cutoutTopInset + dpToPx(48)
-                  marginEnd = dpToPx(8)
+                  topMargin = contentInsets.top + dpToPx(48)
+                  marginEnd = contentInsets.right + dpToPx(8)
                 },
             )
           }
@@ -173,7 +165,7 @@ class TranslatorVoiceInteractionSession(
 
     screenshotView =
       ImageView(context).apply {
-        scaleType = ImageView.ScaleType.FIT_START
+        scaleType = ImageView.ScaleType.FIT_XY
         setBackgroundColor(Color.TRANSPARENT)
       }
     rootView.addView(
@@ -219,6 +211,9 @@ class TranslatorVoiceInteractionSession(
           FrameLayout.LayoutParams.WRAP_CONTENT,
         ).apply {
           gravity = Gravity.TOP or Gravity.START
+          topMargin = contentInsets.top
+          leftMargin = contentInsets.left
+          rightMargin = contentInsets.right
         },
     )
 
@@ -242,7 +237,7 @@ class TranslatorVoiceInteractionSession(
           FrameLayout.LayoutParams.WRAP_CONTENT,
         ).apply {
           gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-          bottomMargin = systemBarBottom + dpToPx(24)
+          bottomMargin = contentInsets.bottom + dpToPx(24)
         }
     rootView.addView(statusView, statusParams)
 
@@ -442,6 +437,7 @@ class TranslatorVoiceInteractionSession(
       WindowManager.LayoutParams.MATCH_PARENT,
     )
     win.setGravity(Gravity.TOP or Gravity.START)
+    win.attributes = win.attributes.apply { spanFullDisplay() }
     win.setBackgroundDrawable(null)
     win.decorView.setBackgroundColor(Color.TRANSPARENT)
     win.decorView.setPadding(0, 0, 0, 0)
@@ -476,10 +472,10 @@ class TranslatorVoiceInteractionSession(
     statusView.visibility = View.GONE
   }
 
-  // The system screenshot can be hardware-backed (unlockable) and includes the status bar. Produce
-  // a lockable software ARGB_8888 bitmap with the bar cropped off. A hardware source must be
-  // `copy`-converted to software first (it can't be drawn to a software Canvas); a software source
-  // is cropped directly. Replaces the old full-copy → crop → working-copy chain.
+  // The system screenshot can be hardware-backed (unlockable) and covers the whole display,
+  // system bars included. Produce a lockable software ARGB_8888 bitmap holding just the content
+  // area. A hardware source must be `copy`-converted to software first (it can't be drawn to a
+  // software Canvas); a software source is cropped directly.
   private fun croppedSoftwareScreenshot(source: Bitmap): Bitmap {
     val software =
       if (source.config == Bitmap.Config.HARDWARE) {
@@ -487,15 +483,65 @@ class TranslatorVoiceInteractionSession(
       } else {
         source
       }
-    val top = systemBarTop.coerceIn(0, software.height - 1)
+    val crop = contentCrop(software.width, software.height)
     val cropped =
-      if (top == 0) {
+      if (crop.left == 0 && crop.top == 0 && crop.width() == software.width && crop.height() == software.height) {
         software.copy(Bitmap.Config.ARGB_8888, false)
       } else {
-        Bitmap.createBitmap(software, 0, top, software.width, software.height - top)
+        Bitmap.createBitmap(software, crop.left, crop.top, crop.width(), crop.height())
       }
     if (software !== source && software !== cropped) software.recycle()
     return cropped
+  }
+
+  // Screenshot pixels and window coordinates are the same space once the session window spans the
+  // physical display, so one rect drives both the crop and where the layers that show it sit.
+  private fun contentCrop(
+    width: Int,
+    height: Int,
+  ): Rect {
+    val left = contentInsets.left.coerceIn(0, width - 1)
+    val top = contentInsets.top.coerceIn(0, height - 1)
+    return Rect(
+      left,
+      top,
+      (width - contentInsets.right).coerceIn(left + 1, width),
+      (height - contentInsets.bottom).coerceIn(top + 1, height),
+    )
+  }
+
+  private fun applyContentGeometry() {
+    if (rootView.width == 0 || rootView.height == 0) return
+    val crop = contentCrop(rootView.width, rootView.height)
+    var changed = false
+    for (layer in listOfNotNull(screenshotView, overlayContainer, resultHost?.view)) {
+      val lp = layer.layoutParams as FrameLayout.LayoutParams
+      if (lp.width == crop.width() && lp.height == crop.height() &&
+        lp.leftMargin == crop.left && lp.topMargin == crop.top
+      ) {
+        continue
+      }
+      lp.gravity = Gravity.TOP or Gravity.START
+      lp.width = crop.width()
+      lp.height = crop.height()
+      lp.leftMargin = crop.left
+      lp.topMargin = crop.top
+      changed = true
+    }
+    val bar = topBarView.layoutParams as FrameLayout.LayoutParams
+    if (bar.topMargin != crop.top || bar.leftMargin != crop.left || bar.rightMargin != contentInsets.right) {
+      bar.topMargin = crop.top
+      bar.leftMargin = crop.left
+      bar.rightMargin = contentInsets.right
+      changed = true
+    }
+    val status = statusView.layoutParams as FrameLayout.LayoutParams
+    val statusBottom = contentInsets.bottom + dpToPx(24)
+    if (status.bottomMargin != statusBottom) {
+      status.bottomMargin = statusBottom
+      changed = true
+    }
+    if (changed) rootView.requestLayout()
   }
 
   private fun clearCapture() {
