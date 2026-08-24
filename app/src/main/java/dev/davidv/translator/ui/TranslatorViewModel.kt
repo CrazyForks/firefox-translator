@@ -61,6 +61,7 @@ import dev.davidv.translator.ui.components.ImageWordSelection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,6 +74,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -211,6 +213,11 @@ class TranslatorViewModel(
 
   private val _pendingSharedImage = MutableSharedFlow<Uri>(replay = 1, extraBufferCapacity = 1)
   val pendingSharedImage: SharedFlow<Uri> = _pendingSharedImage.asSharedFlow()
+
+  // Deep link from the system TTS settings ("install voice data"). Conflated so a
+  // request raised before the UI is listening is still delivered, exactly once.
+  private val _languageManagerRequests = Channel<Unit>(Channel.CONFLATED)
+  val languageManagerRequests: Flow<Unit> = _languageManagerRequests.receiveAsFlow()
 
   val navigationState: StateFlow<NavigationState> =
     combine(languageStateManager.languageState, _from, to) { langState, fromLang, toLang ->
@@ -565,6 +572,10 @@ class TranslatorViewModel(
 
   fun setSharedImageUri(uri: Uri) {
     _pendingSharedImage.tryEmit(uri)
+  }
+
+  fun requestLanguageManager() {
+    _languageManagerRequests.trySend(Unit)
   }
 
   // A shared document (pdf/odt/txt/epub) reaches the same drawer as a picked one:

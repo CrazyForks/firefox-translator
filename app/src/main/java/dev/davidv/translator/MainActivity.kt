@@ -87,6 +87,10 @@ class MainActivity : ComponentActivity() {
     // Deliver any shared input now that the ViewModel exists.
     sharedImageUri?.let { viewModel.setSharedImageUri(it) }
     sharedDocumentUri?.let { viewModel.setSharedDocumentUri(it) }
+    if (openLanguageManager) {
+      viewModel.requestLanguageManager()
+      openLanguageManager = false
+    }
 
     setContent {
       TranslatorTheme {
@@ -103,7 +107,6 @@ class MainActivity : ComponentActivity() {
           TranslatorApp(
             viewModel = viewModel,
             downloadServiceState = downloadServiceState,
-            openLanguageManager = openLanguageManager,
           )
         }
       }
@@ -152,6 +155,10 @@ class MainActivity : ComponentActivity() {
       sharedDocumentUri?.let {
         viewModel.setSharedDocumentUri(it)
         sharedDocumentUri = null
+      }
+      if (openLanguageManager) {
+        viewModel.requestLanguageManager()
+        openLanguageManager = false
       }
     }
   }

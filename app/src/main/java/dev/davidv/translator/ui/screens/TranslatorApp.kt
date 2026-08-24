@@ -64,7 +64,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,6 +76,7 @@ import androidx.core.content.ContextCompat.startActivity
 import androidx.core.content.FileProvider
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.davidv.translator.AppSettings
 import dev.davidv.translator.DocumentTranslationService
@@ -96,14 +96,15 @@ import dev.davidv.translator.ui.components.DocumentConfigureSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import kotlin.math.roundToInt
 import java.text.SimpleDateFormat
 import java.util.Date
+import kotlin.math.roundToInt
 
 private fun defaultVoiceNameForLanguage(packs: List<uniffi.translator_core.InstalledTtsPack>): String? =
   packs.firstOrNull()?.voices?.firstOrNull()?.name
@@ -198,7 +199,7 @@ suspend fun saveImage(
       val date = Date()
       val sdf = SimpleDateFormat("yyyyMMdd-hhmmss")
       val dateString = sdf.format(date)
-      val fileName = "shared_image-"+dateString+".jpg"
+      val fileName = "shared_image-" + dateString + ".jpg"
       val file = File(imagesFolder, fileName)
 
       val stream = FileOutputStream(file)
@@ -355,7 +356,6 @@ fun TranslatorApp(
   viewModel: TranslatorViewModel,
   downloadServiceState: StateFlow<DownloadService?>,
   onClose: () -> Unit = {},
-  openLanguageManager: Boolean = false,
 ) {
   val navController = rememberNavController()
   val context = LocalContext.current
@@ -568,8 +568,13 @@ fun TranslatorApp(
       }
     }
 
-  LaunchedEffect(navigationState) {
-    val currentRoute = navController.currentDestination?.route
+  // The NavHost lives inside an AnimatedVisibility that only composes its content on a
+  // later frame, so the graph is not set while the first effects run; keying on the
+  // current entry re-runs these once the host is actually there.
+  val currentBackStackEntry by navController.currentBackStackEntryAsState()
+
+  LaunchedEffect(navigationState, currentBackStackEntry) {
+    val currentRoute = currentBackStackEntry?.destination?.route
     val targetRoute =
       when (navigationState) {
         TranslatorViewModel.NavigationState.LOADING -> null
@@ -583,12 +588,13 @@ fun TranslatorApp(
     }
   }
 
-  var deepLinkConsumed by rememberSaveable { mutableStateOf(false) }
-  LaunchedEffect(openLanguageManager, navigationState) {
-    if (!openLanguageManager || deepLinkConsumed) return@LaunchedEffect
-    if (navigationState != TranslatorViewModel.NavigationState.READY) return@LaunchedEffect
-    deepLinkConsumed = true
-    navController.navigate("language_manager")
+  LaunchedEffect(Unit) {
+    viewModel.languageManagerRequests.collect {
+      val entry = navController.currentBackStackEntryFlow.first { it.destination.route != "loading" }
+      if (entry.destination.route != "language_manager") {
+        navController.navigate("language_manager")
+      }
+    }
   }
 
   val isReadonlyPopup = currentLaunchMode == LaunchMode.ReadonlyModal

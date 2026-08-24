@@ -286,8 +286,11 @@ class TranslatorTtsDataActivity : Activity() {
   private fun finishInstallTtsData() {
     val intent =
       Intent(this, MainActivity::class.java)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        .putExtra(MainActivity.EXTRA_OPEN_LANGUAGE_MANAGER, true)
+        .addFlags(
+          Intent.FLAG_ACTIVITY_NEW_TASK or
+            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP,
+        ).putExtra(MainActivity.EXTRA_OPEN_LANGUAGE_MANAGER, true)
     startActivity(intent)
     setResult(Activity.RESULT_OK)
     finish()
@@ -299,8 +302,11 @@ class TranslatorTtsSettingsRelayActivity : Activity() {
     super.onCreate(savedInstanceState)
     startActivity(
       Intent(this, MainActivity::class.java)
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        .putExtra(MainActivity.EXTRA_OPEN_LANGUAGE_MANAGER, true),
+        .addFlags(
+          Intent.FLAG_ACTIVITY_NEW_TASK or
+            Intent.FLAG_ACTIVITY_CLEAR_TOP or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP,
+        ).putExtra(MainActivity.EXTRA_OPEN_LANGUAGE_MANAGER, true),
     )
     finish()
   }
