@@ -77,6 +77,7 @@ class TranslatorVoiceInteractionSession(
   private var menuManager: OverlayMenuManager? = null
   private var contentInsets = ContentInsets.NONE
 
+  private var pendingScreenshot: Bitmap? = null
   private var screenshotBitmap: Bitmap? = null
   private var croppedBitmap: Bitmap? = null
   private var processing = false
@@ -113,10 +114,14 @@ class TranslatorVoiceInteractionSession(
       if (current != contentInsets) {
         contentInsets = current
         applyContentGeometry()
+        consumePendingScreenshot()
       }
       insets
     }
-    rootView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> applyContentGeometry() }
+    rootView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+      applyContentGeometry()
+      consumePendingScreenshot()
+    }
     menuManager =
       OverlayMenuManager(
         context,
@@ -328,6 +333,26 @@ class TranslatorVoiceInteractionSession(
       showStatus(context.getString(R.string.assistant_no_screenshot))
       return
     }
+    // The capture can beat the window's first traversal, and until that has happened the insets
+    // this crop needs have not been delivered. Park the frame and let layout drive it instead.
+    pendingScreenshot?.recycle()
+    pendingScreenshot = screenshot.copy(Bitmap.Config.ARGB_8888, false)
+    consumePendingScreenshot()
+  }
+
+  private fun consumePendingScreenshot() {
+    val full = pendingScreenshot ?: return
+    if (rootView.width == 0 || rootView.height == 0) return
+    pendingScreenshot = null
+
+    val crop = contentCrop(full.width, full.height)
+    val cropped =
+      if (crop.left == 0 && crop.top == 0 && crop.width() == full.width && crop.height() == full.height) {
+        full
+      } else {
+        Bitmap.createBitmap(full, crop.left, crop.top, crop.width(), crop.height()).also { full.recycle() }
+      }
+
     val oldSs = screenshotBitmap
     val oldCr = croppedBitmap
     oldSs?.recycle()
@@ -335,8 +360,8 @@ class TranslatorVoiceInteractionSession(
     // `screenshotBitmap` is the cropped, lockable source of truth (reused by retranslate);
     // `croppedBitmap` is the currently-displayed bitmap (this source during the scan, then the
     // translated result), so they start as the same object.
-    screenshotBitmap = croppedSoftwareScreenshot(screenshot)
-    croppedBitmap = screenshotBitmap
+    screenshotBitmap = cropped
+    croppedBitmap = cropped
     screenshotView.setImageBitmap(croppedBitmap)
     updateBackdrop()
     runFullScreenOcr()
@@ -473,28 +498,6 @@ class TranslatorVoiceInteractionSession(
     statusView.visibility = View.GONE
   }
 
-  // The system screenshot can be hardware-backed (unlockable) and covers the whole display,
-  // system bars included. Produce a lockable software ARGB_8888 bitmap holding just the content
-  // area. A hardware source must be `copy`-converted to software first (it can't be drawn to a
-  // software Canvas); a software source is cropped directly.
-  private fun croppedSoftwareScreenshot(source: Bitmap): Bitmap {
-    val software =
-      if (source.config == Bitmap.Config.HARDWARE) {
-        source.copy(Bitmap.Config.ARGB_8888, false)
-      } else {
-        source
-      }
-    val crop = contentCrop(software.width, software.height)
-    val cropped =
-      if (crop.left == 0 && crop.top == 0 && crop.width() == software.width && crop.height() == software.height) {
-        software.copy(Bitmap.Config.ARGB_8888, false)
-      } else {
-        Bitmap.createBitmap(software, crop.left, crop.top, crop.width(), crop.height())
-      }
-    if (software !== source && software !== cropped) software.recycle()
-    return cropped
-  }
-
   // Screenshot pixels and window coordinates are the same space once the session window spans the
   // physical display, so one rect drives both the crop and where the layers that show it sit.
   private fun contentCrop(
@@ -543,6 +546,8 @@ class TranslatorVoiceInteractionSession(
     captureTimeoutJob = null
     statusHideJob?.cancel()
     statusHideJob = null
+    pendingScreenshot?.recycle()
+    pendingScreenshot = null
     val ss = screenshotBitmap
     val cr = croppedBitmap
     ss?.recycle()
