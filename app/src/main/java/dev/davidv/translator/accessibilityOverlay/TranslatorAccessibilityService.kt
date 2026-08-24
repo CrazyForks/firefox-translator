@@ -25,6 +25,7 @@ import dev.davidv.translator.SettingsManager
 import dev.davidv.translator.SpeechService
 import dev.davidv.translator.TranslationCoordinator
 import dev.davidv.translator.TranslationService
+import dev.davidv.translator.overlayChrome.OverlayInsets
 import dev.davidv.translator.screenTranslate.ScreenTranslateService
 import dev.davidv.translator.ui.components.DetectedRegions
 import dev.davidv.translator.ui.components.ImageWordSelection
@@ -331,13 +332,13 @@ class TranslatorAccessibilityService : AccessibilityService() {
       return
     }
 
-    val windowBounds = windowManager.currentWindowMetrics.bounds
+    val content = OverlayInsets.contentBounds(windowManager)
     val region =
       Rect(
-        0,
-        ui.getStatusBarHeight() + ui.dpToPx(48),
-        windowBounds.width(),
-        windowBounds.height() - ui.getNavBarHeight(),
+        content.left,
+        content.top + ui.dpToPx(48),
+        content.right,
+        content.bottom,
       )
 
     // Let any open picker/menu finish dismissing before grabbing the screen,

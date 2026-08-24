@@ -7,7 +7,6 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
@@ -29,6 +28,7 @@ import dev.davidv.translator.overlayChrome.OverlayChromeFactory
 import dev.davidv.translator.overlayChrome.OverlayInsets
 import dev.davidv.translator.overlayChrome.OverlayMenuHost
 import dev.davidv.translator.overlayChrome.OverlayMenuManager
+import dev.davidv.translator.overlayChrome.spanFullDisplay
 import dev.davidv.translator.ui.components.ScanAnimationOverlay
 import dev.davidv.translator.ui.components.SelectionSurface
 import dev.davidv.translator.ui.components.SelectionSurfaceState
@@ -285,7 +285,7 @@ class OverlayUI(
     params.gravity = Gravity.TOP or Gravity.START
     params.x = bounds.left
     params.y = bounds.top
-    params.usePhysicalDisplayCoordinates()
+    params.spanFullDisplay()
 
     windowManager.addView(imageView, params)
     translationOverlays.add(imageView)
@@ -325,7 +325,7 @@ class OverlayUI(
           y = region.top
           width = region.width()
           height = region.height()
-          usePhysicalDisplayCoordinates()
+          spanFullDisplay()
         }
       decorView.setPadding(0, 0, 0, 0)
       host.installOn(decorView)
@@ -416,7 +416,7 @@ class OverlayUI(
     params.gravity = Gravity.TOP or Gravity.START
     params.x = region.left
     params.y = region.top
-    params.usePhysicalDisplayCoordinates()
+    params.spanFullDisplay()
     params.windowAnimations = 0
     windowManager.addView(host.view, params)
     scanHost = host
@@ -481,11 +481,6 @@ class OverlayUI(
 
   fun getStatusBarHeight(): Int = OverlayInsets.topInset(windowManager, service.resources)
 
-  fun getNavBarHeight(): Int {
-    val resourceId = service.resources.getIdentifier("navigation_bar_height", "dimen", "android")
-    return if (resourceId > 0) service.resources.getDimensionPixelSize(resourceId) else 0
-  }
-
   fun showBorderWave() {
     if (borderView != null) return
     val view = BorderWaveView.create(service)
@@ -522,13 +517,4 @@ class OverlayUI(
   }
 
   internal fun dpToPx(dp: Int): Int = (dp * service.resources.displayMetrics.density).toInt()
-
-  private fun WindowManager.LayoutParams.usePhysicalDisplayCoordinates() {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-      layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-    }
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-      setFitInsetsTypes(0)
-    }
-  }
 }
