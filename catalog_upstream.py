@@ -100,6 +100,7 @@ LANGUAGE_NAMES = {
     "is": "Icelandic",
     "it": "Italian",
     "ja": "Japanese",
+    "ka": "Georgian",
     "kn": "Kannada",
     "ko": "Korean",
     "lt": "Lithuanian",
@@ -171,6 +172,7 @@ LANGUAGE_SCRIPTS = {
     "is": "Latn",
     "it": "Latn",
     "ja": "Jpan",
+    "ka": "Geor",
     "kn": "Knda",
     "ko": "Hang",
     "lt": "Latn",
@@ -235,6 +237,12 @@ DICTIONARY_CODE_OVERRIDES = {
 EXTRA_FILES = {
     "ja": ["mucab.bin"],
 }
+
+# The language list is derived from the translation manifest, so a language with
+# a voice but no translation pair would never reach the catalog and `merge_tts`
+# would drop its voices. These carry TTS (and dictionaries/OCR) with both
+# translation directions absent.
+TTS_ONLY_LANGUAGES = {"ka"}
 
 
 def strip_compression_suffix(filename: str) -> str:
@@ -379,7 +387,7 @@ def build_language_index(
     from_english, to_english, all_languages = build_language_data(pair_files)
 
     languages = []
-    for lang_code in sorted(all_languages):
+    for lang_code in sorted(all_languages | TTS_ONLY_LANGUAGES):
         if lang_code not in LANGUAGE_NAMES or lang_code not in LANGUAGE_SCRIPTS:
             continue
 

@@ -1,10 +1,10 @@
 {
   "formatVersion": 6,
-  "generatedAt": 1784793315,
+  "generatedAt": 1788008344,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784793315,
+    "languageIndexUpdatedAt": 1788008344,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1008,6 +1008,27 @@
           }
         },
         "sampleText": "虹は、水滴の中で光が反射、屈折、分散することによって生じ、空に光のスペクトルが現れる気象現象です。"
+      }
+    },
+    "ka": {
+      "meta": {
+        "code": "ka",
+        "name": "Georgian",
+        "shortName": "Georgian",
+        "script": "Geor"
+      },
+      "assets": {},
+      "tts": {
+        "defaultRegion": "GE",
+        "regions": {
+          "GE": {
+            "displayName": "Georgia",
+            "voices": [
+              "tts-piper-ka-ge-natia-medium"
+            ]
+          }
+        },
+        "sampleText": "ცისარტყელა არის მეტეოროლოგიური მოვლენა, რომელიც გამოწვეულია წყლის წვეთებში სინათლის არეკვლით, გარდატეხითა და დისპერსიით, რის შედეგადაც ცაზე ჩნდება სინათლის სპექტრი."
       }
     },
     "kn": {
@@ -7504,6 +7525,23 @@
         "tts-espeak-core-v1"
       ]
     },
+    "tts-espeak-dict-ka": {
+      "feature": "support",
+      "kind": "tts-espeak-dict",
+      "files": [
+        {
+          "name": "ka_dict",
+          "sizeBytes": 87775,
+          "installPath": "bin/espeak-ng-data/ka_dict",
+          "url": "https://offline-translator.davidv.dev/tts/1/espeak-ng-data/ka_dict",
+          "role": "espeakDict",
+          "priority": 0
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-core-v1"
+      ]
+    },
     "tts-espeak-dict-ko": {
       "feature": "support",
       "kind": "tts-espeak-dict",
@@ -10206,6 +10244,40 @@
         "tts-kokoro-mnn-v1.0-core"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ja/jf_alpha_high.opus"
+    },
+    "tts-piper-ka-ge-natia-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "auxRole": "sidecar",
+      "language": "ka",
+      "locale": "ka_GE",
+      "region": "GE",
+      "voice": "natia",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "ka_GE-natia-medium.mnn",
+          "sizeBytes": 16864416,
+          "installPath": "bin/piper/ka/ka_GE/natia/medium/ka_GE-natia-medium.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/ka/ka_GE/natia/medium/ka_GE-natia-medium.mnn",
+          "role": "model",
+          "priority": 0
+        },
+        {
+          "name": "ka_GE-natia-medium.onnx.json",
+          "sizeBytes": 4842,
+          "installPath": "bin/piper/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx.json",
+          "url": "https://offline-translator.davidv.dev/tts/1/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx.json",
+          "role": "sidecar",
+          "priority": 0
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-ka"
+      ],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ka/natia_medium.opus"
     },
     "tts-mms-kn-in-standard-mms": {
       "feature": "tts",
@@ -13258,6 +13330,14 @@
       "quantBits": 8,
       "onnxBytes": 28130791,
       "mnnBytes": 5944328,
+      "feature": "tts"
+    },
+    {
+      "onnx": "bin/piper/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx",
+      "mnn": "bin/piper/ka/ka_GE/natia/medium/ka_GE-natia-medium.mnn",
+      "quantBits": 8,
+      "onnxBytes": 0,
+      "mnnBytes": 16864416,
       "feature": "tts"
     },
     {

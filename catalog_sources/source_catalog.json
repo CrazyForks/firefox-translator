@@ -1,12 +1,12 @@
 {
   "formatVersion": 6,
-  "generatedAt": 1784793315,
+  "generatedAt": 1788008344,
   "translationModelsBaseUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data",
   "dictionaryBaseUrl": "https://offline-translator.davidv.dev/dictionaries",
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1784793315,
+    "languageIndexUpdatedAt": 1788008344,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1010,6 +1010,27 @@
           }
         },
         "sampleText": "虹は、水滴の中で光が反射、屈折、分散することによって生じ、空に光のスペクトルが現れる気象現象です。"
+      }
+    },
+    "ka": {
+      "meta": {
+        "code": "ka",
+        "name": "Georgian",
+        "shortName": "Georgian",
+        "script": "Geor"
+      },
+      "assets": {},
+      "tts": {
+        "defaultRegion": "GE",
+        "regions": {
+          "GE": {
+            "displayName": "Georgia",
+            "voices": [
+              "tts-piper-ka-ge-natia-medium"
+            ]
+          }
+        },
+        "sampleText": "ცისარტყელა არის მეტეოროლოგიური მოვლენა, რომელიც გამოწვეულია წყლის წვეთებში სინათლის არეკვლით, გარდატეხითა და დისპერსიით, რის შედეგადაც ცაზე ჩნდება სინათლის სპექტრი."
       }
     },
     "kn": {
@@ -8341,6 +8362,24 @@
         "tts-espeak-core-v1"
       ]
     },
+    "tts-espeak-dict-ka": {
+      "feature": "support",
+      "kind": "tts-espeak-dict",
+      "files": [
+        {
+          "name": "ka_dict",
+          "sizeBytes": 0,
+          "installPath": "bin/espeak-ng-data/ka_dict",
+          "url": "https://offline-translator.davidv.dev/tts/1/espeak-ng-data/ka_dict",
+          "role": "espeakDict",
+          "priority": 0,
+          "mirrorPath": "tts/1/espeak-ng-data/ka_dict"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-core-v1"
+      ]
+    },
     "tts-espeak-dict-ko": {
       "feature": "support",
       "kind": "tts-espeak-dict",
@@ -11170,6 +11209,41 @@
       "dependsOn": [
         "tts-espeak-dict-ja",
         "tts-kokoro-v1.0-core"
+      ]
+    },
+    "tts-piper-ka-ge-natia-medium": {
+      "feature": "tts",
+      "engine": "piper",
+      "auxRole": "sidecar",
+      "language": "ka",
+      "locale": "ka_GE",
+      "region": "GE",
+      "voice": "natia",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "ka_GE-natia-medium.onnx",
+          "sizeBytes": 63201294,
+          "installPath": "bin/piper/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx",
+          "role": "model",
+          "priority": 0,
+          "mirrorPath": "tts/1/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx"
+        },
+        {
+          "name": "ka_GE-natia-medium.onnx.json",
+          "sizeBytes": 4842,
+          "installPath": "bin/piper/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx.json",
+          "url": "https://huggingface.co/rhasspy/piper-voices/resolve/main/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx.json",
+          "role": "sidecar",
+          "priority": 0,
+          "mirrorPath": "tts/1/ka/ka_GE/natia/medium/ka_GE-natia-medium.onnx.json"
+        }
+      ],
+      "dependsOn": [
+        "tts-espeak-dict-ka"
       ]
     },
     "tts-mms-kn-in-standard-mms": {
