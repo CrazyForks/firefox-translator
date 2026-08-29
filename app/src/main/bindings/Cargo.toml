@@ -2,6 +2,9 @@
 name = "bindings"
 version = "0.1.0"
 edition = "2024"
+# F-Droid builds with rustc 1.88
+# need to bump both in tandem
+rust-version = "1.88"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
