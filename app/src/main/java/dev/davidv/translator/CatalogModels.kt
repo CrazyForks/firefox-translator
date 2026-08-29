@@ -133,6 +133,7 @@ class LanguageCatalog private constructor(
                 displayName = row.language.displayName,
                 shortDisplayName = row.language.shortDisplayName,
                 script = row.language.script,
+                writingSystem = row.language.writingSystem,
                 dictionaryCode = row.language.dictionaryCode,
               ),
             availability =

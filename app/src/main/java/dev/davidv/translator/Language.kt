@@ -25,6 +25,7 @@ data class Language(
   val displayName: String,
   val shortDisplayName: String,
   val script: Script,
+  val writingSystem: WritingSystem,
   val dictionaryCode: String,
 ) {
   val isEnglish: Boolean get() = code == "en"

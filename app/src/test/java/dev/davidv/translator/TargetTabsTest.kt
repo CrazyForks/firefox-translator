@@ -22,7 +22,7 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 class TargetTabsTest {
-  private fun lang(code: String) = Language(code, code, code, "Latn", code)
+  private fun lang(code: String) = Language(code, code, code, Script.LATIN, singleScript(Script.LATIN), code)
 
   private val en = lang("en")
   private val es = lang("es")

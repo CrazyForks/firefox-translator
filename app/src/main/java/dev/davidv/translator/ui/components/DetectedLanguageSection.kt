@@ -33,6 +33,7 @@ import dev.davidv.translator.LanguageAvailabilityEntry
 import dev.davidv.translator.LanguageAvailabilityState
 import dev.davidv.translator.Script
 import dev.davidv.translator.TranslatorMessage
+import dev.davidv.translator.singleScript
 import dev.davidv.translator.ui.theme.TranslatorTheme
 
 @Composable
@@ -76,6 +77,7 @@ private fun previewLanguage(
   displayName = name,
   shortDisplayName = name,
   script = Script.LATIN,
+  writingSystem = singleScript(Script.LATIN),
   dictionaryCode = code,
 )
 

@@ -4,6 +4,12 @@ import androidx.annotation.StringRes
 
 typealias ReadingOrder = uniffi.translator_core.ReadingOrder
 typealias Script = uniffi.translator_core.Script
+typealias WritingSystem = uniffi.translator_core.WritingSystem
+
+// A typealias does not expose the nested classifiers of what it points at, so
+// `WritingSystem.Single` cannot be reached through the alias above the way
+// `Script.LATIN` can -- enum entries resolve through an alias, nested classes do not.
+fun singleScript(script: Script): WritingSystem = uniffi.translator_core.WritingSystem.Single(script)
 typealias SelectionView = uniffi.translator_core.SelectionView
 typealias WritingAxis = uniffi.translator_core.WritingAxis
 typealias Point = uniffi.translator_core.Point

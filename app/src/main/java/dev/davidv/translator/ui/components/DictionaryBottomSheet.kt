@@ -77,6 +77,7 @@ import dev.davidv.translator.Sense
 import dev.davidv.translator.WordEntryComplete
 import dev.davidv.translator.WordTag
 import dev.davidv.translator.WordWithTaggedEntries
+import dev.davidv.translator.singleScript
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import dev.davidv.translator.wordTag
 
@@ -456,6 +457,7 @@ fun DictionaryBottomSheetPreview() {
             displayName = "Spanish",
             shortDisplayName = "Spanish",
             script = Script.LATIN,
+            writingSystem = singleScript(Script.LATIN),
             dictionaryCode = "es",
           ),
         selectedEntryIndex = 0,

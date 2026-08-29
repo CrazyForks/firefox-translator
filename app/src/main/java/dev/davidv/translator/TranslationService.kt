@@ -203,7 +203,7 @@ class TranslationService(
       transliterateBinding.transliterate(
         text = text,
         languageCode = from.code,
-        sourceScript = from.script,
+        writingSystem = from.writingSystem,
         japaneseDictPath = mucabPath,
         japaneseSpaced = settings.addSpacesForJapaneseTransliteration,
       )

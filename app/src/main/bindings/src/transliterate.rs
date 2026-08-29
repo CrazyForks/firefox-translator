@@ -2,19 +2,16 @@
 pub fn transliterate_with_policy_record(
     text: String,
     language_code: String,
-    source_script: translator::script::Script,
-    target_script: translator::script::Script,
+    writing_system: translator::script::WritingSystem,
     japanese_dict_path: Option<String>,
     japanese_spaced: bool,
 ) -> Option<String> {
     #[cfg(feature = "transliterate")]
     {
-        // A script this build cannot name is one it cannot romanize either.
         translator::transliterate::transliterate_with_policy_for_language(
             &text,
             &translator::LanguageCode::from(language_code),
-            &translator::ScriptCode::from(source_script.iso15924()?),
-            &translator::ScriptCode::from(target_script.iso15924()?),
+            writing_system,
             japanese_dict_path.as_deref(),
             japanese_spaced,
         )
@@ -24,8 +21,7 @@ pub fn transliterate_with_policy_record(
         let _ = (
             text,
             language_code,
-            source_script,
-            target_script,
+            writing_system,
             japanese_dict_path,
             japanese_spaced,
         );

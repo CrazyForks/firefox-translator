@@ -89,6 +89,7 @@ import dev.davidv.translator.TapToTranslateNotification
 import dev.davidv.translator.labelRes
 import dev.davidv.translator.languageNameComparator
 import dev.davidv.translator.localizedName
+import dev.davidv.translator.singleScript
 import dev.davidv.translator.ui.components.AppCard
 import dev.davidv.translator.ui.theme.TranslatorTheme
 import kotlinx.coroutines.delay
@@ -1461,6 +1462,7 @@ private fun previewLanguage(
   displayName = name,
   shortDisplayName = name,
   script = Script.LATIN,
+  writingSystem = singleScript(Script.LATIN),
   dictionaryCode = code,
 )
 
