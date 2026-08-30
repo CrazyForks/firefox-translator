@@ -41,6 +41,8 @@ PPOCR_V6_FILENAMES = {
     "PP-OCRv6_small_keys.txt",
     "hebrew_rec_int8.mnn",
     "hebrew_keys.txt",
+    "georgian_rec_int8.mnn",
+    "georgian_keys.txt",
     "indic_r2e10_int8.mnn",
     "indic_keys.txt",
     "ink_bold_int8.mnn",
@@ -59,8 +61,10 @@ PPOCR_V6_RECOGNIZER_FILENAMES = {
 # Scripts whose only recognizer is a v6 fine-tune (no v5 base): (model, keys).
 # These cover languages PaddleOCR never shipped a recognizer for, which were
 # tesseract-only before. `indic` is one merged model over Bengali, Gujarati,
-# Kannada and Malayalam.
+# Kannada and Malayalam; `georgian` covers Mkhedruli plus Mtavruli, which is a
+# separate codepoint block rather than a case styling.
 PPOCR_V6_NATIVE_RECOGNIZER_FILENAMES = {
+    "georgian": ("georgian_rec_int8.mnn", "georgian_keys.txt"),
     "hebrew": ("hebrew_rec_int8.mnn", "hebrew_keys.txt"),
     "indic": ("indic_r2e10_int8.mnn", "indic_keys.txt"),
 }
@@ -93,8 +97,8 @@ PPOCR_RECOGNIZER_FILENAMES = {
 # language-level distinction is East Slavic Cyrillic (see below).
 #
 # `indic` is one merged v6 recognizer over the four non-Devanagari Indic
-# scripts; Devanagari keeps its dedicated v5 recognizer. `hebrew` and `indic`
-# are v6 fine-tunes covering scripts PaddleOCR never shipped a recognizer for
+# scripts; Devanagari keeps its dedicated v5 recognizer. `georgian`, `hebrew`
+# and `indic` are v6 fine-tunes covering scripts PaddleOCR never shipped a recognizer for
 # (tesseract-only before). The shared `cj` model handles Chinese (simplified +
 # traditional) and Japanese; Korean has its own recognizer.
 ISO_SCRIPT_TO_PPOCR = {
@@ -103,6 +107,7 @@ ISO_SCRIPT_TO_PPOCR = {
     "Cyrl": "cyrillic",
     "Deva": "devanagari",
     "Grek": "el",
+    "Geor": "georgian",
     "Gujr": "indic",
     "Hang": "korean",
     "Hans": "cj",
@@ -123,7 +128,7 @@ PPOCR_EAST_SLAVIC_LANGS = {"be", "ru", "uk"}
 
 # Every recognizer slug that gets a pack, in stable output order.
 PPOCR_RECOGNIZER_SLUGS = [
-    "arabic", "cyrillic", "devanagari", "el", "eslav", "hebrew",
+    "arabic", "cyrillic", "devanagari", "el", "eslav", "georgian", "hebrew",
     "indic", "korean", "latin", "ta", "te", "th", "cj",
 ]
 

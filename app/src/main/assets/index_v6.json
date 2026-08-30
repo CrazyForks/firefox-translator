@@ -1,10 +1,10 @@
 {
   "formatVersion": 6,
-  "generatedAt": 1788008344,
+  "generatedAt": 1788049941,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1788008344,
+    "languageIndexUpdatedAt": 1788049941,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -1017,7 +1017,11 @@
         "shortName": "Georgian",
         "script": "Geor"
       },
-      "assets": {},
+      "assets": {
+        "ocr": {
+          "ppocr": "ocr-ppocr-georgian"
+        }
+      },
       "tts": {
         "defaultRegion": "GE",
         "regions": {
@@ -12483,6 +12487,34 @@
           "sizeBytes": 1663,
           "installPath": "ppocr/PP-OCRv5/eslav_PP-OCRv5_keys.txt",
           "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv5/eslav_PP-OCRv5_keys.txt",
+          "role": "keys",
+          "priority": 0
+        }
+      ],
+      "dependsOn": [
+        "ocr-ppocr-detector",
+        "ocr-ppocr-latin"
+      ]
+    },
+    "ocr-ppocr-georgian": {
+      "feature": "ocr",
+      "engine": "ppocr",
+      "role": "recognizer",
+      "script": "georgian",
+      "files": [
+        {
+          "name": "georgian_rec_int8.mnn",
+          "sizeBytes": 3242772,
+          "installPath": "ppocr/PP-OCRv6/georgian_rec_int8.mnn",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/georgian_rec_int8.mnn",
+          "role": "recognizer",
+          "priority": 0
+        },
+        {
+          "name": "georgian_keys.txt",
+          "sizeBytes": 456,
+          "installPath": "ppocr/PP-OCRv6/georgian_keys.txt",
+          "url": "https://offline-translator.davidv.dev/ocr/1/PP-OCRv6/georgian_keys.txt",
           "role": "keys",
           "priority": 0
         }
