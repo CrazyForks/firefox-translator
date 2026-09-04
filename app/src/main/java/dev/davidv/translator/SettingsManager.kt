@@ -331,9 +331,15 @@ class SettingsManager(
     }
     _settings.value = newSettings
 
+    // The native server takes a config snapshot at start, so anything it
+    // serves from settings restarts it.
     val serverConfigChanged =
       newSettings.httpServerPort != currentSettings.httpServerPort ||
-        newSettings.httpServerBindMode != currentSettings.httpServerBindMode
+        newSettings.httpServerBindMode != currentSettings.httpServerBindMode ||
+        newSettings.maxImageSize != currentSettings.maxImageSize ||
+        newSettings.minConfidence != currentSettings.minConfidence ||
+        newSettings.backgroundMode != currentSettings.backgroundMode ||
+        newSettings.translatePdfImages != currentSettings.translatePdfImages
     if (newSettings.httpServerEnabled != currentSettings.httpServerEnabled || serverConfigChanged) {
       applyHttpServerState(newSettings)
     }

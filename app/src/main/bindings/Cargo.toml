@@ -12,7 +12,7 @@ name = "bindings"
 path = "src/lib.rs"
 
 [features]
-default = ["dictionary", "mucab", "tts", "pdf", "odt", "epub", "transliterate", "image-render", "pdf-image-translate", "doc-align", "ppocr", "planar-tracker", "gpu"]
+default = ["dictionary", "mucab", "tts", "pdf", "odt", "epub", "transliterate", "image-render", "pdf-image-translate", "doc-align", "ppocr", "planar-tracker", "gpu", "http"]
 dictionary = ["translator/dictionary"]
 gpu = ["translator/gpu"]
 mucab = ["translator/mucab"]
@@ -26,6 +26,7 @@ pdf-image-translate = ["translator/pdf-image-translate"]
 doc-align = ["translator/doc-align"]
 ppocr = ["translator/ppocr"]
 planar-tracker = ["translator/planar-tracker"]
+http = ["translator/http"]
 
 [dependencies]
 adblock = { version = "0.12.2", default-features = false, features = ["full-regex-handling", "embedded-domain-resolver"] }

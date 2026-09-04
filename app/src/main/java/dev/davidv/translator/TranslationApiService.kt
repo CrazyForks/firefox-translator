@@ -31,17 +31,25 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import uniffi.bindings.CatalogHandle
+import uniffi.bindings.HttpServerException
+import uniffi.bindings.HttpServerHandle
+import uniffi.bindings.HttpSessionSource
+import uniffi.bindings.startHttpServer
+import uniffi.translator.BindAddress
+import uniffi.translator.HttpServerConfig
+import uniffi.translator.OcrSettings
+import java.io.File
 
 /**
- * Foreground service hosting the [LibreTranslateHttpServer]. It must be foreground
- * because the whole point is to answer requests from other apps while this app is
- * backgrounded, which would otherwise let the process (and its listening socket) be
- * suspended or killed.
+ * Foreground service hosting the native LibreTranslate-compatible HTTP server. It
+ * must be foreground because the whole point is to answer requests from other apps
+ * while this app is backgrounded, which would otherwise let the process (and its
+ * listening socket) be suspended or killed.
  */
 class TranslationApiService : Service() {
-  private var server: LibreTranslateHttpServer? = null
-  private var currentPort: Int = -1
-  private var currentBindMode: HttpServerBindMode? = null
+  private var server: HttpServerHandle? = null
+  private var currentConfig: HttpServerConfig? = null
 
   companion object {
     private const val TAG = "TranslationApiService"
@@ -110,7 +118,9 @@ class TranslationApiService : Service() {
     ensureChannel()
     startForegroundCompat(runningNotification(hostFor(bindMode), port))
 
-    if (server != null && port == currentPort && bindMode == currentBindMode) {
+    val app = application as TranslatorApplication
+    val config = serverConfig(port, bindMode, app.settingsManager.settings.value)
+    if (server != null && config == currentConfig) {
       return START_REDELIVER_INTENT
     }
 
@@ -118,13 +128,15 @@ class TranslationApiService : Service() {
     val host = hostFor(bindMode)
     try {
       server =
-        LibreTranslateHttpServer(host, port, application as TranslatorApplication).apply {
-          start(NANO_HTTPD_READ_TIMEOUT_MS, false)
-        }
-      currentPort = port
-      currentBindMode = bindMode
+        startHttpServer(
+          config,
+          object : HttpSessionSource {
+            override fun catalog(): CatalogHandle? = app.filePathManager.loadCatalog()?.planarHandle()
+          },
+        )
+      currentConfig = config
       Log.i(TAG, "Translation API server listening on $host:$port")
-    } catch (e: Exception) {
+    } catch (e: HttpServerException) {
       Log.e(TAG, "Failed to bind translation API server on $host:$port", e)
       server = null
       NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, errorNotification(port))
@@ -159,14 +171,37 @@ class TranslationApiService : Service() {
   private fun stopServer() {
     server?.stop()
     server = null
-    currentPort = -1
-    currentBindMode = null
+    currentConfig = null
   }
+
+  private fun serverConfig(
+    port: Int,
+    bindMode: HttpServerBindMode,
+    settings: AppSettings,
+  ): HttpServerConfig =
+    HttpServerConfig(
+      bind = bindMode.toNative(),
+      port = port.toUShort(),
+      outputDir = File(cacheDir, "translate_file").absolutePath,
+      ocr =
+        OcrSettings(
+          maxImageSize = settings.maxImageSize.toUInt(),
+          minConfidence = settings.minConfidence.toUInt(),
+          backgroundMode = settings.backgroundMode,
+        ),
+      translatePdfImages = settings.translatePdfImages,
+    )
 
   private fun hostFor(bindMode: HttpServerBindMode): String =
     when (bindMode) {
       HttpServerBindMode.LOCALHOST -> "127.0.0.1"
       HttpServerBindMode.ALL_INTERFACES -> "0.0.0.0"
+    }
+
+  private fun HttpServerBindMode.toNative(): BindAddress =
+    when (this) {
+      HttpServerBindMode.LOCALHOST -> BindAddress.LOCALHOST
+      HttpServerBindMode.ALL_INTERFACES -> BindAddress.ALL_INTERFACES
     }
 
   private fun startForegroundCompat(notification: Notification) {
@@ -231,5 +266,3 @@ class TranslationApiService : Service() {
     nm.createNotificationChannel(channel)
   }
 }
-
-private const val NANO_HTTPD_READ_TIMEOUT_MS = 10_000

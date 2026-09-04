@@ -1151,4 +1151,6 @@ private fun speechErrorMessage(
       context.getString(R.string.tts_no_voice, reason.language.localizedName())
     is SpeechError.SynthesisFailed ->
       context.getString(R.string.tts_synthesis_failed, reason.language.localizedName())
+    is SpeechError.SynthesisError ->
+      context.getString(R.string.tts_synthesis_error, reason.language.localizedName(), reason.reason)
   }

@@ -380,7 +380,8 @@ class LanguageCatalog private constructor(
   /** Internal accessor for the raw uniffi `CatalogHandle`. The live-
    *  overlay pipeline constructor takes this so it can hold an Arc to
    *  the underlying TranslatorSession for its async acquire/refresh
-   *  worker. */
+   *  worker, and the API server resolves the current session through
+   *  it per request. */
   internal fun planarHandle(): CatalogHandle = handle
 
   @Throws(CatalogException::class)
@@ -418,7 +419,6 @@ class LanguageCatalog private constructor(
     outputPath: String,
     from: Language,
     to: Language,
-    availableLanguages: List<Language>,
     translatePdfImages: Boolean,
     txtLayout: TxtLayoutChoice,
     onProgress: (DocumentTranslationProgress) -> Unit = {},
@@ -429,7 +429,6 @@ class LanguageCatalog private constructor(
       outputPath,
       from.code,
       to.code,
-      availableLanguages.map { it.code },
       translatePdfImages,
       txtLayout.toUniffi(),
       object : DocumentProgressSink {
@@ -505,6 +504,7 @@ class LanguageCatalog private constructor(
 
   fun installedTtsVoices(languageCode: String): List<uniffi.translator_core.InstalledTtsPack> = handle.installedTtsVoices(languageCode)
 
+  @Throws(CatalogException::class)
   fun planSpeechChunks(
     languageCode: String,
     text: String,

@@ -136,6 +136,7 @@
     <string name="tts_catalog_unavailable">Catalog unavailable</string>
     <string name="tts_no_voice">No voice installed for %1$s</string>
     <string name="tts_synthesis_failed">Speech synthesis failed for %1$s</string>
+    <string name="tts_synthesis_error">Speech synthesis failed for %1$s: %2$s</string>
     <string name="tts_sample_fallback">This is a text-to-speech sample from Offline Translator.</string>
 
     <!-- translation -->

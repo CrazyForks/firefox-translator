@@ -62,12 +62,19 @@ class SpeechService(
         "Using TTS pack=$selectedPackId voice=$selectedVoiceName speed=$boundedSpeechSpeed lang=${language.code}",
       )
       val chunkRequests =
-        catalog.planSpeechChunks(
-          languageCode = language.code,
-          text = text,
-          packId = selectedPackId,
-          readUrlsAndHashtags = settings.ttsReadUrlsAndHashtags,
-        )
+        try {
+          catalog.planSpeechChunks(
+            languageCode = language.code,
+            text = text,
+            packId = selectedPackId,
+            readUrlsAndHashtags = settings.ttsReadUrlsAndHashtags,
+          )
+        } catch (e: uniffi.bindings.CatalogException) {
+          Log.e("SpeechService", "planSpeechChunks failed lang=${language.code} pack=$selectedPackId", e)
+          return@withContext SpeechSynthesisResult.Error(
+            SpeechError.SynthesisError(language, e.message ?: e.toString()),
+          )
+        }
       if (chunkRequests.isEmpty()) {
         return@withContext SpeechSynthesisResult.Error(SpeechError.SynthesisFailed(language))
       }
@@ -93,7 +100,7 @@ class SpeechService(
               } catch (e: uniffi.bindings.CatalogException) {
                 Log.e("SpeechService", "synthesizeSpeechPcm failed lang=${language.code} pack=$selectedPackId", e)
                 throw IllegalStateException(
-                  "Speech synthesis failed for ${language.displayName}",
+                  "Speech synthesis failed for ${language.displayName}: ${e.message ?: e.toString()}",
                   e,
                 )
               }
@@ -176,5 +183,10 @@ sealed interface SpeechError {
 
   data class SynthesisFailed(
     val language: Language,
+  ) : SpeechError
+
+  data class SynthesisError(
+    val language: Language,
+    val reason: String,
   ) : SpeechError
 }

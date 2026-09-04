@@ -200,12 +200,6 @@ class DocumentTranslationService : Service() {
           ?: throw IllegalStateException("Catalog unavailable")
       val from = catalog.languageByCode(request.fromCode) ?: throw IllegalStateException("Source language unavailable")
       val to = catalog.languageByCode(request.toCode) ?: throw IllegalStateException("Target language unavailable")
-      val availableLanguages =
-        catalog.languageRows
-          .asSequence()
-          .filter { it.availability.translatorFiles }
-          .map { it.language }
-          .toList()
 
       updateState(request.taskId) {
         it.copy(progressLabelRes = R.string.doc_progress_preparing, progressFraction = null)
@@ -220,7 +214,6 @@ class DocumentTranslationService : Service() {
               outputPath = request.outputPath,
               from = from,
               to = to,
-              availableLanguages = availableLanguages,
               translatePdfImages = request.translatePdfImages,
               txtLayout = request.txtLayout,
               onProgress = { progress ->
