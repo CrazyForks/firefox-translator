@@ -1,10 +1,10 @@
 {
   "formatVersion": 6,
-  "generatedAt": 1788049941,
+  "generatedAt": 1788340421,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1788049941,
+    "languageIndexUpdatedAt": 1788340421,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -383,6 +383,7 @@
           "translate-en-is",
           "translate-en-it",
           "translate-en-ja",
+          "translate-en-ka",
           "translate-en-kn",
           "translate-en-ko",
           "translate-en-lt",
@@ -428,6 +429,7 @@
           "translate-is-en",
           "translate-it-en",
           "translate-ja-en",
+          "translate-ka-en",
           "translate-kn-en",
           "translate-ko-en",
           "translate-lt-en",
@@ -1002,8 +1004,7 @@
           "JP": {
             "displayName": "Japan",
             "voices": [
-              "tts-kokoro_mnn-ja-jp-jf-alpha-kokoro-mnn-v1.0",
-              "tts-kokoro-ja-jp-jf-alpha-kokoro-v1.0"
+              "tts-kokoro_mnn-ja-jp-jf-alpha-kokoro-mnn-v1.0"
             ]
           }
         },
@@ -1018,6 +1019,10 @@
         "script": "Geor"
       },
       "assets": {
+        "translate": [
+          "translate-en-ka",
+          "translate-ka-en"
+        ],
         "ocr": {
           "ppocr": "ocr-ppocr-georgian"
         }
@@ -1089,8 +1094,7 @@
             "displayName": "South Korea",
             "voices": [
               "tts-mimic3-ko-ko-kss-low",
-              "tts-kokoro_mnn-ko-kr-jf-alpha-kokoro-mnn-v1.0",
-              "tts-kokoro-ko-kr-jf-alpha-kokoro-v1.0"
+              "tts-kokoro_mnn-ko-kr-jf-alpha-kokoro-mnn-v1.0"
             ]
           }
         },
@@ -4572,6 +4576,39 @@
       ],
       "dependsOn": []
     },
+    "translate-en-ka": {
+      "feature": "translation",
+      "from": "en",
+      "to": "ka",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.enka.intgemm.alphas.bin",
+          "sizeBytes": 24369762,
+          "installPath": "bin/model.enka.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-ka/lmt60_distill_20260902/exported/model.enka.intgemm.alphas.bin.gz",
+          "role": "model",
+          "priority": 0
+        },
+        {
+          "name": "lex.50.50.enka.s2t.bin",
+          "sizeBytes": 1750960,
+          "installPath": "bin/lex.50.50.enka.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-ka/lmt60_distill_20260902/exported/lex.50.50.enka.s2t.bin.gz",
+          "role": "lex",
+          "priority": 0
+        },
+        {
+          "name": "vocab.enka.spm",
+          "sizeBytes": 416365,
+          "installPath": "bin/vocab.enka.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/en-ka/lmt60_distill_20260902/exported/vocab.enka.spm.gz",
+          "role": "vocab",
+          "priority": 0
+        }
+      ],
+      "dependsOn": []
+    },
     "translate-en-kn": {
       "feature": "translation",
       "from": "en",
@@ -6099,6 +6136,39 @@
           "sizeBytes": 746616,
           "installPath": "bin/vocab.jaen.spm",
           "url": "https://offline-translator.davidv.dev/translation/1/models/ja-en/cjk_retrain_base-memory_NLRJLD_pQFyrvgKtbie2nA/exported/vocab.jaen.spm.gz",
+          "role": "vocab",
+          "priority": 0
+        }
+      ],
+      "dependsOn": []
+    },
+    "translate-ka-en": {
+      "feature": "translation",
+      "from": "ka",
+      "to": "en",
+      "experimental": false,
+      "files": [
+        {
+          "name": "model.kaen.intgemm.alphas.bin",
+          "sizeBytes": 25210570,
+          "installPath": "bin/model.kaen.intgemm.alphas.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ka-en/lmt60_distill_20260902/exported/model.kaen.intgemm.alphas.bin.gz",
+          "role": "model",
+          "priority": 0
+        },
+        {
+          "name": "lex.50.50.kaen.s2t.bin",
+          "sizeBytes": 1894639,
+          "installPath": "bin/lex.50.50.kaen.s2t.bin",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ka-en/lmt60_distill_20260902/exported/lex.50.50.kaen.s2t.bin.gz",
+          "role": "lex",
+          "priority": 0
+        },
+        {
+          "name": "vocab.kaen.spm",
+          "sizeBytes": 416365,
+          "installPath": "bin/vocab.kaen.spm",
+          "url": "https://offline-translator.davidv.dev/translation/1/models/ka-en/lmt60_distill_20260902/exported/vocab.kaen.spm.gz",
           "role": "vocab",
           "priority": 0
         }
@@ -10245,7 +10315,8 @@
       "files": [],
       "dependsOn": [
         "tts-espeak-dict-ja",
-        "tts-kokoro-mnn-v1.0-core"
+        "tts-kokoro-mnn-v1.0-core",
+        "support-ja-mucab"
       ],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/ja/jf_alpha_high.opus"
     },

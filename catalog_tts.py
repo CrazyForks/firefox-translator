@@ -106,6 +106,13 @@ TTS_LANGUAGE_ALIASES = {
 ESPEAK_DICT_OVERRIDES = {
     "zh": "cmn",
 }
+# Support packs a language's voices need on top of their engine's own files.
+# Japanese text has to be tokenized by mucab before anything can pronounce or
+# romanize it, so every ja voice depends on the dictionary — the language-level
+# support entry is not enough, a voice can be downloaded on its own.
+VOICE_SUPPORT_PACKS = {
+    "ja": ["support-ja-mucab"],
+}
 BANNED_TTS_VOICES = {
     # Broken Spanish Piper MLS voices. Keep them out of the generated TTS catalog.
     "es_ES-mls_10246-low",
@@ -1277,6 +1284,7 @@ def merge_tts(
             shared_pack = voice.get("shared_pack")
             if shared_pack:
                 depends_on.append(shared_pack)
+            depends_on.extend(VOICE_SUPPORT_PACKS.get(app_language, []))
             depends_on.extend(voice.get("depends_on", []))
 
             pack = {

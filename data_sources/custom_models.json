@@ -189,6 +189,60 @@
           }
         }
       }
+    ],
+    "en-ka": [
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "en",
+        "targetLanguage": "ka",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/en-ka/lmt60_distill_20260902/exported/lex.50.50.enka.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/en-ka/lmt60_distill_20260902/exported/model.enka.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561635,
+            "uncompressedHash": "201049a418490e5bfb5bf23ef61faee125a2eed33380540745b4ae6568e25a43"
+          },
+          "vocab": {
+            "path": "models/en-ka/lmt60_distill_20260902/exported/vocab.enka.spm.gz"
+          }
+        },
+        "metrics": {
+          "flores200-plus": {
+            "chrfpp": 47.36,
+            "comet22": 0.8389
+          }
+        }
+      }
+    ],
+    "ka-en": [
+      {
+        "architecture": "base-memory",
+        "releaseStatus": "Release",
+        "sourceLanguage": "ka",
+        "targetLanguage": "en",
+        "files": {
+          "lexicalShortlist": {
+            "path": "models/ka-en/lmt60_distill_20260902/exported/lex.50.50.kaen.s2t.bin.gz"
+          },
+          "model": {
+            "path": "models/ka-en/lmt60_distill_20260902/exported/model.kaen.intgemm.alphas.bin.gz",
+            "uncompressedSize": 31561635,
+            "uncompressedHash": "24540168630f034b2e246474368a308d16deef44c3d55ffb1e6885f6110f6644"
+          },
+          "vocab": {
+            "path": "models/ka-en/lmt60_distill_20260902/exported/vocab.kaen.spm.gz"
+          }
+        },
+        "metrics": {
+          "flores200-plus": {
+            "chrfpp": 48.61,
+            "comet22": 0.826
+          }
+        }
+      }
     ]
   }
 }

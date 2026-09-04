@@ -279,6 +279,20 @@ def validate_manifest(languages: dict, packs: dict) -> None:
             if pack_id not in pack_ids:
                 raise ValueError(f"{language_code}: missing support pack {pack_id}")
 
+        tts = entry.get("tts")
+        if tts is not None:
+            regions = tts["regions"]
+            if not regions:
+                raise ValueError(f"{language_code}: TTS entry without regions")
+            if tts["defaultRegion"] not in regions:
+                raise ValueError(f"{language_code}: default TTS region {tts['defaultRegion']} has no voices")
+            for region_code, region in regions.items():
+                if not region["voices"]:
+                    raise ValueError(f"{language_code}: TTS region {region_code} without voices")
+                for pack_id in region["voices"]:
+                    if pack_id not in pack_ids:
+                        raise ValueError(f"{language_code}: missing TTS voice pack {pack_id}")
+
     for pack_id, pack in packs.items():
         if pack["feature"] == "translation":
             if pack["from"] not in language_codes or pack["to"] not in language_codes:

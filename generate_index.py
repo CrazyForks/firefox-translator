@@ -192,16 +192,45 @@ def tts_sample_mirror_path(pack: dict) -> str | None:
     return f"samples_ogg/{language}/{stem}.opus"
 
 
+# A voice pack that is gone from the public index must also go from the language
+# rows that offer it, or the app lists a voice it can neither resolve nor
+# download. Every other reference to a dropped pack (translation, dictionary,
+# OCR, support, `dependsOn`) means something is actually broken, so those are
+# left for `validate_manifest` to reject.
+def drop_voice_packs(languages: dict, dropped_pack_ids: set[str]) -> None:
+    for entry in languages.values():
+        tts = entry.get("tts")
+        if tts is None:
+            continue
+
+        regions = {}
+        for region_code, region in tts["regions"].items():
+            voices = [pack_id for pack_id in region["voices"] if pack_id not in dropped_pack_ids]
+            if voices:
+                regions[region_code] = {**region, "voices": voices}
+
+        if not regions:
+            entry.pop("tts")
+            continue
+
+        tts["regions"] = regions
+        if tts["defaultRegion"] not in regions:
+            tts["defaultRegion"] = next(iter(regions))
+
+
 def build_public_catalog(source_catalog: dict, bucket_dir: Path, base_url: str, allow_missing: bool) -> dict:
     published = deepcopy(source_catalog)
     published.pop("translationModelsBaseUrl", None)
     published.pop("dictionaryBaseUrl", None)
 
-    published["packs"] = {
-        pack_id: pack
-        for pack_id, pack in published.get("packs", {}).items()
-        if not is_deprecated_kokoro_onnx_pack(pack)
+    packs = published.get("packs", {})
+    dropped_pack_ids = {
+        pack_id for pack_id, pack in packs.items() if is_deprecated_kokoro_onnx_pack(pack)
     }
+    published["packs"] = {
+        pack_id: pack for pack_id, pack in packs.items() if pack_id not in dropped_pack_ids
+    }
+    drop_voice_packs(published["languages"], dropped_pack_ids)
 
     missing_paths = []
     migrations = []
@@ -269,6 +298,7 @@ def build_public_catalog(source_catalog: dict, bucket_dir: Path, base_url: str, 
         )
 
     published["migrations"] = migrations
+    catalog_base.validate_manifest(published["languages"], published["packs"])
     return published
 
 

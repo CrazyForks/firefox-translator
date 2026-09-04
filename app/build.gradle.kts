@@ -10,16 +10,6 @@ plugins {
 val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86" to 3, "x86_64" to 4)
 val defaultDevAbis = listOf("arm64-v8a", "x86_64")
 
-// The HTTP server serves this page, so the browser talks to the same origin it
-// loaded from; a copy keeps translate-web/ the single source without checking a
-// duplicate into assets.
-val copyWebUi =
-  tasks.register<Copy>("copyWebUi") {
-    from(rootProject.file("translate-web")) { include("translator.html") }
-    rename("translator.html", "index.html")
-    into(layout.buildDirectory.dir("generated/assets/web-ui"))
-  }
-
 android {
   namespace = "dev.davidv.translator"
   compileSdk = 34
@@ -30,7 +20,6 @@ android {
     getByName("main") {
       aidl.srcDir("src/main/aidl")
       java.srcDir(layout.buildDirectory.dir("generated/source/uniffi/kotlin"))
-      assets.srcDir(copyWebUi)
     }
     getByName("androidTest") {
       assets {
@@ -417,7 +406,6 @@ tasks.named("preBuild") {
   dependsOn(bindingsTasks)
   dependsOn(converterTasks)
   dependsOn(generateUniffiBindings)
-  dependsOn(copyWebUi)
 }
 
 dependencies {
@@ -450,7 +438,6 @@ dependencies {
   implementation(libs.kotlinx.serialization.json.v162)
   implementation("com.github.yalantis:ucrop:2.2.11")
   implementation("net.java.dev.jna:jna:5.14.0@aar")
-  implementation("org.nanohttpd:nanohttpd:2.3.1")
   implementation(libs.androidx.camera.core)
   implementation(libs.androidx.camera.camera2)
   implementation(libs.androidx.camera.lifecycle)
