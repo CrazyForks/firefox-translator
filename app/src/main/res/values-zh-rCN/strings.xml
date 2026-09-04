@@ -213,4 +213,10 @@
     <string name="detected_translate_from">翻译自</string>
     <string name="detected_missing_language">缺少语言</string>
     <string name="langmgr_ocr_upgrade_available">有改进的文本检测模型可用。</string>
+    <string name="settings_experimental_screen_translate">屏幕翻译（实验性功能）</string>
+    <string name="a11y_add_target_language">添加目标翻译语言</string>
+    <string name="a11y_remove_target_language">删除目标翻译语言</string>
+    <string name="feature_unavailable_tts">文字转语音资源缺失，请从管理语言界面下载</string>
+    <string name="feature_unavailable_dictionary">字典缺失，请从管理语言界面下载</string>
+    <string name="image_crop_action">裁剪</string>
 </resources>
