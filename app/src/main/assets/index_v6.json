@@ -1,10 +1,10 @@
 {
   "formatVersion": 6,
-  "generatedAt": 1788340421,
+  "generatedAt": 1788658816,
   "dictionaryVersion": 1,
   "sources": {
     "languageIndexVersion": 1,
-    "languageIndexUpdatedAt": 1788340421,
+    "languageIndexUpdatedAt": 1788658816,
     "dictionaryIndexVersion": 1,
     "dictionaryIndexUpdatedAt": 1784028791,
     "gcsModelsUrl": "https://storage.googleapis.com/moz-fx-translations-data--303e-prod-translations-data/db/models.json",
@@ -88,6 +88,18 @@
         "ocr": {
           "ppocr": "ocr-ppocr-eslav"
         }
+      },
+      "tts": {
+        "defaultRegion": "BY",
+        "regions": {
+          "BY": {
+            "displayName": "Belarus",
+            "voices": [
+              "tts-glowtts_hifigan-be-by-alex73-glowtts-hifigan"
+            ]
+          }
+        },
+        "sampleText": "Вясёлка — гэта метэаралагічная з'ява, выкліканая адлюстраваннем, праламленнем і рассейваннем святла ў кроплях вады, у выніку чаго ў небе з'яўляецца спектр святла."
       }
     },
     "bg": {
@@ -8110,6 +8122,46 @@
       ],
       "dependsOn": [],
       "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/az/north_latin_medium.opus"
+    },
+    "tts-glowtts_hifigan-be-by-alex73-glowtts-hifigan": {
+      "feature": "tts",
+      "engine": "glowtts_hifigan",
+      "auxRole": "lexicon",
+      "language": "be",
+      "locale": "be_BY",
+      "region": "BY",
+      "voice": "alex73",
+      "quality": "medium",
+      "numSpeakers": 1,
+      "aliases": [],
+      "files": [
+        {
+          "name": "glowtts.mnn",
+          "sizeBytes": 29431392,
+          "installPath": "bin/glowtts_hifigan/be/be_BY/alex73/medium/glowtts.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/be/be_BY/alex73/medium/glowtts.mnn",
+          "role": "model",
+          "priority": 0
+        },
+        {
+          "name": "hifigan.mnn",
+          "sizeBytes": 14083764,
+          "installPath": "bin/glowtts_hifigan/be/be_BY/alex73/medium/hifigan.mnn",
+          "url": "https://offline-translator.davidv.dev/tts/1/be/be_BY/alex73/medium/hifigan.mnn",
+          "role": "vocoder",
+          "priority": 0
+        },
+        {
+          "name": "be_lexicon.bin",
+          "sizeBytes": 3586841,
+          "installPath": "bin/glowtts_hifigan/be/be_BY/alex73/medium/be_lexicon.bin",
+          "url": "https://offline-translator.davidv.dev/tts/1/be/be_BY/alex73/medium/be_lexicon.bin",
+          "role": "lexicon",
+          "priority": 0
+        }
+      ],
+      "dependsOn": [],
+      "sampleUrl": "https://offline-translator.davidv.dev/samples_ogg/be/alex73_medium.opus"
     },
     "tts-piper-bg-bg-dimitar-medium": {
       "feature": "tts",

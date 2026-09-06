@@ -12,6 +12,12 @@ from catalog_tts_samples import TTS_SAMPLES
 def tts_file_role(filename: str) -> str:
     if filename.endswith(".onnx.json"):
         return "sidecar"
+    # A two-stage voice ships two networks; the vocoder is matched first so it
+    # does not fall through to the generic model rule below.
+    if filename.endswith("hifigan.mnn"):
+        return "vocoder"
+    if filename.endswith("_lexicon.bin"):
+        return "lexicon"
     if filename.endswith(".mnn.weight"):
         return "modelWeight"
     if filename.endswith(".onnx") or filename.endswith(".mnn"):
@@ -41,6 +47,7 @@ AUX_ROLE_BY_ENGINE = {
     "coqui_vits": "config",
     "sherpa_vits": "config",
     "cotovia_vits": "lexicon",
+    "glowtts_hifigan": "lexicon",
     "kokoro": "voices",
     "kokoro_mnn": "voices",
 }
@@ -77,6 +84,7 @@ ENGINE_PRIORITY = {
     "piper": 0,
     "mimic3": 0,
     "kokoro_mnn": 0,
+    "glowtts_hifigan": 1,
     "mms": 1,
     "sherpa_vits": 2,
     "coqui_vits": 2,
@@ -296,6 +304,42 @@ EXTRA_TTS_VOICES = {
             "tgl/tokens.txt": {
                 "size_bytes": 337,
                 "url": f"{MMS_BASE_URL}/tgl/tokens.txt",
+            },
+        },
+        "aliases": [],
+    },
+    # alex73's Belarusian GlowTTS acoustic model and HiFiGAN vocoder, trained on
+    # Common Voice via the bel-alex73 recipe and released through Coqui
+    # (CC-BY-SA 4.0). It reads fanetyka IPA rather than Cyrillic, so the voice is
+    # only usable together with the BNKorpus grapheme-to-phoneme table shipped
+    # alongside it.
+    "be_BY-alex73-glowtts_hifigan": {
+        "engine": "glowtts_hifigan",
+        "key": "be_BY-alex73-glowtts_hifigan",
+        "name": "alex73",
+        "language": {
+            "code": "be_BY",
+            "family": "be",
+            "region": "BY",
+            "name_native": "Беларуская",
+            "name_english": "Belarusian",
+            "country_english": "Belarus",
+        },
+        "quality": "medium",
+        "num_speakers": 1,
+        "speaker_id_map": {},
+        "files": {
+            "glowtts.mnn": {
+                "size_bytes": 29431392,
+                "url": f"{TTS_BASE_URL}/{TTS_VERSION}/be/be_BY/alex73/medium/glowtts.mnn",
+            },
+            "hifigan.mnn": {
+                "size_bytes": 14083764,
+                "url": f"{TTS_BASE_URL}/{TTS_VERSION}/be/be_BY/alex73/medium/hifigan.mnn",
+            },
+            "be_lexicon.bin": {
+                "size_bytes": 3586841,
+                "url": f"{TTS_BASE_URL}/{TTS_VERSION}/be/be_BY/alex73/medium/be_lexicon.bin",
             },
         },
         "aliases": [],
