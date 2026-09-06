@@ -1,0 +1,3 @@
+- Support Belarusian TTS
+- Support Georgian (v1, not very good yet, share feedback)
+- Fix transliteration for Chinese/Japanese

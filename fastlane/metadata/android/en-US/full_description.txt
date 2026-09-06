@@ -9,7 +9,7 @@ Features:
 • Transliteration of non-latin script
 • Quick translation of on-screen content via Accessibility service or Device Assistant role
 
-Supports 60 languages:
+Supports 61 languages:
 
 - Albanian
 - Arabic
@@ -31,6 +31,7 @@ Supports 60 languages:
 - Finnish
 - French
 - Galician
+- Georgian
 - German
 - Greek
 - Gujarati
