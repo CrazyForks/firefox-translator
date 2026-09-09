@@ -173,8 +173,19 @@ class TranslatorViewModel(
         }
       }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-  private val _currentDetectedLanguage = MutableStateFlow<Language?>(null)
-  val currentDetectedLanguage: StateFlow<Language?> = _currentDetectedLanguage.asStateFlow()
+  // A text detection only stays valid while the input is at least as long as
+  // the text that produced it; deleting below that point drops the detection
+  // so a stale suggestion can't outlive the words it was based on.
+  private data class LanguageDetection(
+    val language: Language,
+    val inputLength: Int,
+  )
+
+  private val _currentDetectedLanguage = MutableStateFlow<LanguageDetection?>(null)
+  val currentDetectedLanguage: StateFlow<Language?> =
+    _currentDetectedLanguage
+      .map { it?.language }
+      .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
   private val _isAutoSource = MutableStateFlow(false)
   val isAutoSource: StateFlow<Boolean> = _isAutoSource.asStateFlow()
@@ -636,21 +647,21 @@ class TranslatorViewModel(
       viewModelScope.launch {
         val settings = settingsManager.settings.value
         if (!settings.disableCLD) {
-          if (_input.value.isBlank()) {
+          val text = _input.value
+          if (text.isBlank()) {
             _currentDetectedLanguage.value = null
           } else {
+            val prior = _currentDetectedLanguage.value?.takeIf { text.length >= it.inputLength }
             val detected =
               translationCoordinator.detectLanguageRobust(
-                _input.value,
+                text,
                 _from.value,
                 languageStateManager.languageState.value.allLanguages(),
               )
-            if (detected != null) {
-              _currentDetectedLanguage.value = detected
-            }
+            _currentDetectedLanguage.value = detected?.let { LanguageDetection(it, text.length) } ?: prior
           }
           if (_isAutoSource.value) {
-            val detected = _currentDetectedLanguage.value
+            val detected = _currentDetectedLanguage.value?.language
             if (detected != null && languageStateManager.languageState.value.availabilityFor(detected)?.translatorFiles == true) {
               if (detected != activeTo) {
                 _from.value = detected
@@ -753,7 +764,7 @@ class TranslatorViewModel(
           readingOrder = readingOrder,
           isAutoSource = isAutoSourceActive(),
           onMissingDetectedLanguage = { detected ->
-            _currentDetectedLanguage.value = detected
+            _currentDetectedLanguage.value = LanguageDetection(detected, 0)
           },
           onDetectedRegions = { boxes, w, h ->
             _detectedRegions.value = DetectedRegions(w, h, boxes)
@@ -892,14 +903,13 @@ class TranslatorViewModel(
     languageState: dev.davidv.translator.LanguageAvailabilityState,
   ) {
     val settings = settingsManager.settings.value
-    _currentDetectedLanguage.value =
+    val detected =
       if (!settings.disableCLD) {
         translationCoordinator.detectLanguageRobust(initialText, _from.value, languageState.allLanguages())
       } else {
         null
       }
-
-    val detected = _currentDetectedLanguage.value
+    _currentDetectedLanguage.value = detected?.let { LanguageDetection(it, initialText.length) }
     val translated: TranslationResult?
 
     if (detected != null) {
